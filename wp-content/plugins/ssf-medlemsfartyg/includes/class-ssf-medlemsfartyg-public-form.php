@@ -20,6 +20,11 @@ class SSF_Medlemsfartyg_Public_Form
 
     public function shortcode(): string
     {
+        if (! empty($_GET['ssf_sent'])) {
+            $settings = SSF_Medlemsfartyg_Plugin::settings();
+            return '<div class="ssf-collection-form"><h1>' . esc_html__('Tack!', 'ssf-medlemsfartyg') . '</h1><p>' . esc_html($settings['thank_you_text']) . '</p></div>';
+        }
+
         $token_value = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
         $token = $token_value ? SSF_Medlemsfartyg_Tokens::get_by_token($token_value) : null;
         if (! $token) {

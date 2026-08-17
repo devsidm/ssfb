@@ -3,7 +3,7 @@
  * Plugin Name: SSF Medlemsfartyg
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Hanterar och visar Sveriges Segelfartygsförbunds medlemsfartyg.
- * Version: 0.2.2
+ * Version: 0.2.3
  * Author: SIDM
  * Text Domain: ssf-medlemsfartyg
  *
@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_MEDLEMSFARTYG_VERSION', '0.2.2');
+define('SSF_MEDLEMSFARTYG_VERSION', '0.2.3');
 define('SSF_MEDLEMSFARTYG_FILE', __FILE__);
 define('SSF_MEDLEMSFARTYG_PATH', plugin_dir_path(__FILE__));
 define('SSF_MEDLEMSFARTYG_URL', plugin_dir_url(__FILE__));
