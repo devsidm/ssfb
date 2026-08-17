@@ -43,6 +43,43 @@
     form[0].submit();
   });
 
+  $(document).on('click', '[data-ssf-submission-action]', function () {
+    var button = $(this);
+    var container = button.closest('.ssf-submission-review');
+    var action = button.data('ssf-submission-action');
+    var actionMap = {
+      approve: 'ssf_approve_ship_submission',
+      reject: 'ssf_reject_ship_submission'
+    };
+
+    if (!container.length || !actionMap[action]) {
+      return;
+    }
+
+    if (action === 'reject' && !window.confirm('Vill du avvisa inskicket?')) {
+      return;
+    }
+
+    var form = $('<form>', {
+      method: 'post',
+      action: container.data('action-url'),
+      css: { display: 'none' }
+    });
+
+    addHiddenField(form, 'action', actionMap[action]);
+    addHiddenField(form, 'submission_id', container.data('submission-id'));
+    addHiddenField(form, '_wpnonce', container.data('nonce'));
+
+    if (action === 'approve') {
+      addHiddenField(form, 'featured_image', container.find('.ssf-submission-featured-image:checked').val() || '');
+    } else {
+      addHiddenField(form, 'review_note', container.find('.ssf-submission-review-note').val());
+    }
+
+    $('body').append(form);
+    form[0].submit();
+  });
+
   $(document).on('click', '.ssf-gallery-button', function (event) {
     event.preventDefault();
     var button = $(this);
