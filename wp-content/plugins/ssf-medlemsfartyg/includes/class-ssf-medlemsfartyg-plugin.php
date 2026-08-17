@@ -153,7 +153,7 @@ final class SSF_Medlemsfartyg_Plugin
         }
 
         $meta = (array) $request->get_param('meta');
-        SSF_Medlemsfartyg_Meta::save_fields_from_request((int) $post_id, $meta);
+        SSF_Medlemsfartyg_Meta::save_fields_from_request((int) $post_id, $meta, true);
         update_post_meta((int) $post_id, '_ssf_review_status', 'Publicerad');
 
         return new WP_REST_Response(

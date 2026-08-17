@@ -95,16 +95,18 @@ class SSF_Medlemsfartyg_Submissions
             'post_content' => wp_kses_post($data['post_content'] ?? ''),
             'post_status' => 'publish',
         ));
-        SSF_Medlemsfartyg_Meta::save_fields_from_request($ship_id, $data);
+        SSF_Medlemsfartyg_Meta::save_fields_from_request($ship_id, $data, true);
         foreach (array('fartygstyp', 'fartygsstatus', 'fartygsregion', 'fartygsanvandning') as $taxonomy) {
             if (! empty($data['tax_' . $taxonomy])) {
                 wp_set_object_terms($ship_id, array_map('sanitize_text_field', (array) $data['tax_' . $taxonomy]), $taxonomy, false);
             }
         }
-        if ($featured) {
-            set_post_thumbnail($ship_id, $featured);
+        if ($images) {
+            if ($featured) {
+                set_post_thumbnail($ship_id, $featured);
+            }
+            update_post_meta($ship_id, '_ssf_gallery_ids', implode(',', array_diff($images, array($featured))));
         }
-        update_post_meta($ship_id, '_ssf_gallery_ids', implode(',', array_diff($images, array($featured))));
         update_post_meta($submission_id, '_ssf_submission_status', 'approved');
         update_post_meta($submission_id, '_ssf_approved_by', get_current_user_id());
         update_post_meta($submission_id, '_ssf_approved_at', current_time('mysql'));

@@ -168,10 +168,14 @@ class SSF_Medlemsfartyg_Meta
         }
     }
 
-    public static function save_fields_from_request(int $post_id, array $source): void
+    public static function save_fields_from_request(int $post_id, array $source, bool $preserve_missing = false): void
     {
         foreach (self::fields() as $section) {
             foreach ($section['fields'] as $key => $field) {
+                if ($preserve_missing && ! array_key_exists($key, $source)) {
+                    continue;
+                }
+
                 $value = isset($source[$key]) ? wp_unslash($source[$key]) : '';
                 if ('checkbox' === $field['type']) {
                     update_post_meta($post_id, $key, isset($source[$key]) ? '1' : '0');
