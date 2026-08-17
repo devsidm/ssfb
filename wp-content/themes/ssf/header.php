@@ -10,7 +10,9 @@
 <header class="site-header">
     <div class="site-header__inner">
         <a class="site-title" href="<?php echo esc_url(home_url('/')); ?>">
-            <span class="site-title__mark">SSF</span>
+            <span class="site-title__mark">
+                <img src="<?php echo esc_url(get_template_directory_uri() . '/assets/images/ssf-logo.svg'); ?>" alt="<?php esc_attr_e('Sveriges Segelfartygsforbund', 'ssf'); ?>">
+            </span>
             <span><?php bloginfo('name'); ?></span>
         </a>
         <button class="site-menu-toggle" type="button" aria-expanded="false" aria-controls="primary-menu">

@@ -19,7 +19,7 @@ function ssf_site_home_shortcode(): string
     ob_start();
     ?>
     <section class="ssf-hero" aria-label="Sveriges Segelfartygsforbund">
-        <img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80" alt="Segelfartyg pa vatten">
+        <img src="<?php echo esc_url(SSF_SITE_URL . 'assets/images/ssf-hero.jpg'); ?>" alt="Traditionella segelfartyg pa vattnet">
     </section>
 
     <section class="ssf-section ssf-intro">

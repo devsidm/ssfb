@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_SITE_VERSION', '0.1.0');
+define('SSF_SITE_VERSION', '0.1.1');
 define('SSF_SITE_PATH', plugin_dir_path(__FILE__));
 define('SSF_SITE_URL', plugin_dir_url(__FILE__));
 
@@ -65,7 +65,7 @@ function ssf_site_meta_tags(): void
     }
 
     $description = 'SSF samlar Sveriges traditionella segelfartyg, fartygsombud och stodmedlemmar for att bevara, bruka och utveckla det svenska segelfartygsarvet.';
-    $image = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80';
+    $image = SSF_SITE_URL . 'assets/images/ssf-hero.jpg';
     ?>
     <meta name="description" content="<?php echo esc_attr($description); ?>">
     <meta property="og:title" content="Sveriges Segelfartygsforbund - SSF">
