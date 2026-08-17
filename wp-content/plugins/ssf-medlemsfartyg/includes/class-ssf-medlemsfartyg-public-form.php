@@ -1,0 +1,192 @@
+<?php
+/**
+ * Public token-based collection form.
+ *
+ * @package SSF_Medlemsfartyg
+ */
+
+if (! defined('ABSPATH')) {
+    exit;
+}
+
+class SSF_Medlemsfartyg_Public_Form
+{
+    public function __construct()
+    {
+        add_shortcode('ssf_fartygsuppgifter_form', array($this, 'shortcode'));
+        add_action('admin_post_nopriv_ssf_submit_ship_collection', array($this, 'handle_submit'));
+        add_action('admin_post_ssf_submit_ship_collection', array($this, 'handle_submit'));
+    }
+
+    public function shortcode(): string
+    {
+        $token_value = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+        $token = $token_value ? SSF_Medlemsfartyg_Tokens::get_by_token($token_value) : null;
+        if (! $token) {
+            return '<div class="ssf-collection-form ssf-collection-error"><h1>' . esc_html__('Länken är ogiltig eller har gått ut.', 'ssf-medlemsfartyg') . '</h1><p>' . esc_html__('Kontakta SSF för en ny länk.', 'ssf-medlemsfartyg') . '</p></div>';
+        }
+
+        if ('created' === $token->status || 'sent' === $token->status) {
+            SSF_Medlemsfartyg_Tokens::update_status((int) $token->id, 'opened');
+        }
+
+        $ship_id = (int) $token->ship_id;
+        $settings = SSF_Medlemsfartyg_Plugin::settings();
+        ob_start();
+        include SSF_MEDLEMSFARTYG_PATH . 'templates/public-collection-form.php';
+        return ob_get_clean();
+    }
+
+    public function handle_submit(): void
+    {
+        $token_value = isset($_POST['ssf_token']) ? sanitize_text_field(wp_unslash($_POST['ssf_token'])) : '';
+        $token = $token_value ? SSF_Medlemsfartyg_Tokens::get_by_token($token_value) : null;
+        if (! $token || ! isset($_POST['_wpnonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ssf_collect_ship_' . $token->id)) {
+            wp_die(esc_html__('Länken är ogiltig eller har gått ut. Kontakta SSF för en ny länk.', 'ssf-medlemsfartyg'));
+        }
+
+        if (! empty($_POST['website'])) {
+            wp_die(esc_html__('Formuläret kunde inte skickas.', 'ssf-medlemsfartyg'));
+        }
+
+        if (empty($_POST['_ssf_gdpr_consent']) || empty($_POST['_ssf_image_consent'])) {
+            wp_die(esc_html__('Du behöver godkänna integritetstexten och bildvillkoren.', 'ssf-medlemsfartyg'));
+        }
+
+        $ship_id = (int) $token->ship_id;
+        $data = $this->collect_data();
+        $image_ids = $this->handle_uploads($ship_id);
+        $featured_index = max(0, (int) ($_POST['featured_image_index'] ?? 0));
+        $featured_id = $image_ids[$featured_index] ?? ($image_ids[0] ?? 0);
+
+        $submission_id = SSF_Medlemsfartyg_Submissions::create($ship_id, (int) $token->id, $data, $image_ids, $featured_id);
+        SSF_Medlemsfartyg_Tokens::update_status((int) $token->id, 'submitted');
+
+        $settings = SSF_Medlemsfartyg_Plugin::settings();
+        wp_mail(
+            $settings['admin_email'],
+            'Nya fartygsuppgifter inskickade - ' . get_the_title($ship_id),
+            'Nya uppgifter har skickats in för ' . get_the_title($ship_id) . ". Granska uppgifterna i WordPress:\n" . get_edit_post_link($submission_id, ''),
+            array('Content-Type: text/plain; charset=UTF-8')
+        );
+
+        if (is_email($data['_ssf_email'] ?? '')) {
+            wp_mail(
+                $data['_ssf_email'],
+                'Tack - uppgifter om ' . get_the_title($ship_id) . ' har skickats till SSF',
+                'Tack för att du skickat in uppgifter och bilder. SSF granskar materialet innan publicering.',
+                array('Content-Type: text/plain; charset=UTF-8')
+            );
+        }
+
+        wp_safe_redirect(add_query_arg('ssf_sent', '1', home_url('/fartygsuppgifter/')));
+        exit;
+    }
+
+    private function collect_data(): array
+    {
+        $text_fields = array(
+            'post_title',
+            'post_excerpt',
+            '_ssf_short_name',
+            '_ssf_home_port',
+            '_ssf_registry_number',
+            '_ssf_call_sign',
+            '_ssf_mmsi',
+            '_ssf_build_year',
+            '_ssf_shipyard',
+            '_ssf_length',
+            '_ssf_beam',
+            '_ssf_draft',
+            '_ssf_rig',
+            '_ssf_material',
+            '_ssf_engine',
+            '_ssf_sail_area',
+            '_ssf_passengers',
+            '_ssf_contact_name',
+            '_ssf_organization',
+            '_ssf_phone',
+            '_ssf_contact_button_text',
+        );
+        $url_fields = array('_ssf_website', '_ssf_facebook', '_ssf_instagram', '_ssf_booking_link', '_ssf_other_link');
+        $long_fields = array('post_content', '_ssf_short_presentation', '_ssf_today', '_ssf_activity', '_ssf_future', '_ssf_other_info', '_ssf_history', '_ssf_previous_use', '_ssf_restorations', '_ssf_cultural_value');
+
+        $data = array();
+        foreach ($text_fields as $field) {
+            $data[$field] = sanitize_text_field(wp_unslash($_POST[$field] ?? ''));
+        }
+        foreach ($url_fields as $field) {
+            $data[$field] = esc_url_raw(wp_unslash($_POST[$field] ?? ''));
+        }
+        foreach ($long_fields as $field) {
+            $data[$field] = wp_kses_post(wp_unslash($_POST[$field] ?? ''));
+        }
+        $data['_ssf_email'] = sanitize_email(wp_unslash($_POST['_ssf_email'] ?? ''));
+        foreach (array('_ssf_public_contact', '_ssf_public_website', '_ssf_public_phone', '_ssf_public_email') as $field) {
+            $data[$field] = ! empty($_POST[$field]) ? '1' : '0';
+        }
+        foreach (array('fartygstyp', 'fartygsstatus', 'fartygsregion', 'fartygsanvandning') as $taxonomy) {
+            $data['tax_' . $taxonomy] = array_filter(array_map('sanitize_text_field', (array) wp_unslash($_POST['tax_' . $taxonomy] ?? array())));
+        }
+
+        return $data;
+    }
+
+    private function handle_uploads(int $ship_id): array
+    {
+        if (empty($_FILES['ssf_ship_images']['name'][0])) {
+            return array();
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $settings = SSF_Medlemsfartyg_Plugin::settings();
+        $max_images = (int) $settings['max_images'];
+        $max_bytes = (int) $settings['max_image_mb'] * MB_IN_BYTES;
+        $allowed = array_map('trim', explode(',', strtolower((string) $settings['allowed_image_types'])));
+        $ids = array();
+        $files = $_FILES['ssf_ship_images'];
+        $count = min(count((array) $files['name']), $max_images);
+
+        for ($i = 0; $i < $count; $i++) {
+            if ((int) $files['error'][$i] !== UPLOAD_ERR_OK || (int) $files['size'][$i] > $max_bytes) {
+                continue;
+            }
+            $ext = strtolower(pathinfo((string) $files['name'][$i], PATHINFO_EXTENSION));
+            if (! in_array($ext, $allowed, true)) {
+                continue;
+            }
+
+            $file = array(
+                'name' => sanitize_file_name((string) $files['name'][$i]),
+                'type' => (string) $files['type'][$i],
+                'tmp_name' => (string) $files['tmp_name'][$i],
+                'error' => (int) $files['error'][$i],
+                'size' => (int) $files['size'][$i],
+            );
+            $check = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
+            if (empty($check['ext']) || ! in_array(strtolower($check['ext']), $allowed, true)) {
+                continue;
+            }
+
+            $_FILES['ssf_single_ship_image'] = $file;
+            $attachment_id = media_handle_upload('ssf_single_ship_image', $ship_id);
+            if (! is_wp_error($attachment_id)) {
+                $caption = sanitize_text_field(wp_unslash($_POST['image_caption'][$i] ?? ''));
+                $alt = sanitize_text_field(wp_unslash($_POST['image_alt'][$i] ?? ''));
+                if ($caption) {
+                    wp_update_post(array('ID' => $attachment_id, 'post_excerpt' => $caption));
+                }
+                if ($alt) {
+                    update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt);
+                }
+                $ids[] = (int) $attachment_id;
+            }
+        }
+
+        unset($_FILES['ssf_single_ship_image']);
+        return $ids;
+    }
+}

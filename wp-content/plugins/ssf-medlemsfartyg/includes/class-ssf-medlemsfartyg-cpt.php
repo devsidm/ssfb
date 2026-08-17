@@ -43,6 +43,24 @@ class SSF_Medlemsfartyg_CPT
             )
         );
 
+        register_post_type(
+            'ssf_ship_submission',
+            array(
+                'labels' => array(
+                    'name' => __('Inskickade uppgifter', 'ssf-medlemsfartyg'),
+                    'singular_name' => __('Inskickad uppgift', 'ssf-medlemsfartyg'),
+                    'edit_item' => __('Granska inskickade uppgifter', 'ssf-medlemsfartyg'),
+                ),
+                'public' => false,
+                'show_ui' => true,
+                'show_in_menu' => 'edit.php?post_type=medlemsfartyg',
+                'menu_icon' => 'dashicons-clipboard',
+                'supports' => array('title', 'editor', 'custom-fields'),
+                'capability_type' => 'post',
+                'map_meta_cap' => true,
+            )
+        );
+
         $taxonomies = array(
             'fartygstyp' => __('Fartygstyp', 'ssf-medlemsfartyg'),
             'fartygsstatus' => __('Status', 'ssf-medlemsfartyg'),

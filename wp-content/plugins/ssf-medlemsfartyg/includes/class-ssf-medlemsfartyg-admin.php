@@ -24,6 +24,7 @@ class SSF_Medlemsfartyg_Admin
     public function admin_menu(): void
     {
         add_submenu_page('edit.php?post_type=medlemsfartyg', __('Mina fartyg', 'ssf-medlemsfartyg'), __('Mina fartyg', 'ssf-medlemsfartyg'), 'read', 'ssf-mina-fartyg', array(SSF_Medlemsfartyg_Plugin::instance()->owner_dashboard, 'render'));
+        add_submenu_page('edit.php?post_type=medlemsfartyg', __('Insamlingslänkar', 'ssf-medlemsfartyg'), __('Insamlingslänkar', 'ssf-medlemsfartyg'), 'manage_options', 'ssf-insamlingslankar', array(SSF_Medlemsfartyg_Plugin::instance()->tokens, 'render_links_page'));
         add_submenu_page('edit.php?post_type=medlemsfartyg', __('Inställningar', 'ssf-medlemsfartyg'), __('Inställningar', 'ssf-medlemsfartyg'), 'manage_options', 'ssf-medlemsfartyg-settings', array($this, 'settings_page'));
         add_submenu_page('edit.php?post_type=medlemsfartyg', __('Exportera CSV', 'ssf-medlemsfartyg'), __('Exportera CSV', 'ssf-medlemsfartyg'), 'export_ssf_ships', 'ssf-medlemsfartyg-export', array(SSF_Medlemsfartyg_Plugin::instance()->export, 'render_page'));
 
@@ -49,6 +50,13 @@ class SSF_Medlemsfartyg_Admin
             'enable_map' => ! empty($input['enable_map']) ? 'yes' : 'no',
             'primary_color' => sanitize_hex_color($input['primary_color'] ?? '#3163B7') ?: '#3163B7',
             'archive_slug' => sanitize_title($input['archive_slug'] ?? 'medlemsfartyg') ?: 'medlemsfartyg',
+            'token_days' => max(1, min(365, (int) ($input['token_days'] ?? 30))),
+            'max_images' => max(1, min(24, (int) ($input['max_images'] ?? 12))),
+            'max_image_mb' => max(1, min(32, (int) ($input['max_image_mb'] ?? 8))),
+            'allowed_image_types' => sanitize_text_field($input['allowed_image_types'] ?? 'jpg,jpeg,png,webp'),
+            'invitation_text' => sanitize_textarea_field($input['invitation_text'] ?? ''),
+            'thank_you_text' => sanitize_textarea_field($input['thank_you_text'] ?? ''),
+            'privacy_text' => sanitize_textarea_field($input['privacy_text'] ?? ''),
         );
     }
 
@@ -70,6 +78,13 @@ class SSF_Medlemsfartyg_Admin
                     <tr><th><?php esc_html_e('Karta', 'ssf-medlemsfartyg'); ?></th><td><label><input type="checkbox" name="ssf_medlemsfartyg_settings[enable_map]" value="1" <?php checked('yes', $settings['enable_map']); ?>> <?php esc_html_e('Förbered kartfunktion senare', 'ssf-medlemsfartyg'); ?></label></td></tr>
                     <tr><th><?php esc_html_e('Primär färg', 'ssf-medlemsfartyg'); ?></th><td><input type="text" name="ssf_medlemsfartyg_settings[primary_color]" value="<?php echo esc_attr($settings['primary_color']); ?>"></td></tr>
                     <tr><th><?php esc_html_e('Slug för samlingssida', 'ssf-medlemsfartyg'); ?></th><td><input type="text" name="ssf_medlemsfartyg_settings[archive_slug]" value="<?php echo esc_attr($settings['archive_slug']); ?>"><p class="description"><?php esc_html_e('Standard är /medlemsfartyg/. Spara permalänkar efter ändring.', 'ssf-medlemsfartyg'); ?></p></td></tr>
+                    <tr><th><?php esc_html_e('Giltighetstid för insamlingslänk', 'ssf-medlemsfartyg'); ?></th><td><input type="number" min="1" max="365" name="ssf_medlemsfartyg_settings[token_days]" value="<?php echo esc_attr((string) $settings['token_days']); ?>"> <?php esc_html_e('dagar', 'ssf-medlemsfartyg'); ?></td></tr>
+                    <tr><th><?php esc_html_e('Max antal bilder', 'ssf-medlemsfartyg'); ?></th><td><input type="number" min="1" max="24" name="ssf_medlemsfartyg_settings[max_images]" value="<?php echo esc_attr((string) $settings['max_images']); ?>"></td></tr>
+                    <tr><th><?php esc_html_e('Max filstorlek per bild', 'ssf-medlemsfartyg'); ?></th><td><input type="number" min="1" max="32" name="ssf_medlemsfartyg_settings[max_image_mb]" value="<?php echo esc_attr((string) $settings['max_image_mb']); ?>"> MB</td></tr>
+                    <tr><th><?php esc_html_e('Tillåtna bildtyper', 'ssf-medlemsfartyg'); ?></th><td><input class="regular-text" type="text" name="ssf_medlemsfartyg_settings[allowed_image_types]" value="<?php echo esc_attr($settings['allowed_image_types']); ?>"></td></tr>
+                    <tr><th><?php esc_html_e('Standardtext för e-postinbjudan', 'ssf-medlemsfartyg'); ?></th><td><textarea class="large-text" rows="8" name="ssf_medlemsfartyg_settings[invitation_text]"><?php echo esc_textarea($settings['invitation_text']); ?></textarea><p class="description">Tillgängliga platshållare: [NAMN], [FARTYGSNAMN], [LÄNK], [DATUM]</p></td></tr>
+                    <tr><th><?php esc_html_e('Tackmeddelande', 'ssf-medlemsfartyg'); ?></th><td><textarea class="large-text" rows="3" name="ssf_medlemsfartyg_settings[thank_you_text]"><?php echo esc_textarea($settings['thank_you_text']); ?></textarea></td></tr>
+                    <tr><th><?php esc_html_e('Integritetstext', 'ssf-medlemsfartyg'); ?></th><td><textarea class="large-text" rows="4" name="ssf_medlemsfartyg_settings[privacy_text]"><?php echo esc_textarea($settings['privacy_text']); ?></textarea></td></tr>
                 </table>
                 <?php submit_button(__('Spara inställningar', 'ssf-medlemsfartyg')); ?>
             </form>

@@ -22,6 +22,9 @@ final class SSF_Medlemsfartyg_Plugin
     public SSF_Medlemsfartyg_Templates $templates;
     public SSF_Medlemsfartyg_Notifications $notifications;
     public SSF_Medlemsfartyg_Export $export;
+    public SSF_Medlemsfartyg_Tokens $tokens;
+    public SSF_Medlemsfartyg_Submissions $submissions;
+    public SSF_Medlemsfartyg_Public_Form $public_form;
 
     public static function instance(): SSF_Medlemsfartyg_Plugin
     {
@@ -44,6 +47,9 @@ final class SSF_Medlemsfartyg_Plugin
         $this->templates = new SSF_Medlemsfartyg_Templates();
         $this->notifications = new SSF_Medlemsfartyg_Notifications();
         $this->export = new SSF_Medlemsfartyg_Export();
+        $this->tokens = new SSF_Medlemsfartyg_Tokens();
+        $this->submissions = new SSF_Medlemsfartyg_Submissions();
+        $this->public_form = new SSF_Medlemsfartyg_Public_Form();
 
         add_action('init', array($this, 'register_image_sizes'));
         add_action('rest_api_init', array($this, 'register_rest_routes'));
@@ -63,6 +69,9 @@ final class SSF_Medlemsfartyg_Plugin
             'includes/class-ssf-medlemsfartyg-templates.php',
             'includes/class-ssf-medlemsfartyg-notifications.php',
             'includes/class-ssf-medlemsfartyg-export.php',
+            'includes/class-ssf-medlemsfartyg-tokens.php',
+            'includes/class-ssf-medlemsfartyg-submissions.php',
+            'includes/class-ssf-medlemsfartyg-public-form.php',
         );
 
         foreach ($files as $file) {
@@ -191,7 +200,8 @@ final class SSF_Medlemsfartyg_Plugin
 
         return has_shortcode($post->post_content, 'ssf_medlemsfartyg')
             || has_shortcode($post->post_content, 'ssf_utvalt_fartyg')
-            || has_shortcode($post->post_content, 'ssf_fartyg_grid');
+            || has_shortcode($post->post_content, 'ssf_fartyg_grid')
+            || has_shortcode($post->post_content, 'ssf_fartygsuppgifter_form');
     }
 
     public static function settings(): array
@@ -206,6 +216,13 @@ final class SSF_Medlemsfartyg_Plugin
             'enable_map' => 'no',
             'primary_color' => '#3163B7',
             'archive_slug' => 'medlemsfartyg',
+            'token_days' => 30,
+            'max_images' => 12,
+            'max_image_mb' => 8,
+            'allowed_image_types' => 'jpg,jpeg,png,webp',
+            'invitation_text' => "Hej [NAMN],\n\nSveriges Segelfartygsförbund samlar in uppgifter om medlemsfartygen för att kunna presentera dem på förbundets webbplats.\n\nAnvänd länken nedan för att fylla i eller uppdatera uppgifter om [FARTYGSNAMN]. Du kan även ladda upp bilder och välja vilken bild som ska vara huvudbild.\n\n[LÄNK]\n\nLänken är personlig för detta fartyg och gäller till [DATUM].\n\nVänliga hälsningar\nSveriges Segelfartygsförbund",
+            'thank_you_text' => 'Tack! Uppgifterna har skickats till SSF. Vi granskar materialet innan det publiceras på webbplatsen.',
+            'privacy_text' => 'SSF behandlar uppgifterna för att administrera och presentera medlemsfartyget. Kontaktuppgifter visas bara publikt enligt dina val.',
         );
 
         return wp_parse_args((array) get_option('ssf_medlemsfartyg_settings', array()), $defaults);
@@ -215,15 +232,19 @@ final class SSF_Medlemsfartyg_Plugin
     {
         require_once SSF_MEDLEMSFARTYG_PATH . 'includes/class-ssf-medlemsfartyg-cpt.php';
         require_once SSF_MEDLEMSFARTYG_PATH . 'includes/class-ssf-medlemsfartyg-roles.php';
+        require_once SSF_MEDLEMSFARTYG_PATH . 'includes/class-ssf-medlemsfartyg-tokens.php';
 
         (new SSF_Medlemsfartyg_CPT())->register();
         SSF_Medlemsfartyg_Roles::add_role();
+        SSF_Medlemsfartyg_Tokens::create_table();
+        update_option('ssf_medlemsfartyg_db_version', '0.2.0');
 
         if (! get_option('ssf_medlemsfartyg_settings')) {
             update_option('ssf_medlemsfartyg_settings', self::settings());
         }
 
         self::maybe_create_archive_page();
+        self::maybe_create_collection_page();
         flush_rewrite_rules();
     }
 
@@ -246,6 +267,24 @@ final class SSF_Medlemsfartyg_Plugin
                 'post_type' => 'page',
                 'post_status' => 'draft',
                 'post_content' => '<!-- wp:shortcode -->[ssf_medlemsfartyg]<!-- /wp:shortcode -->',
+            )
+        );
+    }
+
+    private static function maybe_create_collection_page(): void
+    {
+        $existing = get_page_by_path('fartygsuppgifter');
+        if ($existing) {
+            return;
+        }
+
+        wp_insert_post(
+            array(
+                'post_title' => 'Fartygsuppgifter',
+                'post_name' => 'fartygsuppgifter',
+                'post_type' => 'page',
+                'post_status' => 'publish',
+                'post_content' => '<!-- wp:shortcode -->[ssf_fartygsuppgifter_form]<!-- /wp:shortcode -->',
             )
         );
     }
