@@ -178,7 +178,7 @@ final class SSF_Medlemsfartyg_Plugin
     public function enqueue_admin_assets(string $hook): void
     {
         $screen = get_current_screen();
-        if (! $screen || ('medlemsfartyg' !== $screen->post_type && false === strpos($hook, 'ssf-medlemsfartyg'))) {
+        if (! $screen || (! in_array($screen->post_type, array('medlemsfartyg', 'ssf_ship_submission'), true) && false === strpos($hook, 'ssf-medlemsfartyg'))) {
             return;
         }
 
