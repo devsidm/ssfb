@@ -15,6 +15,7 @@ class SSF_Medlemsfartyg_Tokens
     {
         add_action('init', array(__CLASS__, 'maybe_create_table'));
         add_action('add_meta_boxes', array($this, 'add_meta_box'));
+        add_action('admin_notices', array($this, 'render_admin_notice'));
         add_action('admin_post_ssf_ship_generate_token', array($this, 'generate_from_admin'));
         add_action('admin_post_ssf_ship_send_token', array($this, 'send_from_admin'));
         add_action('admin_post_ssf_ship_revoke_token', array($this, 'revoke_from_admin'));
@@ -185,40 +186,26 @@ class SSF_Medlemsfartyg_Tokens
     {
         $token = self::latest_for_ship($post->ID);
         $url = get_post_meta($post->ID, '_ssf_last_collection_url', true);
+        $nonce = wp_create_nonce('ssf_ship_token_' . $post->ID);
         ?>
-        <p><strong><?php esc_html_e('Nuvarande status:', 'ssf-medlemsfartyg'); ?></strong> <?php echo esc_html($token->status ?? __('Ingen länk', 'ssf-medlemsfartyg')); ?></p>
-        <?php if ($token) : ?>
-            <p><?php echo esc_html(sprintf(__('Mottagare: %s <%s>', 'ssf-medlemsfartyg'), $token->recipient_name, $token->recipient_email)); ?></p>
-            <p><?php echo esc_html(sprintf(__('Gäller till: %s', 'ssf-medlemsfartyg'), $token->expires_at)); ?></p>
-            <?php if ($url && ! in_array($token->status, array('revoked', 'expired', 'submitted'), true)) : ?>
-                <p><label><?php esc_html_e('Länk att kopiera', 'ssf-medlemsfartyg'); ?><input type="url" readonly onclick="this.select();" value="<?php echo esc_attr($url); ?>"></label></p>
+        <div class="ssf-ship-collection" data-action-url="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-ship-id="<?php echo esc_attr((string) $post->ID); ?>" data-nonce="<?php echo esc_attr($nonce); ?>" data-token-id="<?php echo esc_attr((string) ($token->id ?? 0)); ?>">
+            <p><strong><?php esc_html_e('Nuvarande status:', 'ssf-medlemsfartyg'); ?></strong> <?php echo esc_html($token->status ?? __('Ingen länk', 'ssf-medlemsfartyg')); ?></p>
+            <?php if ($token) : ?>
+                <p><?php echo esc_html(sprintf(__('Mottagare: %s <%s>', 'ssf-medlemsfartyg'), $token->recipient_name, $token->recipient_email)); ?></p>
+                <p><?php echo esc_html(sprintf(__('Gäller till: %s', 'ssf-medlemsfartyg'), $token->expires_at)); ?></p>
+                <?php if ($url && ! in_array($token->status, array('revoked', 'expired', 'submitted'), true)) : ?>
+                    <p><label><?php esc_html_e('Länk att kopiera', 'ssf-medlemsfartyg'); ?><input type="url" readonly onclick="this.select();" value="<?php echo esc_attr($url); ?>"></label></p>
+                <?php endif; ?>
             <?php endif; ?>
-        <?php endif; ?>
-        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-            <input type="hidden" name="action" value="ssf_ship_generate_token">
-            <input type="hidden" name="ship_id" value="<?php echo esc_attr((string) $post->ID); ?>">
-            <?php wp_nonce_field('ssf_ship_token_' . $post->ID); ?>
-            <label><?php esc_html_e('Mottagarens namn', 'ssf-medlemsfartyg'); ?><input type="text" name="recipient_name" value="<?php echo esc_attr($token->recipient_name ?? get_post_meta($post->ID, '_ssf_contact_name', true)); ?>"></label>
-            <label><?php esc_html_e('Mottagarens e-post', 'ssf-medlemsfartyg'); ?><input type="email" name="recipient_email" value="<?php echo esc_attr($token->recipient_email ?? get_post_meta($post->ID, '_ssf_email', true)); ?>"></label>
-            <label><?php esc_html_e('Utgångsdatum', 'ssf-medlemsfartyg'); ?><input type="date" name="expires_at" value="<?php echo esc_attr($token && $token->expires_at ? gmdate('Y-m-d', strtotime($token->expires_at . ' UTC')) : gmdate('Y-m-d', time() + DAY_IN_SECONDS * 30)); ?>"></label>
-            <?php submit_button(__('Generera ny länk', 'ssf-medlemsfartyg'), 'secondary', 'submit', false); ?>
-        </form>
-        <?php if ($token) : ?>
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                <input type="hidden" name="action" value="ssf_ship_send_token">
-                <input type="hidden" name="ship_id" value="<?php echo esc_attr((string) $post->ID); ?>">
-                <input type="hidden" name="token_id" value="<?php echo esc_attr((string) $token->id); ?>">
-                <?php wp_nonce_field('ssf_ship_token_' . $post->ID); ?>
-                <?php submit_button(__('Skicka länk via e-post', 'ssf-medlemsfartyg'), 'primary', 'submit', false); ?>
-            </form>
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                <input type="hidden" name="action" value="ssf_ship_revoke_token">
-                <input type="hidden" name="ship_id" value="<?php echo esc_attr((string) $post->ID); ?>">
-                <input type="hidden" name="token_id" value="<?php echo esc_attr((string) $token->id); ?>">
-                <?php wp_nonce_field('ssf_ship_token_' . $post->ID); ?>
-                <?php submit_button(__('Spärra länk', 'ssf-medlemsfartyg'), 'delete', 'submit', false); ?>
-            </form>
-        <?php endif; ?>
+            <label><?php esc_html_e('Mottagarens namn', 'ssf-medlemsfartyg'); ?><input class="ssf-token-recipient-name" type="text" value="<?php echo esc_attr($token->recipient_name ?? get_post_meta($post->ID, '_ssf_contact_name', true)); ?>"></label>
+            <label><?php esc_html_e('Mottagarens e-post', 'ssf-medlemsfartyg'); ?><input class="ssf-token-recipient-email" type="email" value="<?php echo esc_attr($token->recipient_email ?? get_post_meta($post->ID, '_ssf_email', true)); ?>"></label>
+            <label><?php esc_html_e('Utgångsdatum', 'ssf-medlemsfartyg'); ?><input class="ssf-token-expires-at" type="date" value="<?php echo esc_attr($token && $token->expires_at ? gmdate('Y-m-d', strtotime($token->expires_at . ' UTC')) : gmdate('Y-m-d', time() + DAY_IN_SECONDS * 30)); ?>"></label>
+            <p><button type="button" class="button button-secondary" data-ssf-token-action="generate"><?php esc_html_e('Generera ny länk', 'ssf-medlemsfartyg'); ?></button></p>
+            <?php if ($token) : ?>
+                <p><button type="button" class="button button-primary" data-ssf-token-action="send"><?php esc_html_e('Skicka länk via e-post', 'ssf-medlemsfartyg'); ?></button></p>
+                <p><button type="button" class="button-link-delete" data-ssf-token-action="revoke"><?php esc_html_e('Spärra länk', 'ssf-medlemsfartyg'); ?></button></p>
+            <?php endif; ?>
+        </div>
         <?php
     }
 
@@ -228,7 +215,7 @@ class SSF_Medlemsfartyg_Tokens
         $this->assert_admin_request($ship_id);
         $created = self::create_token($ship_id, (string) wp_unslash($_POST['recipient_name'] ?? ''), (string) wp_unslash($_POST['recipient_email'] ?? ''), (string) wp_unslash($_POST['expires_at'] ?? ''));
         update_post_meta($ship_id, '_ssf_last_collection_url', esc_url_raw($created['url']));
-        wp_safe_redirect(add_query_arg(array('post' => $ship_id, 'action' => 'edit', 'ssf_token_created' => '1'), admin_url('post.php')));
+        $this->redirect_to_edit($ship_id, 'created');
         exit;
     }
 
@@ -239,7 +226,16 @@ class SSF_Medlemsfartyg_Tokens
         $token_id = (int) ($_POST['token_id'] ?? 0);
         $this->assert_admin_request($ship_id);
         $token = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . self::table_name() . ' WHERE id = %d AND ship_id = %d', $token_id, $ship_id));
-        if ($token && is_email($token->recipient_email)) {
+        $notice = 'invalid_recipient';
+        if (! $token) {
+            $notice = 'missing_token';
+        } elseif (! is_email($token->recipient_email)) {
+            $notice = 'invalid_recipient';
+        } elseif (! in_array($token->status, array('created', 'sent'), true)) {
+            $notice = 'unavailable_token';
+        } elseif (! get_post_meta($ship_id, '_ssf_last_collection_url', true)) {
+            $notice = 'missing_url';
+        } else {
             $settings = SSF_Medlemsfartyg_Plugin::settings();
             $url = get_post_meta($ship_id, '_ssf_last_collection_url', true);
             $message = str_replace(
@@ -247,10 +243,15 @@ class SSF_Medlemsfartyg_Tokens
                 array($token->recipient_name, get_the_title($ship_id), $url, get_date_from_gmt($token->expires_at, 'Y-m-d')),
                 $settings['invitation_text']
             );
-            wp_mail($token->recipient_email, 'Uppdatera uppgifter om ' . get_the_title($ship_id) . ' till SSF', $message, array('Content-Type: text/plain; charset=UTF-8'));
-            self::update_status($token_id, 'sent');
+            $sent = wp_mail($token->recipient_email, 'Uppdatera uppgifter om ' . get_the_title($ship_id) . ' till SSF', $message, array('Content-Type: text/plain; charset=UTF-8'));
+            if ($sent) {
+                self::update_status($token_id, 'sent');
+                $notice = 'sent';
+            } else {
+                $notice = 'send_failed';
+            }
         }
-        wp_safe_redirect(add_query_arg(array('post' => $ship_id, 'action' => 'edit', 'ssf_token_sent' => '1'), admin_url('post.php')));
+        $this->redirect_to_edit($ship_id, $notice);
         exit;
     }
 
@@ -260,8 +261,38 @@ class SSF_Medlemsfartyg_Tokens
         $token_id = (int) ($_POST['token_id'] ?? 0);
         $this->assert_admin_request($ship_id);
         self::update_status($token_id, 'revoked');
-        wp_safe_redirect(add_query_arg(array('post' => $ship_id, 'action' => 'edit', 'ssf_token_revoked' => '1'), admin_url('post.php')));
+        $this->redirect_to_edit($ship_id, 'revoked');
         exit;
+    }
+
+    public function render_admin_notice(): void
+    {
+        if (! current_user_can('manage_options') || empty($_GET['ssf_token_notice'])) {
+            return;
+        }
+
+        $notice = sanitize_key((string) wp_unslash($_GET['ssf_token_notice']));
+        $messages = array(
+            'created' => array('success', __('En ny insamlingslänk har skapats.', 'ssf-medlemsfartyg')),
+            'sent' => array('success', __('E-postmeddelandet har lämnats till e-posttjänsten för leverans.', 'ssf-medlemsfartyg')),
+            'revoked' => array('success', __('Länken har spärrats.', 'ssf-medlemsfartyg')),
+            'invalid_recipient' => array('error', __('Länken saknar en giltig mottagaradress.', 'ssf-medlemsfartyg')),
+            'missing_token' => array('error', __('Kunde inte hitta den valda länken.', 'ssf-medlemsfartyg')),
+            'unavailable_token' => array('error', __('Länken kan inte skickas eftersom den är spärrad, utgången eller redan inskickad.', 'ssf-medlemsfartyg')),
+            'missing_url' => array('error', __('Länken saknar en aktiv formuläradress. Skapa en ny länk först.', 'ssf-medlemsfartyg')),
+            'send_failed' => array('error', __('E-post kunde inte skickas. Kontrollera FluentSMTP:s e-postlogg och försök igen.', 'ssf-medlemsfartyg')),
+        );
+
+        if (! isset($messages[$notice])) {
+            return;
+        }
+
+        printf('<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>', esc_attr($messages[$notice][0]), esc_html($messages[$notice][1]));
+    }
+
+    private function redirect_to_edit(int $ship_id, string $notice): void
+    {
+        wp_safe_redirect(add_query_arg(array('post' => $ship_id, 'action' => 'edit', 'ssf_token_notice' => $notice), admin_url('post.php')));
     }
 
     private function assert_admin_request(int $ship_id): void

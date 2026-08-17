@@ -1,4 +1,48 @@
 (function ($) {
+  function addHiddenField(form, name, value) {
+    $('<input>', { type: 'hidden', name: name, value: value }).appendTo(form);
+  }
+
+  $(document).on('click', '[data-ssf-token-action]', function () {
+    var button = $(this);
+    var container = button.closest('.ssf-ship-collection');
+    var action = button.data('ssf-token-action');
+    var actionMap = {
+      generate: 'ssf_ship_generate_token',
+      send: 'ssf_ship_send_token',
+      revoke: 'ssf_ship_revoke_token'
+    };
+
+    if (!container.length || !actionMap[action]) {
+      return;
+    }
+
+    if (action === 'revoke' && !window.confirm('Vill du spärra länken?')) {
+      return;
+    }
+
+    var form = $('<form>', {
+      method: 'post',
+      action: container.data('action-url'),
+      css: { display: 'none' }
+    });
+
+    addHiddenField(form, 'action', actionMap[action]);
+    addHiddenField(form, 'ship_id', container.data('ship-id'));
+    addHiddenField(form, '_wpnonce', container.data('nonce'));
+
+    if (action === 'generate') {
+      addHiddenField(form, 'recipient_name', container.find('.ssf-token-recipient-name').val());
+      addHiddenField(form, 'recipient_email', container.find('.ssf-token-recipient-email').val());
+      addHiddenField(form, 'expires_at', container.find('.ssf-token-expires-at').val());
+    } else {
+      addHiddenField(form, 'token_id', container.data('token-id'));
+    }
+
+    $('body').append(form);
+    form[0].submit();
+  });
+
   $(document).on('click', '.ssf-gallery-button', function (event) {
     event.preventDefault();
     var button = $(this);
