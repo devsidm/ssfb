@@ -31,41 +31,41 @@ function ssf_site_application_result(array $data): array
     if (! $is_sail) {
         return array(
             'title' => 'Fartyget uppfyller inte grundkraven',
-            'text'  => 'Fartyget behover vara ett segelfartyg eller segelfartyg med hjalpmotor.',
+            'text'  => 'Fartyget behöver vara ett segelfartyg eller segelfartyg med hjälpmotor.',
         );
     }
 
     if (! $has_history && ! $traditional_newbuild) {
         return array(
-            'title' => 'Fartyget behover kompletterande bedomning',
-            'text'  => 'Fartyget saknar angiven yrkeshistorik och ar inte markerat som nybyggt i traditionell stil.',
+            'title' => 'Fartyget behöver kompletterande bedömning',
+            'text'  => 'Fartyget saknar angiven yrkeshistorik och är inte markerat som nybyggt i traditionell stil.',
         );
     }
 
     if ($length > 12 && $width >= 4) {
         return array(
-            'title' => 'Fartyget kan ga vidare till ansokan som aspirant',
-            'text'  => 'Utifran svaren uppfyller fartyget mattkraven. Ansokan kan skickas in for styrelsens provning.',
+            'title' => 'Fartyget kan gå vidare till ansökan som aspirant',
+            'text'  => 'Utifrån svaren uppfyller fartyget måttkraven. Ansökan kan skickas in för styrelsens prövning.',
         );
     }
 
     if ($registered) {
         return array(
-            'title' => 'Sarskild provning kan vara mojlig',
-            'text'  => 'Fartyget uppfyller inte mattkraven, men ar registrerat i svenskt skeppsregister. Ansokan kan skickas in for sarskild provning.',
+            'title' => 'Särskild prövning kan vara möjlig',
+            'text'  => 'Fartyget uppfyller inte måttkraven, men är registrerat i svenskt skeppsregister. Ansökan kan skickas in för särskild prövning.',
         );
     }
 
     if ($length > 0 || $width > 0) {
         return array(
-            'title' => 'Fartyget uppfyller inte kraven for sarskild provning',
-            'text'  => 'Fartyg som understiger mattkraven behover vara registrerade i svenskt skeppsregister for att kunna provas sarskilt.',
+            'title' => 'Fartyget uppfyller inte kraven för särskild prövning',
+            'text'  => 'Fartyg som understiger måttkraven behöver vara registrerade i svenskt skeppsregister för att kunna prövas särskilt.',
         );
     }
 
     return array(
-        'title' => 'Ansokan behover granskas av styrelsen',
-        'text'  => 'Svaren ger inte ett entydigt resultat. Skicka garna in uppgifterna sa kan styrelsen gora en bedomning enligt SSF:s stadgar.',
+        'title' => 'Ansökan behöver granskas av styrelsen',
+        'text'  => 'Svaren ger inte ett entydigt resultat. Skicka gärna in uppgifterna så kan styrelsen göra en bedömning enligt SSF:s stadgar.',
     );
 }
 
@@ -104,7 +104,7 @@ function ssf_site_handle_application(): void
     }
 
     $result = ssf_site_application_result($data);
-    $title = sprintf('Ansokan: %s', $data['fartygsnamn'] ?: current_time('Y-m-d H:i'));
+    $title = sprintf('Ansökan: %s', $data['fartygsnamn'] ?: current_time('Y-m-d H:i'));
     $content = ssf_site_format_application_body($data, $result);
 
     $submission_id = wp_insert_post(
@@ -128,13 +128,13 @@ function ssf_site_handle_application(): void
         $headers[] = 'Reply-To: ' . $data['ombud_namn'] . ' <' . $data['ombud_epost'] . '>';
     }
 
-    wp_mail('medlemskap@ssfb.se', 'Ny ansokan som fartygsombud - ' . ($data['fartygsnamn'] ?: 'utan fartygsnamn'), $content, $headers);
+    wp_mail('medlemskap@ssfb.se', 'Ny ansökan som fartygsombud - ' . ($data['fartygsnamn'] ?: 'utan fartygsnamn'), $content, $headers);
 
     if (is_email($data['ombud_epost'])) {
         wp_mail(
             $data['ombud_epost'],
-            'Tack for din ansokan till SSF',
-            "Tack for din ansokan som fartygsombud. SSF aterkommer nar ansokan har granskats.\n\n" . $result['title'] . "\n" . $result['text'],
+            'Tack för din ansökan till SSF',
+            "Tack för din ansökan som fartygsombud. SSF återkommer när ansökan har granskats.\n\n" . $result['title'] . "\n" . $result['text'],
             array('Content-Type: text/plain; charset=UTF-8')
         );
     }
@@ -148,22 +148,22 @@ add_action('admin_post_ssf_application', 'ssf_site_handle_application');
 function ssf_site_format_application_body(array $data, array $result): string
 {
     $lines = array(
-        'Resultat/forhandsbedomning',
+        'Resultat/förhandsbedömning',
         $result['title'],
         $result['text'],
         '',
         'Uppgifter om fartyg',
-        'Ansokningsvag: ' . $data['ansokningsvag'],
+        'Ansökningsväg: ' . $data['ansokningsvag'],
         'Fartygsnamn: ' . $data['fartygsnamn'],
         'Fartygstyp: ' . $data['fartygstyp'],
         'Segelfartyg: ' . $data['segelfartyg'],
         'Yrkeshistorik: ' . $data['yrkeshistorik'],
         'Traditionell nybyggnad: ' . $data['traditionell_nybyggnad'],
-        'Langd: ' . $data['langd'],
+        'Längd: ' . $data['langd'],
         'Bredd: ' . $data['bredd'],
         'Svenskt skeppsregister: ' . $data['svenskt_register'],
         'Under restaurering: ' . $data['restaurering'],
-        'Lank: ' . $data['fartyg_lank'],
+        'Länk: ' . $data['fartyg_lank'],
         'Beskrivning: ' . $data['fartyg_beskrivning'],
         '',
         'Uppgifter om fartygsombud',
@@ -171,7 +171,7 @@ function ssf_site_format_application_body(array $data, array $result): string
         'E-post: ' . $data['ombud_epost'],
         'Telefon: ' . $data['ombud_telefon'],
         'Organisation: ' . $data['organisation'],
-        'Ovriga upplysningar: ' . $data['ovrigt'],
+        'Övriga upplysningar: ' . $data['ovrigt'],
     );
 
     return implode("\n", $lines);
@@ -187,9 +187,9 @@ function ssf_site_handle_contact(): void
     $name = ssf_site_clean_field('namn');
     $email = sanitize_email(ssf_site_clean_field('epost'));
     $phone = ssf_site_clean_field('telefon');
-    $subject = ssf_site_clean_field('amne') ?: 'Kontakt fran ssfb.se';
+    $subject = ssf_site_clean_field('amne') ?: 'Kontakt från ssfb.se';
     $message = ssf_site_clean_textarea('meddelande');
-    $body = "Namn: $name\nE-post: $email\nTelefon: $phone\nAmne: $subject\n\nMeddelande:\n$message";
+    $body = "Namn: $name\nE-post: $email\nTelefon: $phone\nÄmne: $subject\n\nMeddelande:\n$message";
 
     $post_id = wp_insert_post(
         array(
@@ -212,7 +212,7 @@ function ssf_site_handle_contact(): void
         $headers[] = 'Reply-To: ' . $name . ' <' . $email . '>';
     }
 
-    wp_mail('info@ssfb.se', 'Kontaktformular: ' . $subject, $body, $headers);
+    wp_mail('info@ssfb.se', 'Kontaktformulär: ' . $subject, $body, $headers);
 
     wp_safe_redirect(add_query_arg('ssf_status', 'contact_sent', wp_get_referer() ?: home_url('/kontakta-oss/')));
     exit;

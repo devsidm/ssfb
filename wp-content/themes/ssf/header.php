@@ -11,7 +11,7 @@
     <div class="site-header__inner">
         <a class="site-title" href="<?php echo esc_url(home_url('/')); ?>">
             <span class="site-title__mark">
-                <img src="<?php echo esc_url(get_template_directory_uri() . '/assets/images/ssf-logo.svg'); ?>" alt="<?php esc_attr_e('Sveriges Segelfartygsforbund', 'ssf'); ?>">
+                <img src="<?php echo esc_url(get_template_directory_uri() . '/assets/images/ssf-logo.svg'); ?>" alt="<?php esc_attr_e('Sveriges Segelfartygsförbund', 'ssf'); ?>">
             </span>
             <span><?php bloginfo('name'); ?></span>
         </a>

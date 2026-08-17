@@ -13,21 +13,21 @@
     var registered = getValue(form, 'svenskt_register') === 'ja';
 
     if (!isSail) {
-      return ['Fartyget uppfyller inte grundkraven', 'Fartyget behover vara ett segelfartyg eller segelfartyg med hjalpmotor.'];
+      return ['Fartyget uppfyller inte grundkraven', 'Fartyget behöver vara ett segelfartyg eller segelfartyg med hjälpmotor.'];
     }
     if (!hasHistory && !isTraditional) {
-      return ['Fartyget behover kompletterande bedomning', 'Fartyget saknar angiven yrkeshistorik och ar inte markerat som nybyggt i traditionell stil.'];
+      return ['Fartyget behöver kompletterande bedömning', 'Fartyget saknar angiven yrkeshistorik och är inte markerat som nybyggt i traditionell stil.'];
     }
     if (length > 12 && width >= 4) {
-      return ['Fartyget kan ga vidare till ansokan som aspirant', 'Utifran svaren uppfyller fartyget mattkraven. Ansokan kan skickas in for styrelsens provning.'];
+      return ['Fartyget kan gå vidare till ansökan som aspirant', 'Utifrån svaren uppfyller fartyget måttkraven. Ansökan kan skickas in för styrelsens prövning.'];
     }
     if (registered) {
-      return ['Sarskild provning kan vara mojlig', 'Fartyget uppfyller inte mattkraven, men ar registrerat i svenskt skeppsregister. Ansokan kan skickas in for sarskild provning.'];
+      return ['Särskild prövning kan vara möjlig', 'Fartyget uppfyller inte måttkraven, men är registrerat i svenskt skeppsregister. Ansökan kan skickas in för särskild prövning.'];
     }
     if (length > 0 || width > 0) {
-      return ['Fartyget uppfyller inte kraven for sarskild provning', 'Fartyg som understiger mattkraven behover vara registrerade i svenskt skeppsregister for att kunna provas sarskilt.'];
+      return ['Fartyget uppfyller inte kraven för särskild prövning', 'Fartyg som understiger måttkraven behöver vara registrerade i svenskt skeppsregister för att kunna prövas särskilt.'];
     }
-    return ['Ansokan behover granskas av styrelsen', 'Svaren ger inte ett entydigt resultat. Skicka garna in uppgifterna sa kan styrelsen gora en bedomning enligt SSF:s stadgar.'];
+    return ['Ansökan behöver granskas av styrelsen', 'Svaren ger inte ett entydigt resultat. Skicka gärna in uppgifterna så kan styrelsen göra en bedömning enligt SSF:s stadgar.'];
   }
 
   function initApplicationForm(form) {

@@ -17,7 +17,7 @@ function ssf_site_register_post_types(): void
             'labels'       => array(
                 'name'          => __('Medlemsfartyg', 'ssf-site'),
                 'singular_name' => __('Medlemsfartyg', 'ssf-site'),
-                'add_new_item'  => __('Lagg till medlemsfartyg', 'ssf-site'),
+                'add_new_item'  => __('Lägg till medlemsfartyg', 'ssf-site'),
                 'edit_item'     => __('Redigera medlemsfartyg', 'ssf-site'),
             ),
             'public'       => true,
@@ -33,8 +33,8 @@ function ssf_site_register_post_types(): void
         'ssf_ansokan',
         array(
             'labels'       => array(
-                'name'          => __('Ansokningar', 'ssf-site'),
-                'singular_name' => __('Ansokan', 'ssf-site'),
+                'name'          => __('Ansökningar', 'ssf-site'),
+                'singular_name' => __('Ansökan', 'ssf-site'),
             ),
             'public'       => false,
             'show_ui'      => true,

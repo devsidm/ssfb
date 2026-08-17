@@ -2,8 +2,8 @@
 /**
  * Plugin Name: SSF Site Customizations
  * Plugin URI: https://github.com/devsidm/ssfb
- * Description: Content types, shortcodes, forms, and styling for Sveriges Segelfartygsforbund.
- * Version: 0.1.0
+ * Description: Content types, shortcodes, forms, and styling for Sveriges Segelfartygsförbund.
+ * Version: 0.1.2
  * Author: SIDM
  * Text Domain: ssf-site
  *
@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_SITE_VERSION', '0.1.1');
+define('SSF_SITE_VERSION', '0.1.2');
 define('SSF_SITE_PATH', plugin_dir_path(__FILE__));
 define('SSF_SITE_URL', plugin_dir_url(__FILE__));
 
@@ -51,7 +51,7 @@ add_action('wp_enqueue_scripts', 'ssf_site_enqueue_assets');
 function ssf_site_document_title(array $parts): array
 {
     if (is_front_page()) {
-        $parts['title'] = 'Sveriges Segelfartygsforbund - SSF';
+        $parts['title'] = 'Sveriges Segelfartygsförbund - SSF';
     }
 
     return $parts;
@@ -64,11 +64,11 @@ function ssf_site_meta_tags(): void
         return;
     }
 
-    $description = 'SSF samlar Sveriges traditionella segelfartyg, fartygsombud och stodmedlemmar for att bevara, bruka och utveckla det svenska segelfartygsarvet.';
+    $description = 'SSF samlar Sveriges traditionella segelfartyg, fartygsombud och stödmedlemmar för att bevara, bruka och utveckla det svenska segelfartygsarvet.';
     $image = SSF_SITE_URL . 'assets/images/ssf-hero.jpg';
     ?>
     <meta name="description" content="<?php echo esc_attr($description); ?>">
-    <meta property="og:title" content="Sveriges Segelfartygsforbund - SSF">
+    <meta property="og:title" content="Sveriges Segelfartygsförbund - SSF">
     <meta property="og:description" content="<?php echo esc_attr($description); ?>">
     <meta property="og:image" content="<?php echo esc_url($image); ?>">
     <meta property="og:type" content="website">

@@ -27,14 +27,14 @@ get_header();
                     <time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time>
                     <h2><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h2>
                     <p><?php echo esc_html(wp_trim_words(get_the_excerpt(), 28)); ?></p>
-                    <a class="ssf-read-more" href="<?php the_permalink(); ?>"><?php esc_html_e('Las mer', 'ssf'); ?> <span aria-hidden="true">-&gt;</span></a>
+                    <a class="ssf-read-more" href="<?php the_permalink(); ?>"><?php esc_html_e('Läs mer', 'ssf'); ?> <span aria-hidden="true">-&gt;</span></a>
                 </div>
             </article>
         <?php endwhile; ?>
     </div>
     <?php the_posts_pagination(); ?>
 <?php else : ?>
-    <p><?php esc_html_e('Inget innehall hittades.', 'ssf'); ?></p>
+    <p><?php esc_html_e('Inget innehåll hittades.', 'ssf'); ?></p>
 <?php endif; ?>
 
 <?php
