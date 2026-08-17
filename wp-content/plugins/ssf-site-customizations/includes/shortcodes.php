@@ -255,27 +255,11 @@ add_shortcode('ssf_contact_form', 'ssf_site_contact_form_shortcode');
 
 function ssf_site_member_vessels_shortcode(): string
 {
-    $query = new WP_Query(array('post_type' => 'medlemsfartyg', 'posts_per_page' => 24, 'post_status' => 'publish'));
-    if (! $query->have_posts()) {
-        return '<p class="ssf-empty">Medlemsfartyg kommer att visas här.</p>';
+    if (shortcode_exists('ssf_medlemsfartyg')) {
+        return do_shortcode('[ssf_medlemsfartyg]');
     }
 
-    ob_start();
-    echo '<div class="ssf-card-grid ssf-card-grid--three">';
-    while ($query->have_posts()) {
-        $query->the_post();
-        echo '<article class="ssf-card ssf-vessel-card">';
-        if (has_post_thumbnail()) {
-            echo '<a href="' . esc_url(get_permalink()) . '" class="ssf-card-image">' . get_the_post_thumbnail(get_the_ID(), 'medium_large') . '</a>';
-        }
-        echo '<h3><a href="' . esc_url(get_permalink()) . '">' . esc_html(get_the_title()) . '</a></h3>';
-        echo '<p>' . esc_html(wp_trim_words(get_the_excerpt(), 26)) . '</p>';
-        echo '</article>';
-    }
-    echo '</div>';
-    wp_reset_postdata();
-
-    return ob_get_clean();
+    return '<p class="ssf-empty">Medlemsfartyg kommer att visas här.</p>';
 }
 add_shortcode('ssf_member_vessels', 'ssf_site_member_vessels_shortcode');
 

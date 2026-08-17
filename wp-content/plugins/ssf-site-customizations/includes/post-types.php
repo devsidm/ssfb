@@ -12,24 +12,6 @@ if (! defined('ABSPATH')) {
 function ssf_site_register_post_types(): void
 {
     register_post_type(
-        'medlemsfartyg',
-        array(
-            'labels'       => array(
-                'name'          => __('Medlemsfartyg', 'ssf-site'),
-                'singular_name' => __('Medlemsfartyg', 'ssf-site'),
-                'add_new_item'  => __('Lägg till medlemsfartyg', 'ssf-site'),
-                'edit_item'     => __('Redigera medlemsfartyg', 'ssf-site'),
-            ),
-            'public'       => true,
-            'has_archive'  => false,
-            'menu_icon'    => 'dashicons-sos',
-            'supports'     => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields'),
-            'show_in_rest' => true,
-            'rewrite'      => array('slug' => 'fartyg'),
-        )
-    );
-
-    register_post_type(
         'ssf_ansokan',
         array(
             'labels'       => array(
