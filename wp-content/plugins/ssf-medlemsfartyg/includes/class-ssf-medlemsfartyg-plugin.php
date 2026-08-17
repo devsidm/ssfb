@@ -46,6 +46,7 @@ final class SSF_Medlemsfartyg_Plugin
         $this->export = new SSF_Medlemsfartyg_Export();
 
         add_action('init', array($this, 'register_image_sizes'));
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
     }
@@ -74,6 +75,85 @@ final class SSF_Medlemsfartyg_Plugin
         add_image_size('ssf_ship_card', 640, 420, true);
         add_image_size('ssf_ship_hero', 1600, 700, true);
         add_image_size('ssf_ship_gallery_thumb', 240, 160, true);
+    }
+
+    public function register_rest_routes(): void
+    {
+        register_rest_route(
+            'ssf-medlemsfartyg/v1',
+            '/upsert',
+            array(
+                'methods' => 'POST',
+                'callback' => array($this, 'rest_upsert_ship'),
+                'permission_callback' => static function (): bool {
+                    return current_user_can('manage_options');
+                },
+            )
+        );
+    }
+
+    public function rest_upsert_ship(WP_REST_Request $request): WP_REST_Response
+    {
+        $slug = sanitize_title((string) $request->get_param('slug'));
+        $title = sanitize_text_field((string) $request->get_param('title'));
+        if (! $slug || ! $title) {
+            return new WP_REST_Response(array('success' => false, 'message' => 'Slug och titel krävs.'), 400);
+        }
+
+        $existing = get_page_by_path($slug, OBJECT, 'medlemsfartyg');
+        $post_data = array(
+            'post_type' => 'medlemsfartyg',
+            'post_name' => $slug,
+            'post_title' => $title,
+            'post_status' => sanitize_key((string) ($request->get_param('status') ?: 'publish')),
+            'post_excerpt' => sanitize_textarea_field((string) $request->get_param('excerpt')),
+            'post_content' => wp_kses_post((string) $request->get_param('content')),
+        );
+
+        if ($existing) {
+            $post_data['ID'] = $existing->ID;
+            $post_id = wp_update_post($post_data, true);
+        } else {
+            $post_id = wp_insert_post($post_data, true);
+        }
+
+        if (is_wp_error($post_id)) {
+            return new WP_REST_Response(array('success' => false, 'message' => $post_id->get_error_message()), 500);
+        }
+
+        $taxonomies = (array) $request->get_param('taxonomies');
+        foreach ($taxonomies as $taxonomy => $terms) {
+            if (! taxonomy_exists($taxonomy)) {
+                continue;
+            }
+            $term_ids = array();
+            foreach ((array) $terms as $term_name) {
+                $term_name = sanitize_text_field((string) $term_name);
+                if (! $term_name) {
+                    continue;
+                }
+                $term = term_exists($term_name, $taxonomy);
+                if (! $term) {
+                    $term = wp_insert_term($term_name, $taxonomy);
+                }
+                if (! is_wp_error($term)) {
+                    $term_ids[] = (int) (is_array($term) ? $term['term_id'] : $term);
+                }
+            }
+            wp_set_object_terms($post_id, $term_ids, $taxonomy);
+        }
+
+        $meta = (array) $request->get_param('meta');
+        SSF_Medlemsfartyg_Meta::save_fields_from_request((int) $post_id, $meta);
+        update_post_meta((int) $post_id, '_ssf_review_status', 'Publicerad');
+
+        return new WP_REST_Response(
+            array(
+                'success' => true,
+                'id' => (int) $post_id,
+                'link' => get_permalink((int) $post_id),
+            )
+        );
     }
 
     public function enqueue_frontend_assets(): void
