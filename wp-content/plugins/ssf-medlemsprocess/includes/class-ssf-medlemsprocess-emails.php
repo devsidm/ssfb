@@ -27,10 +27,11 @@ class SSF_Medlemsprocess_Emails
         );
     }
 
-    public function send_received(int $application_id, string $token): void
+    public function send_received(int $application_id, string $token): bool
     {
-        $this->send_template('received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($token)));
+        $applicant_sent = $this->send_template('received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($token)));
         $this->send_template('admin_notice', $application_id, array(), true);
+        return $applicant_sent;
     }
 
     public function send_status_email(int $application_id, string $status, string $message = ''): void

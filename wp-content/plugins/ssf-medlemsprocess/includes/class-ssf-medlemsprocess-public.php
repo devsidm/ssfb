@@ -30,7 +30,11 @@ class SSF_Medlemsprocess_Public
     {
         if (! empty($_GET['ssf_application_sent']) && ! empty($_GET['token'])) {
             $status_link = SSF_Medlemsprocess_Application::status_link(sanitize_text_field(wp_unslash($_GET['token'])));
-            return '<section class="ssf-process-shell ssf-process-confirmation"><p class="ssf-process-eyebrow">Ansökan mottagen</p><h1>Tack för din ansökan</h1><p>Vi har skickat en bekräftelse till din e-postadress. Du kan följa ärendet med den personliga statuslänken.</p><p><a class="ssf-process-button" href="' . esc_url($status_link) . '">Följ ansökan</a></p></section>';
+            $mail_sent = 'sent' === sanitize_key(wp_unslash($_GET['ssf_mail'] ?? ''));
+            $message = $mail_sent
+                ? 'Vi har skickat en bekräftelse till din e-postadress. Du kan följa ärendet med den personliga statuslänken.'
+                : 'Ansökan är registrerad, men vi kunde inte bekräfta e-postleveransen. Spara den personliga statuslänken och kontakta SSF om du behöver hjälp.';
+            return '<section class="ssf-process-shell ssf-process-confirmation"><p class="ssf-process-eyebrow">Ansökan mottagen</p><h1>Tack för din ansökan</h1><p>' . esc_html($message) . '</p><p><a class="ssf-process-button" href="' . esc_url($status_link) . '">Följ ansökan</a></p></section>';
         }
 
         $settings = SSF_Medlemsprocess_Plugin::settings();
@@ -83,8 +87,8 @@ class SSF_Medlemsprocess_Public
         $files = $this->handle_uploads($created['id'], 'ssf_application_files');
         update_post_meta($created['id'], '_ssf_application_files', $files);
         set_transient($this->rate_key(), 1, MINUTE_IN_SECONDS * 2);
-        SSF_Medlemsprocess_Plugin::instance()->emails->send_received($created['id'], $created['token']);
-        wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('ansokan', array('ssf_application_sent' => '1', 'token' => rawurlencode($created['token']))));
+        $mail_sent = SSF_Medlemsprocess_Plugin::instance()->emails->send_received($created['id'], $created['token']);
+        wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('ansokan', array('ssf_application_sent' => '1', 'token' => rawurlencode($created['token']), 'ssf_mail' => $mail_sent ? 'sent' : 'failed')));
         exit;
     }
 

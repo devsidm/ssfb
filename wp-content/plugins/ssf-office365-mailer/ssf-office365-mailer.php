@@ -3,7 +3,7 @@
  * Plugin Name: SSF Microsoft 365 Mailer
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Skickar WordPress e-post via Microsoft 365 och Microsoft Graph med OAuth 2.0.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: SIDM
  * Text Domain: ssf-office365-mailer
  * Requires at least: 5.8
@@ -41,6 +41,7 @@ final class SSF_Office365_Mailer
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_notices', array($this, 'render_admin_notices'));
         add_action('rest_api_init', array($this, 'register_oauth_callback'));
+        add_action('rest_api_init', array($this, 'register_diagnostic_route'));
         add_action('admin_post_ssf_office365_connect', array($this, 'start_oauth'));
         add_action('admin_post_ssf_office365_disconnect', array($this, 'disconnect'));
         add_filter('pre_wp_mail', array($this, 'send_mail'), 1, 2);
@@ -71,6 +72,41 @@ final class SSF_Office365_Mailer
                 'methods' => 'GET',
                 'callback' => array($this, 'handle_oauth_callback'),
                 'permission_callback' => '__return_true',
+            )
+        );
+    }
+
+    public function register_diagnostic_route(): void
+    {
+        register_rest_route(
+            'ssf-office365-mailer/v1',
+            '/status',
+            array(
+                'methods' => 'GET',
+                'callback' => array($this, 'diagnostic_status'),
+                'permission_callback' => static function (): bool {
+                    return current_user_can('manage_options');
+                },
+            )
+        );
+    }
+
+    public function diagnostic_status(): WP_REST_Response
+    {
+        $settings = $this->settings();
+        $tokens = $this->tokens();
+        $last_result = (array) get_option('ssf_office365_mailer_last_result', array());
+
+        return new WP_REST_Response(
+            array(
+                'enabled' => 'yes' === $settings['enabled'],
+                'connected_email' => $tokens['email'] ?: '',
+                'ready' => $this->is_ready(),
+                'last_result' => array(
+                    'status' => sanitize_key($last_result['status'] ?? ''),
+                    'message' => sanitize_text_field($last_result['message'] ?? ''),
+                    'at' => (int) ($last_result['at'] ?? 0),
+                ),
             )
         );
     }
@@ -279,7 +315,7 @@ final class SSF_Office365_Mailer
         $access_token = $this->access_token();
         if (is_wp_error($access_token)) {
             $this->mail_failed($args, $access_token);
-            return false;
+            return null;
         }
 
         $recipients = $this->recipient_list($args['to'] ?? array());
@@ -324,7 +360,7 @@ final class SSF_Office365_Mailer
             $details = $response->get_error_message();
             $error = new WP_Error('ssf_office365_send_failed', sprintf(__('Microsoft 365 kunde inte skicka e-post (%s).', 'ssf-office365-mailer'), $details));
             $this->mail_failed($args, $error);
-            return false;
+            return null;
         }
 
         $status_code = wp_remote_retrieve_response_code($response);
@@ -332,7 +368,7 @@ final class SSF_Office365_Mailer
             $details = $this->graph_error_message(wp_remote_retrieve_body($response));
             $error = new WP_Error('ssf_office365_send_failed', sprintf(__('Microsoft 365 kunde inte skicka e-post (%s).', 'ssf-office365-mailer'), $details));
             $this->mail_failed($args, $error);
-            return false;
+            return null;
         }
 
         update_option('ssf_office365_mailer_last_result', array('status' => 'sent', 'at' => time()), false);
