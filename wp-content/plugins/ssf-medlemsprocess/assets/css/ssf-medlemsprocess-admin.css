@@ -1,0 +1,21 @@
+.ssf-process-admin-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 18px; padding: 16px; background: #f6f8fb; border: 1px solid #d9e3f0; }
+.ssf-process-admin-overview > div { display: grid; gap: 4px; }
+.ssf-process-admin-label { color: #66758c; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.ssf-process-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+.ssf-process-admin-grid > label, .postbox .inside > label, .ssf-process-note-form > label { display: grid; gap: 6px; margin: 12px 0; font-weight: 600; }
+.ssf-process-admin-grid input, .ssf-process-admin-grid select, .ssf-process-admin-grid textarea, .postbox .inside > label input, .postbox .inside > label select, .postbox .inside > label textarea { width: 100%; }
+.ssf-process-check { display: flex !important; align-items: center; gap: 8px; }
+.ssf-process-checklist { margin: 18px 0; padding: 14px; border: 1px solid #d9e3f0; background: #fff; }
+.ssf-process-checklist h3 { margin: 0 0 10px; color: #0b2d5c; }
+.ssf-process-check-row { display: grid; grid-template-columns: minmax(200px, 1.4fr) 170px minmax(180px, 1fr); gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid #eaf1fb; }
+.ssf-process-check-row:first-of-type { border-top: 0; }
+.ssf-process-history { margin: 0; }
+.ssf-process-history li { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid #d9e3f0; }
+.ssf-process-history span { color: #66758c; }
+.ssf-process-history p { margin: 0; }
+.ssf-process-dashboard-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 900px; margin: 20px 0; }
+.ssf-process-dashboard-card { display: grid; gap: 8px; padding: 18px; background: #fff; border: 1px solid #d9e3f0; border-radius: 6px; }
+.ssf-process-dashboard-card span { color: #66758c; }
+.ssf-process-dashboard-card strong { color: #0b2d5c; font-size: 30px; }
+.ssf-process-status-badge { display: inline-block; padding: 4px 8px; color: #0b2d5c; background: #f8f1df; border: 1px solid #d8b46a; border-radius: 4px; font-weight: 600; }
+@media (max-width: 782px) { .ssf-process-admin-overview, .ssf-process-admin-grid, .ssf-process-dashboard-cards { grid-template-columns: 1fr; } .ssf-process-check-row { grid-template-columns: 1fr; } }
