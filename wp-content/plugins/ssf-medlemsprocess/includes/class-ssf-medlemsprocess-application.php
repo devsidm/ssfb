@@ -17,7 +17,7 @@ class SSF_Medlemsprocess_Application
     {
         register_post_type(self::POST_TYPE, array(
             'labels' => array(
-                'name' => 'Ansökningar',
+                'name' => 'Medlemsprocess',
                 'singular_name' => 'Ansökan',
                 'edit_item' => 'Granska ansökan',
                 'all_items' => 'Alla ansökningar',
