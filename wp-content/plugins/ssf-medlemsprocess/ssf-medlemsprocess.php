@@ -3,7 +3,7 @@
  * Plugin Name: SSF Medlemsprocess
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Ansökan, granskning, inspektion och beslut för Sveriges Segelfartygsförbund.
- * Version: 0.1.5
+ * Version: 0.2.0
  * Author: SIDM
  * Text Domain: ssf-medlemsprocess
  */
@@ -12,7 +12,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_MEDLEMSPROCESS_VERSION', '0.1.5');
+define('SSF_MEDLEMSPROCESS_VERSION', '0.2.0');
 define('SSF_MEDLEMSPROCESS_FILE', __FILE__);
 define('SSF_MEDLEMSPROCESS_PATH', plugin_dir_path(__FILE__));
 define('SSF_MEDLEMSPROCESS_URL', plugin_dir_url(__FILE__));

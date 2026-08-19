@@ -33,6 +33,7 @@ class SSF_Medlemsprocess_Admin
         add_meta_box('ssf_application_data', 'Ansökningsuppgifter och bilagor', array($this, 'render_application_data'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
         add_meta_box('ssf_application_review', 'Granskning', array($this, 'render_review'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
         add_meta_box('ssf_application_inspection', 'Inspektion', array($this, 'render_inspection'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
+        add_meta_box('ssf_application_inspectors', 'Inspektörer', array($this, 'render_inspectors'), SSF_Medlemsprocess_Application::POST_TYPE, 'side', 'high');
         add_meta_box('ssf_application_booking', 'Tidsbokning', array($this, 'render_booking'), SSF_Medlemsprocess_Application::POST_TYPE, 'side', 'default');
         add_meta_box('ssf_application_decision', 'Beslut och Memlist', array($this, 'render_decision'), SSF_Medlemsprocess_Application::POST_TYPE, 'side', 'high');
         add_meta_box('ssf_application_notes', 'Noteringar', array($this, 'render_notes'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
@@ -53,7 +54,7 @@ class SSF_Medlemsprocess_Admin
         </div>
         <div class="ssf-process-admin-grid">
             <label>Status<select name="ssf_process_status"><?php foreach (SSF_Medlemsprocess_Application::statuses() as $key => $item) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>><?php echo esc_html($item['label']); ?></option><?php endforeach; ?></select></label>
-            <label>Ansvarig handläggare<?php wp_dropdown_users(array('name' => 'ssf_assigned_user', 'selected' => $assigned, 'show_option_none' => 'Ej tilldelad', 'role__in' => array('administrator', 'ssf_inspektor', 'ssf_beslutsfattare'))); ?></label>
+            <label>Ansvarig handläggare<?php wp_dropdown_users(array('name' => 'ssf_assigned_user', 'selected' => $assigned, 'show_option_none' => 'Ej tilldelad', 'role__in' => array('administrator', 'ssf_inspector', 'ssf_inspektor', 'ssf_beslutsfattare'))); ?></label>
             <label>Nästa åtgärd<input type="text" name="ssf_next_action" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_next_action', true)); ?>" placeholder="Exempel: inväntar registreringsbevis"></label>
             <label>Publikt statusmeddelande<textarea name="ssf_status_message" rows="3" placeholder="Visas för sökanden vid statusändring"></textarea></label>
         </div>
@@ -121,6 +122,11 @@ class SSF_Medlemsprocess_Admin
         ?><label>Datum<input type="date" name="ssf_booking[date]" value="<?php echo esc_attr($booking['date'] ?? ''); ?>"></label><label>Starttid<input type="time" name="ssf_booking[start]" value="<?php echo esc_attr($booking['start'] ?? ''); ?>"></label><label>Sluttid<input type="time" name="ssf_booking[end]" value="<?php echo esc_attr($booking['end'] ?? ''); ?>"></label><label>Plats eller länk<input type="text" name="ssf_booking[location]" value="<?php echo esc_attr($booking['location'] ?? ''); ?>"></label><label>Mötestyp<select name="ssf_booking[type]"><?php foreach (array('Telefonsamtal', 'Digitalt möte', 'Ombordbesök', 'Dokumentgranskning') as $type) : ?><option <?php selected($booking['type'] ?? '', $type); ?>><?php echo esc_html($type); ?></option><?php endforeach; ?></select></label><label>Deltagare<input type="text" name="ssf_booking[participants]" value="<?php echo esc_attr($booking['participants'] ?? ''); ?>"></label><label>Kommentar<textarea name="ssf_booking[comment]" rows="3"><?php echo esc_textarea($booking['comment'] ?? ''); ?></textarea></label><label class="ssf-process-check"><input type="checkbox" name="ssf_send_booking_email" value="1"> Skicka bokningsmail vid uppdatering</label><?php
     }
 
+    public function render_inspectors(WP_Post $post): void
+    {
+        SSF_Medlemsprocess_Plugin::instance()->inspector->render_assignment_fields($post->ID);
+    }
+
     public function render_decision(WP_Post $post): void
     {
         $decision = (array) get_post_meta($post->ID, '_ssf_decision', true);
@@ -150,6 +156,7 @@ class SSF_Medlemsprocess_Admin
         if (! isset($_POST['ssf_application_admin_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_application_admin_nonce'])), 'ssf_save_application_' . $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || ! current_user_can('edit_ssf_application', $post_id)) { return; }
         $status = sanitize_key(wp_unslash($_POST['ssf_process_status'] ?? SSF_Medlemsprocess_Application::status($post_id)));
         update_post_meta($post_id, '_ssf_assigned_user', (int) ($_POST['ssf_assigned_user'] ?? 0));
+        SSF_Medlemsprocess_Plugin::instance()->inspector->save_assignment($post_id, (array) wp_unslash($_POST));
         update_post_meta($post_id, '_ssf_next_action', sanitize_text_field(wp_unslash($_POST['ssf_next_action'] ?? '')));
         update_post_meta($post_id, '_ssf_review', $this->sanitize_checklist((array) wp_unslash($_POST['ssf_review'] ?? array())));
         $inspection = $this->sanitize_inspection((array) wp_unslash($_POST['ssf_inspection'] ?? array()));
@@ -239,8 +246,8 @@ class SSF_Medlemsprocess_Admin
         wp_enqueue_script('ssf-medlemsprocess-admin', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-medlemsprocess-admin.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
     }
 
-    public function columns(array $columns): array { return array('cb' => $columns['cb'], 'title' => 'Ärende', 'ssf_ship' => 'Fartyg', 'ssf_applicant' => 'Sökande', 'ssf_status' => 'Status', 'ssf_assigned' => 'Ansvarig', 'ssf_activity' => 'Senaste aktivitet', 'date' => 'Inskickad'); }
-    public function column_content(string $column, int $post_id): void { $data = SSF_Medlemsprocess_Application::data($post_id); if ('ssf_ship' === $column) echo esc_html($data['ship_name'] ?? ''); if ('ssf_applicant' === $column) echo esc_html($data['applicant_name'] ?? ''); if ('ssf_status' === $column) echo '<span class="ssf-process-status-badge">' . esc_html(SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($post_id))) . '</span>'; if ('ssf_assigned' === $column) { $user = get_userdata((int) get_post_meta($post_id, '_ssf_assigned_user', true)); echo esc_html($user ? $user->display_name : 'Ej tilldelad'); } if ('ssf_activity' === $column) echo esc_html(get_post_meta($post_id, '_ssf_last_activity', true)); }
+    public function columns(array $columns): array { return array('cb' => $columns['cb'], 'title' => 'Ärende', 'ssf_ship' => 'Fartyg', 'ssf_applicant' => 'Sökande', 'ssf_status' => 'Status', 'ssf_assigned' => 'Ansvarig', 'ssf_inspectors' => 'Inspektörer', 'ssf_inspector_report' => 'Rapporter', 'ssf_activity' => 'Senaste aktivitet', 'date' => 'Inskickad'); }
+    public function column_content(string $column, int $post_id): void { $data = SSF_Medlemsprocess_Application::data($post_id); if ('ssf_ship' === $column) echo esc_html($data['ship_name'] ?? ''); if ('ssf_applicant' === $column) echo esc_html($data['applicant_name'] ?? ''); if ('ssf_status' === $column) echo '<span class="ssf-process-status-badge">' . esc_html(SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($post_id))) . '</span>'; if ('ssf_assigned' === $column) { $user = get_userdata((int) get_post_meta($post_id, '_ssf_assigned_user', true)); echo esc_html($user ? $user->display_name : 'Ej tilldelad'); } if ('ssf_inspectors' === $column) echo esc_html(SSF_Medlemsprocess_Plugin::instance()->inspector->assignment_summary($post_id)); if ('ssf_inspector_report' === $column) echo esc_html(SSF_Medlemsprocess_Plugin::instance()->inspector->report_summary($post_id)); if ('ssf_activity' === $column) echo esc_html(get_post_meta($post_id, '_ssf_last_activity', true)); }
 
     public function status_filter(string $post_type): void
     {

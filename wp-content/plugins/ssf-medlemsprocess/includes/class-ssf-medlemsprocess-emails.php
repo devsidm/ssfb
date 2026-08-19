@@ -54,6 +54,43 @@ class SSF_Medlemsprocess_Emails
         $this->send_template('booking', $application_id, array('booking_time' => $time, 'booking_location' => $booking['location'] ?? '', 'admin_comment' => $booking['comment'] ?? '', 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
     }
 
+    public function send_inspector_assignment(int $application_id, WP_User $inspector): bool
+    {
+        if (! is_email($inspector->user_email)) {
+            return false;
+        }
+        $data = SSF_Medlemsprocess_Application::data($application_id);
+        $deadline = (string) get_post_meta($application_id, '_ssf_inspector_deadline', true);
+        $task = (string) get_post_meta($application_id, '_ssf_inspector_task', true);
+        $body = "Hej " . $inspector->display_name . ",\n\nDu har tilldelats en inspektion för " . ($data['ship_name'] ?? get_the_title($application_id)) . ".\n\n";
+        if ($deadline) {
+            $body .= "Önskat klart-datum: " . $deadline . "\n";
+        }
+        if ($task) {
+            $body .= "Uppdrag:\n" . $task . "\n";
+        }
+        $body .= "\nÖppna ärendet här:\n" . SSF_Medlemsprocess_Plugin::instance()->inspector->case_url($application_id) . "\n\nVänliga hälsningar\nSveriges Segelfartygsförbund";
+        $sent = wp_mail($inspector->user_email, 'Ny inspektion tilldelad: ' . ($data['ship_name'] ?? get_the_title($application_id)), $body, array('Content-Type: text/plain; charset=UTF-8'));
+        SSF_Medlemsprocess_Application::add_history($application_id, 'email', 'E-post om inspektörstilldelning ' . ($sent ? 'skickades.' : 'kunde inte skickas.'), false);
+        return $sent;
+    }
+
+    public function send_inspection_complete(int $application_id): bool
+    {
+        $settings = SSF_Medlemsprocess_Plugin::settings();
+        $recipient = (string) ($settings['admin_email'] ?? '');
+        if (! is_email($recipient)) {
+            return false;
+        }
+        $data = SSF_Medlemsprocess_Application::data($application_id);
+        $number = (string) get_post_meta($application_id, '_ssf_application_number', true);
+        $edit_url = get_edit_post_link($application_id, '');
+        $body = "Inspektionsrapporterna för ärendet är klara.\n\nÄrende: " . $number . "\nFartyg: " . ($data['ship_name'] ?? get_the_title($application_id)) . "\n\nÖppna ärendet i WordPress:\n" . $edit_url;
+        $sent = wp_mail($recipient, 'Inspektionsrapport klar: ' . ($data['ship_name'] ?? get_the_title($application_id)), $body, array('Content-Type: text/plain; charset=UTF-8'));
+        SSF_Medlemsprocess_Application::add_history($application_id, 'email', 'E-post om färdig inspektionsrapport ' . ($sent ? 'skickades till handläggare.' : 'kunde inte skickas.'), false);
+        return $sent;
+    }
+
     public function send_template(string $key, int $application_id, array $variables = array(), bool $admin_recipient = false): bool
     {
         $templates = self::templates();

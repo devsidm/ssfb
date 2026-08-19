@@ -58,6 +58,8 @@ class SSF_Medlemsprocess_Public
         $booking = (array) get_post_meta($application_id, '_ssf_booking', true);
         $files = array_map('intval', (array) get_post_meta($application_id, '_ssf_application_files', true));
         $completion_files = array_map('intval', (array) get_post_meta($application_id, '_ssf_completion_files', true));
+        $inspector_files = (array) get_post_meta($application_id, '_ssf_inspector_files', true);
+        $inspector_visible_files = array_map('intval', wp_list_pluck(array_filter($inspector_files, static function ($file) { return ! empty($file['visible_to_applicant']); }), 'id'));
         ob_start();
         include SSF_MEDLEMSPROCESS_PATH . 'templates/status-page.php';
         return ob_get_clean();
