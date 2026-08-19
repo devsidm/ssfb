@@ -19,3 +19,4 @@
 .ssf-process-dashboard-card strong { color: #0b2d5c; font-size: 30px; }
 .ssf-process-status-badge { display: inline-block; padding: 4px 8px; color: #0b2d5c; background: #f8f1df; border: 1px solid #d8b46a; border-radius: 4px; font-weight: 600; }
 @media (max-width: 782px) { .ssf-process-admin-overview, .ssf-process-admin-grid, .ssf-process-dashboard-cards { grid-template-columns: 1fr; } .ssf-process-check-row { grid-template-columns: 1fr; } }
+@media print { #adminmenumain, #wpadminbar, #wpfooter, #screen-meta, #postdivrich, #submitdiv, .notice, .button, .button-link, .button-link-delete, .ssf-process-note-form { display: none !important; } #wpcontent, #wpbody, #wpbody-content { margin: 0 !important; padding: 0 !important; } .postbox { border: 0 !important; box-shadow: none !important; } }

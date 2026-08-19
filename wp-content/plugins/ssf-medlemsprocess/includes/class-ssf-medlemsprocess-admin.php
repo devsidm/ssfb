@@ -19,6 +19,8 @@ class SSF_Medlemsprocess_Admin
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
         add_filter('manage_' . SSF_Medlemsprocess_Application::POST_TYPE . '_posts_columns', array($this, 'columns'));
         add_action('manage_' . SSF_Medlemsprocess_Application::POST_TYPE . '_posts_custom_column', array($this, 'column_content'), 10, 2);
+        add_action('restrict_manage_posts', array($this, 'status_filter'));
+        add_action('pre_get_posts', array($this, 'apply_status_filter'));
         add_action('admin_post_ssf_add_application_note', array($this, 'add_note'));
         add_action('admin_post_ssf_application_token_action', array($this, 'token_action'));
         add_action('admin_post_ssf_save_process_settings', array($this, 'save_settings'));
@@ -28,6 +30,7 @@ class SSF_Medlemsprocess_Admin
     public function add_meta_boxes(): void
     {
         add_meta_box('ssf_application_overview', 'Översikt och status', array($this, 'render_overview'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'high');
+        add_meta_box('ssf_application_data', 'Ansökningsuppgifter och bilagor', array($this, 'render_application_data'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
         add_meta_box('ssf_application_review', 'Granskning', array($this, 'render_review'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
         add_meta_box('ssf_application_inspection', 'Inspektion', array($this, 'render_inspection'), SSF_Medlemsprocess_Application::POST_TYPE, 'normal', 'default');
         add_meta_box('ssf_application_booking', 'Tidsbokning', array($this, 'render_booking'), SSF_Medlemsprocess_Application::POST_TYPE, 'side', 'default');
@@ -56,6 +59,34 @@ class SSF_Medlemsprocess_Admin
         </div>
         <p class="description">Statuslänkar är personliga. <button type="button" class="button-link" data-ssf-token-action="send" data-application-id="<?php echo esc_attr((string) $post->ID); ?>" data-nonce="<?php echo esc_attr(wp_create_nonce('ssf_application_token_' . $post->ID)); ?>">Skicka en ny statuslänk</button> eller <button type="button" class="button-link-delete" data-ssf-token-action="revoke" data-application-id="<?php echo esc_attr((string) $post->ID); ?>" data-nonce="<?php echo esc_attr(wp_create_nonce('ssf_application_token_' . $post->ID)); ?>">återkalla befintlig länk</button>.</p>
         <?php
+    }
+
+    public function render_application_data(WP_Post $post): void
+    {
+        $data = SSF_Medlemsprocess_Application::data($post->ID);
+        $labels = array(
+            'application_path' => 'Ansökningsväg', 'ship_is_sailing' => 'Segelfartyg', 'ship_professional_use' => 'Seglande yrkesfartyg', 'ship_traditional_newbuild' => 'Traditionell nybyggnation',
+            'ship_length' => 'Längd i huvuddäck', 'ship_beam' => 'Bredd', 'ship_draft' => 'Djupgående', 'ship_register' => 'Svenskt skeppsregister', 'ship_registry_number' => 'Registreringsnummer',
+            'ship_name' => 'Fartygets namn', 'ship_type' => 'Fartygstyp', 'ship_rig' => 'Rigtyp', 'ship_build_year' => 'Byggår', 'ship_shipyard' => 'Byggplats eller varv', 'ship_home_port' => 'Hemmahamn', 'ship_restoration' => 'Under restaurering',
+            'ship_short_description' => 'Kort beskrivning', 'ship_history' => 'Historia', 'ship_current_use' => 'Nuvarande användning', 'ship_description' => 'Fördjupad beskrivning',
+            'applicant_name' => 'Fartygsombud', 'applicant_email' => 'E-post', 'applicant_phone' => 'Telefon', 'applicant_organization' => 'Organisation eller rederi', 'applicant_address' => 'Adress', 'applicant_website' => 'Webbplats',
+        );
+        echo '<table class="widefat striped ssf-process-data-table"><tbody>';
+        foreach ($labels as $key => $label) {
+            if (! empty($data[$key])) {
+                echo '<tr><th>' . esc_html($label) . '</th><td>' . nl2br(esc_html((string) $data[$key])) . '</td></tr>';
+            }
+        }
+        echo '</tbody></table>';
+        $files = array_merge((array) get_post_meta($post->ID, '_ssf_application_files', true), (array) get_post_meta($post->ID, '_ssf_completion_files', true));
+        if ($files) {
+            echo '<h3>Bilagor och bilder</h3><ul>';
+            foreach (array_unique(array_map('intval', $files)) as $file_id) {
+                printf('<li><a href="%s" target="_blank" rel="noopener">%s</a></li>', esc_url(wp_get_attachment_url($file_id)), esc_html(get_the_title($file_id)));
+            }
+            echo '</ul>';
+        }
+        echo '<p><button type="button" class="button" data-ssf-print-report>Skriv ut / Spara som PDF</button></p>';
     }
 
     public function render_review(WP_Post $post): void
@@ -210,6 +241,31 @@ class SSF_Medlemsprocess_Admin
 
     public function columns(array $columns): array { return array('cb' => $columns['cb'], 'title' => 'Ärende', 'ssf_ship' => 'Fartyg', 'ssf_applicant' => 'Sökande', 'ssf_status' => 'Status', 'ssf_assigned' => 'Ansvarig', 'ssf_activity' => 'Senaste aktivitet', 'date' => 'Inskickad'); }
     public function column_content(string $column, int $post_id): void { $data = SSF_Medlemsprocess_Application::data($post_id); if ('ssf_ship' === $column) echo esc_html($data['ship_name'] ?? ''); if ('ssf_applicant' === $column) echo esc_html($data['applicant_name'] ?? ''); if ('ssf_status' === $column) echo '<span class="ssf-process-status-badge">' . esc_html(SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($post_id))) . '</span>'; if ('ssf_assigned' === $column) { $user = get_userdata((int) get_post_meta($post_id, '_ssf_assigned_user', true)); echo esc_html($user ? $user->display_name : 'Ej tilldelad'); } if ('ssf_activity' === $column) echo esc_html(get_post_meta($post_id, '_ssf_last_activity', true)); }
+
+    public function status_filter(string $post_type): void
+    {
+        if (SSF_Medlemsprocess_Application::POST_TYPE !== $post_type) {
+            return;
+        }
+        $selected = sanitize_key(wp_unslash($_GET['ssf_process_status'] ?? ''));
+        echo '<select name="ssf_process_status"><option value="">Alla statusar</option>';
+        foreach (SSF_Medlemsprocess_Application::statuses() as $key => $item) {
+            printf('<option value="%s" %s>%s</option>', esc_attr($key), selected($selected, $key, false), esc_html($item['label']));
+        }
+        echo '</select>';
+    }
+
+    public function apply_status_filter(WP_Query $query): void
+    {
+        global $pagenow;
+        if (! is_admin() || 'edit.php' !== $pagenow || ! $query->is_main_query() || SSF_Medlemsprocess_Application::POST_TYPE !== $query->get('post_type')) {
+            return;
+        }
+        $status = sanitize_key(wp_unslash($_GET['ssf_process_status'] ?? ''));
+        if ($status && isset(SSF_Medlemsprocess_Application::statuses()[$status])) {
+            $query->set('meta_query', array(array('key' => '_ssf_process_status', 'value' => $status)));
+        }
+    }
 
     private function render_checklist(string $name, array $groups, array $saved): void { foreach ($groups as $group => $points) { echo '<section class="ssf-process-checklist"><h3>' . esc_html($group) . '</h3>'; foreach ($points as $key => $label) { $value = (array) ($saved[$key] ?? array()); echo '<div class="ssf-process-check-row"><strong>' . esc_html($label) . '</strong><select name="' . esc_attr($name . '[' . $key . '][status]') . '">'; foreach (array('' => 'Inte bedömd', 'met' => 'Uppfyllt', 'not_met' => 'Uppfyller ej', 'completion' => 'Komplettering krävs', 'na' => 'Ej relevant') as $option => $option_label) { echo '<option value="' . esc_attr($option) . '" ' . selected($value['status'] ?? '', $option, false) . '>' . esc_html($option_label) . '</option>'; } echo '</select><input name="' . esc_attr($name . '[' . $key . '][comment]') . '" value="' . esc_attr($value['comment'] ?? '') . '" placeholder="Kommentar"></div>'; } echo '</section>'; } }
     private static function review_points(): array { return array('Ombud och formalia' => array('representative' => 'Fartygsombud är angivet', 'contact' => 'Kontaktuppgifter är kompletta', 'application' => 'Ansökan är komplett', 'consent' => 'Samtycke och GDPR är godkänt'), 'Grundkrav för fartyg' => array('sailing' => 'Segelfartyg eller segelfartyg med hjälpmotor', 'professional' => 'Seglande yrkeshistorik eller relevant traditionell nybyggnation', 'purpose' => 'Relevant för SSF:s syfte'), 'Mått och registrering' => array('length' => 'Längd i huvuddäck överstiger 12 meter', 'beam' => 'Bredd är minst 4 meter', 'register' => 'Registeruppgifter är angivna vid behov'), 'Dokumentation' => array('images' => 'Bilder finns', 'history' => 'Historik finns', 'technical' => 'Teknisk information finns'), 'Bedömning' => array('continue' => 'Ansökan kan gå vidare', 'inspection' => 'Inspektion rekommenderas', 'board' => 'Styrelsebeslut krävs')); }
