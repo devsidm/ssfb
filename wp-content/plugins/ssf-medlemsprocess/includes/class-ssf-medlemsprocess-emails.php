@@ -30,7 +30,9 @@ class SSF_Medlemsprocess_Emails
     public function send_received(int $application_id, string $token): bool
     {
         $applicant_sent = $this->send_template('received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($token)));
-        $this->send_template('admin_notice', $application_id, array(), true);
+        $settings = SSF_Medlemsprocess_Plugin::settings();
+        $recipient = is_email($settings['application_notification_email'] ?? '') ? (string) $settings['application_notification_email'] : (string) $settings['admin_email'];
+        $this->send_template('admin_notice', $application_id, array(), false, $recipient);
         return $applicant_sent;
     }
 
@@ -91,7 +93,7 @@ class SSF_Medlemsprocess_Emails
         return $sent;
     }
 
-    public function send_template(string $key, int $application_id, array $variables = array(), bool $admin_recipient = false): bool
+    public function send_template(string $key, int $application_id, array $variables = array(), bool $admin_recipient = false, string $recipient_override = ''): bool
     {
         $templates = self::templates();
         if (! isset($templates[$key])) {
@@ -120,7 +122,7 @@ class SSF_Medlemsprocess_Emails
         foreach ($variables as $name => $value) {
             $replace['{' . $name . '}'] = (string) $value;
         }
-        $recipient = $admin_recipient ? $settings['admin_email'] : ($data['applicant_email'] ?? '');
+        $recipient = $recipient_override ?: ($admin_recipient ? $settings['admin_email'] : ($data['applicant_email'] ?? ''));
         if (! is_email($recipient)) {
             return false;
         }
