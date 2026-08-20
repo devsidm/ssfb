@@ -1,9 +1,20 @@
-<?php if (! defined('ABSPATH')) { exit; } ?>
+<?php
+if (! defined('ABSPATH')) { exit; }
+$application_content = wp_parse_args((array) ($application_content ?? array()), array(
+    'image_id' => 0,
+    'image_alt' => 'Traditionellt segelfartyg',
+    'eyebrow' => 'Sveriges Segelfartygsförbund',
+    'title' => 'Ansök om medlemskap',
+    'intro' => 'Berätta om fartyget och ert fartygsombud. Du kan spara informationen i lugn takt och får en personlig länk för att följa ärendet när ansökan är inskickad.',
+));
+$image_url = function_exists('ssf_site_content_image_url') ? ssf_site_content_image_url((int) $application_content['image_id']) : '';
+?>
 <section class="ssf-process-shell">
+    <?php if ($image_url) : ?><figure class="ssf-process-page-image"><img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($application_content['image_alt']); ?>"></figure><?php endif; ?>
     <div class="ssf-process-heading">
-        <p class="ssf-process-eyebrow">Sveriges Segelfartygsförbund</p>
-        <h1>Ansök om medlemskap</h1>
-        <p>Berätta om fartyget och ert fartygsombud. Du kan spara informationen i lugn takt och får en personlig länk för att följa ärendet när ansökan är inskickad.</p>
+        <p class="ssf-process-eyebrow"><?php echo esc_html($application_content['eyebrow']); ?></p>
+        <h1><?php echo esc_html($application_content['title']); ?></h1>
+        <p><?php echo esc_html($application_content['intro']); ?></p>
     </div>
     <form class="ssf-process-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-ssf-application-form>
         <input type="hidden" name="action" value="ssf_submit_application">

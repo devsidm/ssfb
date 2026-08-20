@@ -22,6 +22,8 @@
 }
 
 .ssf-process-heading { max-width: 720px; margin-bottom: 28px; }
+.ssf-process-page-image { height: min(42vw, 360px); margin: 0 0 28px; overflow: hidden; border-radius: 8px; }
+.ssf-process-page-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .ssf-process-heading h1, .ssf-process-form legend, .ssf-status-section h2 { color: var(--ssf-blue-dark); letter-spacing: 0; }
 .ssf-process-heading h1 { font-size: 36px; margin: 6px 0 12px; }
 .ssf-process-heading p { color: var(--ssf-muted); font-size: 17px; line-height: 1.6; }

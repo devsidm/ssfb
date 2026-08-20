@@ -38,6 +38,7 @@ class SSF_Medlemsprocess_Public
         }
 
         $settings = SSF_Medlemsprocess_Plugin::settings();
+        $application_content = function_exists('ssf_site_page_content') ? ssf_site_page_content('application') : array();
         ob_start();
         include SSF_MEDLEMSPROCESS_PATH . 'templates/application-form.php';
         return ob_get_clean();

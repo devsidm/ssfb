@@ -252,6 +252,45 @@ h1, h2, h3, h4, .site-title {
   padding: 28px;
 }
 
+.ssf-page-content {
+  width: min(960px, calc(100% - 32px));
+  margin: 44px auto 64px;
+}
+
+.ssf-page-content__image {
+  height: min(42vw, 360px);
+  margin: 0 0 32px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.ssf-page-content__image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.ssf-page-content__heading {
+  max-width: 760px;
+  margin-bottom: 26px;
+}
+
+.ssf-page-content__heading h1 {
+  margin: 6px 0 12px;
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+}
+
+.ssf-page-content__heading p {
+  color: var(--ssf-muted);
+  font-size: 1.08rem;
+}
+
+.ssf-form h2 {
+  margin-top: 0;
+  font-size: 1.55rem;
+}
+
 .ssf-form label,
 .ssf-form legend {
   display: grid;
