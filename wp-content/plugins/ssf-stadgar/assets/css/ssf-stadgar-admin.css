@@ -1,0 +1,40 @@
+.ssf-document-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ssf-document-admin-grid--wide {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.ssf-document-admin-grid label,
+.ssf-document-admin-pdf label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.ssf-document-admin-grid input,
+.ssf-document-admin-grid select,
+.ssf-document-admin-grid textarea {
+  width: 100%;
+}
+
+.ssf-document-admin-check {
+  margin: 20px 0 6px;
+  font-weight: 600;
+}
+
+.ssf-document-analysis-result {
+  margin: 12px 0;
+  color: #3c434a;
+}
+
+@media (max-width: 782px) {
+  .ssf-document-admin-grid,
+  .ssf-document-admin-grid--wide {
+    grid-template-columns: 1fr;
+  }
+}

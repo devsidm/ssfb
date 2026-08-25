@@ -1,0 +1,332 @@
+.content-page--stadgar {
+  width: min(1120px, calc(100% - 32px));
+}
+
+.ssf-stadgar {
+  color: var(--ssf-text, #14253f);
+}
+
+.ssf-stadgar__intro {
+  max-width: 760px;
+  margin: 0 0 36px;
+}
+
+.ssf-stadgar__eyebrow,
+.ssf-stadgar__status,
+.ssf-stadgar__document-type {
+  margin: 0 0 8px;
+  color: var(--ssf-gold-dark, #b68d34);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ssf-stadgar__intro h1,
+.ssf-stadgar h2,
+.ssf-stadgar h3 {
+  color: var(--ssf-blue-deep, #071f42);
+  font-family: Quicksand, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.ssf-stadgar__intro h1 {
+  margin: 0 0 14px;
+  font-size: clamp(2.4rem, 4vw, 3.8rem);
+  line-height: 1.05;
+}
+
+.ssf-stadgar__intro > p:last-child,
+.ssf-stadgar__section-heading > p {
+  margin: 0;
+  color: var(--ssf-muted, #66758c);
+  font-size: 1.08rem;
+}
+
+.ssf-stadgar__current,
+.ssf-stadgar__empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
+  gap: 28px;
+  padding: 30px;
+  border: 1px solid var(--ssf-border, #d9e3f0);
+  border-left: 5px solid var(--ssf-gold, #d8b46a);
+  border-radius: 8px;
+  background: var(--ssf-white, #fff);
+  box-shadow: 0 10px 30px rgba(20, 37, 63, 0.08);
+}
+
+.ssf-stadgar__current-heading h2,
+.ssf-stadgar__empty h2 {
+  margin: 0 0 12px;
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  line-height: 1.15;
+}
+
+.ssf-stadgar__current-note,
+.ssf-stadgar__summary {
+  color: var(--ssf-muted, #66758c);
+}
+
+.ssf-stadgar__metadata {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  margin: 0;
+  padding: 4px 0 0;
+}
+
+.ssf-stadgar__metadata div {
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--ssf-border, #d9e3f0);
+}
+
+.ssf-stadgar__metadata dt {
+  margin-bottom: 2px;
+  color: var(--ssf-muted, #66758c);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.ssf-stadgar__metadata dd {
+  margin: 0;
+  color: var(--ssf-blue-deep, #071f42);
+  font-weight: 700;
+}
+
+.ssf-stadgar__summary {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+}
+
+.ssf-stadgar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 12px;
+}
+
+.ssf-stadgar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid var(--ssf-blue, #3163b7);
+  border-radius: 8px;
+  background: var(--ssf-blue, #3163b7);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ssf-stadgar__button:hover,
+.ssf-stadgar__button:focus {
+  border-color: var(--ssf-blue-dark, #0b2d5c);
+  background: var(--ssf-blue-dark, #0b2d5c);
+  color: #fff;
+}
+
+.ssf-stadgar__button--secondary {
+  background: #fff;
+  color: var(--ssf-blue-dark, #0b2d5c);
+}
+
+.ssf-stadgar__reading {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 36px;
+  margin-top: 50px;
+}
+
+.ssf-stadgar__outline {
+  position: sticky;
+  top: 96px;
+  padding: 22px;
+  border: 1px solid var(--ssf-border, #d9e3f0);
+  border-radius: 8px;
+  background: var(--ssf-blue-light, #eaf1fb);
+}
+
+.ssf-stadgar__outline h2,
+.ssf-stadgar__online h2,
+.ssf-stadgar__section h2 {
+  margin: 0 0 16px;
+  font-size: clamp(1.45rem, 2.5vw, 2rem);
+  line-height: 1.2;
+}
+
+.ssf-stadgar__outline ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.ssf-stadgar__outline a {
+  color: var(--ssf-blue-dark, #0b2d5c);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+.ssf-stadgar__online {
+  min-width: 0;
+}
+
+.ssf-stadgar__document-content {
+  color: var(--ssf-text, #14253f);
+}
+
+.ssf-stadgar__document-content h2,
+.ssf-stadgar__document-content h3,
+.ssf-stadgar__document-content h4 {
+  scroll-margin-top: 100px;
+}
+
+.ssf-stadgar__document-content h3 {
+  margin: 34px 0 10px;
+  color: var(--ssf-blue-dark, #0b2d5c);
+  font-size: 1.28rem;
+  line-height: 1.3;
+}
+
+.ssf-stadgar__document-content h3:first-child {
+  margin-top: 0;
+}
+
+.ssf-stadgar__document-content p,
+.ssf-stadgar__document-content li {
+  max-width: 74ch;
+}
+
+.ssf-stadgar__document-content ul {
+  padding-left: 22px;
+}
+
+.ssf-stadgar__section {
+  margin-top: 56px;
+  padding-top: 42px;
+  border-top: 1px solid var(--ssf-border, #d9e3f0);
+}
+
+.ssf-stadgar__section-heading {
+  margin-bottom: 22px;
+}
+
+.ssf-stadgar__document-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.ssf-stadgar__document-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 200px;
+  padding: 22px;
+  border: 1px solid var(--ssf-border, #d9e3f0);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ssf-stadgar__document-card h3 {
+  margin: 0 0 9px;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.ssf-stadgar__document-card > p:not(.ssf-stadgar__document-type) {
+  margin: 0 0 18px;
+  color: var(--ssf-muted, #66758c);
+}
+
+.ssf-stadgar__document-card a {
+  margin-top: auto;
+  color: var(--ssf-blue-dark, #0b2d5c);
+  font-weight: 700;
+}
+
+.ssf-stadgar__history-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ssf-border, #d9e3f0);
+}
+
+.ssf-stadgar__history-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--ssf-border, #d9e3f0);
+}
+
+.ssf-stadgar__history-list h3 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.ssf-stadgar__history-list p {
+  margin: 4px 0 0;
+  color: var(--ssf-muted, #66758c);
+}
+
+.ssf-stadgar__history-list > li > a {
+  flex: 0 0 auto;
+  color: var(--ssf-blue-dark, #0b2d5c);
+  font-weight: 700;
+}
+
+.ssf-stadgar__change-note {
+  max-width: 70ch;
+}
+
+@media (max-width: 800px) {
+  .ssf-stadgar__current,
+  .ssf-stadgar__reading {
+    grid-template-columns: 1fr;
+  }
+
+  .ssf-stadgar__outline {
+    position: static;
+  }
+
+  .ssf-stadgar__document-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .content-page--stadgar {
+    width: min(100% - 24px, 1120px);
+  }
+
+  .ssf-stadgar__intro {
+    margin-bottom: 28px;
+  }
+
+  .ssf-stadgar__current,
+  .ssf-stadgar__empty {
+    padding: 22px;
+  }
+
+  .ssf-stadgar__actions,
+  .ssf-stadgar__button {
+    width: 100%;
+  }
+
+  .ssf-stadgar__document-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ssf-stadgar__history-list li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}

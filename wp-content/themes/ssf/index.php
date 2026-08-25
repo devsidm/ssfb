@@ -11,8 +11,9 @@ get_header();
 <?php if (have_posts()) : ?>
     <?php while (have_posts()) : ?>
         <?php the_post(); ?>
-        <article id="post-<?php the_ID(); ?>" <?php post_class('content-page'); ?>>
-            <?php if (! is_page('kontakta-oss')) : ?><h1><?php the_title(); ?></h1><?php endif; ?>
+        <?php $is_document_page = is_page('stadgar'); ?>
+        <article id="post-<?php the_ID(); ?>" <?php post_class($is_document_page ? 'content-page content-page--stadgar' : 'content-page'); ?>>
+            <?php if (! is_page(array('kontakta-oss', 'stadgar'))) : ?><h1><?php the_title(); ?></h1><?php endif; ?>
             <div class="entry-content">
                 <?php the_content(); ?>
             </div>
