@@ -30,7 +30,6 @@ class SSF_Stadgar_Public
         ?>
         <section class="ssf-stadgar" aria-labelledby="ssf-stadgar-title">
             <header class="ssf-stadgar__intro">
-                <p class="ssf-stadgar__eyebrow">Sveriges Segelfartygsförbund</p>
                 <h1 id="ssf-stadgar-title">Stadgar</h1>
                 <p><?php echo esc_html($intro); ?></p>
             </header>
