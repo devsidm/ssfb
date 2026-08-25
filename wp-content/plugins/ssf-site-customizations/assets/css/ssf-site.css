@@ -159,9 +159,8 @@ h3, h4, .site-title {
 .ssf-news-card h3 {
   margin: 0 0 10px;
   color: var(--ssf-blue-dark);
-  font-family: var(--ssf-font-display);
-  font-synthesis: none;
-  font-weight: 400;
+  font-family: var(--ssf-font-body);
+  font-weight: 700;
 }
 
 .ssf-card span,

@@ -3,7 +3,7 @@ Theme Name: SSF
 Theme URI: https://github.com/devsidm/ssfb
 Author: SIDM
 Description: Custom WordPress theme for the SSF website.
-Version: 0.1.3
+Version: 0.1.4
 Requires at least: 6.0
 Tested up to: 6.6
 Requires PHP: 8.0
@@ -26,7 +26,7 @@ Text Domain: ssf
   --ssf-radius: 18px;
   --ssf-shadow: 0 10px 30px rgba(20, 37, 63, 0.08);
   --ssf-font-display: "SSF Nordhavn Display", Georgia, "Times New Roman", serif;
-  --ssf-font-body: "Source Sans 3", Arial, Helvetica, sans-serif;
+  --ssf-font-body: "Inter", Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -38,8 +38,8 @@ body {
   color: var(--ssf-text);
   background: var(--ssf-bg-soft);
   font-family: var(--ssf-font-body);
-  font-size: 18px;
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.6;
 }
 
 a {

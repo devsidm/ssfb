@@ -22,13 +22,19 @@
   text-transform: uppercase;
 }
 
-.ssf-stadgar__intro h1,
-.ssf-stadgar h2,
-.ssf-stadgar h3 {
+.ssf-stadgar__intro h1 {
   color: var(--ssf-blue-deep, #071f42);
   font-family: var(--ssf-font-display);
   font-synthesis: none;
   font-weight: 400;
+  letter-spacing: 0;
+}
+
+.ssf-stadgar h2,
+.ssf-stadgar h3 {
+  color: var(--ssf-blue-deep, #071f42);
+  font-family: var(--ssf-font-body);
+  font-weight: 700;
   letter-spacing: 0;
 }
 

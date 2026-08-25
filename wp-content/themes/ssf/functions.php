@@ -6,7 +6,7 @@
  */
 
 if (! defined('SSF_VERSION')) {
-    define('SSF_VERSION', '0.1.3');
+    define('SSF_VERSION', '0.1.4');
 }
 
 function ssf_setup(): void

@@ -1,4 +1,4 @@
-SSF Nordhavn Display v0.1
+SSF Nordhavn Display v0.2
 
 Modified font family name: SSF Nordhavn Display
 Created for: Sveriges Segelfartygsforbund (SSF)
@@ -9,10 +9,10 @@ Original copyright: Greek Font Society.
 Original Reserved Font Name: GFS Didot.
 License: SIL Open Font License 1.1.
 
-Changes in this v0.1 implementation include:
+Changes in this v0.2 implementation include:
 - complete renaming to SSF Nordhavn Display
 - adjusted horizontal proportions for the Nordhavn visual direction
-- refined display spacing / advance widths
+- normalized advance widths and space glyph metrics for web text
 - web-optimized WOFF2 packaging
 - SSF-oriented CSS and specimen page
 

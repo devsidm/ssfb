@@ -3,7 +3,7 @@
  * Plugin Name: SSF Stadgar & Dokument
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Hanterar SSF:s stadgar, versionshistorik och relaterade styrdokument.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: SIDM
  * Text Domain: ssf-stadgar
  *
@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_STADGAR_VERSION', '0.1.1');
+define('SSF_STADGAR_VERSION', '0.1.2');
 define('SSF_STADGAR_FILE', __FILE__);
 define('SSF_STADGAR_PATH', plugin_dir_path(__FILE__));
 define('SSF_STADGAR_URL', plugin_dir_url(__FILE__));
