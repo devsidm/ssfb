@@ -77,7 +77,6 @@ function ssf_site_content_defaults(): array
         'contact' => array(
             'image_id' => 0,
             'image_alt' => 'Segelfartyg vid kaj',
-            'eyebrow' => 'Sveriges Segelfartygsförbund',
             'title' => 'Kontakta oss',
             'intro' => 'Hör av dig om medlemskap, fartygsombud, ansökan eller om du vill veta mer om SSF:s arbete.',
             'form_title' => 'Skicka ett meddelande',
@@ -208,7 +207,6 @@ function ssf_site_content_groups(): array
             'Kontakt' => array(
                 'image_id' => array('label' => 'Toppbild', 'type' => 'image'),
                 'image_alt' => array('label' => 'Bildbeskrivning', 'type' => 'text'),
-                'eyebrow' => array('label' => 'Överrubrik', 'type' => 'text'),
                 'title' => array('label' => 'Rubrik', 'type' => 'text'),
                 'intro' => array('label' => 'Inledning', 'type' => 'textarea'),
                 'form_title' => array('label' => 'Formulärets rubrik', 'type' => 'text'),

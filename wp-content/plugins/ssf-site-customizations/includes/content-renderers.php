@@ -37,7 +37,7 @@ function ssf_site_editorial_contact_shortcode(): string
     ?>
     <section class="ssf-page-content">
         <?php if ($image_url) : ?><figure class="ssf-page-content__image"><img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($contact['image_alt']); ?>"></figure><?php endif; ?>
-        <div class="ssf-page-content__heading"><p class="ssf-process-eyebrow"><?php echo esc_html($contact['eyebrow']); ?></p><h1><?php echo esc_html($contact['title']); ?></h1><?php echo wp_kses_post(ssf_site_content_text($contact['intro'])); ?></div>
+        <div class="ssf-page-content__heading"><h1><?php echo esc_html($contact['title']); ?></h1><?php echo wp_kses_post(ssf_site_content_text($contact['intro'])); ?></div>
         <form class="ssf-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><h2><?php echo esc_html($contact['form_title']); ?></h2><input type="hidden" name="action" value="ssf_contact"><?php wp_nonce_field('ssf_contact', 'ssf_contact_nonce'); ?><label>Namn<input name="namn" required></label><label>E-post<input type="email" name="epost" required></label><label>Telefon<input name="telefon"></label><label>Ämne<input name="amne" required></label><label>Meddelande<textarea name="meddelande" rows="6" required></textarea></label><button class="ssf-button" type="submit">Skicka</button></form>
     </section>
     <?php
