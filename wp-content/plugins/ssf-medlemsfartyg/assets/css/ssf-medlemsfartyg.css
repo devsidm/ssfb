@@ -43,7 +43,9 @@
 .ssf-ship-single h1,
 .ssf-ship-single h2 {
   color: var(--ssf-blue-deep);
-  font-family: Quicksand, system-ui, sans-serif;
+  font-family: var(--ssf-font-display);
+  font-synthesis: none;
+  font-weight: 400;
 }
 
 .ssf-ships-hero h1 {
@@ -132,6 +134,9 @@
 .ssf-ship-card h3 {
   margin: 10px 0;
   color: var(--ssf-blue-dark);
+  font-family: var(--ssf-font-display);
+  font-synthesis: none;
+  font-weight: 400;
 }
 
 .ssf-ship-card h3 a,
@@ -275,6 +280,11 @@
 .ssf-collection-form h1,
 .ssf-collection-form h2 {
   color: var(--ssf-blue-deep);
+}
+
+.ssf-collection-form h2 {
+  font-family: var(--ssf-font-body);
+  font-weight: 700;
 }
 
 .ssf-collection-form label {

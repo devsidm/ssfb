@@ -3,7 +3,7 @@
  * Plugin Name: SSF Site Customizations
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Content types, shortcodes, forms, and styling for Sveriges Segelfartygsförbund.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Author: SIDM
  * Text Domain: ssf-site
  *
@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_SITE_VERSION', '0.1.3');
+define('SSF_SITE_VERSION', '0.1.4');
 define('SSF_SITE_PATH', plugin_dir_path(__FILE__));
 define('SSF_SITE_URL', plugin_dir_url(__FILE__));
 
@@ -27,16 +27,16 @@ require_once SSF_SITE_PATH . 'includes/content-renderers.php';
 function ssf_site_enqueue_assets(): void
 {
     wp_enqueue_style(
-        'ssf-google-fonts',
-        'https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&family=Roboto:wght@400;500;700&display=swap',
+        'ssf-typography',
+        SSF_SITE_URL . 'assets/css/ssf-typography.css',
         array(),
-        null
+        SSF_SITE_VERSION
     );
 
     wp_enqueue_style(
         'ssf-site',
         SSF_SITE_URL . 'assets/css/ssf-site.css',
-        array(),
+        array('ssf-typography'),
         SSF_SITE_VERSION
     );
 
@@ -49,6 +49,23 @@ function ssf_site_enqueue_assets(): void
     );
 }
 add_action('wp_enqueue_scripts', 'ssf_site_enqueue_assets');
+
+function ssf_site_enqueue_admin_typography(): void
+{
+    wp_enqueue_style(
+        'ssf-typography',
+        SSF_SITE_URL . 'assets/css/ssf-typography.css',
+        array(),
+        SSF_SITE_VERSION
+    );
+    wp_enqueue_style(
+        'ssf-admin-typography',
+        SSF_SITE_URL . 'assets/css/ssf-admin-typography.css',
+        array('ssf-typography'),
+        SSF_SITE_VERSION
+    );
+}
+add_action('admin_enqueue_scripts', 'ssf_site_enqueue_admin_typography');
 
 function ssf_site_document_title(array $parts): array
 {

@@ -1,0 +1,9 @@
+body,
+body .wp-core-ui,
+body .wp-core-ui button,
+body .wp-core-ui input,
+body .wp-core-ui select,
+body .wp-core-ui textarea,
+body .wp-core-ui .button {
+  font-family: var(--ssf-font-body);
+}

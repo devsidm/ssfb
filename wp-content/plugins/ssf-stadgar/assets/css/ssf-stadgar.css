@@ -26,7 +26,9 @@
 .ssf-stadgar h2,
 .ssf-stadgar h3 {
   color: var(--ssf-blue-deep, #071f42);
-  font-family: Quicksand, system-ui, sans-serif;
+  font-family: var(--ssf-font-display);
+  font-synthesis: none;
+  font-weight: 400;
   letter-spacing: 0;
 }
 

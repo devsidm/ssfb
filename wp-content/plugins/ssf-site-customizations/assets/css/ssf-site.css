@@ -18,12 +18,21 @@
 body {
   color: var(--ssf-text);
   background: var(--ssf-bg-soft);
-  font-family: Roboto, system-ui, sans-serif;
+  font-family: var(--ssf-font-body);
 }
 
-h1, h2, h3, h4, .site-title {
+h1, h2 {
   color: var(--ssf-blue-deep);
-  font-family: Quicksand, system-ui, sans-serif;
+  font-family: var(--ssf-font-display);
+  font-synthesis: none;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+h3, h4, .site-title {
+  color: var(--ssf-blue-deep);
+  font-family: var(--ssf-font-body);
+  font-weight: 700;
   letter-spacing: 0;
 }
 
@@ -150,6 +159,9 @@ h1, h2, h3, h4, .site-title {
 .ssf-news-card h3 {
   margin: 0 0 10px;
   color: var(--ssf-blue-dark);
+  font-family: var(--ssf-font-display);
+  font-synthesis: none;
+  font-weight: 400;
 }
 
 .ssf-card span,
@@ -288,6 +300,8 @@ h1, h2, h3, h4, .site-title {
 
 .ssf-form h2 {
   margin-top: 0;
+  font-family: var(--ssf-font-body);
+  font-weight: 700;
   font-size: 1.55rem;
 }
 

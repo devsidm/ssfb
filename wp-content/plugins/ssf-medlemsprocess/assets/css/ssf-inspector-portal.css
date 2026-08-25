@@ -1,4 +1,4 @@
-.ssf-inspector-shell { max-width: 1180px; margin: 36px auto 56px; color: var(--ssf-text); }
+.ssf-inspector-shell { max-width: 1180px; margin: 36px auto 56px; color: var(--ssf-text); font-family: var(--ssf-font-body); }
 .ssf-inspector-header, .ssf-inspector-case-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
 .ssf-inspector-header h1, .ssf-inspector-case-heading h2 { margin: 4px 0 7px; color: var(--ssf-blue-dark); letter-spacing: 0; }
 .ssf-inspector-header h1 { font-size: 34px; }
