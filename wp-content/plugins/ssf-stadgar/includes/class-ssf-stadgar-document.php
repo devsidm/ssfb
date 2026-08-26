@@ -43,7 +43,7 @@ class SSF_Stadgar_Document
                 ),
                 'public'             => false,
                 'show_ui'            => true,
-                'show_in_menu'       => true,
+                'show_in_menu'       => 'ssf',
                 'show_in_rest'       => true,
                 'rest_base'          => 'ssf-documents',
                 'menu_icon'          => 'dashicons-media-document',

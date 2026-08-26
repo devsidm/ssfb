@@ -39,7 +39,7 @@ class SSF_Stadgar_Admin
     public function add_settings_page(): void
     {
         add_submenu_page(
-            'edit.php?post_type=' . SSF_Stadgar_Document::POST_TYPE,
+            'ssf',
             'Inställningar för stadgarsidan',
             'Inställningar',
             'manage_options',
@@ -89,7 +89,7 @@ class SSF_Stadgar_Admin
         update_option('ssf_stadgar_intro', sanitize_textarea_field($settings['intro'] ?? ''), false);
         update_option('ssf_stadgar_current_note', sanitize_textarea_field($settings['current_note'] ?? ''), false);
 
-        wp_safe_redirect(add_query_arg('updated', '1', admin_url('edit.php?post_type=' . SSF_Stadgar_Document::POST_TYPE . '&page=ssf-stadgar-settings')));
+        wp_safe_redirect(add_query_arg('updated', '1', admin_url('admin.php?page=ssf-stadgar-settings')));
         exit;
     }
 

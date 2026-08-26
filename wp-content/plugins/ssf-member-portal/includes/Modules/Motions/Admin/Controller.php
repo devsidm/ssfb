@@ -52,7 +52,7 @@ final class Controller
         $under_review = count(get_posts(array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'any', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => '_ssf_mp_status', 'meta_value' => MotionStatus::UNDER_REVIEW)));
         $sync_errors = count(get_posts(array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'any', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => '_ssf_mp_sharepoint_status', 'meta_value' => 'retrying')));
         ?>
-        <div class="wrap"><h1><?php esc_html_e('SSF Medlemsportal', 'ssf-member-portal'); ?></h1>
+        <div class="wrap"><h1><?php esc_html_e('SSF', 'ssf-member-portal'); ?></h1>
         <div class="postbox" style="max-width:820px;padding:20px"><h2><?php esc_html_e('Motioner', 'ssf-member-portal'); ?></h2>
         <table class="widefat striped"><tbody>
         <tr><th><?php esc_html_e('Motionsperiod', 'ssf-member-portal'); ?></th><td><?php echo esc_html($this->state_label($state)); ?></td></tr>

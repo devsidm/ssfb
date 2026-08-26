@@ -59,10 +59,10 @@ final class Plugin
 
     public function admin_menu(): void
     {
-        add_menu_page(__('SSF', 'ssf-member-portal'), __('SSF', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal', array($this, 'render_dashboard'), 'dashicons-admin-generic', 25);
-        add_submenu_page('ssf-member-portal', __('Medlemsportal', 'ssf-member-portal'), __('Medlemsportal', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal', array($this, 'render_dashboard'));
-        $this->motions->register_admin_menu('ssf-member-portal');
-        add_submenu_page('ssf-member-portal', __('Systemstatus', 'ssf-member-portal'), __('Systemstatus', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-status', array($this, 'render_system_status'));
+        add_menu_page(__('SSF', 'ssf-member-portal'), __('SSF', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'), 'dashicons-admin-generic', 25);
+        add_submenu_page('ssf', __('SSF - Översikt', 'ssf-member-portal'), __('Översikt', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'));
+        $this->motions->register_admin_menu('ssf');
+        add_submenu_page('ssf', __('Systemstatus', 'ssf-member-portal'), __('Systemstatus', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-status', array($this, 'render_system_status'));
     }
 
     public function render_dashboard(): void
