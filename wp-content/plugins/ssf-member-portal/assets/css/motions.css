@@ -1,0 +1,26 @@
+.ssf-motion-page { max-width: 760px; margin: 0 auto; color: #132f56; }
+.ssf-motion-page__intro { margin-bottom: 2rem; }
+.ssf-motion-page__eyebrow { margin: 0 0 .4rem; color: #98732b; font: 700 .8rem/1.25 Inter, sans-serif; letter-spacing: 0; text-transform: uppercase; }
+.ssf-motion-page h1, .ssf-motion-page h2 { color: #102f57; }
+.ssf-motion-deadline { border-left: 4px solid #bc8730; margin-top: 1.25rem; padding: .8rem 1rem; background: #f6f8f9; display: grid; gap: .2rem; }
+.ssf-motion-deadline span, .ssf-motion-deadline small, .ssf-motion-form__help { color: #4c5d70; font-size: .9rem; }
+.ssf-motion-deadline strong { font-size: 1.2rem; }
+.ssf-motion-message { border: 1px solid #c9d7df; background: #f7fbfc; padding: 1rem 1.15rem; margin: 1.25rem 0; }
+.ssf-motion-message--error { border-color: #b44c43; background: #fff5f3; color: #6e251f; }
+.ssf-motion-message--warning { border-color: #b8842b; background: #fff9ed; }
+.ssf-motion-message--success { border-color: #267466; background: #f0fbf8; }
+.ssf-motion-form { margin-top: 1.5rem; }
+.ssf-motion-form p { margin: 0 0 1rem; }
+.ssf-motion-form label { display: block; margin-bottom: .35rem; font-weight: 700; }
+.ssf-motion-form input, .ssf-motion-form textarea { width: 100%; box-sizing: border-box; border: 1px solid #92a6b5; border-radius: 2px; padding: .65rem; font: inherit; color: #162f50; background: #fff; }
+.ssf-motion-form input:focus, .ssf-motion-form textarea:focus { outline: 3px solid rgba(40, 109, 118, .24); outline-offset: 1px; border-color: #176a70; }
+.ssf-motion-form input[type=file] { border: 0; padding-left: 0; }
+.ssf-motion-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+.ssf-motion-form__grid p:last-child { grid-column: 1 / -1; }
+.ssf-motion-form__honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.ssf-motion-button { border: 0; border-radius: 2px; background: #0c5865; color: #fff; padding: .75rem 1.05rem; font: 700 1rem/1.2 Inter, sans-serif; cursor: pointer; }
+.ssf-motion-button:hover { background: #083f4a; }
+.ssf-motion-status-list { margin: 1.5rem 0; border-top: 1px solid #c9d7df; }
+.ssf-motion-status-list div { display: grid; grid-template-columns: minmax(150px, .8fr) 2fr; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid #c9d7df; }
+.ssf-motion-status-list dt { font-weight: 700; }.ssf-motion-status-list dd { margin: 0; }
+@media (max-width: 600px) { .ssf-motion-form__grid { display: block; }.ssf-motion-status-list div { grid-template-columns: 1fr; gap: .25rem; } }
