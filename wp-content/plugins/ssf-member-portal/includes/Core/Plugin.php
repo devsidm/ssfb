@@ -33,6 +33,7 @@ final class Plugin
         add_action('init', array($this, 'register'));
         add_action('admin_menu', array($this, 'admin_menu'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_assets'));
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
     }
 
     public static function activate(): void
@@ -93,6 +94,27 @@ final class Plugin
         }
         wp_enqueue_style('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/css/motions.css', array(), SSF_MEMBER_PORTAL_VERSION);
         wp_enqueue_script('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/js/motions.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
+    }
+
+    public function register_rest_routes(): void
+    {
+        register_rest_route(
+            'ssf-member-portal/v1',
+            '/sharepoint/test',
+            array(
+                'methods' => 'POST',
+                'callback' => array($this, 'test_sharepoint'),
+                'permission_callback' => static function (): bool {
+                    return current_user_can(Capabilities::MANAGE);
+                },
+            )
+        );
+    }
+
+    public function test_sharepoint(): \WP_REST_Response
+    {
+        $result = $this->motions->test_sharepoint();
+        return new \WP_REST_Response($result, $result['ok'] ? 200 : 422);
     }
 
     private static function install_pages(): void

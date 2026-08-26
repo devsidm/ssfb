@@ -37,4 +37,9 @@ final class Authentication
         set_transient('ssf_member_portal_graph_token', (string) $data['access_token'], max(60, (int) ($data['expires_in'] ?? 3600) - 120));
         return (string) $data['access_token'];
     }
+
+    public function clear_token(): void
+    {
+        delete_transient('ssf_member_portal_graph_token');
+    }
 }

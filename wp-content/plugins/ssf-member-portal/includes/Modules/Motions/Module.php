@@ -41,4 +41,15 @@ final class Module
     {
         $this->admin->render_dashboard();
     }
+
+    public function test_sharepoint(): array
+    {
+        $meeting = $this->deadline->active_meeting();
+        $result = $this->service->test_sharepoint((int) ($meeting['year'] ?: wp_date('Y', null, wp_timezone())));
+        if (is_wp_error($result)) {
+            $error_data = (array) $result->get_error_data();
+            return array('ok' => false, 'message' => $result->get_error_message(), 'graph_status' => (int) ($error_data['status'] ?? 0));
+        }
+        return array('ok' => true, 'message' => __('SharePoint-testfilen har laddats upp.', 'ssf-member-portal'), 'folder' => $result['folder'], 'filename' => $result['filename'], 'web_url' => $result['web_url']);
+    }
 }

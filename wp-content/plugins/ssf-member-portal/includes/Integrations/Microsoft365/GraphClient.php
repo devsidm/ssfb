@@ -38,4 +38,9 @@ final class GraphClient
         }
         return is_array($json) ? $json : array();
     }
+
+    public function clear_token(): void
+    {
+        $this->authentication->clear_token();
+    }
 }

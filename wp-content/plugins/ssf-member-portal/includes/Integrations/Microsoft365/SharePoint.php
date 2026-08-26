@@ -27,42 +27,86 @@ final class SharePoint
     {
         $settings = Settings::all();
         $file = get_attached_file($attachment_id);
-        if (! $file || ! is_readable($file) || ! $this->ensure_folders($folder)) {
+        $folders = $this->ensure_folders($folder);
+        if (! $file || ! is_readable($file) || is_wp_error($folders)) {
             return false;
         }
-        $path = $this->drive_path($folder . '/' . basename($file));
-        $result = $this->graph->request('PUT', $path . ':/content', file_get_contents($file));
+        $result = $this->upload_to_folder((string) $folders['id'], basename($file), file_get_contents($file));
         return ! is_wp_error($result);
     }
 
-    private function ensure_folders(string $folder): bool
+    public function test_connection(int $year)
     {
-        $parts = array_filter(explode('/', trim($folder, '/')));
-        $current = '';
-        foreach ($parts as $part) {
-            $parent = $current;
-            $current .= ($current ? '/' : '') . $part;
-            $existing = $this->graph->request('GET', $this->drive_path($current));
-            if (! is_wp_error($existing)) {
-                continue;
-            }
-            $parent_path = $parent ? $this->drive_path($parent) . ':/children' : $this->drive_path('root/children', false);
-            $created = $this->graph->request('POST', $parent_path, array('name' => $part, 'folder' => new \stdClass(), '@microsoft.graph.conflictBehavior' => 'fail'));
-            if (is_wp_error($created) && 409 !== (int) $created->get_error_data('status')) {
-                return false;
-            }
+        if (! $this->enabled()) {
+            return new \WP_Error('sharepoint_not_configured', __('SharePoint-synk är inte fullt konfigurerad eller aktiverad.', 'ssf-member-portal'));
         }
-        return true;
+
+        $this->graph->clear_token();
+        $folder = 'Årsmöten/' . max(2000, $year) . '/Motioner';
+        $folders = $this->ensure_folders($folder);
+        if (is_wp_error($folders)) {
+            return $folders;
+        }
+
+        $filename = 'SSF-anslutningstest-' . wp_date('Ymd-His', null, wp_timezone()) . '.txt';
+        $content = "SSF Medlemsportal\nSharePoint-anslutning verifierad " . wp_date('c', null, wp_timezone()) . "\n";
+        $result = $this->upload_to_folder((string) $folders['id'], $filename, $content);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return array('folder' => $folder . '/', 'filename' => $filename, 'web_url' => esc_url_raw((string) ($result['webUrl'] ?? '')));
     }
 
-    private function drive_path(string $path, bool $colon_path = true): string
+    private function ensure_folders(string $folder)
+    {
+        $parts = array_filter(explode('/', trim($folder, '/')));
+        $parent_id = 'root';
+        foreach ($parts as $part) {
+            $children = $this->graph->request('GET', $this->children_path($parent_id));
+            if (is_wp_error($children)) {
+                return $children;
+            }
+            $existing_id = '';
+            foreach ((array) ($children['value'] ?? array()) as $child) {
+                if ($part === ($child['name'] ?? '') && isset($child['folder'])) {
+                    $existing_id = (string) ($child['id'] ?? '');
+                    break;
+                }
+            }
+            if ($existing_id) {
+                $parent_id = $existing_id;
+                continue;
+            }
+            $created = $this->graph->request('POST', $this->children_path($parent_id), array('name' => $part, 'folder' => new \stdClass(), '@microsoft.graph.conflictBehavior' => 'fail'));
+            if (is_wp_error($created)) {
+                $data = (array) $created->get_error_data();
+                if (409 !== (int) ($data['status'] ?? 0)) {
+                    return $created;
+                }
+                return new \WP_Error('sharepoint_folder_conflict', __('En SharePoint-mapp kunde inte verifieras efter en samtidig ändring.', 'ssf-member-portal'));
+            }
+            $parent_id = (string) ($created['id'] ?? '');
+            if (! $parent_id) {
+                return new \WP_Error('sharepoint_folder_id', __('SharePoint returnerade ingen mappidentifierare.', 'ssf-member-portal'));
+            }
+        }
+        return array('id' => $parent_id);
+    }
+
+    private function upload_to_folder(string $folder_id, string $filename, string $content)
+    {
+        return $this->graph->request('PUT', $this->drive_base() . '/items/' . rawurlencode($folder_id) . ':/' . rawurlencode($filename) . ':/content', $content);
+    }
+
+    private function children_path(string $parent_id): string
+    {
+        return 'root' === $parent_id ? $this->drive_base() . '/root/children' : $this->drive_base() . '/items/' . rawurlencode($parent_id) . '/children';
+    }
+
+    private function drive_base(): string
     {
         $settings = Settings::all();
-        $base = 'sites/' . rawurlencode($settings['sharepoint_site_id']) . '/drives/' . rawurlencode($settings['sharepoint_drive_id']) . '/';
-        if (! $colon_path) {
-            return $base . $path;
-        }
-        $segments = array_map('rawurlencode', array_filter(explode('/', trim($path, '/'))));
-        return $base . 'root:/' . implode('/', $segments);
+        return 'sites/' . rawurlencode($settings['sharepoint_site_id']) . '/drives/' . rawurlencode($settings['sharepoint_drive_id']);
     }
 }

@@ -30,16 +30,22 @@ final class Settings
     public static function save(array $input): void
     {
         $current = self::all();
-        $settings = array(
-            'notification_email' => sanitize_email($input['notification_email'] ?? ''),
-            'max_upload_mb' => min(25, max(1, absint($input['max_upload_mb'] ?? 10))),
-            'sharepoint_enabled' => ! empty($input['sharepoint_enabled']) ? 'yes' : 'no',
-            'microsoft_tenant_id' => sanitize_text_field($input['microsoft_tenant_id'] ?? ''),
-            'microsoft_client_id' => sanitize_text_field($input['microsoft_client_id'] ?? ''),
-            'microsoft_client_secret' => $current['microsoft_client_secret'],
-            'sharepoint_site_id' => sanitize_text_field($input['sharepoint_site_id'] ?? ''),
-            'sharepoint_drive_id' => sanitize_text_field($input['sharepoint_drive_id'] ?? ''),
-        );
+        $settings = $current;
+
+        if (array_key_exists('notification_email', $input)) {
+            $settings['notification_email'] = sanitize_email($input['notification_email']);
+        }
+        if (array_key_exists('max_upload_mb', $input)) {
+            $settings['max_upload_mb'] = min(25, max(1, absint($input['max_upload_mb'])));
+        }
+        if (array_key_exists('sharepoint_enabled', $input)) {
+            $settings['sharepoint_enabled'] = ! empty($input['sharepoint_enabled']) ? 'yes' : 'no';
+        }
+        foreach (array('microsoft_tenant_id', 'microsoft_client_id', 'sharepoint_site_id', 'sharepoint_drive_id') as $key) {
+            if (array_key_exists($key, $input)) {
+                $settings[$key] = sanitize_text_field($input[$key]);
+            }
+        }
 
         if (! empty($input['microsoft_client_secret'])) {
             $encrypted = self::encrypt((string) $input['microsoft_client_secret']);
@@ -49,6 +55,7 @@ final class Settings
         }
 
         update_option(self::OPTION, $settings, false);
+        delete_transient('ssf_member_portal_graph_token');
     }
 
     public static function decrypt_secret(): string

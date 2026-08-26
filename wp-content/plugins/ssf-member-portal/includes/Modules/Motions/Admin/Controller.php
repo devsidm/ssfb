@@ -27,6 +27,7 @@ final class Controller
         $this->deadline = $deadline;
         $this->service = $service;
         add_action('admin_post_ssf_member_portal_save_motion_settings', array($this, 'save_settings'));
+        add_action('admin_post_ssf_member_portal_test_sharepoint', array($this, 'test_sharepoint'));
         add_action('add_meta_boxes_' . MotionPostType::POST_TYPE, array($this, 'add_motion_meta_box'));
         add_action('save_post_' . MotionPostType::POST_TYPE, array($this, 'save_motion'), 10, 2);
         add_filter('manage_' . MotionPostType::POST_TYPE . '_posts_columns', array($this, 'columns'));
@@ -113,19 +114,26 @@ final class Controller
             return;
         }
         $settings = Settings::all();
+        $notice = get_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
+        if ($notice) {
+            delete_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
+        }
         ?>
         <div class="wrap"><h1><?php esc_html_e('Medlemsportal – Microsoft 365', 'ssf-member-portal'); ?></h1>
         <p><?php esc_html_e('SharePoint är ett dokumentarkiv. Motionen sparas alltid först i WordPress och fungerar även när Microsoft 365 inte är tillgängligt.', 'ssf-member-portal'); ?></p>
+        <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr($notice['type']); ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?></p></div><?php endif; ?>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_save_motion_settings"><?php wp_nonce_field('ssf_member_portal_save_motion_settings'); ?>
         <input type="hidden" name="active_meeting_id" value="<?php echo esc_attr((string) get_option('ssf_member_portal_active_meeting_id', 0)); ?>"><input type="hidden" name="notification_email" value="<?php echo esc_attr($settings['notification_email']); ?>"><input type="hidden" name="max_upload_mb" value="<?php echo esc_attr($settings['max_upload_mb']); ?>">
         <table class="form-table" role="presentation"><tbody>
-        <tr><th><?php esc_html_e('Aktivera SharePoint-synk', 'ssf-member-portal'); ?></th><td><label><input type="checkbox" name="sharepoint_enabled" value="1" <?php checked('yes', $settings['sharepoint_enabled']); ?>> <?php esc_html_e('Köa motionsbilagor för synk till SharePoint', 'ssf-member-portal'); ?></label></td></tr>
+        <tr><th><?php esc_html_e('Aktivera SharePoint-synk', 'ssf-member-portal'); ?></th><td><input type="hidden" name="sharepoint_enabled" value=""><label><input type="checkbox" name="sharepoint_enabled" value="1" <?php checked('yes', $settings['sharepoint_enabled']); ?>> <?php esc_html_e('Köa motionsbilagor för synk till SharePoint', 'ssf-member-portal'); ?></label></td></tr>
         <tr><th><label for="ssf-tenant"><?php esc_html_e('Microsoft Entra Tenant ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-tenant" class="regular-text code" name="microsoft_tenant_id" value="<?php echo esc_attr($settings['microsoft_tenant_id']); ?>"></td></tr>
         <tr><th><label for="ssf-client-id"><?php esc_html_e('Application (client) ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-client-id" class="regular-text code" name="microsoft_client_id" value="<?php echo esc_attr($settings['microsoft_client_id']); ?>"></td></tr>
         <tr><th><label for="ssf-client-secret"><?php esc_html_e('Client secret', 'ssf-member-portal'); ?></label></th><td><input id="ssf-client-secret" class="regular-text" type="password" name="microsoft_client_secret" value="" autocomplete="new-password"><p class="description"><?php esc_html_e('Lämna tomt för att behålla ett redan sparat secret.', 'ssf-member-portal'); ?></p></td></tr>
         <tr><th><label for="ssf-site-id"><?php esc_html_e('SharePoint Site ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-site-id" class="large-text code" name="sharepoint_site_id" value="<?php echo esc_attr($settings['sharepoint_site_id']); ?>"></td></tr>
         <tr><th><label for="ssf-drive-id"><?php esc_html_e('Document Library / Drive ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-drive-id" class="large-text code" name="sharepoint_drive_id" value="<?php echo esc_attr($settings['sharepoint_drive_id']); ?>"></td></tr>
-        </tbody></table><p class="description"><?php esc_html_e('Ge appen minsta nödvändiga Graph-behörighet för den valda dokumentytan, till exempel Sites.Selected med godkänd platsbehörighet.', 'ssf-member-portal'); ?></p><?php submit_button(__('Spara Microsoft 365-inställningar', 'ssf-member-portal')); ?></form></div>
+        </tbody></table><p class="description"><?php esc_html_e('Använd en Entra-app med Graph Application permissions. För minsta behörighet: Sites.Selected med skrivbehörighet till just den här Teams-webbplatsen. Den delegerade Mail.Send-konfigurationen för e-post räcker inte för SharePoint.', 'ssf-member-portal'); ?></p><p class="description"><?php esc_html_e('Ange Graph-värden för Site ID och Document Library / Drive ID, inte en Teams- eller SharePoint-URL.', 'ssf-member-portal'); ?></p><?php submit_button(__('Spara Microsoft 365-inställningar', 'ssf-member-portal')); ?></form>
+        <hr><h2><?php esc_html_e('Kontrollera SharePoint', 'ssf-member-portal'); ?></h2><p><?php esc_html_e('Verifierar anslutningen genom att skapa en liten testfil under Årsmöten/{år}/Motioner/.', 'ssf-member-portal'); ?></p>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_test_sharepoint"><?php wp_nonce_field('ssf_member_portal_test_sharepoint'); ?><?php submit_button(__('Testa SharePoint-anslutningen', 'ssf-member-portal'), 'secondary', 'submit', false); ?></form></div>
         <?php
     }
 
@@ -138,6 +146,22 @@ final class Controller
         update_option('ssf_member_portal_late_override', ! empty($_POST['late_override']) ? 'yes' : 'no', false);
         Settings::save(wp_unslash($_POST));
         wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=ssf-member-portal-settings'));
+        exit;
+    }
+
+    public function test_sharepoint(): void
+    {
+        if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_member_portal_test_sharepoint')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
+        }
+        $meeting = $this->deadline->active_meeting();
+        $year = (int) ($meeting['year'] ?: wp_date('Y', null, wp_timezone()));
+        $result = $this->service->test_sharepoint($year);
+        $notice = is_wp_error($result)
+            ? array('type' => 'error', 'message' => $result->get_error_message())
+            : array('type' => 'success', 'message' => sprintf(__('Testfilen %1$s har laddats upp till %2$s.', 'ssf-member-portal'), $result['filename'], $result['folder']));
+        set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
+        wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;
     }
 

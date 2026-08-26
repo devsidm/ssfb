@@ -62,4 +62,16 @@ final class MotionSharePoint
             wp_schedule_single_event(time() + ($attempts * HOUR_IN_SECONDS), 'ssf_member_portal_sync_motion', array($motion_id));
         }
     }
+
+    public function test_connection(int $year)
+    {
+        $result = $this->sharepoint->test_connection($year);
+        if (is_wp_error($result)) {
+            Logger::add('sharepoint_connection_failed', array('message' => $result->get_error_message()));
+            return $result;
+        }
+
+        Logger::add('sharepoint_connection_verified', array('folder' => $result['folder'], 'filename' => $result['filename']));
+        return $result;
+    }
 }

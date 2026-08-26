@@ -89,4 +89,9 @@ final class MotionService
         $page_id = (int) get_option('ssf_member_portal_motion_status_page_id');
         return add_query_arg(array('motion' => $number, 'token' => $token), $page_id ? get_permalink($page_id) : home_url('/motion-status/'));
     }
+
+    public function test_sharepoint(int $year)
+    {
+        return $this->sharepoint->test_connection($year);
+    }
 }
