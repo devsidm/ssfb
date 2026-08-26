@@ -144,6 +144,39 @@ h6 {
   list-style: none;
 }
 
+.site-nav li {
+  position: relative;
+}
+
+.site-nav .sub-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 12px);
+  left: -14px;
+  display: none;
+  min-width: 190px;
+  padding: 8px;
+  border: 1px solid var(--ssf-border);
+  border-radius: 4px;
+  background: var(--ssf-white);
+  box-shadow: 0 12px 28px rgba(11, 43, 80, 0.15);
+}
+
+.site-nav .sub-menu li + li {
+  border-top: 1px solid var(--ssf-border);
+}
+
+.site-nav .sub-menu a {
+  display: block;
+  padding: 9px 8px;
+  white-space: nowrap;
+}
+
+.site-nav .menu-item-has-children:hover > .sub-menu,
+.site-nav .menu-item-has-children:focus-within > .sub-menu {
+  display: block;
+}
+
 .site-nav a {
   color: var(--ssf-blue-dark);
   font-size: 0.94rem;
@@ -226,5 +259,23 @@ h6 {
   .site-nav ul {
     display: grid;
     gap: 12px;
+  }
+
+  .site-nav .sub-menu {
+    position: static;
+    display: grid;
+    gap: 0;
+    min-width: 0;
+    margin: 8px 0 0 14px;
+    padding: 0 0 0 14px;
+    border: 0;
+    border-left: 2px solid var(--ssf-border);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .site-nav .sub-menu a {
+    padding: 7px 0;
+    white-space: normal;
   }
 }
