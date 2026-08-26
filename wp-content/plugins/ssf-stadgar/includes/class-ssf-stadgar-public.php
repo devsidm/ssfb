@@ -62,13 +62,13 @@ class SSF_Stadgar_Public
             </div>
             <dl class="ssf-stadgar__metadata">
                 <?php if ($data['version']) : ?><div><dt>Version</dt><dd><?php echo esc_html($data['version']); ?></dd></div><?php endif; ?>
-                <?php if ($data['adopted_date']) : ?><div><dt>Antagna</dt><dd><?php echo esc_html($this->format_date($data['adopted_date'])); ?></dd></div><?php endif; ?>
+                <?php if ($data['adopted_date']) : ?><div><dt>Antagen vid</dt><dd><?php echo esc_html($this->format_date($data['adopted_date'])); ?></dd></div><?php endif; ?>
                 <?php if ($data['adopted_by']) : ?><div><dt>Antagen av</dt><dd><?php echo esc_html($data['adopted_by']); ?></dd></div><?php endif; ?>
             </dl>
             <?php if ($data['summary']) : ?><p class="ssf-stadgar__summary"><?php echo esc_html($data['summary']); ?></p><?php endif; ?>
             <div class="ssf-stadgar__actions">
                 <?php if ($has_online_content) : ?><a class="ssf-stadgar__button" href="#stadgar-online">Läs stadgarna online</a><?php endif; ?>
-                <?php if ($pdf_url) : ?><a class="ssf-stadgar__button ssf-stadgar__button--secondary" href="<?php echo esc_url($pdf_url); ?>" target="_blank" rel="noopener">Ladda ner PDF</a><?php endif; ?>
+                <?php if ($pdf_url) : ?><a class="ssf-stadgar__button ssf-stadgar__button--secondary" href="<?php echo esc_url($pdf_url); ?>" target="_blank" rel="noopener"><?php echo esc_html($this->pdf_link_label($document, $data)); ?></a><?php endif; ?>
             </div>
         </section>
 
@@ -159,7 +159,7 @@ class SSF_Stadgar_Public
                             </p>
                             <?php if ($data['change_note']) : ?><p class="ssf-stadgar__change-note"><?php echo esc_html($data['change_note']); ?></p><?php endif; ?>
                         </div>
-                        <?php if ($pdf_url) : ?><a href="<?php echo esc_url($pdf_url); ?>" target="_blank" rel="noopener">Ladda ner PDF</a><?php endif; ?>
+                        <?php if ($pdf_url) : ?><a href="<?php echo esc_url($pdf_url); ?>" target="_blank" rel="noopener"><?php echo esc_html($this->pdf_link_label($document, $data)); ?></a><?php endif; ?>
                     </li>
                 <?php endforeach; ?>
             </ol>
@@ -171,6 +171,15 @@ class SSF_Stadgar_Public
     {
         $content = $this->add_heading_anchors($content, $outline);
         return apply_filters('the_content', $content);
+    }
+
+    private function pdf_link_label(WP_Post $document, array $data): string
+    {
+        if ('stadgar' === $data['type']) {
+            return 'Ladda ner Stadgar' . ($data['version'] ? ' ' . $data['version'] : '') . ' som PDF';
+        }
+
+        return 'Ladda ner ' . $document->post_title . ' som PDF';
     }
 
     private function add_heading_anchors(string $content, array $outline): string

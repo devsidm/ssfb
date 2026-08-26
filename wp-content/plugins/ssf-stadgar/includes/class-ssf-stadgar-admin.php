@@ -146,6 +146,7 @@ class SSF_Stadgar_Admin
         $data = $this->documents->data($post->ID);
         $pdf_url = $data['pdf_id'] ? wp_get_attachment_url($data['pdf_id']) : '';
         $nonce = wp_create_nonce('ssf_stadgar_extract_' . $post->ID);
+        $extracted_text = $data['extracted_text'];
         ?>
         <div class="ssf-document-admin-pdf" data-document-id="<?php echo esc_attr((string) $post->ID); ?>" data-nonce="<?php echo esc_attr($nonce); ?>">
             <input type="hidden" name="ssf_document_pdf_id" class="ssf-document-pdf-id" value="<?php echo esc_attr((string) $data['pdf_id']); ?>">
@@ -158,6 +159,11 @@ class SSF_Stadgar_Admin
             </p>
             <p class="description">Analysen försöker skapa en preliminär paragraföversikt. Kontrollera alltid resultatet. Om PDF:en inte kan läsas fungerar den manuella redigeringen nedan ändå.</p>
             <div class="ssf-document-analysis-result" aria-live="polite"></div>
+            <details class="ssf-document-extracted-text"<?php echo $extracted_text ? ' open' : ''; ?>>
+                <summary>Extraherat textinnehåll för granskning</summary>
+                <p class="description">Texten är ett arbetsunderlag från PDF:en. Den publiceras inte automatiskt och ersätter aldrig webbtexten i redigeraren.</p>
+                <textarea class="large-text code" rows="12" readonly aria-label="Extraherat textinnehåll från PDF"><?php echo esc_textarea($extracted_text); ?></textarea>
+            </details>
         </div>
         <label for="ssf-document-outline"><strong>Snabböversikt</strong></label>
         <textarea id="ssf-document-outline" name="ssf_document_outline" class="large-text code ssf-document-outline" rows="12" placeholder="§ 1 Namn och ändamål | 1-namn-och-andamal&#10;§ 2 Medlemskap | 2-medlemskap"><?php echo esc_textarea($this->documents->outline_as_text($post->ID)); ?></textarea>
@@ -256,8 +262,10 @@ class SSF_Stadgar_Admin
 
         $pdf_id = (int) get_post_meta($document_id, '_ssf_document_pdf_id', true);
         $analysis = $this->extractor->extract($pdf_id);
+        $extracted_text = '';
         if (! empty($analysis['text'])) {
-            update_post_meta($document_id, '_ssf_document_extracted_text', sanitize_textarea_field($analysis['text']));
+            $extracted_text = sanitize_textarea_field($analysis['text']);
+            update_post_meta($document_id, '_ssf_document_extracted_text', $extracted_text);
         }
 
         $outline_text = '';
@@ -269,6 +277,7 @@ class SSF_Stadgar_Admin
             array(
                 'message'      => $analysis['message'],
                 'outline_text' => $outline_text,
+                'extracted_text' => $extracted_text,
             )
         );
     }

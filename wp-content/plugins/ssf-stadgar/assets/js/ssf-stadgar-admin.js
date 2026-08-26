@@ -47,6 +47,10 @@
       if (response.data.outline_text) {
         $('#ssf-document-outline').val(response.data.outline_text);
       }
+      if (response.data.extracted_text) {
+        $box.find('.ssf-document-extracted-text textarea').val(response.data.extracted_text);
+        $box.find('.ssf-document-extracted-text').prop('open', true);
+      }
       $result.text(response.data.message + (response.data.outline_text ? ' Snabböversikten har lagts i redigeringsfältet. Spara dokumentet när du har granskat den.' : ''));
     }).fail(function () {
       $result.text('Analysen kunde inte genomföras. Du kan fortfarande skriva snabböversikten manuellt.');

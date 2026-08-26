@@ -32,6 +32,20 @@
   color: #3c434a;
 }
 
+.ssf-document-extracted-text {
+  margin: 14px 0;
+}
+
+.ssf-document-extracted-text summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ssf-document-extracted-text textarea {
+  width: 100%;
+  margin-top: 8px;
+}
+
 @media (max-width: 782px) {
   .ssf-document-admin-grid,
   .ssf-document-admin-grid--wide {

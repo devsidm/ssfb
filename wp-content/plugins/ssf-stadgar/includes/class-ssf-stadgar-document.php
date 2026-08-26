@@ -76,20 +76,32 @@ class SSF_Stadgar_Document
         $this->register_meta('_ssf_document_summary', 'string');
         $this->register_meta('_ssf_document_change_note', 'string');
         $this->register_meta('_ssf_document_pdf_id', 'integer');
+        $this->register_meta('_ssf_document_extracted_text', 'string');
         $this->register_meta('_ssf_document_outline', 'string');
+        $this->register_meta('_ssf_document_related_ids', 'array');
         $this->register_meta('_ssf_document_current', 'boolean');
         $this->register_meta('_ssf_document_sort', 'integer');
     }
 
     private function register_meta(string $key, string $type): void
     {
+        $show_in_rest = true;
+        if ('array' === $type) {
+            $show_in_rest = array(
+                'schema' => array(
+                    'type'  => 'array',
+                    'items' => array('type' => 'integer'),
+                ),
+            );
+        }
+
         register_post_meta(
             self::POST_TYPE,
             $key,
             array(
                 'single'       => true,
                 'type'         => $type,
-                'show_in_rest' => true,
+                'show_in_rest' => $show_in_rest,
                 'auth_callback' => static function (bool $allowed, string $meta_key, int $post_id): bool {
                     return current_user_can('edit_post', $post_id);
                 },
@@ -125,6 +137,7 @@ class SSF_Stadgar_Document
             'summary'      => (string) get_post_meta($document_id, '_ssf_document_summary', true),
             'change_note'  => (string) get_post_meta($document_id, '_ssf_document_change_note', true),
             'pdf_id'       => (int) get_post_meta($document_id, '_ssf_document_pdf_id', true),
+            'extracted_text' => (string) get_post_meta($document_id, '_ssf_document_extracted_text', true),
             'current'      => (bool) get_post_meta($document_id, '_ssf_document_current', true),
             'sort'         => (int) get_post_meta($document_id, '_ssf_document_sort', true),
             'related_ids'  => array_values(array_filter(array_map('absint', (array) get_post_meta($document_id, '_ssf_document_related_ids', true)))),
