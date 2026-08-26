@@ -3,7 +3,7 @@ Theme Name: SSF
 Theme URI: https://github.com/devsidm/ssfb
 Author: SIDM
 Description: Custom WordPress theme for the SSF website.
-Version: 0.1.4
+Version: 0.1.7
 Requires at least: 6.0
 Tested up to: 6.6
 Requires PHP: 8.0
@@ -135,10 +135,11 @@ h6 {
   font-weight: 700;
 }
 
-.site-nav ul {
+.site-nav > ul {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -148,33 +149,90 @@ h6 {
   position: relative;
 }
 
+.site-nav > ul > li > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 9px;
+}
+
+.site-nav .menu-item-has-children {
+  display: flex;
+  align-items: center;
+}
+
+.site-nav .submenu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ssf-blue-dark);
+  cursor: pointer;
+}
+
+.site-nav .submenu-toggle::before {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 160ms ease;
+}
+
+.site-nav .submenu-toggle:hover,
+.site-nav .submenu-toggle:focus-visible {
+  color: var(--ssf-gold-dark);
+  outline: none;
+}
+
+.site-nav .submenu-toggle:focus-visible {
+  outline: 2px solid var(--ssf-gold-dark);
+  outline-offset: -4px;
+}
+
 .site-nav .sub-menu {
   position: absolute;
-  z-index: 20;
-  top: calc(100% + 12px);
-  left: -14px;
-  display: none;
-  min-width: 190px;
-  padding: 8px;
+  z-index: 30;
+  top: calc(100% - 1px);
+  left: 0;
+  display: grid;
+  min-width: 218px;
+  margin: 0;
+  padding: 7px;
   border: 1px solid var(--ssf-border);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--ssf-white);
-  box-shadow: 0 12px 28px rgba(11, 43, 80, 0.15);
+  box-shadow: 0 14px 30px rgba(11, 43, 80, 0.16);
+  list-style: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-5px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
+  visibility: hidden;
 }
 
 .site-nav .sub-menu li + li {
-  border-top: 1px solid var(--ssf-border);
+  border-top: 1px solid #e8eef5;
 }
 
 .site-nav .sub-menu a {
   display: block;
-  padding: 9px 8px;
+  padding: 9px 10px;
+  border-radius: 3px;
   white-space: nowrap;
 }
 
-.site-nav .menu-item-has-children:hover > .sub-menu,
-.site-nav .menu-item-has-children:focus-within > .sub-menu {
-  display: block;
+.site-nav .sub-menu a:hover,
+.site-nav .sub-menu a:focus-visible {
+  background: var(--ssf-blue-light);
+  color: var(--ssf-blue-deep);
+  outline: none;
+  text-decoration: none;
 }
 
 .site-nav a {
@@ -189,6 +247,23 @@ h6 {
 .site-nav .current-menu-item > a {
   color: var(--ssf-gold-dark);
   text-decoration: underline;
+}
+
+.site-nav .current-menu-ancestor > a {
+  color: var(--ssf-gold-dark);
+}
+
+@media (min-width: 721px) {
+  .site-nav .menu-item-has-children.is-submenu-open > .sub-menu {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  .site-nav .menu-item-has-children.is-submenu-open > .submenu-toggle::before {
+    transform: rotate(225deg) translate(-2px, -2px);
+  }
 }
 
 .site-main {
@@ -256,26 +331,75 @@ h6 {
     display: block;
   }
 
-  .site-nav ul {
+  .site-nav > ul {
     display: grid;
-    gap: 12px;
+    gap: 0;
+    border-top: 1px solid var(--ssf-border);
+  }
+
+  .site-nav > ul > li {
+    display: block;
+    border-bottom: 1px solid var(--ssf-border);
+  }
+
+  .site-nav > ul > li > a {
+    display: flex;
+    min-height: 48px;
+    padding: 0;
+  }
+
+  .site-nav > ul > .menu-item-has-children {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+  }
+
+  .site-nav > ul > .menu-item-has-children > a {
+    grid-column: 1;
+  }
+
+  .site-nav .submenu-toggle {
+    grid-column: 2;
+    width: 42px;
+    min-height: 48px;
+    height: 48px;
+    border-left: 1px solid var(--ssf-border);
   }
 
   .site-nav .sub-menu {
     position: static;
+    grid-column: 1 / -1;
     display: grid;
+    max-height: 0;
     gap: 0;
     min-width: 0;
-    margin: 8px 0 0 14px;
+    margin: 0;
     padding: 0 0 0 14px;
     border: 0;
     border-left: 2px solid var(--ssf-border);
     border-radius: 0;
     box-shadow: none;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transform: none;
+    visibility: hidden;
   }
 
   .site-nav .sub-menu a {
-    padding: 7px 0;
+    padding: 10px 0;
+    border-radius: 0;
     white-space: normal;
+  }
+
+  .site-nav .menu-item-has-children.is-submenu-open > .sub-menu {
+    max-height: 240px;
+    margin: 0 0 10px 14px;
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+  }
+
+  .site-nav .menu-item-has-children.is-submenu-open > .submenu-toggle::before {
+    transform: rotate(225deg) translate(-2px, -2px);
   }
 }
