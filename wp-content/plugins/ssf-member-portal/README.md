@@ -77,6 +77,10 @@ Statusar är `pending`, `syncing`, `synced` och `error`. Vid fel görs automatis
 
 ## Power Automate-statussynk
 
+En komplett Solution-specifikation med trigger, villkor, expressions,
+environment variables, felhantering och driftsättning finns i
+[docs/power-automate-motion-status-flow.md](docs/power-automate-motion-status-flow.md).
+
 Under `SSF > Motioner > Microsoft 365` finns webhook-URL, status för secret och en kontroll för inbound-synk. Ett secret sparas krypterat, visas aldrig igen och kan alternativt sättas på servern med `SSF_MOTIONS_WEBHOOK_SECRET`.
 
 Power Automate ska skicka `POST` med `Content-Type: application/json` till den URL som visas i admin (på utvecklingsmiljön innehåller den automatiskt `/dev/`) och HTTP-headern `X-SSF-Webhook-Secret`.
