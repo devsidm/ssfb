@@ -1,0 +1,171 @@
+<?php
+
+namespace SSF\MemberPortal\Modules\AnnualMeetings;
+
+if (! defined('ABSPATH')) {
+    exit;
+}
+
+final class Frontend
+{
+    private Module $meetings;
+    private RegistrationService $registrations;
+
+    public function __construct(Module $meetings, RegistrationService $registrations)
+    {
+        $this->meetings = $meetings;
+        $this->registrations = $registrations;
+        add_shortcode('ssf_member_portal_annual_meeting', array($this, 'meeting_shortcode'));
+        add_shortcode('ssf_member_portal_annual_meeting_registration', array($this, 'registration_shortcode'));
+        add_action('admin_post_nopriv_ssf_member_portal_submit_meeting_registration', array($this, 'submit'));
+        add_action('admin_post_ssf_member_portal_submit_meeting_registration', array($this, 'submit'));
+        add_action('admin_post_nopriv_ssf_member_portal_cancel_meeting_registration', array($this, 'cancel'));
+        add_action('admin_post_ssf_member_portal_cancel_meeting_registration', array($this, 'cancel'));
+        add_action('admin_post_nopriv_ssf_member_portal_meeting_calendar', array($this, 'calendar'));
+        add_action('admin_post_ssf_member_portal_meeting_calendar', array($this, 'calendar'));
+    }
+
+    public function meeting_shortcode(): string
+    {
+        $meeting_post = $this->meetings->active();
+        if (! $meeting_post) {
+            return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
+        }
+        $meeting = $this->meetings->data($meeting_post->ID);
+        if (! $this->is_publicly_configured($meeting_post, $meeting)) {
+            return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
+        }
+        ob_start();
+        include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/meeting.php';
+        return (string) ob_get_clean();
+    }
+
+    public function registration_shortcode(): string
+    {
+        $meeting_post = $this->meetings->active();
+        if (! $meeting_post) {
+            return $this->message(__('Det finns inget årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
+        }
+        $meeting = $this->meetings->data($meeting_post->ID);
+        if (! $this->is_publicly_configured($meeting_post, $meeting)) {
+            return $this->message(__('Det finns inget årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
+        }
+        $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+        $registration_post = $token ? $this->registrations->find_by_token($token) : null;
+        if ($registration_post && (int) $registration_post->post_parent !== (int) $meeting['id']) {
+            $registration_post = null;
+            $token = '';
+        }
+        $registration = $registration_post ? $this->registrations->details($registration_post->ID, $meeting) : array();
+        if ($registration_post && isset($_GET['ssf_am_confirmation'])) {
+            ob_start();
+            include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/confirmation.php';
+            return (string) ob_get_clean();
+        }
+        $error = isset($_GET['ssf_am_error']) ? sanitize_text_field(wp_unslash($_GET['ssf_am_error'])) : '';
+        ob_start();
+        include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/form.php';
+        return (string) ob_get_clean();
+    }
+
+    public function submit(): void
+    {
+        $redirect = $this->meetings->registration_url();
+        if (! isset($_POST['ssf_member_portal_meeting_registration_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_registration_nonce'])), 'ssf_member_portal_submit_meeting_registration') || ! empty($_POST['website'])) {
+            $this->redirect_error($redirect, __('Formuläret kunde inte verifieras. Försök igen.', 'ssf-member-portal'));
+        }
+        $ip = sanitize_text_field((string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $limit_key = 'ssf_am_rate_' . md5($ip);
+        $attempts = (int) get_transient($limit_key);
+        if ($attempts >= 8) {
+            $this->redirect_error($redirect, __('För många försök. Vänta några minuter och försök igen.', 'ssf-member-portal'));
+        }
+        set_transient($limit_key, $attempts + 1, 10 * MINUTE_IN_SECONDS);
+
+        $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : null;
+        $result = $this->registrations->submit(wp_unslash($_POST), $token ?: null);
+        if (is_wp_error($result)) {
+            $this->redirect_error($token ? $this->meetings->registration_url(array('token' => rawurlencode($token))) : $redirect, $result->get_error_message());
+        }
+        delete_transient($limit_key);
+        $url = $this->meetings->registration_url(array('token' => rawurlencode((string) $result['token']), 'ssf_am_confirmation' => 1));
+        wp_safe_redirect($url);
+        exit;
+    }
+
+    public function cancel(): void
+    {
+        $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '';
+        $registration = $this->registrations->find_by_token($token);
+        $url = $this->meetings->registration_url($token ? array('token' => rawurlencode($token)) : array());
+        if (! $registration || ! isset($_POST['ssf_member_portal_meeting_cancel_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_cancel_nonce'])), 'ssf_member_portal_cancel_meeting_registration')) {
+            $this->redirect_error($url, __('Avbokningen kunde inte verifieras.', 'ssf-member-portal'));
+        }
+        $result = $this->registrations->cancel($registration, $token);
+        if (is_wp_error($result)) {
+            $this->redirect_error($url, $result->get_error_message());
+        }
+        wp_safe_redirect(add_query_arg('ssf_am_cancelled', 1, $url));
+        exit;
+    }
+
+    public function calendar(): void
+    {
+        $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+        $registration = $this->registrations->find_by_token($token);
+        if (! $registration) {
+            status_header(404);
+            exit;
+        }
+        nocache_headers();
+        header('Content-Type: text/calendar; charset=utf-8');
+        header('Content-Disposition: attachment; filename="ssf-arsmote.ics"');
+        echo $this->registrations->calendar($registration); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        exit;
+    }
+
+    public function date_range(array $meeting): string
+    {
+        if (empty($meeting['start_at'])) {
+            return __('Datum meddelas senare', 'ssf-member-portal');
+        }
+        $start = wp_date('j F Y, H:i', (int) $meeting['start_at'], wp_timezone());
+        return empty($meeting['end_at']) ? $start : $start . ' – ' . wp_date('j F Y, H:i', (int) $meeting['end_at'], wp_timezone());
+    }
+
+    public function render_question(array $question, array $answers): void
+    {
+        $key = (string) $question['key'];
+        $value = $answers[$key] ?? '';
+        $id = 'ssf-am-question-' . sanitize_html_class($key);
+        $required = ! empty($question['required']);
+        ?>
+        <fieldset class="ssf-am-fieldset"><legend><?php echo esc_html($question['title']); ?><?php if ($required) : ?> <span aria-hidden="true">*</span><?php endif; ?></legend>
+        <?php if (! empty($question['help'])) : ?><p class="ssf-am-help"><?php echo esc_html($question['help']); ?></p><?php endif; ?>
+        <?php if ('info' === $question['type']) : ?><p><?php echo wp_kses_post(wpautop((string) $question['help'])); ?></p>
+        <?php elseif ('textarea' === $question['type']) : ?><textarea id="<?php echo esc_attr($id); ?>" name="answers[<?php echo esc_attr($key); ?>]" rows="4" <?php required($required); ?>><?php echo esc_textarea((string) $value); ?></textarea>
+        <?php elseif ('yes_no' === $question['type']) : ?>
+            <?php foreach (array('yes' => __('Ja', 'ssf-member-portal'), 'no' => __('Nej', 'ssf-member-portal')) as $option => $label) : ?><label class="ssf-am-option"><input type="radio" name="answers[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr($option); ?>" <?php checked($value, $option); ?> <?php required($required); ?>> <?php echo esc_html($label); ?></label><?php endforeach; ?>
+        <?php elseif (in_array($question['type'], array('single', 'multiple', 'checkbox'), true)) : ?>
+            <?php foreach ((array) $question['options'] as $option) : $multiple = in_array($question['type'], array('multiple', 'checkbox'), true); $checked = $multiple ? in_array($option, (array) $value, true) : $value === $option; ?><label class="ssf-am-option"><input type="<?php echo $multiple ? 'checkbox' : 'radio'; ?>" name="answers[<?php echo esc_attr($key); ?>]<?php echo $multiple ? '[]' : ''; ?>" value="<?php echo esc_attr($option); ?>" <?php checked($checked); ?>> <?php echo esc_html($option); ?></label><?php endforeach; ?>
+        <?php else : ?><input id="<?php echo esc_attr($id); ?>" type="<?php echo 'date' === $question['type'] ? 'date' : 'text'; ?>" name="answers[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) $value); ?>" <?php required($required); ?>>
+        <?php endif; ?></fieldset>
+        <?php
+    }
+
+    private function redirect_error(string $url, string $error): void
+    {
+        wp_safe_redirect(add_query_arg('ssf_am_error', rawurlencode($error), $url));
+        exit;
+    }
+
+    private function is_publicly_configured(\WP_Post $post, array $meeting): bool
+    {
+        return (bool) trim($post->post_title) && ! empty($meeting['year']) && ! empty($meeting['start_at']);
+    }
+
+    private function message(string $message): string
+    {
+        return '<section class="ssf-am-page"><p class="ssf-am-message">' . esc_html($message) . '</p></section>';
+    }
+}

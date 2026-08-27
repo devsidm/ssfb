@@ -227,6 +227,33 @@ final class SharePoint
     }
 
     /**
+     * Stores the annual-meeting registration projection below the existing Årsmöten root.
+     * This intentionally reuses the same Graph client, app-only credentials and Sites.Selected grant as motions.
+     */
+    public function upload_registration_excel(int $year, string $filename, string $content)
+    {
+        if (! $this->enabled()) {
+            return $this->not_configured_error();
+        }
+        $folders = $this->ensure_registration_folder($year);
+        if (is_wp_error($folders)) {
+            return $folders;
+        }
+        $item = $this->upload_to_folder((string) $folders['registration_folder_id'], $filename, $content, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (is_wp_error($item)) {
+            return $item;
+        }
+        return array(
+            'drive_item_id' => (string) ($item['id'] ?? ''),
+            'drive_id' => Configuration::value('drive_id'),
+            'parent_folder_id' => (string) $folders['registration_folder_id'],
+            'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
+            'filename' => $filename,
+            'uploaded_at' => gmdate('c'),
+        );
+    }
+
+    /**
      * Updates only the Status column for a manual WordPress status change.
      */
     public function update_motion_status(string $drive_item_id, string $status)
@@ -337,6 +364,25 @@ final class SharePoint
             'folder' => $this->folder_path($year),
             'year_folder_id' => (string) $year_folder['id'],
             'motion_folder_id' => (string) $motion_folder['id'],
+        );
+    }
+
+    private function ensure_registration_folder(int $year)
+    {
+        $year = max(2000, $year);
+        $year_folder = $this->find_or_create_folder(Configuration::value('annual_meeting_folder_id'), (string) $year);
+        if (is_wp_error($year_folder)) {
+            return $year_folder;
+        }
+        $registration_folder = $this->find_or_create_folder((string) $year_folder['id'], 'Anmälningar');
+        if (is_wp_error($registration_folder)) {
+            return $registration_folder;
+        }
+
+        return array(
+            'folder' => 'Årsmöten/' . $year . '/Anmälningar/',
+            'year_folder_id' => (string) $year_folder['id'],
+            'registration_folder_id' => (string) $registration_folder['id'],
         );
     }
 

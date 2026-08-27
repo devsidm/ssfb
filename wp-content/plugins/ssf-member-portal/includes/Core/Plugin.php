@@ -63,6 +63,7 @@ final class Plugin
     {
         add_menu_page(__('SSF', 'ssf-member-portal'), __('SSF', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'), 'dashicons-admin-generic', 25);
         add_submenu_page('ssf', __('SSF - Översikt', 'ssf-member-portal'), __('Översikt', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'));
+        $this->meetings->register_admin_menu('ssf');
         $this->motions->register_admin_menu('ssf');
         add_submenu_page('ssf', __('Systemstatus', 'ssf-member-portal'), __('Systemstatus', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-status', array($this, 'render_system_status'));
     }
@@ -90,11 +91,17 @@ final class Plugin
 
     public function enqueue_assets(): void
     {
-        if (! is_page(array((int) get_option('ssf_member_portal_motion_form_page_id'), (int) get_option('ssf_member_portal_motion_status_page_id')))) {
-            return;
+        $motion_pages = array((int) get_option('ssf_member_portal_motion_form_page_id'), (int) get_option('ssf_member_portal_motion_status_page_id'));
+        if (is_page($motion_pages)) {
+            wp_enqueue_style('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/css/motions.css', array(), SSF_MEMBER_PORTAL_VERSION);
+            wp_enqueue_script('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/js/motions.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
         }
-        wp_enqueue_style('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/css/motions.css', array(), SSF_MEMBER_PORTAL_VERSION);
-        wp_enqueue_script('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/js/motions.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
+
+        $meeting_pages = array((int) get_option('ssf_member_portal_annual_meeting_page_id'), (int) get_option('ssf_member_portal_annual_meeting_registration_page_id'));
+        if (is_page($meeting_pages)) {
+            wp_enqueue_style('ssf-member-portal-annual-meetings', SSF_MEMBER_PORTAL_URL . 'assets/css/annual-meetings.css', array(), SSF_MEMBER_PORTAL_VERSION);
+            wp_enqueue_script('ssf-member-portal-annual-meetings', SSF_MEMBER_PORTAL_URL . 'assets/js/annual-meetings.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
+        }
     }
 
     public function register_rest_routes(): void
@@ -172,5 +179,7 @@ final class Plugin
             $id = $existing ? $existing->ID : wp_insert_post(array('post_title' => $page[1], 'post_name' => $page[0], 'post_content' => $page[2], 'post_status' => 'publish', 'post_type' => 'page'));
             update_option('ssf_member_portal_' . $key . '_page_id', (int) $id, false);
         }
+
+        AnnualMeetings::install_pages();
     }
 }
