@@ -3,7 +3,7 @@
  * Plugin Name: SSF Site Customizations
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Content types, shortcodes, forms, and styling for Sveriges Segelfartygsförbund.
- * Version: 0.1.5
+ * Version: 0.2.0
  * Author: SIDM
  * Text Domain: ssf-site
  *
@@ -14,11 +14,13 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_SITE_VERSION', '0.1.5');
+define('SSF_SITE_VERSION', '0.2.0');
 define('SSF_SITE_PATH', plugin_dir_path(__FILE__));
 define('SSF_SITE_URL', plugin_dir_url(__FILE__));
 
 require_once SSF_SITE_PATH . 'includes/post-types.php';
+require_once SSF_SITE_PATH . 'includes/newsletters.php';
+require_once SSF_SITE_PATH . 'includes/information-architecture.php';
 require_once SSF_SITE_PATH . 'includes/forms.php';
 require_once SSF_SITE_PATH . 'includes/content-admin.php';
 require_once SSF_SITE_PATH . 'includes/shortcodes.php';
@@ -108,6 +110,18 @@ function ssf_site_register_admin_routes(): void
             },
         )
     );
+
+    register_rest_route(
+        'ssf-site/v1',
+        '/sync-information-architecture',
+        array(
+            'methods'             => 'POST',
+            'callback'            => 'ssf_site_sync_information_architecture_route',
+            'permission_callback' => static function (): bool {
+                return current_user_can('edit_theme_options');
+            },
+        )
+    );
 }
 add_action('rest_api_init', 'ssf_site_register_admin_routes');
 
@@ -143,6 +157,8 @@ function ssf_site_activate_theme_route(WP_REST_Request $request): WP_REST_Respon
 function ssf_site_activate(): void
 {
     ssf_site_register_post_types();
+    ssf_site_register_newsletter_post_type();
+    ssf_site_grant_newsletter_capabilities();
     flush_rewrite_rules();
 }
 register_activation_hook(__FILE__, 'ssf_site_activate');

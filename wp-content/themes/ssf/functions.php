@@ -6,7 +6,7 @@
  */
 
 if (! defined('SSF_VERSION')) {
-    define('SSF_VERSION', '0.1.7');
+    define('SSF_VERSION', '0.2.0');
 }
 
 function ssf_setup(): void
@@ -20,6 +20,7 @@ function ssf_setup(): void
     register_nav_menus(
         array(
             'primary' => __('Primary menu', 'ssf'),
+            'footer'  => __('Footer menu', 'ssf'),
         )
     );
 
