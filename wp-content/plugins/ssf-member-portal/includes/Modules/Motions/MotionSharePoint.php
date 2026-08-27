@@ -334,11 +334,12 @@ final class MotionSharePoint
         }
         $list_id = (string) get_post_meta($motion_id, '_ssf_mp_graph_list_id', true);
         $list_item_id = (string) (get_post_meta($motion_id, '_ssf_mp_graph_list_item_id', true) ?: get_post_meta($motion_id, '_ssf_mp_sharepoint_list_item_id', true));
-        if (! $list_item_id) {
+        $drive_item_id = (string) get_post_meta($motion_id, '_ssf_mp_graph_drive_item_id', true);
+        if (! $list_item_id && ! $drive_item_id) {
             return new \WP_Error('sharepoint_list_item_missing', __('Motionen saknar SharePoint-listkoppling.', 'ssf-member-portal'));
         }
 
-        $remote = $this->sharepoint->get_motion_status($list_id, $list_item_id);
+        $remote = $this->sharepoint->get_motion_status($list_id, $list_item_id, $drive_item_id);
         update_post_meta($motion_id, '_ssf_mp_sharepoint_last_checked_at', gmdate('c'));
         if (is_wp_error($remote)) {
             update_post_meta($motion_id, '_ssf_mp_sharepoint_status_poll_error', $remote->get_error_message());
@@ -401,6 +402,7 @@ final class MotionSharePoint
                 array('key' => '_ssf_mp_status', 'value' => MotionStatus::AVSLUTAD, 'compare' => '!='),
                 array(
                     'relation' => 'OR',
+                    array('key' => '_ssf_mp_graph_drive_item_id', 'compare' => 'EXISTS'),
                     array('key' => '_ssf_mp_graph_list_item_id', 'compare' => 'EXISTS'),
                     array('key' => '_ssf_mp_sharepoint_list_item_id', 'compare' => 'EXISTS'),
                 ),
