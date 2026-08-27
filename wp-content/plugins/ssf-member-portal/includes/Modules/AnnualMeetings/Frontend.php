@@ -33,6 +33,9 @@ final class Frontend
 
     public function meeting_shortcode(): string
     {
+        if (! $this->feature_enabled('annual_meetings')) {
+            return '';
+        }
         $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
@@ -50,6 +53,9 @@ final class Frontend
 
     public function archive_shortcode(): string
     {
+        if (! $this->feature_enabled('annual_meetings')) {
+            return '';
+        }
         $upcoming = array();
         $past = array();
         $now = time();
@@ -73,6 +79,9 @@ final class Frontend
 
     public function append_archive_to_page(string $content): string
     {
+        if (! $this->feature_enabled('annual_meetings')) {
+            return $content;
+        }
         $page_id = (int) get_option('ssf_member_portal_annual_meetings_archive_page_id', 0);
         if (! $page_id || ! is_main_query() || ! in_the_loop() || ! is_page($page_id)) {
             return $content;
@@ -83,6 +92,9 @@ final class Frontend
 
     public function registration_shortcode(): string
     {
+        if (! $this->feature_enabled('annual_meeting_registration')) {
+            return $this->message(__('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
+        }
         $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
             return $this->message(__('Det finns inget årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
@@ -112,6 +124,9 @@ final class Frontend
     public function submit(): void
     {
         $redirect = $this->meetings->registration_url();
+        if (! $this->feature_enabled('annual_meeting_registration')) {
+            $this->redirect_error($redirect, __('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
+        }
         if (! isset($_POST['ssf_member_portal_meeting_registration_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_registration_nonce'])), 'ssf_member_portal_submit_meeting_registration') || ! empty($_POST['website'])) {
             $this->redirect_error($redirect, __('Formuläret kunde inte verifieras. Försök igen.', 'ssf-member-portal'));
         }
@@ -136,6 +151,9 @@ final class Frontend
 
     public function cancel(): void
     {
+        if (! $this->feature_enabled('annual_meeting_registration')) {
+            $this->redirect_error($this->meetings->registration_url(), __('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
+        }
         $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '';
         $registration = $this->registrations->find_by_token($token);
         $url = $this->meetings->registration_url($token ? array('token' => rawurlencode($token)) : array());
@@ -152,6 +170,10 @@ final class Frontend
 
     public function calendar(): void
     {
+        if (! $this->feature_enabled('annual_meeting_registration')) {
+            status_header(404);
+            exit;
+        }
         $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
         $registration = $this->registrations->find_by_token($token);
         if (! $registration) {
@@ -207,6 +229,9 @@ final class Frontend
 
     private function public_meeting(): ?\WP_Post
     {
+        if (! $this->feature_enabled('annual_meetings')) {
+            return null;
+        }
         $requested_id = isset($_GET['meeting']) && is_scalar($_GET['meeting']) ? absint(wp_unslash($_GET['meeting'])) : 0;
         if ($requested_id) {
             $requested = get_post($requested_id);
@@ -221,5 +246,10 @@ final class Frontend
     private function message(string $message): string
     {
         return '<section class="ssf-am-page"><p class="ssf-am-message">' . esc_html($message) . '</p></section>';
+    }
+
+    private function feature_enabled(string $feature): bool
+    {
+        return ! class_exists('SSF_Features') || \SSF_Features::enabled($feature);
     }
 }

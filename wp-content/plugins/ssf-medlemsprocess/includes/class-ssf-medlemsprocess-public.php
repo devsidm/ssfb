@@ -28,6 +28,9 @@ class SSF_Medlemsprocess_Public
 
     public function application_form(): string
     {
+        if (! $this->applications_enabled()) {
+            return '<section class="ssf-process-shell"><p class="ssf-process-eyebrow">Medlemskap</p><h2>Ansökan är tillfälligt stängd</h2><p>Den digitala ansökningsfunktionen är tillfälligt stängd medan vi färdigställer den nya medlemsprocessen.</p><p>För frågor om medlemskap, <a href="' . esc_url(home_url('/kontakta-oss/')) . '">kontakta SSF</a>.</p></section>';
+        }
         if (! empty($_GET['ssf_application_sent']) && ! empty($_GET['token'])) {
             $status_link = SSF_Medlemsprocess_Application::status_link(sanitize_text_field(wp_unslash($_GET['token'])));
             $mail_sent = 'sent' === sanitize_key(wp_unslash($_GET['ssf_mail'] ?? ''));
@@ -68,6 +71,10 @@ class SSF_Medlemsprocess_Public
 
     public function submit_application(): void
     {
+        if (! $this->applications_enabled()) {
+            wp_safe_redirect(add_query_arg('ssf_application_closed', '1', SSF_Medlemsprocess_Plugin::page_url('ansokan')));
+            exit;
+        }
         $this->assert_nonce('ssf_application_submit');
         if (! empty($_POST['website'])) {
             wp_die('Formuläret kunde inte skickas.');
@@ -196,5 +203,10 @@ class SSF_Medlemsprocess_Public
     {
         $ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
         return 'ssf_application_rate_' . md5($ip);
+    }
+
+    private function applications_enabled(): bool
+    {
+        return ! class_exists('SSF_Features') || SSF_Features::enabled('applications');
     }
 }

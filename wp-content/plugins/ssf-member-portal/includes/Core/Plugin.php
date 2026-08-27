@@ -80,8 +80,37 @@ final class Plugin
             return;
         }
         $logs = Logger::recent();
+        $release_available = class_exists('SSF_Release_Info') && class_exists('SSF_Features');
+        $features = $release_available ? \SSF_Features::all() : array();
+        $health = $release_available && class_exists('SSF_Release_Controls') ? \SSF_Release_Controls::health() : array();
+        $labels = array(
+            'applications' => __('Ansökningar', 'ssf-member-portal'),
+            'motions' => __('Motioner', 'ssf-member-portal'),
+            'annual_meetings' => __('Årsmöten', 'ssf-member-portal'),
+            'annual_meeting_registration' => __('Årsmötesanmälan', 'ssf-member-portal'),
+            'calendar' => __('Kalender', 'ssf-member-portal'),
+        );
         ?>
         <div class="wrap"><h1><?php esc_html_e('SSF systemstatus', 'ssf-member-portal'); ?></h1>
+        <?php if ($release_available) : ?>
+            <h2><?php esc_html_e('Release', 'ssf-member-portal'); ?></h2>
+            <table class="widefat striped" style="max-width:760px"><tbody>
+                <tr><th><?php esc_html_e('Miljö', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Environment::label()); ?></td></tr>
+                <tr><th><?php esc_html_e('Release', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Release_Info::get_version()); ?></td></tr>
+                <tr><th><?php esc_html_e('Releasedatum', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Release_Info::get_release_date() ?: 'Ej konfigurerat'); ?></td></tr>
+                <tr><th><?php esc_html_e('Commit', 'ssf-member-portal'); ?></th><td><code><?php echo esc_html(\SSF_Release_Info::get_commit() ?: 'Ej konfigurerat'); ?></code></td></tr>
+            </tbody></table>
+            <h2><?php esc_html_e('Funktionsflaggor', 'ssf-member-portal'); ?></h2>
+            <table class="widefat striped" style="max-width:760px"><tbody>
+                <?php foreach ($labels as $feature => $label) : ?><tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html(! empty($features[$feature]) ? 'ON' : 'OFF'); ?></td></tr><?php endforeach; ?>
+            </tbody></table>
+            <h2><?php esc_html_e('Releasekontroll', 'ssf-member-portal'); ?></h2>
+            <table class="widefat striped" style="max-width:760px"><tbody>
+                <?php foreach ($health as $check => $result) : ?><tr><th><?php echo esc_html(ucfirst(str_replace('_', ' ', $check))); ?></th><td><?php echo esc_html(! empty($result['ok']) ? 'OK' : 'Kontrollera'); ?></td><td><?php echo esc_html((string) ($result['value'] ?? '')); ?></td></tr><?php endforeach; ?>
+            </tbody></table>
+        <?php else : ?>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('SSF Release Controls är inte laddat. Kontrollera att MU-pluginet är deployat.', 'ssf-member-portal'); ?></p></div>
+        <?php endif; ?>
         <p><?php esc_html_e('Senaste händelser för Medlemsportalen.', 'ssf-member-portal'); ?></p>
         <table class="widefat striped"><thead><tr><th><?php esc_html_e('Tid', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Händelse', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Information', 'ssf-member-portal'); ?></th></tr></thead><tbody>
         <?php foreach ($logs as $log) : ?><tr><td><?php echo esc_html(wp_date('Y-m-d H:i', (int) $log['at'])); ?></td><td><?php echo esc_html($log['event']); ?></td><td><?php echo esc_html(wp_json_encode($log['context'])); ?></td></tr><?php endforeach; ?>
@@ -92,14 +121,14 @@ final class Plugin
 
     public function enqueue_assets(): void
     {
-        $motion_pages = array((int) get_option('ssf_member_portal_motion_form_page_id'), (int) get_option('ssf_member_portal_motion_status_page_id'));
-        if (is_page($motion_pages)) {
+        $motion_pages = array((int) get_option('ssf_member_portal_motion_hub_page_id'), (int) get_option('ssf_member_portal_motion_form_page_id'), (int) get_option('ssf_member_portal_motion_status_page_id'));
+        if (self::feature_enabled('motions') && is_page($motion_pages)) {
             wp_enqueue_style('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/css/motions.css', array(), SSF_MEMBER_PORTAL_VERSION);
             wp_enqueue_script('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/js/motions.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
         }
 
         $meeting_pages = array((int) get_option('ssf_member_portal_annual_meeting_page_id'), (int) get_option('ssf_member_portal_annual_meeting_registration_page_id'), (int) get_option('ssf_member_portal_annual_meetings_archive_page_id'));
-        if (is_page($meeting_pages)) {
+        if ((self::feature_enabled('annual_meetings') || self::feature_enabled('annual_meeting_registration')) && is_page($meeting_pages)) {
             wp_enqueue_style('ssf-member-portal-annual-meetings', SSF_MEMBER_PORTAL_URL . 'assets/css/annual-meetings.css', array(), SSF_MEMBER_PORTAL_VERSION);
             wp_enqueue_script('ssf-member-portal-annual-meetings', SSF_MEMBER_PORTAL_URL . 'assets/js/annual-meetings.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
         }
@@ -131,18 +160,20 @@ final class Plugin
             );
         }
 
-        register_rest_route(
-            'ssf-motions/v1',
-            '/status',
-            array(
-                'methods' => 'POST',
-                'callback' => array($this->motions, 'handle_power_automate_webhook'),
-                'permission_callback' => static function (): bool {
-                    // The callback validates the server-to-server webhook secret.
-                    return true;
-                },
-            )
-        );
+        if (self::feature_enabled('motions')) {
+            register_rest_route(
+                'ssf-motions/v1',
+                '/status',
+                array(
+                    'methods' => 'POST',
+                    'callback' => array($this->motions, 'handle_power_automate_webhook'),
+                    'permission_callback' => static function (): bool {
+                        // The callback validates the server-to-server webhook secret.
+                        return true;
+                    },
+                )
+            );
+        }
     }
 
     public function test_sharepoint(): \WP_REST_Response
@@ -174,6 +205,7 @@ final class Plugin
     private static function install_pages(): void
     {
         $pages = array(
+            'motion_hub' => array('motioner', 'Motioner till årsmötet', '[ssf_member_portal_motion_hub]'),
             'motion_form' => array('lamna-motion', 'Lämna motion', '[ssf_member_portal_motions]'),
             'motion_status' => array('motion-status', 'Följ min motion', '[ssf_member_portal_motion_status]'),
         );
@@ -184,5 +216,10 @@ final class Plugin
         }
 
         AnnualMeetings::install_pages();
+    }
+
+    private static function feature_enabled(string $feature): bool
+    {
+        return ! class_exists('SSF_Features') || \SSF_Features::enabled($feature);
     }
 }

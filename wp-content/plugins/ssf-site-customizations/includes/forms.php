@@ -71,6 +71,10 @@ function ssf_site_application_result(array $data): array
 
 function ssf_site_handle_application(): void
 {
+    if (! ssf_site_applications_enabled()) {
+        wp_safe_redirect(add_query_arg('ssf_status', 'application_closed', home_url('/ansokan/')));
+        exit;
+    }
     if (! isset($_POST['ssf_application_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_application_nonce'])), 'ssf_application')) {
         wp_safe_redirect(add_query_arg('ssf_status', 'invalid', wp_get_referer() ?: home_url('/ansokan/')));
         exit;

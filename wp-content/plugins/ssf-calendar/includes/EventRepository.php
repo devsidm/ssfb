@@ -100,6 +100,9 @@ final class EventRepository
 
     private function annual_meeting_events(string $range): array
     {
+        if (class_exists('SSF_Features') && ! \SSF_Features::enabled('annual_meetings')) {
+            return array();
+        }
         if (! post_type_exists('ssf_annual_meeting')) {
             return array();
         }

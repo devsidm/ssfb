@@ -9,8 +9,23 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
+function ssf_site_applications_enabled(): bool
+{
+    return ! class_exists('SSF_Features') || SSF_Features::enabled('applications');
+}
+
+function ssf_site_application_destination(string $title, string $text, string $url): array
+{
+    $path = trim((string) wp_parse_url($url, PHP_URL_PATH), '/');
+    if (! ssf_site_applications_enabled() && false !== strpos($path, 'ansokan')) {
+        return array('Medlemskap', 'Läs om medlemskap och hur du kan engagera dig i SSF.', home_url('/medlemskap/'));
+    }
+    return array($title, $text, $url);
+}
+
 function ssf_site_button(string $label, string $url, string $class = ''): string
 {
+    list($label, , $url) = ssf_site_application_destination($label, '', $url);
     return sprintf('<a class="ssf-button %s" href="%s">%s</a>', esc_attr($class), esc_url($url), esc_html($label));
 }
 
@@ -115,6 +130,7 @@ add_shortcode('ssf_home', 'ssf_site_home_shortcode');
 
 function ssf_site_feature_card(string $title, string $text, string $url): string
 {
+    list($title, $text, $url) = ssf_site_application_destination($title, $text, $url);
     return sprintf('<a class="ssf-card ssf-card--link" href="%s"><h3>%s</h3><p>%s</p><span>Läs mer</span></a>', esc_url($url), esc_html($title), esc_html($text));
 }
 
@@ -125,6 +141,10 @@ function ssf_site_plain_card(string $title, string $text): string
 
 function ssf_site_membership_card(string $title, string $text, array $items, string $button, string $url): string
 {
+    list($title, $text, $url) = ssf_site_application_destination($title, $text, $url);
+    if (! ssf_site_applications_enabled() && home_url('/medlemskap/') === $url) {
+        $button = 'Läs om medlemskap';
+    }
     $list = '';
     foreach ($items as $item) {
         $list .= '<li>' . esc_html($item) . '</li>';
@@ -182,6 +202,9 @@ add_shortcode('ssf_news_cards', 'ssf_site_news_cards_shortcode');
 
 function ssf_site_application_form_shortcode(): string
 {
+    if (! ssf_site_applications_enabled()) {
+        return '<section class="ssf-page-content"><div class="ssf-page-content__heading"><h1>Ansökan</h1><p>Den digitala ansökningsfunktionen är tillfälligt stängd medan vi färdigställer den nya medlemsprocessen.</p><p>För frågor om medlemskap, <a href="' . esc_url(home_url('/kontakta-oss/')) . '">kontakta SSF</a>.</p></div></section>';
+    }
     ob_start();
     ssf_site_status_notice();
     ?>
@@ -268,6 +291,7 @@ function ssf_site_status_notice(): void
     $status = isset($_GET['ssf_status']) ? sanitize_text_field(wp_unslash($_GET['ssf_status'])) : '';
     $messages = array(
         'application_sent' => 'Tack. Din ansökan har skickats till SSF.',
+        'application_closed' => 'Den digitala ansökningsfunktionen är tillfälligt stängd.',
         'contact_sent' => 'Tack. Ditt meddelande har skickats.',
         'invalid' => 'Formuläret kunde inte verifieras. Försök igen.',
         'consent' => 'Du behöver godkänna intygande och behandling av uppgifter för att skicka formuläret.',

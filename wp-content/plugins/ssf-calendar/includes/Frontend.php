@@ -22,6 +22,9 @@ final class Frontend
 
     public function assets(): void
     {
+        if (! $this->feature_enabled()) {
+            return;
+        }
         if (! is_page('kalender') && ! is_singular(EventPostType::POST_TYPE)) {
             return;
         }
@@ -30,6 +33,9 @@ final class Frontend
 
     public function calendar_shortcode(): string
     {
+        if (! $this->feature_enabled()) {
+            return '';
+        }
         return $this->render_calendar(true);
     }
 
@@ -44,6 +50,9 @@ final class Frontend
 
     public function upcoming_shortcode(array $atts): string
     {
+        if (! $this->feature_enabled()) {
+            return '';
+        }
         $atts = shortcode_atts(array('count' => 3), $atts, 'ssf_calendar_upcoming');
         $events = $this->events->events(array('range' => 'upcoming', 'limit' => max(1, absint($atts['count']))));
         if (! $events) {
@@ -56,6 +65,9 @@ final class Frontend
 
     public function append_calendar_to_page(string $content): string
     {
+        if (! $this->feature_enabled()) {
+            return $content;
+        }
         if (! is_main_query() || ! in_the_loop() || ! is_page('kalender')) {
             return $content;
         }
@@ -68,6 +80,9 @@ final class Frontend
 
     public function single_template(string $template): string
     {
+        if (! $this->feature_enabled()) {
+            return $template;
+        }
         if (is_singular(EventPostType::POST_TYPE)) {
             $candidate = SSF_CALENDAR_PATH . 'templates/event.php';
             if (is_readable($candidate)) {
@@ -86,5 +101,10 @@ final class Frontend
             <div class="ssf-calendar-card__body"><time datetime="<?php echo esc_attr($this->events->datetime_value($event)); ?>"><?php echo esc_html($date_label); ?></time><h3><a href="<?php echo esc_url($event['permalink']); ?>"><?php echo esc_html($event['title']); ?></a></h3><?php if ($event['location']) : ?><p class="ssf-calendar-card__location"><?php echo esc_html($event['location']); ?></p><?php endif; ?><?php if ($event['excerpt']) : ?><p><?php echo esc_html($event['excerpt']); ?></p><?php endif; ?><a class="ssf-calendar-link" href="<?php echo esc_url($event['permalink']); ?>"><?php esc_html_e('Läs mer', 'ssf-calendar'); ?></a></div>
         </article>
         <?php
+    }
+
+    private function feature_enabled(): bool
+    {
+        return ! class_exists('SSF_Features') || \SSF_Features::enabled('calendar');
     }
 }

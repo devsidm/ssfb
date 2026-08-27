@@ -33,6 +33,10 @@ Appearance > Themes > SSF
 3. Commit and push changes to GitHub.
 4. Deploy through the hosting workflow once confirmed.
 
+## Releases
+
+Environment configuration, feature flags, and the production smoke-test checklist are documented in [docs/release-controls.md](docs/release-controls.md).
+
 ## Notes for Codex
 
 - Keep project-specific notes in `docs/`.
