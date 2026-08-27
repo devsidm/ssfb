@@ -45,18 +45,19 @@ Pluginet cachelagrar token med WordPress Transients API fram till `expires_in - 
 
 ### Microsoft Graph-behörighet
 
-Den valda Graph v1.0-metoden använder app-only uppladdning med `PUT /drives/{drive-id}/items/{parent-id}:/{filename}:/content`. För den här implementationen ska appen ha **Microsoft Graph Application permission `Files.ReadWrite.All`** och en Global Administrator måste ge **Admin consent**.
+Den valda Graph v1.0-metoden använder app-only uppladdning med `PUT /drives/{drive-id}/items/{parent-id}:/{filename}:/content`. SSF använder **Microsoft Graph Application permission `Sites.Selected`** med en explicit `write`-grant till enbart styrelsens SharePoint-site. Admin consent krävs för permissionen och site-granten krävs dessutom för den valda siten.
 
-`Files.ReadWrite.All` ger appen läs- och skrivåtkomst till filer i organisationen. `Sites.ReadWrite.All` ger en bredare åtkomst till SharePoint-webbplatser och ska inte läggas till utan ett uttryckligt behov. `Sites.Selected` är inte aktiverat automatiskt; den begränsningsmodellen behöver verifieras separat mot de Graph-endpoints som används innan den kan ersätta den valda behörigheten. Microsofts aktuella referens finns i [Graph permissions reference](https://learn.microsoft.com/en-us/graph/permissions-reference) och [Upload small files](https://learn.microsoft.com/en-us/graph/api/driveitem-put-content?view=graph-rest-1.0).
+`Files.ReadWrite.All`, `Sites.ReadWrite.All` och `Sites.FullControl.All` ska inte läggas till när `Sites.Selected` med site-grant fungerar. Microsofts aktuella referens finns i [Graph permissions reference](https://learn.microsoft.com/en-us/graph/permissions-reference) och [Upload small files](https://learn.microsoft.com/en-us/graph/api/driveitem-put-content?view=graph-rest-1.0).
 
 ### Testa säkert
 
 Öppna `SSF > Motioner > Microsoft 365` som administratör eller användare med motionsbehörighet.
 
-1. **Testa anslutning** autentiserar och läser site, dokumentbiblioteket, Årsmöten-mappen och dess innehåll. Det skriver inget.
-2. **Testa skrivåtkomst** hittar eller skapar `Årsmöten/{år}/Motioner/` för aktuellt kalenderår.
-3. **Ladda upp testfil** lägger upp en liten `ssf-graph-test-*.txt` i den mappen.
-4. **Ta bort testfil** får bara radera den senast skapade testfilen från pluginet.
+1. **Testa autentisering** hämtar en app-only token utan att visa den.
+2. **Testa läsåtkomst** läser site, dokumentbiblioteket, Årsmöten-mappen och dess innehåll.
+3. **Testa skrivåtkomst** skapar och tar bort en unik temporär mapp under Årsmöten.
+4. **Förbered motionsmapp** hittar eller skapar `Årsmöten/{år}/Motioner/` för aktuellt kalenderår.
+5. **Testa filuppladdning** lägger upp en liten `ssf-graph-test-*.txt`; **Ta bort testfil** raderar endast den filen.
 
 Adminvyn sparar en diagnostikrapport med endpoint, HTTP-status, Graph-felkod, felmeddelande och tidsstämpel. Rapporten filtrerar bort token, secret och Authorization-data.
 
@@ -75,6 +76,6 @@ Statusar är `pending`, `syncing`, `synced` och `error`. Vid fel görs automatis
 ## Felsökning
 
 - `401` vid token-test: kontrollera nytt Client secret **value**, Tenant ID, Client ID och att secret inte har löpt ut.
-- `403` från Graph: kontrollera att `Files.ReadWrite.All` är av typen **Application**, att Admin consent har givits och att rätt app registration används.
+- `403` från Graph: kontrollera att `Sites.Selected` är av typen **Application**, att Admin consent har givits och att appen har en explicit `write`-grant till styrelsens site.
 - `404` för site, drive eller rotmapp: kontrollera respektive Graph ID i `wp-config.php`.
 - `409` vid mappskapande: pluginet söker om efter den befintliga mappen och fortsätter när den hittas.

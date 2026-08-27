@@ -22,6 +22,11 @@ final class SharePoint
         return Configuration::complete();
     }
 
+    public function test_authentication()
+    {
+        return $this->graph->authentication()->test();
+    }
+
     /**
      * Runs read-only checks. Folder creation and file upload have separate actions.
      */
@@ -86,6 +91,45 @@ final class SharePoint
             'folder' => $this->folder_path($year),
             'year_folder_id' => $folders['year_folder_id'],
             'motion_folder_id' => $folders['motion_folder_id'],
+        );
+    }
+
+    /**
+     * Creates and removes one uniquely named folder below Årsmöten.
+     */
+    public function test_temporary_write()
+    {
+        if (! $this->enabled()) {
+            return $this->not_configured_error();
+        }
+
+        $name = 'ssf-graph-test-' . gmdate('Ymd-His') . '-' . wp_generate_password(6, false, false);
+        $created = $this->graph->request(
+            'POST',
+            $this->children_path(Configuration::value('annual_meeting_folder_id')),
+            array('name' => $name, 'folder' => new \stdClass(), '@microsoft.graph.conflictBehavior' => 'fail')
+        );
+        if (is_wp_error($created)) {
+            return $created;
+        }
+
+        $id = (string) ($created['id'] ?? '');
+        if (! $id) {
+            return new \WP_Error('sharepoint_test_folder_id', __('Microsoft Graph returnerade inget ID för testmappen.', 'ssf-member-portal'));
+        }
+
+        $deleted = $this->graph->request('DELETE', $this->item_path($id));
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+
+        return array(
+            'ok' => true,
+            'folder_name' => $name,
+            'folder_id' => $id,
+            'created' => true,
+            'deleted' => true,
+            'timestamp' => gmdate('c'),
         );
     }
 

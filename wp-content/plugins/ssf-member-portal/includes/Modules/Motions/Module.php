@@ -44,7 +44,40 @@ final class Module
 
     public function test_sharepoint(): array
     {
-        $result = $this->service->sharepoint_diagnostics();
+        return $this->graph_result($this->service->sharepoint_diagnostics(), __('SharePoint-diagnostik slutförd utan skrivning.', 'ssf-member-portal'));
+    }
+
+    public function test_sharepoint_authentication(): array
+    {
+        return $this->graph_result($this->service->sharepoint_authentication(), __('Microsoft Entra-autentisering slutförd.', 'ssf-member-portal'));
+    }
+
+    public function test_sharepoint_temporary_write(): array
+    {
+        return $this->graph_result($this->service->test_sharepoint_temporary_write(), __('Temporär testmapp skapades och togs bort.', 'ssf-member-portal'));
+    }
+
+    public function test_sharepoint_motion_folder(): array
+    {
+        $meeting = $this->deadline->active_meeting();
+        $year = (int) ($meeting['year'] ?: wp_date('Y', null, wp_timezone()));
+        return $this->graph_result($this->service->test_sharepoint_write_access($year), __('Motionsmappen är klar.', 'ssf-member-portal'));
+    }
+
+    public function test_sharepoint_file(): array
+    {
+        $meeting = $this->deadline->active_meeting();
+        $year = (int) ($meeting['year'] ?: wp_date('Y', null, wp_timezone()));
+        return $this->graph_result($this->service->upload_sharepoint_test_file($year), __('Testfilen har laddats upp.', 'ssf-member-portal'));
+    }
+
+    public function delete_sharepoint_file(): array
+    {
+        return $this->graph_result($this->service->delete_sharepoint_test_file(), __('Testfilen har tagits bort.', 'ssf-member-portal'));
+    }
+
+    private function graph_result($result, string $success_message): array
+    {
         if (is_wp_error($result)) {
             $error_data = (array) $result->get_error_data();
             return array(
@@ -55,6 +88,6 @@ final class Module
                 'graph_code' => (string) ($error_data['graph_code'] ?? $error_data['microsoft_code'] ?? ''),
             );
         }
-        return array('ok' => true, 'message' => __('SharePoint-diagnostik slutförd utan skrivning.', 'ssf-member-portal'), 'result' => $result);
+        return array('ok' => true, 'message' => $success_message, 'result' => $result);
     }
 }

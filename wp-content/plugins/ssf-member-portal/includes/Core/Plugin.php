@@ -99,22 +99,52 @@ final class Plugin
 
     public function register_rest_routes(): void
     {
-        register_rest_route(
-            'ssf-member-portal/v1',
-            '/sharepoint/test',
-            array(
-                'methods' => 'POST',
-                'callback' => array($this, 'test_sharepoint'),
-                'permission_callback' => static function (): bool {
-                    return current_user_can(Capabilities::MANAGE);
-                },
-            )
+        $routes = array(
+            '/sharepoint/test' => 'test_sharepoint',
+            '/sharepoint/authentication' => 'test_sharepoint_authentication',
+            '/sharepoint/temporary-write' => 'test_sharepoint_temporary_write',
+            '/sharepoint/motion-folder' => 'test_sharepoint_motion_folder',
+            '/sharepoint/test-file' => 'test_sharepoint_file',
+            '/sharepoint/test-file/delete' => 'delete_sharepoint_file',
         );
+        foreach ($routes as $route => $method) {
+            register_rest_route(
+                'ssf-member-portal/v1',
+                $route,
+                array(
+                    'methods' => 'POST',
+                    'callback' => array($this, 'rest_sharepoint_action'),
+                    'permission_callback' => static function (): bool {
+                        return current_user_can(Capabilities::MANAGE);
+                    },
+                    'args' => array('action' => array('default' => $method)),
+                )
+            );
+        }
     }
 
     public function test_sharepoint(): \WP_REST_Response
     {
         $result = $this->motions->test_sharepoint();
+        return new \WP_REST_Response($result, $result['ok'] ? 200 : 422);
+    }
+
+    public function rest_sharepoint_action(\WP_REST_Request $request): \WP_REST_Response
+    {
+        $action = sanitize_key((string) $request->get_param('action'));
+        $allowed = array(
+            'test_sharepoint',
+            'test_sharepoint_authentication',
+            'test_sharepoint_temporary_write',
+            'test_sharepoint_motion_folder',
+            'test_sharepoint_file',
+            'delete_sharepoint_file',
+        );
+        if (! in_array($action, $allowed, true)) {
+            return new \WP_REST_Response(array('ok' => false, 'message' => __('Ogiltig SharePoint-åtgärd.', 'ssf-member-portal')), 400);
+        }
+
+        $result = $this->motions->{$action}();
         return new \WP_REST_Response($result, $result['ok'] ? 200 : 422);
     }
 

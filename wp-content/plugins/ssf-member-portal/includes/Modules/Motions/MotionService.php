@@ -95,9 +95,19 @@ final class MotionService
         return $this->sharepoint->diagnostics();
     }
 
+    public function sharepoint_authentication()
+    {
+        return $this->sharepoint->test_authentication();
+    }
+
     public function test_sharepoint_write_access(int $year)
     {
         return $this->sharepoint->test_write_access($year);
+    }
+
+    public function test_sharepoint_temporary_write()
+    {
+        return $this->sharepoint->test_temporary_write();
     }
 
     public function upload_sharepoint_test_file(int $year)

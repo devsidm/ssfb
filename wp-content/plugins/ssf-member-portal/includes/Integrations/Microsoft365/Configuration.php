@@ -36,6 +36,17 @@ final class Configuration
         'site_path',
     );
 
+    private const DEFAULTS = array(
+        'tenant_id' => 'ad928e8c-b976-4c84-a0b1-931341b5a512',
+        'client_id' => '8a3bfdb3-6b8c-4982-b562-eaf43be7f39a',
+        'site_id' => 'tradtionsfartyg.sharepoint.com,fcb7d0b0-8986-4dbc-a97c-e85297880b7e,5041e290-138c-442f-a20d-3e5a7918c810',
+        'drive_id' => 'b!sNC3_IaJvE2pfOhSl4gLfpDiQVCMEy9Eog0-WnkYyBDVxq_wiIU3Tbpm3lUPgSuc',
+        'annual_meeting_folder_id' => '01YQZLHNOR4EIPLSI6ERAKQYR2ECTT4KD2',
+        'annual_meeting_folder_name' => 'Årsmöten',
+        'site_hostname' => 'tradtionsfartyg.sharepoint.com',
+        'site_path' => '/sites/styrelsen9',
+    );
+
     public static function value(string $key): string
     {
         if (! isset(self::KEYS[$key])) {
@@ -52,7 +63,8 @@ final class Configuration
             return self::decrypt((string) ($stored[$key] ?? ''));
         }
 
-        return trim((string) ($stored[$key] ?? ''));
+        $stored_value = trim((string) ($stored[$key] ?? ''));
+        return '' !== $stored_value ? $stored_value : (string) (self::DEFAULTS[$key] ?? '');
     }
 
     public static function all(): array
@@ -104,6 +116,16 @@ final class Configuration
         return true;
     }
 
+    public static function reset_admin_defaults(): void
+    {
+        $settings = self::stored();
+        foreach (self::TEXT_KEYS as $key) {
+            unset($settings[$key]);
+        }
+        update_option(self::OPTION, $settings, false);
+        delete_transient('ssf_member_portal_graph_token');
+    }
+
     public static function missing(): array
     {
         $labels = array(
@@ -134,10 +156,13 @@ final class Configuration
         $status = array();
         foreach (self::KEYS as $key => $constant) {
             $server_value = self::server_value($key);
+            $value = self::value($key);
+            $stored = self::stored();
+            $source = '' !== $server_value ? 'server' : (array_key_exists($key, $stored) && '' !== (string) $stored[$key] ? 'admin' : ('' !== $value ? 'default' : 'missing'));
             $status[$key] = array(
                 'constant' => $constant,
-                'configured' => '' !== self::value($key),
-                'source' => '' !== $server_value ? 'server' : ('' !== self::value($key) ? 'admin' : 'missing'),
+                'configured' => '' !== $value,
+                'source' => $source,
             );
         }
 
