@@ -42,7 +42,7 @@ final class Module
             'public' => false,
             'show_ui' => true,
             'show_in_menu' => false,
-            'supports' => array('title', 'editor', 'revisions'),
+            'supports' => array('title', 'editor', 'thumbnail', 'revisions'),
             'capability_type' => 'post',
             'map_meta_cap' => true,
         ));
@@ -274,10 +274,10 @@ final class Module
         return add_query_arg($args, $page_id ? get_permalink($page_id) : home_url('/arsmote/anmalan/'));
     }
 
-    public function meeting_url(): string
+    public function meeting_url(array $args = array()): string
     {
         $page_id = (int) get_option('ssf_member_portal_annual_meeting_page_id');
-        return $page_id ? get_permalink($page_id) : home_url('/arsmote/');
+        return add_query_arg($args, $page_id ? get_permalink($page_id) : home_url('/arsmote/'));
     }
 
     public function is_registration_open(array $meeting): bool

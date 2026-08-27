@@ -27,7 +27,7 @@ final class Frontend
 
     public function meeting_shortcode(): string
     {
-        $meeting_post = $this->meetings->active();
+        $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
@@ -35,6 +35,7 @@ final class Frontend
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
+        $can_register = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->meetings->is_registration_open($meeting);
         ob_start();
         include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/meeting.php';
         return (string) ob_get_clean();
@@ -42,7 +43,7 @@ final class Frontend
 
     public function registration_shortcode(): string
     {
-        $meeting_post = $this->meetings->active();
+        $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
             return $this->message(__('Det finns inget årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
         }
@@ -162,6 +163,19 @@ final class Frontend
     private function is_publicly_configured(\WP_Post $post, array $meeting): bool
     {
         return (bool) trim($post->post_title) && ! empty($meeting['year']) && ! empty($meeting['start_at']);
+    }
+
+    private function public_meeting(): ?\WP_Post
+    {
+        $requested_id = isset($_GET['meeting']) && is_scalar($_GET['meeting']) ? absint(wp_unslash($_GET['meeting'])) : 0;
+        if ($requested_id) {
+            $requested = get_post($requested_id);
+            if ($requested && Module::POST_TYPE === $requested->post_type && 'publish' === $requested->post_status) {
+                return $requested;
+            }
+        }
+        $active = $this->meetings->active();
+        return $active && 'publish' === $active->post_status ? $active : null;
     }
 
     private function message(string $message): string

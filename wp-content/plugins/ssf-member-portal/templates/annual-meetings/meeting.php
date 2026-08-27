@@ -33,5 +33,5 @@
 
     <?php if ($meeting['contact_name'] || $meeting['contact_email']) : ?><p class="ssf-am-contact"><strong><?php esc_html_e('Kontakt', 'ssf-member-portal'); ?></strong><br><?php echo esc_html($meeting['contact_name']); ?> <?php if ($meeting['contact_email']) : ?><a href="mailto:<?php echo esc_attr(antispambot($meeting['contact_email'])); ?>"><?php echo esc_html(antispambot($meeting['contact_email'])); ?></a><?php endif; ?></p><?php endif; ?>
 
-    <?php if ($this->meetings->is_registration_open($meeting)) : ?><p><a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Anmäl dig', 'ssf-member-portal'); ?></a></p><?php else : ?><p class="ssf-am-message"><?php esc_html_e('Anmälan är stängd.', 'ssf-member-portal'); ?></p><?php endif; ?>
+    <?php if ($can_register) : ?><p><a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Anmäl dig', 'ssf-member-portal'); ?></a></p><?php elseif ($meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0)) : ?><p class="ssf-am-message"><?php esc_html_e('Anmälan är stängd.', 'ssf-member-portal'); ?></p><?php endif; ?>
 </section>

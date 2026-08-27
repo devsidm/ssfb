@@ -35,7 +35,7 @@ final class RegistrationService
     public function submit(array $input, ?string $token = null)
     {
         $meeting_post = $this->meetings->active();
-        if (! $meeting_post) {
+        if (! $meeting_post || 'publish' !== $meeting_post->post_status) {
             return new \WP_Error('annual_meeting_missing', __('Det finns inget aktivt årsmöte att anmäla sig till.', 'ssf-member-portal'));
         }
         $meeting = $this->meetings->data($meeting_post->ID);
