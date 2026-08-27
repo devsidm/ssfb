@@ -21,8 +21,7 @@ Fartyg
   Medlemsfartyg
   Om traditionsfartyg
 Medlemskap
-  Bli medlem
-  Fartygsombud
+  Medlemskap
   Ansökan
 Aktuellt
   Nyheter
@@ -35,6 +34,8 @@ För medlemmar
 ```
 
 The theme provides a keyboard-accessible desktop dropdown and an explicit expand/collapse control for each mobile submenu. The footer gets a compact set of high-value links.
+
+Informationen om fartygsombud ligger på sidan `Medlemskap`; det finns ingen separat offentlig sida för den rollen.
 
 ## Publishing a newsletter
 

@@ -57,7 +57,6 @@ function ssf_site_information_pages(): array
 {
     $member_vessels_url = esc_url(home_url('/medlemsfartyg/'));
     $traditional_vessels_url = esc_url(home_url('/om-traditionsfartyg/'));
-    $application_url = esc_url(home_url('/ansokan/'));
     $motion_url = esc_url(home_url('/lamna-motion/'));
 
     return array(
@@ -76,10 +75,6 @@ function ssf_site_information_pages(): array
         'om-traditionsfartyg' => array(
             'title' => 'Om traditionsfartyg',
             'content' => '<p>Traditionsfartyg bär kunskap om byggnadssätt, hantverk och livet till sjöss. De ska kunna seglas och brukas, samtidigt som deras kulturhistoriska värden tas till vara.</p>',
-        ),
-        'fartygsombud' => array(
-            'title' => 'Fartygsombud',
-            'content' => sprintf('<p>Ett fartygsombud företräder ett fartyg i kontakten med SSF. Ombudet är medlem i förbundet och ansvarar för att fartygsuppgifterna är aktuella.</p><p><a href="%s">Ansök som fartygsombud</a></p>', $application_url),
         ),
         'aktuellt' => array(
             'title' => 'Aktuellt',
@@ -191,8 +186,7 @@ function ssf_site_sync_information_architecture(): array
             'medlemsfartyg' => array('title' => 'Medlemsfartyg', 'url' => home_url('/medlemsfartyg/'), 'parent' => 'fartyg'),
             'traditionsfartyg' => array('title' => 'Om traditionsfartyg', 'page_id' => $page('om-traditionsfartyg'), 'parent' => 'fartyg'),
             'medlemskap' => array('title' => 'Medlemskap', 'page_id' => $page('medlemskap')),
-            'bli-medlem' => array('title' => 'Bli medlem', 'page_id' => $page('medlemskap'), 'parent' => 'medlemskap'),
-            'fartygsombud' => array('title' => 'Fartygsombud', 'page_id' => $page('fartygsombud'), 'parent' => 'medlemskap'),
+            'bli-medlem' => array('title' => 'Medlemskap', 'page_id' => $page('medlemskap'), 'parent' => 'medlemskap'),
             'ansokan' => array('title' => 'Ansökan', 'page_id' => $page('ansokan'), 'parent' => 'medlemskap'),
             'aktuellt' => array('title' => 'Aktuellt', 'page_id' => $page('aktuellt')),
             'nyheter' => array('title' => 'Nyheter', 'page_id' => $page('nyheter'), 'parent' => 'aktuellt'),
