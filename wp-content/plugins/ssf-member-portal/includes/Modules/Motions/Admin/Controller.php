@@ -29,6 +29,7 @@ final class Controller
         $this->service = $service;
 
         add_action('admin_post_ssf_member_portal_save_motion_settings', array($this, 'save_settings'));
+        add_action('admin_post_ssf_member_portal_save_microsoft365_configuration', array($this, 'save_microsoft365_configuration'));
         add_action('admin_post_ssf_member_portal_test_sharepoint', array($this, 'test_sharepoint'));
         add_action('admin_post_ssf_member_portal_test_sharepoint_write', array($this, 'test_sharepoint_write'));
         add_action('admin_post_ssf_member_portal_upload_sharepoint_test_file', array($this, 'upload_sharepoint_test_file'));
@@ -155,6 +156,7 @@ final class Controller
         }
 
         $config = Configuration::public_status();
+        $values = Configuration::editable_values();
         $notice = get_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
         if ($notice) {
             delete_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
@@ -171,11 +173,33 @@ final class Controller
                 <h2><?php esc_html_e('Konfigurationsstatus', 'ssf-member-portal'); ?></h2>
                 <table class="widefat striped"><tbody>
                 <?php foreach (array('tenant_id' => 'Tenant ID', 'client_id' => 'Client ID', 'client_secret' => 'Client secret', 'site_id' => 'Site ID', 'drive_id' => 'Drive ID', 'annual_meeting_folder_id' => 'Årsmöten-mappens ID', 'annual_meeting_folder_name' => 'Årsmöten-mappens namn') as $key => $label) : ?>
-                    <tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html($config[$key]['configured'] ? __('Konfigurerad', 'ssf-member-portal') : __('Saknas', 'ssf-member-portal')); ?></td></tr>
+                    <tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html($config[$key]['configured'] ? __('Konfigurerad', 'ssf-member-portal') : __('Saknas', 'ssf-member-portal')); ?><?php if ($config[$key]['configured']) : ?> <span class="description">(<?php echo esc_html('server' === $config[$key]['source'] ? __('server', 'ssf-member-portal') : __('admin', 'ssf-member-portal')); ?>)</span><?php endif; ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
-                <p class="description"><?php esc_html_e('Graph-värden läses enbart från wp-config.php eller servermiljön. Client secret visas och sparas aldrig i WordPress-admin.', 'ssf-member-portal'); ?></p>
+                <p class="description"><?php esc_html_e('Serverkonfiguration prioriteras före värden som sparats här. Client secret visas aldrig igen.', 'ssf-member-portal'); ?></p>
             </div>
+
+            <?php if (current_user_can(Capabilities::MANAGE)) : ?>
+                <div class="postbox" style="max-width:980px;padding:20px">
+                    <h2><?php esc_html_e('Konfigurera anslutning', 'ssf-member-portal'); ?></h2>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                        <input type="hidden" name="action" value="ssf_member_portal_save_microsoft365_configuration">
+                        <?php wp_nonce_field('ssf_member_portal_save_microsoft365_configuration'); ?>
+                        <table class="form-table" role="presentation"><tbody>
+                        <tr><th><label for="ssf-graph-tenant-id"><?php esc_html_e('Tenant ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-tenant-id" class="regular-text code" name="graph[tenant_id]" value="<?php echo esc_attr($values['tenant_id']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-client-id"><?php esc_html_e('Application (client) ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-id" class="regular-text code" name="graph[client_id]" value="<?php echo esc_attr($values['client_id']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-client-secret"><?php esc_html_e('Client secret value', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-secret" class="regular-text" type="password" name="graph[client_secret]" value="" autocomplete="new-password"><p class="description"><?php esc_html_e('Lämna tomt för att behålla ett sparat secret. Secret ID fungerar inte här.', 'ssf-member-portal'); ?></p><label><input type="checkbox" name="graph[clear_client_secret]" value="1"> <?php esc_html_e('Ta bort sparat client secret', 'ssf-member-portal'); ?></label></td></tr>
+                        <tr><th><label for="ssf-graph-site-id"><?php esc_html_e('SharePoint Site ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-site-id" class="large-text code" name="graph[site_id]" value="<?php echo esc_attr($values['site_id']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-drive-id"><?php esc_html_e('Document library / Drive ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-drive-id" class="large-text code" name="graph[drive_id]" value="<?php echo esc_attr($values['drive_id']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-root-id"><?php esc_html_e('Årsmöten-mappens ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-root-id" class="large-text code" name="graph[annual_meeting_folder_id]" value="<?php echo esc_attr($values['annual_meeting_folder_id']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-root-name"><?php esc_html_e('Årsmöten-mappens namn', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-root-name" class="regular-text" name="graph[annual_meeting_folder_name]" value="<?php echo esc_attr($values['annual_meeting_folder_name']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-hostname"><?php esc_html_e('SharePoint hostname', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-hostname" class="regular-text code" name="graph[site_hostname]" value="<?php echo esc_attr($values['site_hostname']); ?>"></td></tr>
+                        <tr><th><label for="ssf-graph-path"><?php esc_html_e('SharePoint site path', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-path" class="regular-text code" name="graph[site_path]" value="<?php echo esc_attr($values['site_path']); ?>"></td></tr>
+                        </tbody></table>
+                        <?php submit_button(__('Spara anslutningsinställningar', 'ssf-member-portal')); ?>
+                    </form>
+                </div>
+            <?php endif; ?>
 
             <div class="postbox" style="max-width:980px;padding:20px">
                 <h2><?php esc_html_e('Diagnostik och test', 'ssf-member-portal'); ?></h2>
@@ -211,6 +235,21 @@ final class Controller
         update_option('ssf_member_portal_late_override', ! empty($_POST['late_override']) ? 'yes' : 'no', false);
         Settings::save(wp_unslash($_POST));
         wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=ssf-member-portal-settings'));
+        exit;
+    }
+
+    public function save_microsoft365_configuration(): void
+    {
+        if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_member_portal_save_microsoft365_configuration')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
+        }
+
+        $result = Configuration::save_admin((array) wp_unslash($_POST['graph'] ?? array()));
+        $notice = is_wp_error($result)
+            ? array('type' => 'error', 'message' => $result->get_error_message())
+            : array('type' => 'success', 'message' => __('Microsoft 365-konfigurationen har sparats.', 'ssf-member-portal'));
+        set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
+        wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;
     }
 

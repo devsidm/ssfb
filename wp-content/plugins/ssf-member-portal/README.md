@@ -13,9 +13,9 @@ En motion sparas alltid i WordPress före e-post och SharePoint-synk. Ett fel ho
 
 ## Microsoft Graph och SharePoint
 
-Konfigurationen läses endast från `wp-config.php` eller serverns miljövariabler. Utgå från [docs/microsoft-graph-wp-config.example.php](docs/microsoft-graph-wp-config.example.php) och lägg in motsvarande konstanter på servern, utanför Git.
+Konfigurationen kan läggas in under `SSF > Motioner > Microsoft 365`. Client secret anges där endast vid sparning, lagras krypterat med WordPress serverhemligheter och visas aldrig igen. Serverkonfiguration i `wp-config.php` eller miljövariabler har alltid företräde, vilket rekommenderas för produktion. Utgå vid behov från [docs/microsoft-graph-wp-config.example.php](docs/microsoft-graph-wp-config.example.php) och lägg in motsvarande konstanter utanför Git.
 
-`SSF_GRAPH_CLIENT_SECRET` ska vara **Client secret value**, inte Secret ID. Det ska helst vara en miljövariabel. Spara aldrig ett client secret i WordPress-admin, plugin-kod, databasexporter eller Git.
+`SSF_GRAPH_CLIENT_SECRET` ska vara **Client secret value**, inte Secret ID. Det ska helst vara en miljövariabel. Spara aldrig ett client secret i plugin-kod, databasexporter eller Git.
 
 Krävda konstanter:
 
