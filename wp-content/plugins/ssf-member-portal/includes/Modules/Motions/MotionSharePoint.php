@@ -39,17 +39,22 @@ final class MotionSharePoint
 
     public function cron_schedules(array $schedules): array
     {
-        $schedules['ssf_thirty_minutes'] = array(
-            'interval' => 30 * MINUTE_IN_SECONDS,
-            'display' => __('Var 30:e minut', 'ssf-member-portal'),
+        $schedules['ssf_one_minute'] = array(
+            'interval' => MINUTE_IN_SECONDS,
+            'display' => __('Varje minut', 'ssf-member-portal'),
         );
         return $schedules;
     }
 
     public function register(): void
     {
-        if (! wp_next_scheduled(self::POLL_HOOK)) {
-            wp_schedule_event(time() + 5 * MINUTE_IN_SECONDS, 'ssf_thirty_minutes', self::POLL_HOOK);
+        $event = wp_get_scheduled_event(self::POLL_HOOK);
+        if ($event && 'ssf_one_minute' !== $event->schedule) {
+            wp_clear_scheduled_hook(self::POLL_HOOK);
+            $event = false;
+        }
+        if (! $event) {
+            wp_schedule_event(time() + MINUTE_IN_SECONDS, 'ssf_one_minute', self::POLL_HOOK);
         }
     }
 
