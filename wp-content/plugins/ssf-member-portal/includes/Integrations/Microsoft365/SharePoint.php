@@ -40,16 +40,12 @@ final class SharePoint
         if (is_wp_error($site)) {
             return $site;
         }
-        if (Configuration::value('site_id') !== (string) ($site['id'] ?? '') || 'styrelsen' !== (string) ($site['name'] ?? '')) {
-            return new \WP_Error('sharepoint_site_mismatch', __('SharePoint-siten stämmer inte med den förväntade styrelsen-siten.', 'ssf-member-portal'));
-        }
-
         $drive = $this->test_drive();
         if (is_wp_error($drive)) {
             return $drive;
         }
-        if ('Dokument' !== (string) ($drive['name'] ?? '') || 'documentLibrary' !== (string) ($drive['drive_type'] ?? '')) {
-            return new \WP_Error('sharepoint_drive_mismatch', __('Dokumentbiblioteket stämmer inte med den förväntade SharePoint-konfigurationen.', 'ssf-member-portal'));
+        if (Configuration::value('drive_id') !== (string) ($drive['id'] ?? '')) {
+            return new \WP_Error('sharepoint_drive_mismatch', __('Dokumentbiblioteket stämmer inte med det konfigurerade Drive ID:t.', 'ssf-member-portal'));
         }
 
         $root = $this->test_root_folder();
@@ -192,7 +188,10 @@ final class SharePoint
 
         return array(
             'id' => (string) ($site['id'] ?? ''),
+            'configured_id_matches' => 0 === strcasecmp(Configuration::value('site_id'), (string) ($site['id'] ?? '')),
             'name' => sanitize_text_field((string) ($site['displayName'] ?? '')),
+            'expected_name' => 'styrelsen',
+            'name_matches_expected' => 0 === strcasecmp('styrelsen', (string) ($site['displayName'] ?? '')),
             'web_url' => esc_url_raw((string) ($site['webUrl'] ?? '')),
         );
     }
@@ -208,6 +207,8 @@ final class SharePoint
             'id' => (string) ($drive['id'] ?? ''),
             'name' => sanitize_text_field((string) ($drive['name'] ?? '')),
             'drive_type' => sanitize_text_field((string) ($drive['driveType'] ?? '')),
+            'expected_name' => 'Dokument',
+            'name_matches_expected' => 0 === strcasecmp('Dokument', (string) ($drive['name'] ?? '')),
             'web_url' => esc_url_raw((string) ($drive['webUrl'] ?? '')),
         );
     }
@@ -222,14 +223,11 @@ final class SharePoint
             return new \WP_Error('sharepoint_root_not_folder', __('Den konfigurerade Årsmöten-posten är inte en mapp.', 'ssf-member-portal'));
         }
         $expected_name = Configuration::value('annual_meeting_folder_name') ?: 'Årsmöten';
-        if (0 !== strcasecmp($expected_name, (string) ($root['name'] ?? ''))) {
-            return new \WP_Error('sharepoint_root_mismatch', __('Den konfigurerade rotmappen stämmer inte med Årsmöten.', 'ssf-member-portal'));
-        }
-
         return array(
             'id' => (string) ($root['id'] ?? ''),
             'name' => sanitize_text_field((string) ($root['name'] ?? '')),
             'expected_name' => $expected_name,
+            'name_matches_expected' => 0 === strcasecmp($expected_name, (string) ($root['name'] ?? '')),
             'web_url' => esc_url_raw((string) ($root['webUrl'] ?? '')),
         );
     }
