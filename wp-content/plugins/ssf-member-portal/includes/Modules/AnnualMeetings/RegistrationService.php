@@ -87,6 +87,7 @@ final class RegistrationService
         foreach ($data as $key => $value) {
             update_post_meta($post_id, '_ssf_am_' . $key, $value);
         }
+        update_post_meta($post_id, '_ssf_am_annual_meeting_id', (int) $meeting['id']);
         update_post_meta($post_id, '_ssf_am_status', $status);
         update_post_meta($post_id, '_ssf_am_updated_at', $now);
         update_post_meta($post_id, '_ssf_am_sharepoint_sync_status', 'pending');

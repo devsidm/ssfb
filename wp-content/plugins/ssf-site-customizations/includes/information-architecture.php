@@ -90,7 +90,7 @@ function ssf_site_information_pages(): array
         ),
         'arsmoten' => array(
             'title' => 'Årsmöten',
-            'content' => sprintf('<p>Här samlar SSF kallelser, handlingar och information inför föreningens årsmöten.</p><p>Vill du lämna en motion? <a href="%s">Gå till formuläret för motioner</a>.</p>', $motion_url),
+            'content' => '<p>Här samlar SSF kallelser, handlingar och information inför föreningens årsmöten.</p>',
         ),
         'medlemsinformation' => array(
             'title' => 'Medlemsinformation',
@@ -195,7 +195,6 @@ function ssf_site_sync_information_architecture(): array
             'medlemmar' => array('title' => 'För medlemmar', 'page_id' => $page('for-medlemmar')),
             'arsmoten' => array('title' => 'Årsmöten', 'page_id' => $page('arsmoten'), 'parent' => 'medlemmar'),
             'medlemsinformation' => array('title' => 'Medlemsinformation', 'page_id' => $page('medlemsinformation'), 'parent' => 'medlemmar'),
-            'motioner' => array('title' => 'Lämna motion', 'url' => home_url('/lamna-motion/'), 'parent' => 'medlemmar'),
         )
     );
 

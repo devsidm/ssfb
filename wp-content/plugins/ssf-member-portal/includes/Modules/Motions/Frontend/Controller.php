@@ -25,9 +25,15 @@ final class Controller
         add_action('admin_post_ssf_member_portal_submit_motion', array($this, 'submit'));
     }
 
-    public function form_shortcode(): string
+    public function form_shortcode(array $atts = array()): string
     {
-        $period = $this->deadline->state();
+        $atts = shortcode_atts(array('meeting_id' => 0), $atts, 'ssf_member_portal_motions');
+        $requested_id = absint($atts['meeting_id']);
+        if (! $requested_id && isset($_GET['meeting']) && is_scalar($_GET['meeting'])) {
+            $requested_id = absint(wp_unslash($_GET['meeting']));
+        }
+        $meeting = $requested_id ? $this->deadline->meeting($requested_id) : $this->deadline->active_meeting();
+        $period = $this->deadline->state($meeting);
         $error = sanitize_text_field(wp_unslash($_GET['ssf_motion_error'] ?? ''));
         return $this->template('form', array('period' => $period, 'deadline' => $this->deadline, 'error' => $error));
     }
@@ -36,19 +42,24 @@ final class Controller
     {
         $number = sanitize_text_field(wp_unslash($_GET['motion'] ?? ''));
         $token = sanitize_text_field(wp_unslash($_GET['token'] ?? ''));
-        $motion = $this->service->find($number, $token);
+        $meeting_id = isset($_GET['meeting']) && is_scalar($_GET['meeting']) ? absint(wp_unslash($_GET['meeting'])) : 0;
+        $motion = $this->service->find($number, $token, $meeting_id);
         if (! $motion) {
             return $this->template('status', array('motion' => null, 'deadline' => $this->deadline));
         }
         if (! empty($_GET['confirmation'])) {
-            return $this->template('confirmation', array('motion' => $motion, 'deadline' => $this->deadline, 'status_url' => $this->service->status_url($number, $token)));
+            return $this->template('confirmation', array('motion' => $motion, 'deadline' => $this->deadline, 'status_url' => $this->service->status_url($number, $token, (int) get_post_meta($motion->ID, '_ssf_mp_annual_meeting_id', true))));
         }
         return $this->template('status', array('motion' => $motion, 'deadline' => $this->deadline));
     }
 
     public function submit(): void
     {
+        $meeting_id = absint($_POST['meeting_id'] ?? 0);
         $form_url = (int) get_option('ssf_member_portal_motion_form_page_id') ? get_permalink((int) get_option('ssf_member_portal_motion_form_page_id')) : home_url('/lamna-motion/');
+        if ($meeting_id) {
+            $form_url = add_query_arg('meeting', $meeting_id, $form_url);
+        }
         if (! isset($_POST['ssf_member_portal_motion_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_motion_nonce'])), 'ssf_member_portal_submit_motion') || ! empty($_POST['company'])) {
             wp_safe_redirect(add_query_arg('ssf_motion_error', rawurlencode(__('Formuläret kunde inte verifieras.', 'ssf-member-portal')), $form_url));
             exit;

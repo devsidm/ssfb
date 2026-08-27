@@ -3,7 +3,7 @@
  * Plugin Name: SSF Medlemsportal
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Gemensam grund för SSF:s digitala medlemsfunktioner, inklusive motioner och årsmötesanmälan.
- * Version: 0.5.2
+ * Version: 0.6.0
  * Author: SIDM
  * Text Domain: ssf-member-portal
  * Requires at least: 6.0
@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_MEMBER_PORTAL_VERSION', '0.5.2');
+define('SSF_MEMBER_PORTAL_VERSION', '0.6.0');
 define('SSF_MEMBER_PORTAL_FILE', __FILE__);
 define('SSF_MEMBER_PORTAL_PATH', plugin_dir_path(__FILE__));
 define('SSF_MEMBER_PORTAL_URL', plugin_dir_url(__FILE__));

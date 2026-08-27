@@ -75,6 +75,16 @@ final class Module
             'post_content' => '[ssf_member_portal_annual_meeting_registration]',
         ));
         update_option('ssf_member_portal_annual_meeting_registration_page_id', $registration_id, false);
+
+        $archive = get_page_by_path('arsmoten');
+        $archive_id = $archive ? (int) $archive->ID : (int) wp_insert_post(array(
+            'post_type' => 'page',
+            'post_status' => 'publish',
+            'post_name' => 'arsmoten',
+            'post_title' => 'Årsmöten',
+            'post_content' => '[ssf_member_portal_annual_meetings]',
+        ));
+        update_option('ssf_member_portal_annual_meetings_archive_page_id', $archive_id, false);
     }
 
     public function register_admin_menu(string $parent): void
@@ -82,9 +92,15 @@ final class Module
         $this->admin->register_menu($parent);
     }
 
+    public function render_dashboard(): void
+    {
+        $this->admin->overview();
+    }
+
     public function add_meta_box(): void
     {
         add_meta_box('ssf-member-portal-meeting', __('Årsmötesuppgifter', 'ssf-member-portal'), array($this, 'render_meta_box'), self::POST_TYPE, 'normal', 'high');
+        add_meta_box('ssf-member-portal-meeting-status', __('Årsmötesöversikt', 'ssf-member-portal'), array($this, 'render_status_meta_box'), self::POST_TYPE, 'side', 'high');
     }
 
     public function enqueue_admin_assets(string $hook): void
@@ -111,6 +127,7 @@ final class Module
             <p><label><strong><?php esc_html_e('Plats', 'ssf-member-portal'); ?></strong><br><input class="widefat" name="ssf_meeting_location" value="<?php echo esc_attr($data['location']); ?>"></label></p>
             <p><label><strong><?php esc_html_e('Adress', 'ssf-member-portal'); ?></strong><br><textarea class="widefat" rows="2" name="ssf_meeting_address"><?php echo esc_textarea($data['address']); ?></textarea></label></p>
             <p><label><strong><?php esc_html_e('Kort introduktion', 'ssf-member-portal'); ?></strong><br><textarea class="widefat" rows="3" name="ssf_meeting_intro"><?php echo esc_textarea($data['intro']); ?></textarea></label></p>
+            <p><label><strong><?php esc_html_e('Anmälan öppnar', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_registration_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['registration_opens_at'])); ?>"></label></p>
             <p><label><strong><?php esc_html_e('Sista anmälningsdag', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_registration_closes_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['registration_closes_at'])); ?>"></label></p>
             <p><label><strong><?php esc_html_e('Kontaktperson', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_contact_name" value="<?php echo esc_attr($data['contact_name']); ?>"></label></p>
             <p><label><strong><?php esc_html_e('Kontakt-e-post', 'ssf-member-portal'); ?></strong><br><input type="email" name="ssf_meeting_contact_email" value="<?php echo esc_attr($data['contact_email']); ?>"></label></p>
@@ -119,6 +136,10 @@ final class Module
             <h2><?php esc_html_e('Motionsperiod', 'ssf-member-portal'); ?></h2>
             <p><label><strong><?php esc_html_e('Motioner öppnar', 'ssf-member-portal'); ?></strong><br><input name="ssf_motion_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['motion_opens_at'])); ?>"></label></p>
             <p><label><strong><?php esc_html_e('Motioner stänger', 'ssf-member-portal'); ?></strong><br><input name="ssf_motion_closes_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['motion_closes_at'])); ?>"></label><br><span class="description"><?php esc_html_e('Motionsfunktionen behåller sin befintliga period och SharePoint-mapp.', 'ssf-member-portal'); ?></span></p>
+            <p><label><input type="checkbox" name="ssf_meeting_allow_late_motions" value="1" <?php checked($data['allow_late_motions']); ?>> <?php esc_html_e('Tillåt sena motioner efter deadline', 'ssf-member-portal'); ?></label></p>
+            <p><label><input type="checkbox" name="ssf_meeting_motions_public" value="1" <?php checked($data['motions_public']); ?>> <?php esc_html_e('Visa motionsinformation publikt', 'ssf-member-portal'); ?></label></p>
+            <p><label><strong><?php esc_html_e('Instruktion till medlem', 'ssf-member-portal'); ?></strong></label><?php wp_editor($data['motion_instructions'], 'ssf_meeting_motion_instructions', array('textarea_name' => 'ssf_meeting_motion_instructions', 'textarea_rows' => 5, 'media_buttons' => false)); ?></p>
+            <p><label><strong><?php esc_html_e('Kontakt för motionsfrågor', 'ssf-member-portal'); ?></strong><br><input type="email" class="regular-text" name="ssf_meeting_motion_contact_email" value="<?php echo esc_attr($data['motion_contact_email']); ?>"></label></p>
 
             <h2><?php esc_html_e('Anmälan och kalender', 'ssf-member-portal'); ?></h2>
             <p><label><input type="checkbox" name="ssf_meeting_registration_open" value="1" <?php checked($data['registration_open']); ?>> <?php esc_html_e('Anmälan är öppen', 'ssf-member-portal'); ?></label></p>
@@ -146,13 +167,46 @@ final class Module
             <p><button class="button" type="button" data-ssf-add-row="question"><?php esc_html_e('Lägg till fråga', 'ssf-member-portal'); ?></button></p>
 
             <h2><?php esc_html_e('Administration och integritet', 'ssf-member-portal'); ?></h2>
-            <p><label><strong><?php esc_html_e('SharePoint-år', 'ssf-member-portal'); ?></strong><br><input type="number" min="2000" max="2100" name="ssf_meeting_sharepoint_year" value="<?php echo esc_attr($data['sharepoint_year']); ?>"></label><br><code><?php echo esc_html('Årsmöten/' . ($data['sharepoint_year'] ?: 'YYYY') . '/Anmälningar/'); ?></code></p>
+            <p><strong><?php esc_html_e('SharePoint-mapp', 'ssf-member-portal'); ?></strong><br><code><?php echo esc_html('Årsmöten/' . ($data['year'] ?: 'YYYY') . '/'); ?></code><br><span class="description"><?php esc_html_e('Årsmötesåret används gemensamt för motioner, anmälningar och handlingar.', 'ssf-member-portal'); ?></span></p>
             <p><label><strong><?php esc_html_e('Mottagare för notifiering', 'ssf-member-portal'); ?></strong><br><input type="email" class="regular-text" name="ssf_meeting_notification_email" value="<?php echo esc_attr($data['notification_email']); ?>"></label></p>
             <p><label><input type="checkbox" name="ssf_meeting_notify_each" value="1" <?php checked($data['notify_each']); ?>> <?php esc_html_e('Maila mottagaren vid varje ny anmälan', 'ssf-member-portal'); ?></label></p>
             <p><label><strong><?php esc_html_e('Gallra personuppgifter efter', 'ssf-member-portal'); ?></strong><br><input type="number" min="1" max="60" name="ssf_meeting_retention_months" value="<?php echo esc_attr($data['retention_months']); ?>"> <?php esc_html_e('månader efter mötets slut', 'ssf-member-portal'); ?></label></p>
         </div>
         <script type="text/html" id="tmpl-ssf-am-program-row"><?php $this->render_program_row('__INDEX__', $this->program_row()); ?></script>
         <script type="text/html" id="tmpl-ssf-am-question-row"><?php $this->render_question_row('__INDEX__', $this->question_row()); ?></script>
+        <?php
+    }
+
+    public function render_status_meta_box(\WP_Post $post): void
+    {
+        $meeting = $this->data($post->ID);
+        $registrations = count(get_posts(array('post_type' => RegistrationPostType::POST_TYPE, 'post_status' => 'private', 'post_parent' => $post->ID, 'fields' => 'ids', 'posts_per_page' => -1)));
+        $motions = post_type_exists('ssf_motion') ? count(get_posts(array('post_type' => 'ssf_motion', 'post_status' => 'any', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => '_ssf_mp_annual_meeting_id', 'meta_value' => $post->ID))) : 0;
+        $warnings = array();
+        if (! $meeting['start_at']) {
+            $warnings[] = __('Datum saknas.', 'ssf-member-portal');
+        }
+        if (! $meeting['location']) {
+            $warnings[] = __('Plats saknas.', 'ssf-member-portal');
+        }
+        if ($meeting['registration_open'] && ! $meeting['registration_closes_at']) {
+            $warnings[] = __('Anmälan saknar deadline.', 'ssf-member-portal');
+        }
+        if (! $meeting['motion_opens_at'] || ! $meeting['motion_closes_at']) {
+            $warnings[] = __('Motionsperioden är inte komplett.', 'ssf-member-portal');
+        }
+        if (! has_post_thumbnail($post)) {
+            $warnings[] = __('Kalenderbild saknas.', 'ssf-member-portal');
+        }
+        ?>
+        <p><strong><?php echo esc_html($post->post_status === 'publish' ? __('Publicerad', 'ssf-member-portal') : __('Utkast', 'ssf-member-portal')); ?></strong></p>
+        <p><?php esc_html_e('Anmälningar', 'ssf-member-portal'); ?><br><strong><?php echo esc_html((string) $registrations); ?></strong></p>
+        <p><?php esc_html_e('Motioner', 'ssf-member-portal'); ?><br><strong><?php echo esc_html((string) $motions); ?></strong></p>
+        <p><?php esc_html_e('Kalender', 'ssf-member-portal'); ?><br><?php echo esc_html($post->post_status === 'publish' && $meeting['start_at'] ? __('Publiceras automatiskt', 'ssf-member-portal') : __('Väntar på publicering', 'ssf-member-portal')); ?></p>
+        <p><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?><br><?php echo esc_html(get_post_meta($post->ID, '_ssf_am_sharepoint_excel_synced_at', true) ? __('Synkroniserad', 'ssf-member-portal') : __('Inte synkroniserad ännu', 'ssf-member-portal')); ?></p>
+        <?php if ($warnings) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Att kontrollera', 'ssf-member-portal'); ?></strong></p><ul><?php foreach ($warnings as $warning) : ?><li><?php echo esc_html($warning); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+        <p><a class="button" href="<?php echo esc_url(admin_url('edit.php?post_type=' . RegistrationPostType::POST_TYPE . '&ssf_am_meeting=' . $post->ID)); ?>"><?php esc_html_e('Visa anmälningar', 'ssf-member-portal'); ?></a></p>
+        <p><a class="button" href="<?php echo esc_url(admin_url('edit.php?post_type=ssf_motion&ssf_am_meeting=' . $post->ID)); ?>"><?php esc_html_e('Visa motioner', 'ssf-member-portal'); ?></a></p>
         <?php
     }
 
@@ -171,8 +225,13 @@ final class Module
         $legacy_meeting_date = (string) get_post_meta($post_id, '_ssf_mp_meeting_date', true);
         $opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_opens_at'] ?? '')));
         $closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_closes_at'] ?? '')));
+        $registration_opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_opens_at'] ?? '')));
+        $registration_closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_closes_at'] ?? '')));
         if ($opens_at && $closes_at && $closes_at <= $opens_at) {
             $closes_at = 0;
+        }
+        if ($registration_opens_at && $registration_closes_at && $registration_closes_at <= $registration_opens_at) {
+            $registration_closes_at = 0;
         }
         $values = array(
             'year' => $year,
@@ -182,7 +241,14 @@ final class Module
             'location' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_location'] ?? '')),
             'address' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_address'] ?? '')),
             'intro' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_intro'] ?? '')),
-            'registration_closes_at' => $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_closes_at'] ?? ''))),
+            'registration_opens_at' => $registration_opens_at,
+            'registration_closes_at' => $registration_closes_at,
+            'motion_opens_at' => $opens_at,
+            'motion_closes_at' => $closes_at,
+            'allow_late_motions' => ! empty($_POST['ssf_meeting_allow_late_motions']) ? 1 : 0,
+            'motions_public' => ! empty($_POST['ssf_meeting_motions_public']) ? 1 : 0,
+            'motion_instructions' => wp_kses_post(wp_unslash($_POST['ssf_meeting_motion_instructions'] ?? '')),
+            'motion_contact_email' => sanitize_email(wp_unslash($_POST['ssf_meeting_motion_contact_email'] ?? '')),
             'contact_name' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_contact_name'] ?? '')),
             'contact_email' => sanitize_email(wp_unslash($_POST['ssf_meeting_contact_email'] ?? '')),
             'registration_open' => ! empty($_POST['ssf_meeting_registration_open']) ? 1 : 0,
@@ -195,7 +261,7 @@ final class Module
             'program' => $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array())),
             'food_options' => $this->lines(sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_food_options'] ?? ''))),
             'questions' => $this->sanitize_questions((array) wp_unslash($_POST['ssf_meeting_questions'] ?? array())),
-            'sharepoint_year' => min(2100, max(2000, absint($_POST['ssf_meeting_sharepoint_year'] ?? $year))),
+            'sharepoint_year' => $year,
             'notification_email' => sanitize_email(wp_unslash($_POST['ssf_meeting_notification_email'] ?? '')),
             'notify_each' => ! empty($_POST['ssf_meeting_notify_each']) ? 1 : 0,
             'retention_months' => min(60, max(1, absint($_POST['ssf_meeting_retention_months'] ?? 12))),
@@ -228,15 +294,20 @@ final class Module
             'id' => $meeting_id,
             'year' => (int) $meta('year', $legacy_year),
             'meeting_date' => (string) $meta('meeting_date', $legacy_date),
-            'motion_opens_at' => (int) get_post_meta($meeting_id, '_ssf_mp_motion_opens_at', true),
-            'motion_closes_at' => (int) get_post_meta($meeting_id, '_ssf_mp_motion_closes_at', true),
+            'motion_opens_at' => (int) $meta('motion_opens_at', (int) get_post_meta($meeting_id, '_ssf_mp_motion_opens_at', true)),
+            'motion_closes_at' => (int) $meta('motion_closes_at', (int) get_post_meta($meeting_id, '_ssf_mp_motion_closes_at', true)),
             'sharepoint_folder' => (string) get_post_meta($meeting_id, '_ssf_mp_sharepoint_folder', true),
             'start_at' => (int) $meta('start_at', 0),
             'end_at' => (int) $meta('end_at', 0),
             'location' => (string) $meta('location', ''),
             'address' => (string) $meta('address', ''),
             'intro' => (string) $meta('intro', ''),
+            'registration_opens_at' => (int) $meta('registration_opens_at', 0),
             'registration_closes_at' => (int) $meta('registration_closes_at', 0),
+            'allow_late_motions' => (bool) $meta('allow_late_motions', 'yes' === get_option('ssf_member_portal_late_override', 'no')),
+            'motions_public' => (bool) $meta('motions_public', 1),
+            'motion_instructions' => (string) $meta('motion_instructions', ''),
+            'motion_contact_email' => (string) $meta('motion_contact_email', ''),
             'contact_name' => (string) $meta('contact_name', ''),
             'contact_email' => (string) $meta('contact_email', ''),
             'registration_open' => (bool) $meta('registration_open', 0),
@@ -265,7 +336,7 @@ final class Module
 
     public function all(): array
     {
-        return get_posts(array('post_type' => self::POST_TYPE, 'post_status' => array('publish', 'draft', 'private'), 'posts_per_page' => -1, 'orderby' => 'date', 'order' => 'DESC'));
+        return get_posts(array('post_type' => self::POST_TYPE, 'post_status' => array('publish', 'draft', 'private'), 'posts_per_page' => -1, 'meta_key' => '_ssf_am_start_at', 'orderby' => 'meta_value_num', 'order' => 'DESC'));
     }
 
     public function registration_url(array $args = array()): string
@@ -280,9 +351,27 @@ final class Module
         return add_query_arg($args, $page_id ? get_permalink($page_id) : home_url('/arsmote/'));
     }
 
+    public function motion_url(array $args = array()): string
+    {
+        $page_id = (int) get_option('ssf_member_portal_motion_form_page_id');
+        return add_query_arg($args, $page_id ? get_permalink($page_id) : home_url('/lamna-motion/'));
+    }
+
+    public function archive_url(): string
+    {
+        $page_id = (int) get_option('ssf_member_portal_annual_meetings_archive_page_id');
+        return $page_id ? get_permalink($page_id) : home_url('/arsmoten/');
+    }
+
     public function is_registration_open(array $meeting): bool
     {
-        return ! empty($meeting['registration_open']) && (! $meeting['registration_closes_at'] || time() <= (int) $meeting['registration_closes_at']);
+        if (empty($meeting['registration_open'])) {
+            return false;
+        }
+        if (! empty($meeting['registration_opens_at']) && time() < (int) $meeting['registration_opens_at']) {
+            return false;
+        }
+        return ! $meeting['registration_closes_at'] || time() <= (int) $meeting['registration_closes_at'];
     }
 
     private function render_program_row($index, array $item): void

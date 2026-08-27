@@ -10,6 +10,18 @@
 .ssf-am-facts dt, .ssf-am-summary dt { color: #536677; font-size: .86rem; font-weight: 700; }
 .ssf-am-facts dd, .ssf-am-summary dd { margin: .2rem 0 0; }
 .ssf-am-content { margin: 1.8rem 0; }
+.ssf-am-hero-image { margin: 0 0 1.6rem; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 4px; }
+.ssf-am-hero-image img { width: 100%; height: 100%; object-fit: cover; }
+.ssf-am-local-nav { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin: 1.1rem 0 1.5rem; padding: .8rem 0; border-block: 1px solid #c9d7df; }
+.ssf-am-local-nav a { color: #0c5865; font-weight: 700; text-decoration-thickness: 1px; text-underline-offset: .18em; }
+.ssf-am-section { margin: 2rem 0; padding-top: .5rem; }
+.ssf-am-archive-item { margin: 1rem 0; padding: 1.15rem 0; border-top: 1px solid #c9d7df; }
+.ssf-am-archive-item h3 { margin: .35rem 0; }
+.ssf-am-archive-item p { margin: .35rem 0 1rem; }
+.ssf-am-archive__past { margin-top: 2.4rem; }
+.ssf-am-archive__past ul { margin: 0; padding: 0; list-style: none; border-top: 1px solid #c9d7df; }
+.ssf-am-archive__past li { display: flex; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid #c9d7df; }
+.ssf-am-archive__past span { color: #536677; text-align: right; }
 .ssf-am-program { margin: 2rem 0; }
 .ssf-am-program ol { list-style: none; padding: 0; margin: 0; border-top: 1px solid #c9d7df; }
 .ssf-am-program li { display: grid; grid-template-columns: minmax(0, 1fr) 10rem; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid #c9d7df; }
@@ -42,4 +54,4 @@
 .ssf-am-button:hover { background: #083f4a; }
 .ssf-am-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .ssf-am-cancel { margin-top: 1.5rem; }
-@media (max-width: 600px) { .ssf-am-grid, .ssf-am-facts, .ssf-am-summary, .ssf-am-options { grid-template-columns: 1fr; }.ssf-am-program li { grid-template-columns: 1fr; gap: .3rem; }.ssf-am-program span { text-align: left; } }
+@media (max-width: 600px) { .ssf-am-grid, .ssf-am-facts, .ssf-am-summary, .ssf-am-options { grid-template-columns: 1fr; }.ssf-am-program li { grid-template-columns: 1fr; gap: .3rem; }.ssf-am-program span { text-align: left; }.ssf-am-archive__past li { display: block; }.ssf-am-archive__past span { display: block; margin-top: .25rem; text-align: left; } }

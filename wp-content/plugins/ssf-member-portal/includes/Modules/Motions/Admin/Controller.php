@@ -44,12 +44,13 @@ final class Controller
         add_action('save_post_' . MotionPostType::POST_TYPE, array($this, 'save_motion'), 10, 2);
         add_filter('manage_' . MotionPostType::POST_TYPE . '_posts_columns', array($this, 'columns'));
         add_action('manage_' . MotionPostType::POST_TYPE . '_posts_custom_column', array($this, 'column_content'), 10, 2);
+        add_action('restrict_manage_posts', array($this, 'motion_filters'));
+        add_action('pre_get_posts', array($this, 'filter_motion_query'));
     }
 
     public function register_menu(string $parent): void
     {
         add_submenu_page($parent, __('Alla motioner', 'ssf-member-portal'), __('Motioner', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'edit.php?post_type=' . MotionPostType::POST_TYPE);
-        add_submenu_page($parent, __('Motionsperiod', 'ssf-member-portal'), __('Motionsperiod', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'ssf-member-portal-motion-period', array($this, 'render_period'));
         add_submenu_page($parent, __('Inställningar', 'ssf-member-portal'), __('Inställningar', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-settings', array($this, 'render_settings'));
         add_submenu_page($parent, __('Microsoft 365', 'ssf-member-portal'), __('Microsoft 365', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'ssf-member-portal-microsoft365', array($this, 'render_microsoft365'));
     }
@@ -144,7 +145,7 @@ final class Controller
                         <option value="<?php echo esc_attr($item->ID); ?>" <?php selected($active_id, $item->ID); ?>><?php echo esc_html($data['year'] ? sprintf(__('Årsmöte %d', 'ssf-member-portal'), $data['year']) : $item->post_title); ?></option>
                     <?php endforeach; ?></select>
                 </td></tr>
-                <tr><th><?php esc_html_e('Sen inlämning', 'ssf-member-portal'); ?></th><td><label><input type="checkbox" name="late_override" value="1" <?php checked('yes', get_option('ssf_member_portal_late_override', 'no')); ?>> <?php esc_html_e('Tillåt inlämning även efter sista motionsdag', 'ssf-member-portal'); ?></label><p class="description"><?php esc_html_e('Sena motioner märks alltid permanent som inkomna efter motionsfrist.', 'ssf-member-portal'); ?></p></td></tr>
+                <tr><th><?php esc_html_e('Sen inlämning', 'ssf-member-portal'); ?></th><td><?php esc_html_e('Konfigureras på respektive årsmöte under Motionsperiod.', 'ssf-member-portal'); ?></td></tr>
                 <tr><th><label for="ssf-notification-email"><?php esc_html_e('Mottagare av ny motion', 'ssf-member-portal'); ?></label></th><td><input id="ssf-notification-email" class="regular-text" type="email" name="notification_email" value="<?php echo esc_attr($settings['notification_email']); ?>"></td></tr>
                 <tr><th><label for="ssf-upload-size"><?php esc_html_e('Max filstorlek', 'ssf-member-portal'); ?></label></th><td><input id="ssf-upload-size" class="small-text" type="number" min="1" max="25" name="max_upload_mb" value="<?php echo esc_attr($settings['max_upload_mb']); ?>"> MB</td></tr>
                 </tbody></table>
@@ -310,7 +311,6 @@ final class Controller
         }
 
         update_option('ssf_member_portal_active_meeting_id', absint($_POST['active_meeting_id'] ?? 0), false);
-        update_option('ssf_member_portal_late_override', ! empty($_POST['late_override']) ? 'yes' : 'no', false);
         Settings::save(wp_unslash($_POST));
         wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=ssf-member-portal-settings'));
         exit;
@@ -507,6 +507,7 @@ final class Controller
         return array(
             'cb' => $columns['cb'],
             'title' => __('Motion', 'ssf-member-portal'),
+            'motion_meeting' => __('Årsmöte', 'ssf-member-portal'),
             'motion_status' => __('Status', 'ssf-member-portal'),
             'motion_submitted' => __('Inskickad', 'ssf-member-portal'),
             'date' => $columns['date'],
@@ -515,12 +516,39 @@ final class Controller
 
     public function column_content(string $column, int $post_id): void
     {
+        if ('motion_meeting' === $column) {
+            $meeting_id = (int) get_post_meta($post_id, '_ssf_mp_annual_meeting_id', true);
+            echo esc_html($meeting_id ? get_the_title($meeting_id) : __('Ej kopplad', 'ssf-member-portal'));
+        }
         if ('motion_status' === $column) {
             echo esc_html(MotionStatus::label((string) get_post_meta($post_id, '_ssf_mp_status', true)));
         }
         if ('motion_submitted' === $column) {
             echo esc_html($this->deadline->format((int) get_post_meta($post_id, '_ssf_mp_submitted_at', true)));
         }
+    }
+
+    public function motion_filters(string $post_type): void
+    {
+        if (MotionPostType::POST_TYPE !== $post_type) {
+            return;
+        }
+        $selected = isset($_GET['ssf_am_meeting']) && is_scalar($_GET['ssf_am_meeting']) ? absint(wp_unslash($_GET['ssf_am_meeting'])) : 0;
+        ?><select name="ssf_am_meeting"><option value="0"><?php esc_html_e('Alla årsmöten', 'ssf-member-portal'); ?></option><?php foreach ($this->meetings->all() as $meeting) : ?><option value="<?php echo esc_attr($meeting->ID); ?>" <?php selected($selected, $meeting->ID); ?>><?php echo esc_html(get_the_title($meeting)); ?></option><?php endforeach; ?></select><?php
+    }
+
+    public function filter_motion_query(\WP_Query $query): void
+    {
+        if (! is_admin() || ! $query->is_main_query() || MotionPostType::POST_TYPE !== $query->get('post_type')) {
+            return;
+        }
+        $meeting_id = isset($_GET['ssf_am_meeting']) && is_scalar($_GET['ssf_am_meeting']) ? absint(wp_unslash($_GET['ssf_am_meeting'])) : 0;
+        if (! $meeting_id) {
+            return;
+        }
+        $meta_query = (array) $query->get('meta_query');
+        $meta_query[] = array('key' => '_ssf_mp_annual_meeting_id', 'value' => $meeting_id);
+        $query->set('meta_query', $meta_query);
     }
 
     private function microsoft365_button(string $action, string $nonce_action, string $label, string $class): void

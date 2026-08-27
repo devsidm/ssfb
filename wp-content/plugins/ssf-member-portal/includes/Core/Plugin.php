@@ -61,8 +61,8 @@ final class Plugin
 
     public function admin_menu(): void
     {
-        add_menu_page(__('SSF', 'ssf-member-portal'), __('SSF', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'), 'dashicons-admin-generic', 25);
-        add_submenu_page('ssf', __('SSF - Översikt', 'ssf-member-portal'), __('Översikt', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'));
+        add_menu_page(__('SSF Årsmöten', 'ssf-member-portal'), __('SSF Årsmöten', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'), 'dashicons-calendar-alt', 25);
+        add_submenu_page('ssf', __('SSF Årsmöten - Översikt', 'ssf-member-portal'), __('Översikt', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'));
         $this->meetings->register_admin_menu('ssf');
         $this->motions->register_admin_menu('ssf');
         add_submenu_page('ssf', __('Systemstatus', 'ssf-member-portal'), __('Systemstatus', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-status', array($this, 'render_system_status'));
@@ -70,7 +70,7 @@ final class Plugin
 
     public function render_dashboard(): void
     {
-        $this->motions->render_dashboard();
+        $this->meetings->render_dashboard();
     }
 
     public function render_system_status(): void
@@ -97,7 +97,7 @@ final class Plugin
             wp_enqueue_script('ssf-member-portal-motions', SSF_MEMBER_PORTAL_URL . 'assets/js/motions.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
         }
 
-        $meeting_pages = array((int) get_option('ssf_member_portal_annual_meeting_page_id'), (int) get_option('ssf_member_portal_annual_meeting_registration_page_id'));
+        $meeting_pages = array((int) get_option('ssf_member_portal_annual_meeting_page_id'), (int) get_option('ssf_member_portal_annual_meeting_registration_page_id'), (int) get_option('ssf_member_portal_annual_meetings_archive_page_id'));
         if (is_page($meeting_pages)) {
             wp_enqueue_style('ssf-member-portal-annual-meetings', SSF_MEMBER_PORTAL_URL . 'assets/css/annual-meetings.css', array(), SSF_MEMBER_PORTAL_VERSION);
             wp_enqueue_script('ssf-member-portal-annual-meetings', SSF_MEMBER_PORTAL_URL . 'assets/js/annual-meetings.js', array(), SSF_MEMBER_PORTAL_VERSION, true);

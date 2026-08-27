@@ -2,6 +2,8 @@
 
 namespace SSF\MemberPortal\Modules\AnnualMeetings;
 
+use SSF\MemberPortal\Modules\Motions\MotionDeadline;
+
 if (! defined('ABSPATH')) {
     exit;
 }
@@ -10,12 +12,16 @@ final class Frontend
 {
     private Module $meetings;
     private RegistrationService $registrations;
+    private MotionDeadline $motions;
 
     public function __construct(Module $meetings, RegistrationService $registrations)
     {
         $this->meetings = $meetings;
         $this->registrations = $registrations;
+        $this->motions = new MotionDeadline($meetings);
         add_shortcode('ssf_member_portal_annual_meeting', array($this, 'meeting_shortcode'));
+        add_shortcode('ssf_member_portal_annual_meetings', array($this, 'archive_shortcode'));
+        add_filter('the_content', array($this, 'append_archive_to_page'), 20);
         add_shortcode('ssf_member_portal_annual_meeting_registration', array($this, 'registration_shortcode'));
         add_action('admin_post_nopriv_ssf_member_portal_submit_meeting_registration', array($this, 'submit'));
         add_action('admin_post_ssf_member_portal_submit_meeting_registration', array($this, 'submit'));
@@ -36,9 +42,43 @@ final class Frontend
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
         $can_register = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->meetings->is_registration_open($meeting);
+        $motion = $this->motions->state($meeting);
         ob_start();
         include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/meeting.php';
         return (string) ob_get_clean();
+    }
+
+    public function archive_shortcode(): string
+    {
+        $upcoming = array();
+        $past = array();
+        $now = time();
+        $posts = get_posts(array('post_type' => Module::POST_TYPE, 'post_status' => 'publish', 'posts_per_page' => -1, 'meta_key' => '_ssf_am_start_at', 'orderby' => 'meta_value_num', 'order' => 'ASC'));
+        foreach ($posts as $post) {
+            $meeting = $this->meetings->data((int) $post->ID);
+            if (! $this->is_publicly_configured($post, $meeting)) {
+                continue;
+            }
+            $item = array('post' => $post, 'meeting' => $meeting);
+            if ((int) $meeting['start_at'] >= $now) {
+                $upcoming[] = $item;
+            } else {
+                array_unshift($past, $item);
+            }
+        }
+        ob_start();
+        include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/archive.php';
+        return (string) ob_get_clean();
+    }
+
+    public function append_archive_to_page(string $content): string
+    {
+        $page_id = (int) get_option('ssf_member_portal_annual_meetings_archive_page_id', 0);
+        if (! $page_id || ! is_main_query() || ! in_the_loop() || ! is_page($page_id)) {
+            return $content;
+        }
+        $raw = (string) get_post_field('post_content', $page_id);
+        return has_shortcode($raw, 'ssf_member_portal_annual_meetings') ? $content : $content . $this->archive_shortcode();
     }
 
     public function registration_shortcode(): string

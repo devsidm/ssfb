@@ -12,11 +12,13 @@ final class Admin
 {
     private Module $meetings;
     private RegistrationService $registrations;
+    private Migration $migration;
 
     public function __construct(Module $meetings, RegistrationService $registrations)
     {
         $this->meetings = $meetings;
         $this->registrations = $registrations;
+        $this->migration = new Migration($meetings);
         add_filter('manage_' . RegistrationPostType::POST_TYPE . '_posts_columns', array($this, 'columns'));
         add_action('manage_' . RegistrationPostType::POST_TYPE . '_posts_custom_column', array($this, 'column'), 10, 2);
         add_action('restrict_manage_posts', array($this, 'filters'));
@@ -26,12 +28,44 @@ final class Admin
         add_action('admin_post_ssf_member_portal_export_meeting_registrations', array($this, 'export'));
         add_action('admin_post_ssf_member_portal_retry_meeting_sync', array($this, 'retry_sync'));
         add_action('admin_post_ssf_member_portal_resend_meeting_confirmation', array($this, 'resend_confirmation'));
+        add_action('admin_post_ssf_member_portal_migrate_annual_meeting_data', array($this, 'migrate_data'));
     }
 
     public function register_menu(string $parent): void
     {
         add_submenu_page($parent, __('Årsmöten', 'ssf-member-portal'), __('Årsmöten', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'edit.php?post_type=' . Module::POST_TYPE);
+        add_submenu_page($parent, __('Lägg till årsmöte', 'ssf-member-portal'), __('Lägg till årsmöte', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'post-new.php?post_type=' . Module::POST_TYPE);
         add_submenu_page($parent, __('Anmälningar', 'ssf-member-portal'), __('Anmälningar', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'ssf-member-portal-meeting-registrations', array($this, 'dashboard'));
+    }
+
+    public function overview(): void
+    {
+        if (! current_user_can(Capabilities::MANAGE_ANNUAL_MEETINGS)) {
+            return;
+        }
+        $active_id = (int) get_option('ssf_member_portal_active_meeting_id', 0);
+        $report = (array) get_option(Migration::REPORT_OPTION, array());
+        ?>
+        <div class="wrap"><h1><?php esc_html_e('SSF Årsmöten', 'ssf-member-portal'); ?></h1>
+        <p><?php esc_html_e('Skapa och administrera varje årsmöte på ett ställe. Kalendern läser årsmötets publicerade information automatiskt.', 'ssf-member-portal'); ?></p>
+        <p><a class="button button-primary" href="<?php echo esc_url(admin_url('post-new.php?post_type=' . Module::POST_TYPE)); ?>"><?php esc_html_e('Lägg till årsmöte', 'ssf-member-portal'); ?></a></p>
+        <table class="widefat striped"><thead><tr><th><?php esc_html_e('Årsmöte', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Status', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Anmälningar', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Motioner', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Kalender', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Åtgärd', 'ssf-member-portal'); ?></th></tr></thead><tbody>
+        <?php foreach ($this->meetings->all() as $post) : $meeting = $this->meetings->data((int) $post->ID); $registration_count = count($this->registrations->registrations((int) $post->ID)); $motion_count = post_type_exists('ssf_motion') ? count(get_posts(array('post_type' => 'ssf_motion', 'post_status' => 'any', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => '_ssf_mp_annual_meeting_id', 'meta_value' => $post->ID))) : 0; ?><tr><td><strong><?php echo esc_html(get_the_title($post)); ?></strong><br><span class="description"><?php echo esc_html($meeting['start_at'] ? wp_date('j F Y', (int) $meeting['start_at'], wp_timezone()) : __('Datum saknas', 'ssf-member-portal')); ?></span></td><td><?php echo esc_html($post->post_status === 'publish' ? __('Publicerad', 'ssf-member-portal') : __('Utkast', 'ssf-member-portal')); ?><?php if ($active_id === (int) $post->ID) : ?><br><span class="description"><?php esc_html_e('Aktivt årsmöte', 'ssf-member-portal'); ?></span><?php endif; ?></td><td><?php echo esc_html((string) $registration_count); ?></td><td><?php echo esc_html((string) $motion_count); ?></td><td><?php echo esc_html($post->post_status === 'publish' && $meeting['start_at'] ? __('Publiceras automatiskt', 'ssf-member-portal') : __('Väntar', 'ssf-member-portal')); ?></td><td><a class="button" href="<?php echo esc_url(get_edit_post_link($post)); ?>"><?php esc_html_e('Redigera', 'ssf-member-portal'); ?></a></td></tr><?php endforeach; ?>
+        <?php if (! $this->meetings->all()) : ?><tr><td colspan="6"><?php esc_html_e('Inga årsmöten finns ännu.', 'ssf-member-portal'); ?></td></tr><?php endif; ?></tbody></table>
+        <hr><h2><?php esc_html_e('Migrera befintlig data', 'ssf-member-portal'); ?></h2><p><?php esc_html_e('Kopplar äldre motioner och anmälningar till rätt årsmöte när relationen kan fastställas. Inga poster eller manuella kalenderevent tas bort.', 'ssf-member-portal'); ?></p>
+        <?php if (! empty($report['ran_at'])) : ?><p><strong><?php esc_html_e('Senaste körning:', 'ssf-member-portal'); ?></strong> <?php echo esc_html($report['ran_at']); ?><br><?php echo esc_html(sprintf(__('Motioner kopplade: %d. Anmälningar kopplade: %d. Okopplade motioner: %d. Okopplade anmälningar: %d.', 'ssf-member-portal'), (int) $report['motions_linked'], (int) $report['registrations_linked'], (int) $report['motions_unresolved'], (int) $report['registrations_unresolved'])); ?></p><?php endif; ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_migrate_annual_meeting_data"><?php wp_nonce_field('ssf_member_portal_migrate_annual_meeting_data'); ?><?php submit_button(__('Kör säker datamigrering', 'ssf-member-portal'), 'secondary', 'submit', false); ?></form></div>
+        <?php
+    }
+
+    public function migrate_data(): void
+    {
+        if (! current_user_can(Capabilities::MANAGE_ANNUAL_MEETINGS) || ! check_admin_referer('ssf_member_portal_migrate_annual_meeting_data')) {
+            wp_die(esc_html__('Du har inte behörighet att köra migreringen.', 'ssf-member-portal'));
+        }
+        $this->migration->run();
+        wp_safe_redirect(admin_url('admin.php?page=ssf'));
+        exit;
     }
 
     public function dashboard(): void

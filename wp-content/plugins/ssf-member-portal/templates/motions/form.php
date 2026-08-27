@@ -20,6 +20,7 @@
     <?php endif; ?>
 
     <?php if ($error) : ?><p class="ssf-motion-message ssf-motion-message--error" role="alert"><?php echo esc_html($error); ?></p><?php endif; ?>
+    <?php if (! empty($period['meeting']['motion_instructions'])) : ?><div class="ssf-motion-message"><?php echo wp_kses_post(wpautop($period['meeting']['motion_instructions'])); ?></div><?php endif; ?>
 
     <?php if ('upcoming' === $period['state']) : ?>
         <div class="ssf-motion-message"><h2><?php esc_html_e('Motionsperioden är ännu inte öppen.', 'ssf-member-portal'); ?></h2><p><?php esc_html_e('Du kan lämna motion från:', 'ssf-member-portal'); ?> <strong><?php echo esc_html($deadline->format((int) $period['opens_at'])); ?></strong></p><p><?php esc_html_e('Sista motionsdag:', 'ssf-member-portal'); ?> <strong><?php echo esc_html($deadline->format((int) $period['closes_at'])); ?></strong></p></div>
@@ -36,6 +37,7 @@
         <p><?php esc_html_e('Din motion måste vara inskickad senast vid den angivna tidpunkten.', 'ssf-member-portal'); ?></p>
         <form class="ssf-motion-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post" enctype="multipart/form-data">
             <input type="hidden" name="action" value="ssf_member_portal_submit_motion">
+            <input type="hidden" name="meeting_id" value="<?php echo esc_attr((string) $period['meeting']['id']); ?>">
             <?php wp_nonce_field('ssf_member_portal_submit_motion', 'ssf_member_portal_motion_nonce'); ?>
             <p class="ssf-motion-form__honeypot" aria-hidden="true"><label><?php esc_html_e('Företag', 'ssf-member-portal'); ?><input type="text" name="company" tabindex="-1" autocomplete="off"></label></p>
             <div class="ssf-motion-form__grid">

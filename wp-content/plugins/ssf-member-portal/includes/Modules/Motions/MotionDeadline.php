@@ -20,11 +20,25 @@ final class MotionDeadline
     public function active_meeting(): array
     {
         $id = (int) get_option('ssf_member_portal_active_meeting_id', 0);
-        if (! $id || AnnualMeetings::POST_TYPE !== get_post_type($id)) {
-            $meetings = $this->meetings->all();
-            $id = $meetings ? (int) $meetings[0]->ID : 0;
+        $meeting = $this->meeting($id);
+        if (! $meeting['id']) {
+            foreach ($this->meetings->all() as $post) {
+                $meeting = $this->meeting((int) $post->ID);
+                if ($meeting['id']) {
+                    break;
+                }
+            }
         }
-        return $id ? $this->meetings->data($id) : array('id' => 0, 'year' => 0, 'meeting_date' => '', 'motion_opens_at' => 0, 'motion_closes_at' => 0, 'sharepoint_folder' => '');
+        return $meeting;
+    }
+
+    public function meeting(int $meeting_id): array
+    {
+        $post = $meeting_id ? get_post($meeting_id) : null;
+        if (! $post || AnnualMeetings::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status) {
+            return array('id' => 0, 'year' => 0, 'meeting_date' => '', 'motion_opens_at' => 0, 'motion_closes_at' => 0, 'sharepoint_folder' => '');
+        }
+        return $this->meetings->data((int) $post->ID);
     }
 
     public function state(?array $meeting = null): array
@@ -33,7 +47,7 @@ final class MotionDeadline
         $now = (new \DateTimeImmutable('now', wp_timezone()))->getTimestamp();
         $opens = (int) $meeting['motion_opens_at'];
         $closes = (int) $meeting['motion_closes_at'];
-        $override = 'yes' === (string) get_option('ssf_member_portal_late_override', 'no');
+        $override = ! empty($meeting['allow_late_motions']);
 
         $state = 'not_configured';
         if (! empty($meeting['year']) && $opens && $closes && $closes > $opens) {

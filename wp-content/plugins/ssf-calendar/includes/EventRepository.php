@@ -120,19 +120,21 @@ final class EventRepository
                 continue;
             }
             $end_timestamp = (int) get_post_meta($post->ID, '_ssf_am_end_at', true);
+            $calendar_title = (string) get_post_meta($post->ID, '_ssf_am_calendar_title', true);
+            $calendar_description = (string) get_post_meta($post->ID, '_ssf_am_calendar_description', true);
             $events[] = array(
                 'id' => 'annual-meeting-' . $post->ID,
                 'post_id' => 0,
                 'source' => 'annual_meeting',
                 'source_id' => $post->ID,
                 'type' => 'annual_meeting',
-                'title' => get_the_title($post),
+                'title' => $calendar_title ?: get_the_title($post),
                 'start_date' => $start_date,
                 'start_time' => wp_date('H:i', $start_timestamp, wp_timezone()),
                 'end_date' => $end_timestamp ? wp_date('Y-m-d', $end_timestamp, wp_timezone()) : $start_date,
                 'end_time' => $end_timestamp ? wp_date('H:i', $end_timestamp, wp_timezone()) : '',
                 'location' => (string) get_post_meta($post->ID, '_ssf_am_location', true),
-                'excerpt' => (string) get_post_meta($post->ID, '_ssf_am_intro', true) ?: $this->excerpt($post),
+                'excerpt' => $calendar_description ?: ((string) get_post_meta($post->ID, '_ssf_am_intro', true) ?: $this->excerpt($post)),
                 'image_id' => (int) get_post_thumbnail_id($post),
                 'permalink' => add_query_arg('meeting', $post->ID, $page_id ? get_permalink($page_id) : home_url('/arsmote/')),
                 'event_url' => '',

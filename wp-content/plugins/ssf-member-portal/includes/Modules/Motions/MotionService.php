@@ -29,7 +29,9 @@ final class MotionService
 
     public function submit(array $input, array $files)
     {
-        $period = $this->deadline->state();
+        $meeting_id = absint($input['meeting_id'] ?? 0);
+        $meeting = $meeting_id ? $this->deadline->meeting($meeting_id) : $this->deadline->active_meeting();
+        $period = $this->deadline->state($meeting);
         if (! $period['allowed']) {
             return new \WP_Error('motion_period_closed', __('Motionsperioden är inte öppen för inlämning.', 'ssf-member-portal'));
         }
@@ -48,9 +50,9 @@ final class MotionService
 
         $submitted_at = (new \DateTimeImmutable('now', wp_timezone()))->getTimestamp();
         $snapshot = $this->deadline->snapshot($period, $submitted_at);
-        $number = $this->numbers->next((int) $snapshot['meeting_year']);
+        $number = $this->numbers->next((int) $snapshot['meeting_id'], (int) $snapshot['meeting_year']);
         $token = wp_generate_password(48, false, false);
-        $motion_id = wp_insert_post(array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'private', 'post_title' => 'Motion ' . $number . ': ' . $title, 'post_content' => $content, 'post_author' => get_current_user_id()));
+        $motion_id = wp_insert_post(array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'private', 'post_parent' => (int) $snapshot['meeting_id'], 'post_title' => 'Motion ' . $number . ': ' . $title, 'post_content' => $content, 'post_author' => get_current_user_id()));
         if (is_wp_error($motion_id) || ! $motion_id) {
             return new \WP_Error('motion_save', __('Motionen kunde inte sparas. Försök igen.', 'ssf-member-portal'));
         }
@@ -58,6 +60,7 @@ final class MotionService
         foreach ($snapshot as $key => $value) {
             update_post_meta($motion_id, '_ssf_mp_' . $key, $value);
         }
+        update_post_meta($motion_id, '_ssf_mp_annual_meeting_id', (int) $snapshot['meeting_id']);
         update_post_meta($motion_id, '_ssf_mp_motion_number', $number);
         update_post_meta($motion_id, '_ssf_mp_status', $snapshot['submitted_after_deadline'] ? MotionStatus::RECEIVED_LATE : MotionStatus::RECEIVED);
         update_post_meta($motion_id, '_ssf_mp_submitter_name', $name);
@@ -67,29 +70,37 @@ final class MotionService
         update_post_meta($motion_id, '_ssf_mp_member_user_id', get_current_user_id());
         $this->files->attach($files, $motion_id);
 
-        $status_url = $this->status_url($number, $token);
+        $status_url = $this->status_url($number, $token, (int) $snapshot['meeting_id']);
         $this->mailer->send_received($motion_id, $status_url);
         $this->sharepoint->queue($motion_id);
         Logger::add('motion_received', array('motion_id' => $motion_id, 'number' => $number, 'late' => $snapshot['submitted_after_deadline']));
         return array('motion_id' => $motion_id, 'number' => $number, 'token' => $token, 'status_url' => $status_url);
     }
 
-    public function find(string $number, string $token): ?\WP_Post
+    public function find(string $number, string $token, int $meeting_id = 0): ?\WP_Post
     {
         if (! $number || strlen($token) < 32) {
             return null;
         }
-        $motions = get_posts(array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'any', 'posts_per_page' => 1, 'meta_key' => '_ssf_mp_motion_number', 'meta_value' => sanitize_text_field($number)));
+        $query = array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'any', 'posts_per_page' => 1, 'meta_key' => '_ssf_mp_motion_number', 'meta_value' => sanitize_text_field($number));
+        if ($meeting_id) {
+            $query['meta_query'] = array(array('key' => '_ssf_mp_annual_meeting_id', 'value' => $meeting_id));
+        }
+        $motions = get_posts($query);
         if (! $motions) {
             return null;
         }
         return hash_equals((string) get_post_meta($motions[0]->ID, '_ssf_mp_access_token_hash', true), hash('sha256', $token)) ? $motions[0] : null;
     }
 
-    public function status_url(string $number, string $token): string
+    public function status_url(string $number, string $token, int $meeting_id = 0): string
     {
         $page_id = (int) get_option('ssf_member_portal_motion_status_page_id');
-        return add_query_arg(array('motion' => $number, 'token' => $token), $page_id ? get_permalink($page_id) : home_url('/motion-status/'));
+        $args = array('motion' => $number, 'token' => $token);
+        if ($meeting_id) {
+            $args['meeting'] = $meeting_id;
+        }
+        return add_query_arg($args, $page_id ? get_permalink($page_id) : home_url('/motion-status/'));
     }
 
     public function sharepoint_diagnostics()
