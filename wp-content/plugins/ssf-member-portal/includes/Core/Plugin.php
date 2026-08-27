@@ -121,6 +121,19 @@ final class Plugin
                 )
             );
         }
+
+        register_rest_route(
+            'ssf-motions/v1',
+            '/status',
+            array(
+                'methods' => 'POST',
+                'callback' => array($this->motions, 'handle_power_automate_webhook'),
+                'permission_callback' => static function (): bool {
+                    // The callback validates the server-to-server webhook secret.
+                    return true;
+                },
+            )
+        );
     }
 
     public function test_sharepoint(): \WP_REST_Response

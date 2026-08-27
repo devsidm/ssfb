@@ -2,6 +2,8 @@
 
 namespace SSF\MemberPortal\Integrations\Microsoft365;
 
+use SSF\MemberPortal\Modules\Motions\MotionStatus;
+
 if (! defined('ABSPATH')) {
     exit;
 }
@@ -178,7 +180,7 @@ final class SharePoint
         return array('ok' => true, 'filename' => $filename, 'timestamp' => gmdate('c'));
     }
 
-    public function upload_motion_attachment(int $attachment_id, int $year, string $motion_number, string $motion_title)
+    public function upload_motion_attachment(int $attachment_id, int $motion_id, int $year, string $motion_number, string $motion_title)
     {
         if (! $this->enabled()) {
             return $this->not_configured_error();
@@ -208,14 +210,38 @@ final class SharePoint
             return $item;
         }
 
+        $metadata = $this->update_motion_metadata((string) ($item['id'] ?? ''), $motion_id, $motion_number);
+        if (is_wp_error($metadata)) {
+            return $metadata;
+        }
+
         return array(
             'drive_item_id' => (string) ($item['id'] ?? ''),
             'drive_id' => Configuration::value('drive_id'),
             'parent_folder_id' => (string) $folders['motion_folder_id'],
             'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
+            'sharepoint_list_item_id' => sanitize_text_field((string) ($metadata['id'] ?? '')),
             'filename' => $filename,
             'uploaded_at' => gmdate('c'),
         );
+    }
+
+    /**
+     * Updates only the Status column for a manual WordPress status change.
+     */
+    public function update_motion_status(string $drive_item_id, string $status)
+    {
+        if (! $this->enabled()) {
+            return $this->not_configured_error();
+        }
+
+        $status = MotionStatus::canonical($status);
+        $field = Configuration::value('metadata_status_field');
+        if (! $status || ! $field) {
+            return new \WP_Error('sharepoint_status_configuration', __('SharePoint-statusfältet är inte konfigurerat.', 'ssf-member-portal'));
+        }
+
+        return $this->update_list_item_fields($drive_item_id, array($field => MotionStatus::label($status)));
     }
 
     private function test_site()
@@ -365,6 +391,45 @@ final class SharePoint
             $content,
             array('Content-Type' => sanitize_text_field($mime_type))
         );
+    }
+
+    private function update_motion_metadata(string $drive_item_id, int $motion_id, string $motion_number)
+    {
+        if (! $drive_item_id) {
+            return new \WP_Error('sharepoint_drive_item_missing', __('Microsoft Graph returnerade inget dokument-ID.', 'ssf-member-portal'));
+        }
+
+        $status = MotionStatus::canonical((string) get_post_meta($motion_id, '_ssf_mp_status', true)) ?: MotionStatus::IN_SORTERAD;
+        $submitted_at = (int) get_post_meta($motion_id, '_ssf_mp_submitted_at', true);
+        $vessel = '';
+        foreach (array('_ssf_mp_vessel', '_ssf_mp_ship', '_ssf_mp_fartyg') as $meta_key) {
+            $vessel = sanitize_text_field((string) get_post_meta($motion_id, $meta_key, true));
+            if ($vessel) {
+                break;
+            }
+        }
+
+        $fields = array(
+            Configuration::value('metadata_wordpress_motion_id_field') => (string) $motion_id,
+            Configuration::value('metadata_motion_number_field') => $motion_number,
+            Configuration::value('metadata_status_field') => MotionStatus::label($status),
+            Configuration::value('metadata_vessel_field') => $vessel,
+            Configuration::value('metadata_received_date_field') => $submitted_at ? gmdate('Y-m-d', $submitted_at) : '',
+        );
+
+        return $this->update_list_item_fields($drive_item_id, $fields);
+    }
+
+    private function update_list_item_fields(string $drive_item_id, array $fields)
+    {
+        $fields = array_filter($fields, static function ($value, $key): bool {
+            return is_string($key) && '' !== trim($key) && is_scalar($value);
+        }, ARRAY_FILTER_USE_BOTH);
+        if (! $fields) {
+            return new \WP_Error('sharepoint_metadata_configuration', __('SharePoint-metadatafälten är inte konfigurerade.', 'ssf-member-portal'));
+        }
+
+        return $this->graph->request('PATCH', $this->item_path($drive_item_id) . '/listItem/fields', $fields);
     }
 
     private function children(string $folder_id)

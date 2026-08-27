@@ -14,6 +14,7 @@ if (! defined('ABSPATH')) {
 final class MotionSharePoint
 {
     private const RETRY_DELAYS = array(5 * MINUTE_IN_SECONDS, 30 * MINUTE_IN_SECONDS, 2 * HOUR_IN_SECONDS);
+    private const STATUS_RETRY_DELAYS = array(5 * MINUTE_IN_SECONDS, 30 * MINUTE_IN_SECONDS, 2 * HOUR_IN_SECONDS);
 
     private SharePoint $sharepoint;
 
@@ -21,6 +22,7 @@ final class MotionSharePoint
     {
         $this->sharepoint = new SharePoint(new GraphClient(new Authentication()));
         add_action('ssf_member_portal_sync_motion', array($this, 'sync'));
+        add_action('ssf_member_portal_sync_motion_status', array($this, 'sync_status'));
     }
 
     public function queue(int $motion_id): void
@@ -76,7 +78,7 @@ final class MotionSharePoint
                 continue;
             }
 
-            $item = $this->sharepoint->upload_motion_attachment($attachment_id, $year, $number, (string) $title);
+            $item = $this->sharepoint->upload_motion_attachment($attachment_id, $motion_id, $year, $number, (string) $title);
             if (is_wp_error($item)) {
                 $items[$attachment_id] = array(
                     'attachment_id' => $attachment_id,
@@ -98,11 +100,17 @@ final class MotionSharePoint
             update_post_meta($motion_id, '_ssf_mp_sharepoint_web_url', $item['web_url']);
             update_post_meta($motion_id, '_ssf_mp_sharepoint_filename', $item['filename']);
             update_post_meta($motion_id, '_ssf_mp_sharepoint_uploaded_at', $item['uploaded_at']);
+            if (! empty($item['sharepoint_list_item_id']) && ! get_post_meta($motion_id, '_ssf_mp_sharepoint_list_item_id', true)) {
+                update_post_meta($motion_id, '_ssf_mp_sharepoint_list_item_id', $item['sharepoint_list_item_id']);
+            }
         }
 
         update_post_meta($motion_id, '_ssf_mp_sharepoint_items', $items);
         update_post_meta($motion_id, '_ssf_mp_sharepoint_status', 'synced');
         delete_post_meta($motion_id, '_ssf_mp_sharepoint_last_error');
+        if ('waiting_for_document' === get_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', true)) {
+            $this->queue_status_update($motion_id);
+        }
         Logger::add('motion_sharepoint_synced', array('motion_id' => $motion_id, 'attachments' => count($attachments)));
     }
 
@@ -134,6 +142,70 @@ final class MotionSharePoint
     public function delete_test_file()
     {
         return $this->sharepoint->delete_test_file();
+    }
+
+    /**
+     * Only locally initiated status changes are placed on the outbound queue.
+     */
+    public function queue_status_update(int $motion_id): void
+    {
+        if (! $this->sharepoint->enabled()) {
+            update_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', 'not_configured');
+            return;
+        }
+
+        update_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', 'pending');
+        if (! wp_next_scheduled('ssf_member_portal_sync_motion_status', array($motion_id))) {
+            wp_schedule_single_event(time() + 10, 'ssf_member_portal_sync_motion_status', array($motion_id));
+        }
+    }
+
+    public function sync_status(int $motion_id): void
+    {
+        $motion = get_post($motion_id);
+        if (! $motion || MotionPostType::POST_TYPE !== $motion->post_type) {
+            return;
+        }
+
+        $items = (array) get_post_meta($motion_id, '_ssf_mp_sharepoint_items', true);
+        $drive_item_ids = array_filter(array_map(static function ($item): string {
+            return (string) (is_array($item) ? ($item['drive_item_id'] ?? '') : '');
+        }, $items));
+        if (! $drive_item_ids) {
+            $drive_item_ids = array_filter(array((string) get_post_meta($motion_id, '_ssf_mp_graph_drive_item_id', true)));
+        }
+        if (! $drive_item_ids) {
+            update_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', 'waiting_for_document');
+            return;
+        }
+
+        $status = MotionStatus::canonical((string) get_post_meta($motion_id, '_ssf_mp_status', true));
+        if (! $status) {
+            update_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', 'error');
+            update_post_meta($motion_id, '_ssf_mp_sharepoint_status_last_error', __('Motionens status saknas eller är ogiltig.', 'ssf-member-portal'));
+            return;
+        }
+
+        foreach ($drive_item_ids as $drive_item_id) {
+            $result = $this->sharepoint->update_motion_status($drive_item_id, $status);
+            if (is_wp_error($result)) {
+                $attempts = (int) get_post_meta($motion_id, '_ssf_mp_sharepoint_status_attempts', true) + 1;
+                update_post_meta($motion_id, '_ssf_mp_sharepoint_status_attempts', $attempts);
+                update_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', 'error');
+                update_post_meta($motion_id, '_ssf_mp_sharepoint_status_last_error', $result->get_error_message());
+                Logger::add('motion_sharepoint_status_failed', array('motion_id' => $motion_id, 'attempt' => $attempts, 'error' => $result->get_error_code()));
+                if ($attempts <= count(self::STATUS_RETRY_DELAYS)) {
+                    wp_schedule_single_event(time() + self::STATUS_RETRY_DELAYS[$attempts - 1], 'ssf_member_portal_sync_motion_status', array($motion_id));
+                }
+                return;
+            }
+        }
+
+        update_post_meta($motion_id, '_ssf_mp_sharepoint_status_sync', 'synced');
+        update_post_meta($motion_id, '_ssf_mp_sharepoint_status_synced_at', gmdate('c'));
+        update_post_meta($motion_id, '_ssf_mp_sharepoint_status_attempts', 0);
+        delete_post_meta($motion_id, '_ssf_mp_sharepoint_status_last_error');
+        Logger::add('motion_sharepoint_status_synced', array('motion_id' => $motion_id, 'status' => $status));
     }
 
     private function record_failure(int $motion_id, \WP_Error $error, bool $schedule_retry): void

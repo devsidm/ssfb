@@ -16,13 +16,16 @@ final class Module
     private MotionDeadline $deadline;
     private MotionService $service;
     private AdminController $admin;
+    private PowerAutomateWebhook $webhook;
 
     public function __construct(AnnualMeetings $meetings)
     {
         $this->post_type = new MotionPostType();
         $this->deadline = new MotionDeadline($meetings);
         $sharepoint = new MotionSharePoint();
-        $this->service = new MotionService($this->deadline, new MotionNumber(), new MotionFiles(), new MotionMailer(), $sharepoint);
+        $statuses = new MotionStatusService($sharepoint);
+        $this->service = new MotionService($this->deadline, new MotionNumber(), new MotionFiles(), new MotionMailer(), $sharepoint, $statuses);
+        $this->webhook = new PowerAutomateWebhook($statuses);
         $this->admin = new AdminController($meetings, $this->deadline, $this->service);
         new FrontendController($this->deadline, $this->service);
     }
@@ -74,6 +77,11 @@ final class Module
     public function delete_sharepoint_file(): array
     {
         return $this->graph_result($this->service->delete_sharepoint_test_file(), __('Testfilen har tagits bort.', 'ssf-member-portal'));
+    }
+
+    public function handle_power_automate_webhook(\WP_REST_Request $request): \WP_REST_Response
+    {
+        return $this->webhook->handle($request);
     }
 
     private function graph_result($result, string $success_message): array

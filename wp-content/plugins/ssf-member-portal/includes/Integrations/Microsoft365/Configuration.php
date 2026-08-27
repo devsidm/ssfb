@@ -12,6 +12,8 @@ if (! defined('ABSPATH')) {
 final class Configuration
 {
     public const OPTION = 'ssf_member_portal_graph_configuration';
+    private const WEBHOOK_SECRET_KEY = 'SSF_MOTIONS_WEBHOOK_SECRET';
+    private const INBOUND_SYNC_OPTION = 'ssf_member_portal_power_automate_inbound_enabled';
 
     private const KEYS = array(
         'tenant_id' => 'SSF_GRAPH_TENANT_ID',
@@ -23,6 +25,11 @@ final class Configuration
         'annual_meeting_folder_name' => 'SSF_GRAPH_ANNUAL_MEETING_FOLDER_NAME',
         'site_hostname' => 'SSF_GRAPH_SITE_HOSTNAME',
         'site_path' => 'SSF_GRAPH_SITE_PATH',
+        'metadata_wordpress_motion_id_field' => 'SSF_GRAPH_WORDPRESS_MOTION_ID_FIELD',
+        'metadata_motion_number_field' => 'SSF_GRAPH_MOTION_NUMBER_FIELD',
+        'metadata_status_field' => 'SSF_GRAPH_STATUS_FIELD',
+        'metadata_vessel_field' => 'SSF_GRAPH_VESSEL_FIELD',
+        'metadata_received_date_field' => 'SSF_GRAPH_RECEIVED_DATE_FIELD',
     );
 
     private const TEXT_KEYS = array(
@@ -34,6 +41,11 @@ final class Configuration
         'annual_meeting_folder_name',
         'site_hostname',
         'site_path',
+        'metadata_wordpress_motion_id_field',
+        'metadata_motion_number_field',
+        'metadata_status_field',
+        'metadata_vessel_field',
+        'metadata_received_date_field',
     );
 
     private const DEFAULTS = array(
@@ -45,6 +57,11 @@ final class Configuration
         'annual_meeting_folder_name' => 'Årsmöten',
         'site_hostname' => 'tradtionsfartyg.sharepoint.com',
         'site_path' => '/sites/styrelsen9',
+        'metadata_wordpress_motion_id_field' => 'WordPressMotionID',
+        'metadata_motion_number_field' => 'Motionnummer',
+        'metadata_status_field' => 'Status',
+        'metadata_vessel_field' => 'Fartyg',
+        'metadata_received_date_field' => 'InkommenDatum',
     );
 
     public static function value(string $key): string
@@ -169,6 +186,55 @@ final class Configuration
         return $status;
     }
 
+    public static function webhook_secret(): string
+    {
+        $server_value = self::server_webhook_secret();
+        if ('' !== $server_value) {
+            return $server_value;
+        }
+
+        return self::decrypt((string) (self::stored()['webhook_secret'] ?? ''));
+    }
+
+    public static function webhook_public_status(): array
+    {
+        $server_value = self::server_webhook_secret();
+        $stored = self::stored();
+        return array(
+            'configured' => '' !== self::webhook_secret(),
+            'source' => '' !== $server_value ? 'server' : (! empty($stored['webhook_secret']) ? 'admin' : 'missing'),
+            'inbound_enabled' => self::inbound_sync_enabled(),
+        );
+    }
+
+    public static function inbound_sync_enabled(): bool
+    {
+        return 'no' !== get_option(self::INBOUND_SYNC_OPTION, 'yes');
+    }
+
+    public static function save_webhook_settings(array $input)
+    {
+        $settings = self::stored();
+        if (! empty($input['webhook_secret'])) {
+            $encrypted = self::encrypt((string) $input['webhook_secret']);
+            if (is_wp_error($encrypted)) {
+                return $encrypted;
+            }
+            $settings['webhook_secret'] = $encrypted;
+            update_option(self::OPTION, $settings, false);
+        }
+
+        update_option(self::INBOUND_SYNC_OPTION, ! empty($input['inbound_enabled']) ? 'yes' : 'no', false);
+        return true;
+    }
+
+    public static function generate_webhook_secret()
+    {
+        $secret = wp_generate_password(48, false, false);
+        $result = self::save_webhook_settings(array('webhook_secret' => $secret, 'inbound_enabled' => '1'));
+        return is_wp_error($result) ? $result : $secret;
+    }
+
     private static function stored(): array
     {
         return (array) get_option(self::OPTION, array());
@@ -179,6 +245,12 @@ final class Configuration
         $constant = self::KEYS[$key];
         $value = defined($constant) ? constant($constant) : getenv($constant);
 
+        return is_string($value) ? trim($value) : '';
+    }
+
+    private static function server_webhook_secret(): string
+    {
+        $value = defined(self::WEBHOOK_SECRET_KEY) ? constant(self::WEBHOOK_SECRET_KEY) : getenv(self::WEBHOOK_SECRET_KEY);
         return is_string($value) ? trim($value) : '';
     }
 

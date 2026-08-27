@@ -71,7 +71,30 @@ Efter att en motion och dess WordPress-bilagor har sparats köas SharePoint-synk
 
 Filnamn följer `{motionsnummer}-{sanerad-rubrik}.{originaländelse}`. För varje bilaga sparas DriveItem ID, Drive ID, överordnad mapp, `webUrl`, filnamn och uppladdningstid i motionspostens metadata.
 
+Varje dokument får dessutom SharePoint-metadata för `WordPressMotionID`, `Motionnummer`, `Status`, `Fartyg` och `InkommenDatum`. Standardnamnen kan ändras under Microsoft 365 om SharePoints interna kolumnnamn skiljer sig från de synliga kolumnrubrikerna.
+
 Statusar är `pending`, `syncing`, `synced` och `error`. Vid fel görs automatiska försök efter 5 minuter, 30 minuter och 2 timmar. Därefter behålls felstatusen, och administratören kan använda **Försök igen** på motionsposten.
+
+## Power Automate-statussynk
+
+Under `SSF > Motioner > Microsoft 365` finns webhook-URL, status för secret och en kontroll för inbound-synk. Ett secret sparas krypterat, visas aldrig igen och kan alternativt sättas på servern med `SSF_MOTIONS_WEBHOOK_SECRET`.
+
+Power Automate ska skicka `POST` med `Content-Type: application/json` till den URL som visas i admin (på utvecklingsmiljön innehåller den automatiskt `/dev/`) och HTTP-headern `X-SSF-Webhook-Secret`.
+
+```json
+{
+  "wordpress_motion_id": "1842",
+  "motion_number": "2027-004",
+  "status": "Under behandling",
+  "sharepoint_list_item_id": "123",
+  "sharepoint_file_url": "https://tenant.sharepoint.com/...",
+  "changed_at": "2027-03-10T12:30:00Z"
+}
+```
+
+Tillåtna SharePoint-statusar är `Inkommen`, `Under behandling`, `Begär komplettering`, `Färdigbehandlad`, `Till årsmötet` och `Avslutad`. Webhooken verifierar både WordPress-ID och motionsnummer, är idempotent och returnerar `401` vid fel secret, `404` om motionen saknas, `409` om identiteten inte matchar och `400` vid ogiltig status eller payload.
+
+Statusuppdateringar från Power Automate får källan `power_automate`, sparas i statushistoriken och skrivs inte tillbaka till SharePoint. Manuella statusändringar i WordPress får källan `wordpress` och köas för uppdatering av SharePoints statusmetadata.
 
 ## Felsökning
 

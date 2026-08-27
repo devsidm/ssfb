@@ -16,3 +16,6 @@ define('SSF_GRAPH_ANNUAL_MEETING_FOLDER_NAME', 'Årsmöten');
 /* Optional, but enables verification by SharePoint host and path. */
 define('SSF_GRAPH_SITE_HOSTNAME', 'YOUR-TENANT.sharepoint.com');
 define('SSF_GRAPH_SITE_PATH', '/sites/YOUR-SITE');
+
+/* Optional. This overrides a webhook secret saved in the WordPress admin. */
+define('SSF_MOTIONS_WEBHOOK_SECRET', getenv('SSF_MOTIONS_WEBHOOK_SECRET') ?: '');

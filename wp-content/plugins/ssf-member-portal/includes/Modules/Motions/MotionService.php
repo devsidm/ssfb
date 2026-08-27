@@ -15,14 +15,16 @@ final class MotionService
     private MotionFiles $files;
     private MotionMailer $mailer;
     private MotionSharePoint $sharepoint;
+    private MotionStatusService $statuses;
 
-    public function __construct(MotionDeadline $deadline, MotionNumber $numbers, MotionFiles $files, MotionMailer $mailer, MotionSharePoint $sharepoint)
+    public function __construct(MotionDeadline $deadline, MotionNumber $numbers, MotionFiles $files, MotionMailer $mailer, MotionSharePoint $sharepoint, MotionStatusService $statuses)
     {
         $this->deadline = $deadline;
         $this->numbers = $numbers;
         $this->files = $files;
         $this->mailer = $mailer;
         $this->sharepoint = $sharepoint;
+        $this->statuses = $statuses;
     }
 
     public function submit(array $input, array $files)
@@ -123,5 +125,10 @@ final class MotionService
     public function retry_sharepoint_sync(int $motion_id): void
     {
         $this->sharepoint->retry($motion_id);
+    }
+
+    public function update_status(int $motion_id, string $status, string $source = 'wordpress', array $context = array())
+    {
+        return $this->statuses->update($motion_id, $status, $source, $context);
     }
 }

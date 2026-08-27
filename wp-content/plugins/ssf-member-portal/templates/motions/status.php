@@ -13,6 +13,7 @@
             <div><dt><?php esc_html_e('Inskickad', 'ssf-member-portal'); ?></dt><dd><?php echo esc_html($deadline->format((int) get_post_meta($motion->ID, '_ssf_mp_submitted_at', true))); ?></dd></div>
             <div><dt><?php esc_html_e('Motionsfrist', 'ssf-member-portal'); ?></dt><dd><?php echo esc_html($deadline->format((int) get_post_meta($motion->ID, '_ssf_mp_submission_deadline_at', true))); ?></dd></div>
             <div><dt><?php esc_html_e('Status', 'ssf-member-portal'); ?></dt><dd><strong><?php echo esc_html(SSF\MemberPortal\Modules\Motions\MotionStatus::label((string) get_post_meta($motion->ID, '_ssf_mp_status', true))); ?></strong></dd></div>
+            <?php if (get_post_meta($motion->ID, '_ssf_mp_status_updated_at', true)) : ?><div><dt><?php esc_html_e('Senast uppdaterad', 'ssf-member-portal'); ?></dt><dd><?php echo esc_html($deadline->format((int) strtotime((string) get_post_meta($motion->ID, '_ssf_mp_status_updated_at', true)))); ?></dd></div><?php endif; ?>
         </dl>
         <?php if ((bool) get_post_meta($motion->ID, '_ssf_mp_submitted_after_deadline', true)) : ?><p class="ssf-motion-message ssf-motion-message--warning"><strong><?php esc_html_e('Inkommen efter motionsfrist', 'ssf-member-portal'); ?></strong></p><?php endif; ?>
     <?php endif; ?>
