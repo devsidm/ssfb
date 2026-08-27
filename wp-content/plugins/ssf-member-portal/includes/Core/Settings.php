@@ -17,6 +17,7 @@ final class Settings
             array(
                 'notification_email' => 'medlem@ssfb.se',
                 'max_upload_mb' => 10,
+                'motion_status_messages' => array(),
             )
         );
     }
@@ -31,6 +32,13 @@ final class Settings
         }
         if (array_key_exists('max_upload_mb', $input)) {
             $settings['max_upload_mb'] = min(25, max(1, absint($input['max_upload_mb'])));
+        }
+        if (array_key_exists('motion_status_messages', $input) && is_array($input['motion_status_messages'])) {
+            $messages = array();
+            foreach ($input['motion_status_messages'] as $status => $message) {
+                $messages[sanitize_key((string) $status)] = sanitize_textarea_field((string) $message);
+            }
+            $settings['motion_status_messages'] = $messages;
         }
         update_option(self::OPTION, $settings, false);
     }

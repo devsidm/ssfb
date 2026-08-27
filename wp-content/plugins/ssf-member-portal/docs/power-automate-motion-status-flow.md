@@ -32,9 +32,10 @@ statusändring till WordPress. Det får aldrig skriva tillbaka till biblioteket.
    Inkommen
    Under behandling
    Begär komplettering
-   Färdigbehandlad
-   Till årsmötet
-   Avslutad
+Färdigbehandlad av styrelsen
+Till årsmötet
+Beslutad på årsmötet
+Avslutad
    ```
 
 ## Solution

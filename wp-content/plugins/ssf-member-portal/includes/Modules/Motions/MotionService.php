@@ -62,7 +62,7 @@ final class MotionService
         }
         update_post_meta($motion_id, '_ssf_mp_annual_meeting_id', (int) $snapshot['meeting_id']);
         update_post_meta($motion_id, '_ssf_mp_motion_number', $number);
-        update_post_meta($motion_id, '_ssf_mp_status', $snapshot['submitted_after_deadline'] ? MotionStatus::RECEIVED_LATE : MotionStatus::RECEIVED);
+        update_post_meta($motion_id, '_ssf_mp_status', MotionStatus::INKOMMEN);
         update_post_meta($motion_id, '_ssf_mp_submitter_name', $name);
         update_post_meta($motion_id, '_ssf_mp_submitter_email', $email);
         update_post_meta($motion_id, '_ssf_mp_submitter_phone', $phone);
@@ -71,6 +71,7 @@ final class MotionService
         $this->files->attach($files, $motion_id);
 
         $status_url = $this->status_url($number, $token, (int) $snapshot['meeting_id']);
+        update_post_meta($motion_id, '_ssf_mp_status_url', esc_url_raw($status_url));
         $this->mailer->send_received($motion_id, $status_url);
         $this->sharepoint->queue($motion_id);
         Logger::add('motion_received', array('motion_id' => $motion_id, 'number' => $number, 'late' => $snapshot['submitted_after_deadline']));
@@ -136,6 +137,41 @@ final class MotionService
     public function retry_sharepoint_sync(int $motion_id): void
     {
         $this->sharepoint->retry($motion_id);
+    }
+
+    public function register_sharepoint_status_poll(): void
+    {
+        $this->sharepoint->register();
+    }
+
+    public function ensure_sharepoint_status_schema()
+    {
+        return $this->sharepoint->ensure_status_schema();
+    }
+
+    public function sharepoint_status_schema_diagnostics()
+    {
+        return $this->sharepoint->status_schema_diagnostics();
+    }
+
+    public function poll_sharepoint_statuses(): array
+    {
+        return $this->sharepoint->poll_statuses();
+    }
+
+    public function poll_sharepoint_motion_status(int $motion_id)
+    {
+        return $this->sharepoint->poll_motion($motion_id);
+    }
+
+    public function sharepoint_status_poll_diagnostics(): array
+    {
+        return $this->sharepoint->status_poll_diagnostics();
+    }
+
+    public function resend_status_email(int $motion_id)
+    {
+        return $this->statuses->resend_status_email($motion_id);
     }
 
     public function update_status(int $motion_id, string $status, string $source = 'wordpress', array $context = array())

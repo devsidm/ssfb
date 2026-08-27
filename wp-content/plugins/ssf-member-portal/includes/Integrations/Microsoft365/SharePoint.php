@@ -13,10 +13,12 @@ final class SharePoint
     private const TEST_FILE_OPTION = 'ssf_member_portal_graph_test_file';
 
     private GraphClient $graph;
+    private MotionSchema $motion_schema;
 
     public function __construct(GraphClient $graph)
     {
         $this->graph = $graph;
+        $this->motion_schema = new MotionSchema($graph);
     }
 
     public function enabled(): bool
@@ -201,6 +203,11 @@ final class SharePoint
             return $folders;
         }
 
+        $schema = $this->status_context(true);
+        if (is_wp_error($schema)) {
+            return $schema;
+        }
+
         $extension = strtolower((string) pathinfo($file, PATHINFO_EXTENSION));
         $base = sanitize_file_name($motion_number . '-' . sanitize_title($motion_title));
         $filename = $base . ($extension ? '.' . $extension : '');
@@ -210,7 +217,18 @@ final class SharePoint
             return $item;
         }
 
-        $metadata = $this->update_motion_metadata((string) ($item['id'] ?? ''), $motion_id, $motion_number);
+        $list_item = $this->list_item_for_drive_item((string) ($item['id'] ?? ''));
+        if (is_wp_error($list_item)) {
+            return $list_item;
+        }
+
+        $metadata = $this->update_motion_metadata(
+            (string) $schema['list_id'],
+            (string) ($list_item['id'] ?? ''),
+            (string) $schema['status_field'],
+            $motion_id,
+            $motion_number
+        );
         if (is_wp_error($metadata)) {
             return $metadata;
         }
@@ -220,9 +238,13 @@ final class SharePoint
             'drive_id' => Configuration::value('drive_id'),
             'parent_folder_id' => (string) $folders['motion_folder_id'],
             'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
-            'sharepoint_list_item_id' => sanitize_text_field((string) ($metadata['id'] ?? '')),
+            'sharepoint_list_id' => (string) $schema['list_id'],
+            'sharepoint_list_item_id' => sanitize_text_field((string) ($list_item['id'] ?? '')),
             'filename' => $filename,
             'uploaded_at' => gmdate('c'),
+            'last_modified' => sanitize_text_field((string) ($item['lastModifiedDateTime'] ?? '')),
+            'etag' => sanitize_text_field((string) ($item['eTag'] ?? '')),
+            'schema_warning' => sanitize_text_field((string) ($schema['schema_warning'] ?? '')),
         );
     }
 
@@ -256,19 +278,95 @@ final class SharePoint
     /**
      * Updates only the Status column for a manual WordPress status change.
      */
-    public function update_motion_status(string $drive_item_id, string $status)
+    public function update_motion_status(string $drive_item_id, string $status, string $list_id = '', string $list_item_id = '')
     {
         if (! $this->enabled()) {
             return $this->not_configured_error();
         }
 
         $status = MotionStatus::canonical($status);
-        $field = Configuration::value('metadata_status_field');
-        if (! $status || ! $field) {
-            return new \WP_Error('sharepoint_status_configuration', __('SharePoint-statusfältet är inte konfigurerat.', 'ssf-member-portal'));
+        if (! $status) {
+            return new \WP_Error('sharepoint_status_configuration', __('Motionens status är inte giltig.', 'ssf-member-portal'));
         }
 
-        return $this->update_list_item_fields($drive_item_id, array($field => MotionStatus::label($status)));
+        $schema = $this->status_context();
+        if (is_wp_error($schema)) {
+            return $schema;
+        }
+        $list_id = $list_id ?: (string) $schema['list_id'];
+        if (! $list_item_id) {
+            $list_item = $this->list_item_for_drive_item($drive_item_id);
+            if (is_wp_error($list_item)) {
+                return $list_item;
+            }
+            $list_item_id = (string) ($list_item['id'] ?? '');
+        }
+        if (! $list_item_id) {
+            return new \WP_Error('sharepoint_list_item_missing', __('Kunde inte koppla dokumentet till rätt SharePoint-listpost.', 'ssf-member-portal'));
+        }
+
+        return $this->update_list_item_fields($list_id, $list_item_id, array((string) $schema['status_field'] => MotionStatus::label($status)));
+    }
+
+    public function ensure_motion_status_schema()
+    {
+        return $this->motion_schema->ensure_status_column();
+    }
+
+    public function motion_status_schema_diagnostics()
+    {
+        return $this->motion_schema->diagnostics();
+    }
+
+    public function get_motion_status(string $list_id, string $list_item_id)
+    {
+        $schema = $this->status_context();
+        if (is_wp_error($schema)) {
+            return $schema;
+        }
+        $list_id = $list_id ?: (string) $schema['list_id'];
+        if (! $list_id || ! $list_item_id) {
+            return new \WP_Error('sharepoint_list_item_missing', __('Motionen saknar SharePoint-listkoppling.', 'ssf-member-portal'));
+        }
+
+        $field = rawurlencode((string) $schema['status_field']);
+        $item = $this->graph->request('GET', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '?$expand=fields($select=' . $field . ')');
+        if (is_wp_error($item)) {
+            return $item;
+        }
+
+        return array(
+            'status' => sanitize_text_field((string) ($item['fields'][(string) $schema['status_field']] ?? '')),
+            'last_modified' => sanitize_text_field((string) ($item['lastModifiedDateTime'] ?? '')),
+            'etag' => sanitize_text_field((string) ($item['eTag'] ?? '')),
+            'list_item_id' => sanitize_text_field((string) ($item['id'] ?? $list_item_id)),
+        );
+    }
+
+    /**
+     * Schema management requires broader Graph rights than normal file writes.
+     * When a site already has the configured Status field, keep status sync
+     * working under Sites.Selected and surface the repair failure in admin.
+     */
+    private function status_context(bool $force_schema_check = false)
+    {
+        $schema = $force_schema_check ? $this->motion_schema->ensure_status_column() : $this->motion_schema->status_context();
+        if (! is_wp_error($schema)) {
+            return $schema;
+        }
+
+        $error_data = (array) $schema->get_error_data();
+        $list_id = Configuration::value('document_library_list_id');
+        $status_field = Configuration::value('metadata_status_field');
+        if ('accessdenied' === strtolower((string) ($error_data['graph_code'] ?? '')) && $list_id && $status_field) {
+            return array(
+                'list_id' => $list_id,
+                'status_field' => $status_field,
+                'schema_warning' => $schema->get_error_message(),
+            );
+        }
+
+        return $schema;
     }
 
     private function test_site()
@@ -439,10 +537,10 @@ final class SharePoint
         );
     }
 
-    private function update_motion_metadata(string $drive_item_id, int $motion_id, string $motion_number)
+    private function update_motion_metadata(string $list_id, string $list_item_id, string $status_field, int $motion_id, string $motion_number)
     {
-        if (! $drive_item_id) {
-            return new \WP_Error('sharepoint_drive_item_missing', __('Microsoft Graph returnerade inget dokument-ID.', 'ssf-member-portal'));
+        if (! $list_id || ! $list_item_id || ! $status_field) {
+            return new \WP_Error('sharepoint_list_item_missing', __('Microsoft Graph returnerade inte rätt listkoppling för dokumentet.', 'ssf-member-portal'));
         }
 
         $status = MotionStatus::canonical((string) get_post_meta($motion_id, '_ssf_mp_status', true)) ?: MotionStatus::IN_SORTERAD;
@@ -458,15 +556,15 @@ final class SharePoint
         $fields = array(
             Configuration::value('metadata_wordpress_motion_id_field') => (string) $motion_id,
             Configuration::value('metadata_motion_number_field') => $motion_number,
-            Configuration::value('metadata_status_field') => MotionStatus::label($status),
+            $status_field => MotionStatus::label($status),
             Configuration::value('metadata_vessel_field') => $vessel,
             Configuration::value('metadata_received_date_field') => $submitted_at ? gmdate('Y-m-d', $submitted_at) : '',
         );
 
-        return $this->update_list_item_fields($drive_item_id, $fields);
+        return $this->update_list_item_fields($list_id, $list_item_id, $fields);
     }
 
-    private function update_list_item_fields(string $drive_item_id, array $fields)
+    private function update_list_item_fields(string $list_id, string $list_item_id, array $fields)
     {
         $fields = array_filter($fields, static function ($value, $key): bool {
             return is_string($key) && '' !== trim($key) && is_scalar($value);
@@ -475,7 +573,24 @@ final class SharePoint
             return new \WP_Error('sharepoint_metadata_configuration', __('SharePoint-metadatafälten är inte konfigurerade.', 'ssf-member-portal'));
         }
 
-        return $this->graph->request('PATCH', $this->item_path($drive_item_id) . '/listItem/fields', $fields);
+        return $this->graph->request('PATCH', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '/fields', $fields);
+    }
+
+    private function list_item_for_drive_item(string $drive_item_id)
+    {
+        if (! $drive_item_id) {
+            return new \WP_Error('sharepoint_drive_item_missing', __('Microsoft Graph returnerade inget dokument-ID.', 'ssf-member-portal'));
+        }
+
+        $item = $this->graph->request('GET', $this->item_path($drive_item_id) . '/listItem?$expand=fields');
+        if (is_wp_error($item)) {
+            return $item;
+        }
+        if (empty($item['id'])) {
+            return new \WP_Error('sharepoint_list_item_missing', __('Kunde inte läsa dokumentets SharePoint-listpost.', 'ssf-member-portal'));
+        }
+
+        return $item;
     }
 
     private function children(string $folder_id)
@@ -496,6 +611,11 @@ final class SharePoint
     private function drive_base(): string
     {
         return 'drives/' . rawurlencode(Configuration::value('drive_id'));
+    }
+
+    private function list_base(string $list_id): string
+    {
+        return 'sites/' . rawurlencode(Configuration::value('site_id')) . '/lists/' . rawurlencode($list_id);
     }
 
     private function folder_path(int $year): string

@@ -47,6 +47,7 @@ final class Plugin
 
     public static function deactivate(): void
     {
+        \SSF\MemberPortal\Modules\Motions\MotionSharePoint::unschedule();
         flush_rewrite_rules();
     }
 
@@ -113,6 +114,7 @@ final class Plugin
             '/sharepoint/motion-folder' => 'test_sharepoint_motion_folder',
             '/sharepoint/test-file' => 'test_sharepoint_file',
             '/sharepoint/test-file/delete' => 'delete_sharepoint_file',
+            '/sharepoint/motion-status-schema' => 'test_sharepoint_motion_schema',
         );
         foreach ($routes as $route => $method) {
             register_rest_route(
@@ -159,6 +161,7 @@ final class Plugin
             'test_sharepoint_motion_folder',
             'test_sharepoint_file',
             'delete_sharepoint_file',
+            'test_sharepoint_motion_schema',
         );
         if (! in_array($action, $allowed, true)) {
             return new \WP_REST_Response(array('ok' => false, 'message' => __('Ogiltig SharePoint-åtgärd.', 'ssf-member-portal')), 400);

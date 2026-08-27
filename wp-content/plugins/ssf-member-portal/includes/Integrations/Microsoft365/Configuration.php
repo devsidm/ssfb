@@ -21,6 +21,8 @@ final class Configuration
         'client_secret' => 'SSF_GRAPH_CLIENT_SECRET',
         'site_id' => 'SSF_GRAPH_SITE_ID',
         'drive_id' => 'SSF_GRAPH_DRIVE_ID',
+        'document_library_list_id' => 'SSF_GRAPH_DOCUMENT_LIBRARY_LIST_ID',
+        'document_library_name' => 'SSF_GRAPH_DOCUMENT_LIBRARY_NAME',
         'annual_meeting_folder_id' => 'SSF_GRAPH_ANNUAL_MEETING_FOLDER_ID',
         'annual_meeting_folder_name' => 'SSF_GRAPH_ANNUAL_MEETING_FOLDER_NAME',
         'site_hostname' => 'SSF_GRAPH_SITE_HOSTNAME',
@@ -37,6 +39,8 @@ final class Configuration
         'client_id',
         'site_id',
         'drive_id',
+        'document_library_list_id',
+        'document_library_name',
         'annual_meeting_folder_id',
         'annual_meeting_folder_name',
         'site_hostname',
@@ -53,6 +57,8 @@ final class Configuration
         'client_id' => '8a3bfdb3-6b8c-4982-b562-eaf43be7f39a',
         'site_id' => 'tradtionsfartyg.sharepoint.com,fcb7d0b0-8986-4dbc-a97c-e85297880b7e,5041e290-138c-442f-a20d-3e5a7918c810',
         'drive_id' => 'b!sNC3_IaJvE2pfOhSl4gLfpDiQVCMEy9Eog0-WnkYyBDVxq_wiIU3Tbpm3lUPgSuc',
+        'document_library_list_id' => '',
+        'document_library_name' => 'Dokument',
         'annual_meeting_folder_id' => '01YQZLHNOR4EIPLSI6ERAKQYR2ECTT4KD2',
         'annual_meeting_folder_name' => 'Årsmöten',
         'site_hostname' => 'tradtionsfartyg.sharepoint.com',
@@ -129,6 +135,7 @@ final class Configuration
 
         update_option(self::OPTION, $settings, false);
         delete_transient('ssf_member_portal_graph_token');
+        delete_option('ssf_member_portal_graph_motion_schema');
 
         return true;
     }
@@ -141,6 +148,25 @@ final class Configuration
         }
         update_option(self::OPTION, $settings, false);
         delete_transient('ssf_member_portal_graph_token');
+        delete_option('ssf_member_portal_graph_motion_schema');
+    }
+
+    /**
+     * Persists only the discovered document-library list ID. A wp-config value
+     * still takes precedence, so deployment configuration remains authoritative.
+     */
+    public static function save_discovered_document_library_list_id(string $list_id): void
+    {
+        $list_id = sanitize_text_field($list_id);
+        if (! $list_id || self::server_value('document_library_list_id')) {
+            return;
+        }
+
+        $settings = self::stored();
+        if (($settings['document_library_list_id'] ?? '') !== $list_id) {
+            $settings['document_library_list_id'] = $list_id;
+            update_option(self::OPTION, $settings, false);
+        }
     }
 
     public static function missing(): array

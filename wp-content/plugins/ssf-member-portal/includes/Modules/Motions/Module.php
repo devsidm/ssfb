@@ -23,8 +23,10 @@ final class Module
         $this->post_type = new MotionPostType();
         $this->deadline = new MotionDeadline($meetings);
         $sharepoint = new MotionSharePoint();
-        $statuses = new MotionStatusService($sharepoint);
-        $this->service = new MotionService($this->deadline, new MotionNumber(), new MotionFiles(), new MotionMailer(), $sharepoint, $statuses);
+        $mailer = new MotionMailer();
+        $statuses = new MotionStatusService($sharepoint, $mailer);
+        $sharepoint->set_status_service($statuses);
+        $this->service = new MotionService($this->deadline, new MotionNumber(), new MotionFiles(), $mailer, $sharepoint, $statuses);
         $this->webhook = new PowerAutomateWebhook($statuses);
         $this->admin = new AdminController($meetings, $this->deadline, $this->service);
         new FrontendController($this->deadline, $this->service);
@@ -33,6 +35,7 @@ final class Module
     public function register(): void
     {
         $this->post_type->register();
+        $this->service->register_sharepoint_status_poll();
     }
 
     public function register_admin_menu(string $parent): void
@@ -77,6 +80,11 @@ final class Module
     public function delete_sharepoint_file(): array
     {
         return $this->graph_result($this->service->delete_sharepoint_test_file(), __('Testfilen har tagits bort.', 'ssf-member-portal'));
+    }
+
+    public function test_sharepoint_motion_schema(): array
+    {
+        return $this->graph_result($this->service->ensure_sharepoint_status_schema(), __('SharePoints motionsstatus är konfigurerad.', 'ssf-member-portal'));
     }
 
     public function handle_power_automate_webhook(\WP_REST_Request $request): \WP_REST_Response

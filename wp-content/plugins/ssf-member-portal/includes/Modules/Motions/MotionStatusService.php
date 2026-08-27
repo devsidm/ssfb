@@ -14,10 +14,12 @@ if (! defined('ABSPATH')) {
 final class MotionStatusService
 {
     private MotionSharePoint $sharepoint;
+    private MotionMailer $mailer;
 
-    public function __construct(MotionSharePoint $sharepoint)
+    public function __construct(MotionSharePoint $sharepoint, MotionMailer $mailer)
     {
         $this->sharepoint = $sharepoint;
+        $this->mailer = $mailer;
     }
 
     public function update(int $motion_id, string $status, string $source, array $context = array())
@@ -79,8 +81,11 @@ final class MotionStatusService
             'source' => $source,
         ));
 
+        $email_sent = false;
         if ('wordpress' === $source) {
             $this->sharepoint->queue_status_update($motion_id);
+        } elseif (in_array($source, array('sharepoint', 'power_automate'), true)) {
+            $email_sent = $this->mailer->send_status_change($motion_id, $old_status, $new_status);
         }
 
         return array(
@@ -89,7 +94,13 @@ final class MotionStatusService
             'motion_number' => (string) get_post_meta($motion_id, '_ssf_mp_motion_number', true),
             'old_status' => $old_status,
             'new_status' => $new_status,
+            'email_sent' => $email_sent,
         );
+    }
+
+    public function resend_status_email(int $motion_id)
+    {
+        return $this->mailer->resend_status_email($motion_id);
     }
 
     private function store_sharepoint_reference(int $motion_id, array $context): void
