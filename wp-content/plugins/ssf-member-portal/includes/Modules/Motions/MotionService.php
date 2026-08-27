@@ -90,8 +90,28 @@ final class MotionService
         return add_query_arg(array('motion' => $number, 'token' => $token), $page_id ? get_permalink($page_id) : home_url('/motion-status/'));
     }
 
-    public function test_sharepoint(int $year)
+    public function sharepoint_diagnostics()
     {
-        return $this->sharepoint->test_connection($year);
+        return $this->sharepoint->diagnostics();
+    }
+
+    public function test_sharepoint_write_access(int $year)
+    {
+        return $this->sharepoint->test_write_access($year);
+    }
+
+    public function upload_sharepoint_test_file(int $year)
+    {
+        return $this->sharepoint->upload_test_file($year);
+    }
+
+    public function delete_sharepoint_test_file()
+    {
+        return $this->sharepoint->delete_test_file();
+    }
+
+    public function retry_sharepoint_sync(int $motion_id): void
+    {
+        $this->sharepoint->retry($motion_id);
     }
 }

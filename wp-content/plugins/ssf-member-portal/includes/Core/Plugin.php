@@ -53,6 +53,7 @@ final class Plugin
     public function register(): void
     {
         Capabilities::register();
+        Settings::remove_legacy_graph_settings();
         $this->meetings->register();
         $this->motions->register();
         self::install_pages();
