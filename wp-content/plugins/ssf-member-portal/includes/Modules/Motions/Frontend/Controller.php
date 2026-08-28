@@ -115,7 +115,7 @@ final class Controller
 
     private function feature_enabled(): bool
     {
-        return ! class_exists('SSF_Features') || \SSF_Features::enabled('motions');
+        return ! class_exists('SSF_Feature_Manager') || \SSF_Feature_Manager::can_access('motions');
     }
 
     private function unavailable(): string

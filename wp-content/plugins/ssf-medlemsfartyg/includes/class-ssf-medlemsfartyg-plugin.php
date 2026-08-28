@@ -167,6 +167,9 @@ final class SSF_Medlemsfartyg_Plugin
 
     public function enqueue_frontend_assets(): void
     {
+        if (class_exists('SSF_Feature_Manager') && ! SSF_Feature_Manager::can_access('member_vessels')) {
+            return;
+        }
         if (! is_singular('medlemsfartyg') && ! is_post_type_archive('medlemsfartyg') && ! $this->page_has_shortcodes()) {
             return;
         }

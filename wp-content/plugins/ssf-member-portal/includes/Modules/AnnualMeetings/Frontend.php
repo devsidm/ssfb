@@ -44,7 +44,7 @@ final class Frontend
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
-        $can_register = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->meetings->is_registration_open($meeting);
+        $can_register = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->meetings->is_registration_open($meeting) && $this->feature_enabled('annual_meeting_registration');
         $motion = $this->motions->state($meeting);
         ob_start();
         include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/meeting.php';
@@ -92,6 +92,9 @@ final class Frontend
 
     public function registration_shortcode(): string
     {
+        if (! $this->feature_enabled('annual_meetings')) {
+            return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
+        }
         if (! $this->feature_enabled('annual_meeting_registration')) {
             return $this->message(__('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
         }
@@ -124,7 +127,7 @@ final class Frontend
     public function submit(): void
     {
         $redirect = $this->meetings->registration_url();
-        if (! $this->feature_enabled('annual_meeting_registration')) {
+        if (! $this->feature_enabled('annual_meetings') || ! $this->feature_enabled('annual_meeting_registration')) {
             $this->redirect_error($redirect, __('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
         }
         if (! isset($_POST['ssf_member_portal_meeting_registration_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_registration_nonce'])), 'ssf_member_portal_submit_meeting_registration') || ! empty($_POST['website'])) {
@@ -250,6 +253,6 @@ final class Frontend
 
     private function feature_enabled(string $feature): bool
     {
-        return ! class_exists('SSF_Features') || \SSF_Features::enabled($feature);
+        return ! class_exists('SSF_Feature_Manager') || \SSF_Feature_Manager::can_access($feature);
     }
 }

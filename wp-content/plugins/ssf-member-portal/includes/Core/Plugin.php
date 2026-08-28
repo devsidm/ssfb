@@ -71,6 +71,9 @@ final class Plugin
 
     public function render_dashboard(): void
     {
+        if (class_exists('SSF_Feature_Manager')) {
+            \SSF_Feature_Manager::render_dashboard_card();
+        }
         $this->meetings->render_dashboard();
     }
 
@@ -80,8 +83,8 @@ final class Plugin
             return;
         }
         $logs = Logger::recent();
-        $release_available = class_exists('SSF_Release_Info') && class_exists('SSF_Features');
-        $features = $release_available ? \SSF_Features::all() : array();
+        $release_available = class_exists('SSF_Release_Info') && class_exists('SSF_Feature_Manager');
+        $features = $release_available ? \SSF_Feature_Manager::get_all_features() : array();
         $health = $release_available && class_exists('SSF_Release_Controls') ? \SSF_Release_Controls::health() : array();
         $labels = array(
             'applications' => __('Ansökningar', 'ssf-member-portal'),
@@ -89,6 +92,7 @@ final class Plugin
             'annual_meetings' => __('Årsmöten', 'ssf-member-portal'),
             'annual_meeting_registration' => __('Årsmötesanmälan', 'ssf-member-portal'),
             'calendar' => __('Kalender', 'ssf-member-portal'),
+            'member_vessels' => __('Medlemsfartyg', 'ssf-member-portal'),
         );
         ?>
         <div class="wrap"><h1><?php esc_html_e('SSF systemstatus', 'ssf-member-portal'); ?></h1>
@@ -102,7 +106,7 @@ final class Plugin
             </tbody></table>
             <h2><?php esc_html_e('Funktionsflaggor', 'ssf-member-portal'); ?></h2>
             <table class="widefat striped" style="max-width:760px"><tbody>
-                <?php foreach ($labels as $feature => $label) : ?><tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html(! empty($features[$feature]) ? 'ON' : 'OFF'); ?></td></tr><?php endforeach; ?>
+                <?php foreach ($labels as $feature => $label) : ?><tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html(\SSF_Feature_Manager::state_label((string) ($features[$feature]['state'] ?? 'off'))); ?></td><td><?php echo esc_html(! empty($features[$feature]['override']) ? 'Styrs av wp-config.php' : (string) ($features[$feature]['source'] ?? '')); ?></td></tr><?php endforeach; ?>
             </tbody></table>
             <h2><?php esc_html_e('Releasekontroll', 'ssf-member-portal'); ?></h2>
             <table class="widefat striped" style="max-width:760px"><tbody>
@@ -160,7 +164,7 @@ final class Plugin
             );
         }
 
-        if (self::feature_enabled('motions')) {
+        if (self::feature_public('motions')) {
             register_rest_route(
                 'ssf-motions/v1',
                 '/status',
@@ -220,6 +224,11 @@ final class Plugin
 
     private static function feature_enabled(string $feature): bool
     {
-        return ! class_exists('SSF_Features') || \SSF_Features::enabled($feature);
+        return ! class_exists('SSF_Feature_Manager') || \SSF_Feature_Manager::can_access($feature);
+    }
+
+    private static function feature_public(string $feature): bool
+    {
+        return ! class_exists('SSF_Feature_Manager') || \SSF_Feature_Manager::is_public($feature);
     }
 }

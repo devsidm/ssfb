@@ -207,6 +207,6 @@ class SSF_Medlemsprocess_Public
 
     private function applications_enabled(): bool
     {
-        return ! class_exists('SSF_Features') || SSF_Features::enabled('applications');
+        return ! class_exists('SSF_Feature_Manager') || SSF_Feature_Manager::can_access('applications');
     }
 }

@@ -105,6 +105,6 @@ final class Frontend
 
     private function feature_enabled(): bool
     {
-        return ! class_exists('SSF_Features') || \SSF_Features::enabled('calendar');
+        return ! class_exists('SSF_Feature_Manager') || \SSF_Feature_Manager::can_access('calendar');
     }
 }

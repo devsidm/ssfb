@@ -17,6 +17,9 @@ if (! isset($query)) {
 $shortcodes = new SSF_Medlemsfartyg_Shortcodes();
 if (empty($is_shortcode)) {
     get_header();
+    if (class_exists('SSF_Feature_Manager')) {
+        echo SSF_Feature_Manager::test_mode_banner('member_vessels'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+    }
 }
 ?>
 <main class="ssf-ships-page">

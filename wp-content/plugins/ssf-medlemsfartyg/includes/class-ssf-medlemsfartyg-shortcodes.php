@@ -20,17 +20,23 @@ class SSF_Medlemsfartyg_Shortcodes
 
     public function archive_shortcode(array $atts = array()): string
     {
+        if (! $this->can_display()) {
+            return $this->unavailable();
+        }
         $settings = SSF_Medlemsfartyg_Plugin::settings();
         $query = $this->build_query($settings);
         $is_shortcode = true;
 
         ob_start();
         include SSF_Medlemsfartyg_Templates::locate('archive-medlemsfartyg.php');
-        return ob_get_clean();
+        return $this->test_banner() . ob_get_clean();
     }
 
     public function featured_shortcode(array $atts): string
     {
+        if (! $this->can_display()) {
+            return '';
+        }
         $atts = shortcode_atts(array('id' => 0), $atts);
         $post = get_post((int) $atts['id']);
         if (! $post || 'medlemsfartyg' !== $post->post_type) {
@@ -41,11 +47,14 @@ class SSF_Medlemsfartyg_Shortcodes
         echo '<div class="ssf-ship-featured">';
         $this->render_card($post->ID, true);
         echo '</div>';
-        return ob_get_clean();
+        return $this->test_banner() . ob_get_clean();
     }
 
     public function grid_shortcode(array $atts): string
     {
+        if (! $this->can_display()) {
+            return '';
+        }
         $atts = shortcode_atts(array('antal' => 4, 'status' => ''), $atts);
         $args = array(
             'post_type' => 'medlemsfartyg',
@@ -74,7 +83,7 @@ class SSF_Medlemsfartyg_Shortcodes
         }
         echo '</div>';
         wp_reset_postdata();
-        return ob_get_clean();
+        return $this->test_banner() . ob_get_clean();
     }
 
     public function render_card(int $post_id, bool $large = false): void
@@ -155,5 +164,23 @@ class SSF_Medlemsfartyg_Shortcodes
     public static function field(int $post_id, string $key): string
     {
         return (string) get_post_meta($post_id, $key, true);
+    }
+
+    private function can_display(): bool
+    {
+        return ! class_exists('SSF_Feature_Manager') || SSF_Feature_Manager::can_access('member_vessels');
+    }
+
+    private function unavailable(): string
+    {
+        if (class_exists('SSF_Feature_Manager')) {
+            return SSF_Feature_Manager::unavailable_markup('member_vessels');
+        }
+        return '<p>Medlemsfartygen är inte tillgängliga just nu.</p>';
+    }
+
+    private function test_banner(): string
+    {
+        return class_exists('SSF_Feature_Manager') ? SSF_Feature_Manager::test_mode_banner('member_vessels') : '';
     }
 }

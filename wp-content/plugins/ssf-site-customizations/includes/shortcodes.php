@@ -11,7 +11,7 @@ if (! defined('ABSPATH')) {
 
 function ssf_site_applications_enabled(): bool
 {
-    return ! class_exists('SSF_Features') || SSF_Features::enabled('applications');
+    return ! class_exists('SSF_Feature_Manager') || SSF_Feature_Manager::can_access('applications');
 }
 
 function ssf_site_application_destination(string $title, string $text, string $url): array
