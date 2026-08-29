@@ -71,6 +71,9 @@ final class Plugin
 
     public function render_dashboard(): void
     {
+        if (class_exists('SSF_Release_Manager')) {
+            \SSF_Release_Manager::render_dashboard_card();
+        }
         if (class_exists('SSF_Feature_Manager')) {
             \SSF_Feature_Manager::render_dashboard_card();
         }
@@ -92,6 +95,7 @@ final class Plugin
             'annual_meetings' => __('Årsmöten', 'ssf-member-portal'),
             'annual_meeting_registration' => __('Årsmötesanmälan', 'ssf-member-portal'),
             'calendar' => __('Kalender', 'ssf-member-portal'),
+            'newsletters' => __('Nyhetsbrev', 'ssf-member-portal'),
             'member_vessels' => __('Medlemsfartyg', 'ssf-member-portal'),
         );
         ?>
@@ -100,8 +104,9 @@ final class Plugin
             <h2><?php esc_html_e('Release', 'ssf-member-portal'); ?></h2>
             <table class="widefat striped" style="max-width:760px"><tbody>
                 <tr><th><?php esc_html_e('Miljö', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Environment::label()); ?></td></tr>
-                <tr><th><?php esc_html_e('Release', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Release_Info::get_version()); ?></td></tr>
+                <tr><th><?php esc_html_e('SSF Web', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Release_Info::get_version() ?: 'Ej konfigurerat'); ?></td></tr>
                 <tr><th><?php esc_html_e('Releasedatum', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Release_Info::get_release_date() ?: 'Ej konfigurerat'); ?></td></tr>
+                <?php if (class_exists('SSF_Release_Manager')) : ?><tr><th><?php esc_html_e('Release status', 'ssf-member-portal'); ?></th><td><?php echo esc_html(\SSF_Release_Manager::status_label(\SSF_Release_Manager::get_status())); ?></td></tr><?php endif; ?>
                 <tr><th><?php esc_html_e('Commit', 'ssf-member-portal'); ?></th><td><code><?php echo esc_html(\SSF_Release_Info::get_commit() ?: 'Ej konfigurerat'); ?></code></td></tr>
             </tbody></table>
             <h2><?php esc_html_e('Funktionsflaggor', 'ssf-member-portal'); ?></h2>

@@ -55,12 +55,12 @@ final class SSF_Environment
     public static function label(): string
     {
         $labels = array(
-            'production' => 'PRODUKTION',
-            'development' => 'DEVELOPMENT',
-            'staging' => 'STAGING',
-            'local' => 'LOCAL',
+            'production' => 'Production',
+            'development' => 'Development',
+            'staging' => 'Staging',
+            'local' => 'Local',
         );
-        return $labels[self::get_environment()] ?? strtoupper(self::get_environment());
+        return $labels[self::get_environment()] ?? ucfirst(self::get_environment());
     }
 
     private static function installation_environment(): string
@@ -86,42 +86,576 @@ final class SSF_Environment
     }
 }
 
-final class SSF_Release_Info
+final class SSF_Release_Manager
 {
-    public static function get_version(): string
+    public const POST_TYPE = 'ssf_release';
+    public const CAPABILITY = 'manage_ssf_releases';
+    public const AUDIT_OPTION = 'ssf_release_audit_log';
+
+    private const CACHE_GROUP = 'ssf_release_manager';
+    private const STATUSES = array('draft', 'development', 'released', 'superseded');
+    private const CURRENT_STATUSES = array('development', 'released', 'draft');
+
+    private static ?array $current_release = null;
+
+    public static function boot(): void
     {
-        return self::value('SSF_RELEASE_VERSION', SSF_Environment::is_production() ? 'ej konfigurerad' : 'dev');
+        add_action('init', array(__CLASS__, 'register_post_type'), 4);
+        add_action('init', array(__CLASS__, 'ensure_capability'), 5);
+        add_action('admin_menu', array(__CLASS__, 'register_admin_page'), 55);
+        add_action('admin_post_ssf_save_release', array(__CLASS__, 'save_release'));
+        add_action('wp_dashboard_setup', array(__CLASS__, 'register_dashboard_widget'));
     }
 
-    public static function get_environment(): string
+    public static function register_post_type(): void
     {
-        return SSF_Environment::get_environment();
+        register_post_type(
+            self::POST_TYPE,
+            array(
+                'labels' => array(
+                    'name' => 'SSF releaser',
+                    'singular_name' => 'SSF release',
+                ),
+                'public' => false,
+                'show_ui' => false,
+                'show_in_rest' => false,
+                'supports' => array('title'),
+                'capability_type' => 'post',
+            )
+        );
+    }
+
+    public static function ensure_capability(): void
+    {
+        $administrator = get_role('administrator');
+        if ($administrator && ! $administrator->has_cap(self::CAPABILITY)) {
+            $administrator->add_cap(self::CAPABILITY);
+        }
+    }
+
+    public static function get_current_release(): array
+    {
+        if (null !== self::$current_release) {
+            return self::$current_release;
+        }
+
+        $environment = self::get_environment();
+        $cache_key = 'current_' . $environment;
+        $cached = wp_cache_get($cache_key, self::CACHE_GROUP);
+        if (is_array($cached)) {
+            self::$current_release = $cached;
+            return self::$current_release;
+        }
+
+        $release = self::find_current_release($environment);
+        if (! $release) {
+            $release = self::legacy_release($environment);
+        }
+        if (! $release) {
+            $release = self::empty_release($environment);
+        }
+
+        self::$current_release = $release;
+        wp_cache_set($cache_key, $release, self::CACHE_GROUP, 300);
+        return self::$current_release;
+    }
+
+    public static function get_version(): string
+    {
+        return (string) (self::get_current_release()['version'] ?? '');
+    }
+
+    public static function get_release_name(): string
+    {
+        return (string) (self::get_current_release()['release_name'] ?? 'SSF Web');
     }
 
     public static function get_release_date(): string
     {
-        return self::value('SSF_RELEASE_DATE');
+        return (string) (self::get_current_release()['release_date'] ?? '');
+    }
+
+    public static function get_environment(): string
+    {
+        return function_exists('wp_get_environment_type') ? (string) wp_get_environment_type() : SSF_Environment::get_environment();
+    }
+
+    public static function get_environment_label(): string
+    {
+        $labels = array(
+            'production' => 'Production',
+            'development' => 'Development',
+            'staging' => 'Staging',
+            'local' => 'Local',
+        );
+        return $labels[self::get_environment()] ?? ucfirst(self::get_environment());
+    }
+
+    public static function get_status(): string
+    {
+        return (string) (self::get_current_release()['status'] ?? '');
     }
 
     public static function get_commit(): string
     {
-        return self::value('SSF_RELEASE_COMMIT');
-    }
-
-    public static function is_configured(): bool
-    {
-        return '' !== self::value('SSF_RELEASE_VERSION');
+        return (string) (self::get_current_release()['source_commit'] ?? '');
     }
 
     public static function get_display_string(): string
     {
-        return sprintf('Release %s - %s', self::get_version(), SSF_Environment::label());
+        $release = self::get_current_release();
+        $parts = array(self::release_title($release));
+        $parts[] = self::get_environment_label();
+        if (! empty($release['release_date'])) {
+            $parts[] = $release['release_date'];
+        }
+        return implode(' · ', $parts);
     }
 
-    private static function value(string $name, string $fallback = ''): string
+    public static function is_production(): bool
     {
-        $value = SSF_Environment::configured_value($name);
-        return '' !== $value ? $value : $fallback;
+        return 'production' === self::get_environment();
+    }
+
+    public static function is_configured(): bool
+    {
+        return '' !== self::get_version();
+    }
+
+    public static function validate_version(string $version): bool
+    {
+        return 1 === preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$/', $version);
+    }
+
+    public static function status_label(string $status): string
+    {
+        $labels = array(
+            'draft' => 'Draft',
+            'development' => 'Development',
+            'released' => 'Released',
+            'superseded' => 'Superseded',
+        );
+        if ('' === $status) {
+            return 'Ej konfigurerat';
+        }
+        return $labels[$status] ?? ucfirst($status);
+    }
+
+    public static function get_allowed_statuses(): array
+    {
+        return self::is_production() ? array('draft', 'released', 'superseded') : self::STATUSES;
+    }
+
+    public static function register_admin_page(): void
+    {
+        add_submenu_page('ssf', 'SSF Release', 'Release', self::CAPABILITY, 'ssf-release', array(__CLASS__, 'render_admin_page'));
+    }
+
+    public static function register_dashboard_widget(): void
+    {
+        if (current_user_can(self::CAPABILITY)) {
+            wp_add_dashboard_widget('ssf-release-dashboard', 'SSF: Release', array(__CLASS__, 'render_dashboard_widget'));
+        }
+    }
+
+    public static function render_dashboard_card(): void
+    {
+        if (! current_user_can(self::CAPABILITY)) {
+            return;
+        }
+        $release = self::get_current_release();
+        ?>
+        <section class="ssf-release-dashboard-card">
+            <h2>Release</h2>
+            <p><strong><?php echo esc_html(self::get_display_string()); ?></strong></p>
+            <p><?php echo esc_html(self::status_label((string) $release['status'])); ?><?php echo ! empty($release['release_date']) ? ' ' . esc_html((string) $release['release_date']) : ''; ?></p>
+            <p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-release')); ?>">Hantera release</a></p>
+        </section>
+        <?php
+    }
+
+    public static function render_dashboard_widget(): void
+    {
+        self::render_dashboard_card();
+    }
+
+    public static function render_admin_page(): void
+    {
+        if (! current_user_can(self::CAPABILITY)) {
+            wp_die('Du saknar behörighet att ändra SSF:s releaser.');
+        }
+
+        $current = self::get_current_release();
+        $error = isset($_GET['ssf_release_error']) ? sanitize_key(wp_unslash($_GET['ssf_release_error'])) : '';
+        $updated = isset($_GET['ssf_release_updated']);
+        $history = self::get_history();
+        ?>
+        <div class="wrap ssf-release-admin">
+            <h1>SSF Release</h1>
+            <?php if ($updated) : ?><div class="notice notice-success is-dismissible"><p>Releaseinformationen har sparats.</p></div><?php endif; ?>
+            <?php if ($error) : ?><div class="notice notice-error"><p><?php echo esc_html(self::error_message($error)); ?></p></div><?php endif; ?>
+            <section class="ssf-release-current">
+                <div>
+                    <p class="description">CURRENT ENVIRONMENT</p>
+                    <h2><?php echo esc_html(self::get_environment_label()); ?></h2>
+                </div>
+                <div>
+                    <p class="description">CURRENT RELEASE</p>
+                    <h2><?php echo esc_html(self::get_display_string()); ?></h2>
+                    <p>Release date: <strong><?php echo esc_html((string) ($current['release_date'] ?: 'Ej satt')); ?></strong></p>
+                    <p>Status: <strong><?php echo esc_html(self::status_label((string) $current['status'])); ?></strong></p>
+                    <?php if (! empty($current['source_commit'])) : ?><p>Source commit: <code><?php echo esc_html((string) $current['source_commit']); ?></code></p><?php endif; ?>
+                </div>
+            </section>
+            <h2>Ny release</h2>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="ssf-release-form">
+                <input type="hidden" name="action" value="ssf_save_release">
+                <?php wp_nonce_field('ssf_save_release'); ?>
+                <table class="form-table" role="presentation"><tbody>
+                    <tr><th><label for="ssf-release-version">Version</label></th><td><input id="ssf-release-version" class="regular-text" name="version" required placeholder="1.0.0 eller 1.1.0-dev.3"></td></tr>
+                    <tr><th><label for="ssf-release-name">Release name</label></th><td><input id="ssf-release-name" class="regular-text" name="release_name" value="SSF Web"></td></tr>
+                    <tr><th><label for="ssf-release-date">Release date</label></th><td><input id="ssf-release-date" type="date" name="release_date"></td></tr>
+                    <tr><th><label for="ssf-release-status">Status</label></th><td><select id="ssf-release-status" name="status"><?php foreach (self::get_allowed_statuses() as $status) : ?><option value="<?php echo esc_attr($status); ?>"><?php echo esc_html(self::status_label($status)); ?></option><?php endforeach; ?></select></td></tr>
+                    <tr><th><label for="ssf-release-commit">Source commit</label></th><td><input id="ssf-release-commit" class="regular-text" name="source_commit" placeholder="optional"></td></tr>
+                    <tr><th><label for="ssf-release-notes">Release notes</label></th><td><textarea id="ssf-release-notes" class="large-text" name="notes" rows="5"></textarea></td></tr>
+                </tbody></table>
+                <input type="hidden" name="confirm_released" value="0" id="ssf-release-confirmed">
+                <?php submit_button('Skapa release'); ?>
+            </form>
+            <h2>Releasehistorik</h2>
+            <?php self::render_history_table($history); ?>
+            <h2>Audit log</h2>
+            <?php self::render_audit_log(); ?>
+        </div>
+        <dialog id="ssf-release-confirm-dialog" aria-labelledby="ssf-release-confirm-title">
+            <form method="dialog"><h2 id="ssf-release-confirm-title">Publicera produktionsrelease?</h2><p id="ssf-release-confirm-text"></p><menu><button value="cancel">Avbryt</button><button class="button button-primary" id="ssf-release-confirm-submit" value="confirm">Publicera release</button></menu></form>
+        </dialog>
+        <style>
+            .ssf-release-admin{max-width:1100px}.ssf-release-current{display:grid;grid-template-columns:minmax(220px,.7fr) minmax(320px,1.3fr);gap:20px;background:#fff;border-left:4px solid #2271b1;margin:16px 0 24px;padding:18px 20px}.ssf-release-current h2{margin:0 0 8px}.ssf-release-dashboard-card{border:1px solid #c3c4c7;background:#fff;padding:16px;margin:16px 0;max-width:720px}.ssf-release-dashboard-card h2{margin:0 0 8px}.ssf-release-status--released{color:#18724b}.ssf-release-status--development{color:#996800}.ssf-release-status--superseded{color:#646970}@media(max-width:782px){.ssf-release-current{grid-template-columns:1fr}}
+        </style>
+        <script>
+        (function(){var form=document.getElementById('ssf-release-form'),status=document.getElementById('ssf-release-status'),dialog=document.getElementById('ssf-release-confirm-dialog'),text=document.getElementById('ssf-release-confirm-text'),confirmed=document.getElementById('ssf-release-confirmed'),button=document.getElementById('ssf-release-confirm-submit'),version=document.getElementById('ssf-release-version'),date=document.getElementById('ssf-release-date');if(!form||!status||!dialog||!button){return;}form.addEventListener('submit',function(event){if(confirmed.value==='1'||status.value!=='released'||'<?php echo esc_js(self::get_environment()); ?>'!=='production'){return;}event.preventDefault();text.textContent='Du är på väg att göra SSF Web '+version.value+' till aktuell produktionsrelease. Release date: '+(date.value||'dagens datum')+'.';dialog.showModal();});button.addEventListener('click',function(){confirmed.value='1';form.submit();});})();
+        </script>
+        <?php
+    }
+
+    public static function save_release(): void
+    {
+        if (! current_user_can(self::CAPABILITY) || ! check_admin_referer('ssf_save_release')) {
+            wp_die('Du saknar behörighet att ändra SSF:s releaser.');
+        }
+
+        $environment = self::get_environment();
+        $version = isset($_POST['version']) ? sanitize_text_field(wp_unslash($_POST['version'])) : '';
+        $release_name = isset($_POST['release_name']) ? sanitize_text_field(wp_unslash($_POST['release_name'])) : 'SSF Web';
+        $release_date = isset($_POST['release_date']) ? sanitize_text_field(wp_unslash($_POST['release_date'])) : '';
+        $status = isset($_POST['status']) ? sanitize_key(wp_unslash($_POST['status'])) : 'draft';
+        $source_commit = isset($_POST['source_commit']) ? sanitize_text_field(wp_unslash($_POST['source_commit'])) : '';
+        $notes = isset($_POST['notes']) ? sanitize_textarea_field(wp_unslash($_POST['notes'])) : '';
+
+        if (! self::validate_version($version)) {
+            self::redirect_with_error('version');
+        }
+        if (! in_array($status, self::get_allowed_statuses(), true)) {
+            self::redirect_with_error('status');
+        }
+        if ($release_date && ! self::valid_date($release_date)) {
+            self::redirect_with_error('date');
+        }
+        if ('production' === $environment && 'released' === $status && '1' !== (string) ($_POST['confirm_released'] ?? '0')) {
+            self::redirect_with_error('confirmation');
+        }
+        if ('production' === $environment && 'released' === $status && '' === $release_date) {
+            $release_date = current_time('Y-m-d');
+        }
+        if ('' === $release_name) {
+            $release_name = 'SSF Web';
+        }
+
+        $post_id = wp_insert_post(
+            array(
+                'post_type' => self::POST_TYPE,
+                'post_status' => 'publish',
+                'post_title' => $release_name . ' ' . $version,
+                'post_content' => $notes,
+            ),
+            true
+        );
+        if (is_wp_error($post_id)) {
+            self::redirect_with_error('save');
+        }
+
+        self::save_release_meta((int) $post_id, array(
+            'version' => $version,
+            'release_name' => $release_name,
+            'release_date' => $release_date,
+            'environment' => $environment,
+            'status' => $status,
+            'source_commit' => $source_commit,
+            'notes' => $notes,
+        ));
+
+        if ('released' === $status) {
+            self::supersede_previous_releases((int) $post_id, $environment);
+        }
+
+        self::clear_cache();
+        self::add_audit_entry(sprintf('Release %s marked %s', $version, self::status_label($status)), $environment);
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-release', 'ssf_release_updated' => '1'), admin_url('admin.php')));
+        exit;
+    }
+
+    public static function get_history(): array
+    {
+        $posts = get_posts(array(
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'numberposts' => 50,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'suppress_filters' => true,
+        ));
+        return array_map(static fn(WP_Post $post): array => self::release_from_post($post), $posts);
+    }
+
+    private static function find_current_release(string $environment): ?array
+    {
+        $current_statuses = 'production' === $environment ? array('released') : self::CURRENT_STATUSES;
+        foreach ($current_statuses as $status) {
+            $posts = get_posts(array(
+                'post_type' => self::POST_TYPE,
+                'post_status' => 'publish',
+                'numberposts' => 1,
+                'meta_query' => array(
+                    array('key' => '_ssf_release_environment', 'value' => $environment),
+                    array('key' => '_ssf_release_status', 'value' => $status),
+                ),
+                'meta_key' => '_ssf_release_date',
+                'orderby' => array('meta_value' => 'DESC', 'date' => 'DESC'),
+                'suppress_filters' => true,
+            ));
+            if ($posts) {
+                return self::release_from_post($posts[0]);
+            }
+        }
+        return null;
+    }
+
+    private static function release_from_post(WP_Post $post): array
+    {
+        return array(
+            'id' => (int) $post->ID,
+            'version' => (string) get_post_meta($post->ID, '_ssf_release_version', true),
+            'release_name' => (string) (get_post_meta($post->ID, '_ssf_release_name', true) ?: 'SSF Web'),
+            'release_date' => (string) get_post_meta($post->ID, '_ssf_release_date', true),
+            'environment' => (string) get_post_meta($post->ID, '_ssf_release_environment', true),
+            'status' => (string) get_post_meta($post->ID, '_ssf_release_status', true),
+            'source_commit' => (string) get_post_meta($post->ID, '_ssf_release_source_commit', true),
+            'notes' => (string) get_post_meta($post->ID, '_ssf_release_notes', true),
+            'created_by' => (int) $post->post_author,
+            'created_at' => (string) $post->post_date_gmt,
+        );
+    }
+
+    private static function release_title(array $release): string
+    {
+        $name = trim((string) ($release['release_name'] ?? 'SSF Web'));
+        $version = trim((string) ($release['version'] ?? ''));
+        if ('' === $name) {
+            $name = 'SSF Web';
+        }
+        if ('' === $version || false !== strpos($name, $version)) {
+            return $name;
+        }
+        return $name . ' ' . $version;
+    }
+
+    private static function save_release_meta(int $post_id, array $release): void
+    {
+        update_post_meta($post_id, '_ssf_release_version', $release['version']);
+        update_post_meta($post_id, '_ssf_release_name', $release['release_name']);
+        update_post_meta($post_id, '_ssf_release_date', $release['release_date']);
+        update_post_meta($post_id, '_ssf_release_environment', $release['environment']);
+        update_post_meta($post_id, '_ssf_release_status', $release['status']);
+        update_post_meta($post_id, '_ssf_release_source_commit', $release['source_commit']);
+        update_post_meta($post_id, '_ssf_release_notes', $release['notes']);
+    }
+
+    private static function supersede_previous_releases(int $current_id, string $environment): void
+    {
+        $posts = get_posts(array(
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'numberposts' => -1,
+            'fields' => 'ids',
+            'meta_query' => array(
+                array('key' => '_ssf_release_environment', 'value' => $environment),
+                array('key' => '_ssf_release_status', 'value' => 'released'),
+            ),
+            'suppress_filters' => true,
+        ));
+        foreach ($posts as $post_id) {
+            if ((int) $post_id !== $current_id) {
+                update_post_meta((int) $post_id, '_ssf_release_status', 'superseded');
+            }
+        }
+    }
+
+    private static function legacy_release(string $environment): ?array
+    {
+        if ('production' === $environment) {
+            return null;
+        }
+
+        $version = SSF_Environment::configured_value('SSF_RELEASE_VERSION');
+        if ('' === $version || ! self::validate_version($version)) {
+            return null;
+        }
+        return array(
+            'id' => 0,
+            'version' => $version,
+            'release_name' => 'SSF Web',
+            'release_date' => SSF_Environment::configured_value('SSF_RELEASE_DATE'),
+            'environment' => $environment,
+            'status' => 'production' === $environment ? 'released' : 'development',
+            'source_commit' => SSF_Environment::configured_value('SSF_RELEASE_COMMIT'),
+            'notes' => '',
+            'created_by' => 0,
+            'created_at' => '',
+        );
+    }
+
+    private static function empty_release(string $environment): array
+    {
+        return array(
+            'id' => 0,
+            'version' => '',
+            'release_name' => 'SSF Web',
+            'release_date' => '',
+            'environment' => $environment,
+            'status' => '',
+            'source_commit' => '',
+            'notes' => '',
+            'created_by' => 0,
+            'created_at' => '',
+        );
+    }
+
+    private static function render_history_table(array $history): void
+    {
+        if (! $history) {
+            echo '<p>Inga releaser har registrerats ännu.</p>';
+            return;
+        }
+        ?>
+        <table class="widefat striped"><thead><tr><th>Version</th><th>Datum</th><th>Miljö</th><th>Status</th><th>Commit</th><th>Anteckningar</th></tr></thead><tbody>
+        <?php foreach ($history as $release) : ?><tr><td><strong><?php echo esc_html((string) $release['version']); ?></strong></td><td><?php echo esc_html((string) $release['release_date']); ?></td><td><?php echo esc_html(self::environment_label((string) $release['environment'])); ?></td><td class="ssf-release-status--<?php echo esc_attr((string) $release['status']); ?>"><?php echo esc_html(self::status_label((string) $release['status'])); ?></td><td><code><?php echo esc_html((string) $release['source_commit']); ?></code></td><td><?php echo esc_html(wp_trim_words((string) $release['notes'], 18)); ?></td></tr><?php endforeach; ?>
+        </tbody></table>
+        <?php
+    }
+
+    private static function render_audit_log(): void
+    {
+        $entries = (array) get_option(self::AUDIT_OPTION, array());
+        if (! $entries) {
+            echo '<p>Inga releaseändringar har registrerats ännu.</p>';
+            return;
+        }
+        ?>
+        <table class="widefat striped"><thead><tr><th>Tid</th><th>Händelse</th><th>Miljö</th><th>Användare</th></tr></thead><tbody>
+        <?php foreach (array_slice($entries, 0, 25) as $entry) : ?><tr><td><?php echo esc_html((string) ($entry['timestamp'] ?? '')); ?></td><td><?php echo esc_html((string) ($entry['message'] ?? '')); ?></td><td><?php echo esc_html(self::environment_label((string) ($entry['environment'] ?? ''))); ?></td><td><?php echo esc_html((string) ($entry['user'] ?? '')); ?></td></tr><?php endforeach; ?>
+        </tbody></table>
+        <?php
+    }
+
+    private static function add_audit_entry(string $message, string $environment): void
+    {
+        $user = wp_get_current_user();
+        $entries = (array) get_option(self::AUDIT_OPTION, array());
+        array_unshift($entries, array(
+            'timestamp' => current_time('Y-m-d H:i:s', true),
+            'message' => $message,
+            'environment' => $environment,
+            'user_id' => get_current_user_id(),
+            'user' => $user && $user->exists() ? $user->user_login : 'okänd',
+        ));
+        update_option(self::AUDIT_OPTION, array_slice($entries, 0, 100), false);
+    }
+
+    private static function clear_cache(): void
+    {
+        self::$current_release = null;
+        foreach (array('production', 'development', 'staging', 'local') as $environment) {
+            wp_cache_delete('current_' . $environment, self::CACHE_GROUP);
+        }
+    }
+
+    private static function valid_date(string $date): bool
+    {
+        $parsed = date_create_from_format('Y-m-d', $date);
+        return $parsed && $parsed->format('Y-m-d') === $date;
+    }
+
+    private static function error_message(string $error): string
+    {
+        $messages = array(
+            'version' => 'Versionen måste följa Semantic Versioning, till exempel 1.0.0 eller 1.1.0-dev.3.',
+            'status' => 'Ogiltig release-status.',
+            'date' => 'Releasedatum måste ha formatet YYYY-MM-DD.',
+            'confirmation' => 'Bekräfta innan en production release publiceras.',
+            'save' => 'Release kunde inte sparas.',
+        );
+        return $messages[$error] ?? 'Release kunde inte sparas.';
+    }
+
+    private static function redirect_with_error(string $error): void
+    {
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-release', 'ssf_release_error' => $error), admin_url('admin.php')));
+        exit;
+    }
+
+    private static function environment_label(string $environment): string
+    {
+        $labels = array(
+            'production' => 'Production',
+            'development' => 'Development',
+            'staging' => 'Staging',
+            'local' => 'Local',
+        );
+        return $labels[$environment] ?? ucfirst($environment);
+    }
+}
+
+final class SSF_Release_Info
+{
+    public static function get_version(): string
+    {
+        return SSF_Release_Manager::get_version();
+    }
+
+    public static function get_environment(): string
+    {
+        return SSF_Release_Manager::get_environment();
+    }
+
+    public static function get_release_date(): string
+    {
+        return SSF_Release_Manager::get_release_date();
+    }
+
+    public static function get_commit(): string
+    {
+        return SSF_Release_Manager::get_commit();
+    }
+
+    public static function is_configured(): bool
+    {
+        return SSF_Release_Manager::is_configured();
+    }
+
+    public static function get_display_string(): string
+    {
+        return SSF_Release_Manager::get_display_string();
     }
 }
 
@@ -171,6 +705,13 @@ final class SSF_Feature_Manager
             'default' => 'public',
             'sensitive' => false,
             'unavailable' => 'Kalendern är inte tillgänglig just nu.',
+        ),
+        'newsletters' => array(
+            'label' => 'Nyhetsbrev',
+            'description' => 'Arkiv för nyhetsbrev och äldre nummer av Fördevind.',
+            'default' => 'public',
+            'sensitive' => false,
+            'unavailable' => 'Nyhetsbrevsarkivet är inte tillgängligt just nu.',
         ),
         'member_vessels' => array(
             'label' => 'Medlemsfartyg',
@@ -579,6 +1120,9 @@ final class SSF_Feature_Manager
         if (is_singular('ssf_calendar_event')) {
             return 'calendar';
         }
+        if (is_singular('ssf_newsletter') || is_post_type_archive('ssf_newsletter')) {
+            return 'newsletters';
+        }
         if (is_singular('medlemsfartyg') || is_post_type_archive('medlemsfartyg')) {
             return 'member_vessels';
         }
@@ -634,6 +1178,9 @@ final class SSF_Feature_Manager
         }
         if (false !== strpos($path, 'ansokan')) {
             return 'applications';
+        }
+        if (false !== strpos($path, 'nyhetsbrev')) {
+            return 'newsletters';
         }
         if (false !== strpos($path, 'medlemsfartyg')) {
             return 'member_vessels';
@@ -723,13 +1270,13 @@ final class SSF_Release_Controls
 
     public static function add_environment_node($admin_bar): void
     {
-        if (! current_user_can(SSF_Feature_Manager::CAPABILITY)) {
+        if (! current_user_can(SSF_Release_Manager::CAPABILITY)) {
             return;
         }
         $admin_bar->add_node(array(
             'id' => 'ssf-environment',
-            'title' => 'SSF ' . SSF_Environment::label() . ' - ' . SSF_Release_Info::get_version(),
-            'href' => admin_url('admin.php?page=ssf-features'),
+            'title' => SSF_Release_Manager::get_display_string(),
+            'href' => admin_url('admin.php?page=ssf-release'),
         ));
     }
 
@@ -744,8 +1291,10 @@ final class SSF_Release_Controls
         $motion_page_ready = $motion_page_id && 'publish' === get_post_status($motion_page_id);
         $theme_ready = 'ssf' === get_stylesheet();
         return array(
-            'environment' => array('ok' => true, 'value' => SSF_Environment::get_environment()),
-            'release' => array('ok' => SSF_Release_Info::is_configured(), 'value' => SSF_Release_Info::get_version()),
+            'environment' => array('ok' => true, 'value' => SSF_Release_Manager::get_environment_label()),
+            'release' => array('ok' => SSF_Release_Info::is_configured(), 'value' => SSF_Release_Manager::get_display_string()),
+            'release_date' => array('ok' => true, 'value' => SSF_Release_Manager::get_release_date() ?: 'Ej konfigurerat'),
+            'release_status' => array('ok' => true, 'value' => SSF_Release_Manager::status_label(SSF_Release_Manager::get_status())),
             'database' => array('ok' => $database_ok, 'value' => $database_ok ? 'Ansluten' : 'Kunde inte verifieras'),
             'plugins' => array('ok' => $portal_active && $applications_active && $calendar_active, 'value' => $portal_active && $applications_active && $calendar_active ? 'Aktiva' : 'Kontrollera SSF-plugins'),
             'motion_page' => array('ok' => 'off' === SSF_Feature_Manager::get_state('motions') || $motion_page_ready, 'value' => $motion_page_ready ? 'Publicerad' : 'Saknas eller ej publicerad'),
@@ -754,5 +1303,6 @@ final class SSF_Release_Controls
     }
 }
 
+SSF_Release_Manager::boot();
 SSF_Feature_Manager::boot();
 SSF_Release_Controls::boot();

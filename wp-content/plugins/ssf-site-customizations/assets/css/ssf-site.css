@@ -427,7 +427,7 @@ h3, h4, .site-title {
 }
 
 .ssf-newsletter-card--latest.ssf-newsletter-card--without-image {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(160px, 0.45fr) minmax(0, 1.25fr);
 }
 
 .ssf-newsletter-card__image {
@@ -443,8 +443,21 @@ h3, h4, .site-title {
   object-fit: cover;
 }
 
+.ssf-newsletter-card__pdf-icon {
+  display: grid;
+  min-height: 180px;
+  align-items: center;
+  justify-items: center;
+  background: var(--ssf-blue-light);
+  color: var(--ssf-blue-deep);
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .ssf-newsletter-card__content {
   padding: 26px;
+  min-width: 0;
 }
 
 .ssf-newsletter-card__content h2 {
@@ -469,8 +482,18 @@ h3, h4, .site-title {
   color: var(--ssf-muted);
 }
 
+.ssf-newsletter-card__date span {
+  display: inline-block;
+  margin-left: 8px;
+}
+
 .ssf-actions--compact {
   margin-top: 18px;
+}
+
+.ssf-actions--compact .ssf-button {
+  max-width: 100%;
+  white-space: normal;
 }
 
 .ssf-newsletter-archive {
@@ -516,6 +539,7 @@ h3, h4, .site-title {
 }
 
 .ssf-newsletter-year {
+  scroll-margin-top: 96px;
   margin: 44px 0 18px;
   font-size: clamp(1.8rem, 3vw, 2.5rem);
 }
@@ -552,6 +576,15 @@ h3, h4, .site-title {
 
 .ssf-newsletter-single__viewer p {
   padding: 24px;
+}
+
+.ssf-newsletter-import-table {
+  margin: 20px 0;
+  overflow-x: auto;
+}
+
+.ssf-newsletter-import-table input {
+  max-width: 100%;
 }
 
 @media (max-width: 900px) {
@@ -600,12 +633,12 @@ h3, h4, .site-title {
     grid-template-columns: 1fr;
   }
 
-  .ssf-newsletter-card__image {
+  .ssf-newsletter-card__image,
+  .ssf-newsletter-card__pdf-icon {
     min-height: 190px;
   }
 
   .ssf-newsletter-single__viewer {
     min-height: 440px;
   }
-}
 }
