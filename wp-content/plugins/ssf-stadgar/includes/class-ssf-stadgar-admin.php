@@ -38,6 +38,27 @@ class SSF_Stadgar_Admin
 
     public function add_settings_page(): void
     {
+        if (class_exists('SSF_Admin_Navigation')) {
+            add_submenu_page(
+                SSF_Admin_Navigation::CONTENT,
+                'Stadgar & dokument',
+                'Stadgar & dokument',
+                'edit_posts',
+                'edit.php?post_type=' . SSF_Stadgar_Document::POST_TYPE,
+                '',
+                60
+            );
+            add_submenu_page(
+                null,
+                'Inställningar för stadgarsidan',
+                'Inställningar',
+                'manage_options',
+                'ssf-stadgar-settings',
+                array($this, 'render_settings_page')
+            );
+            return;
+        }
+
         add_submenu_page(
             'ssf',
             'Inställningar för stadgarsidan',

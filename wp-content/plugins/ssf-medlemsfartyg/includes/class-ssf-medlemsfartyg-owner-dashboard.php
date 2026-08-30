@@ -104,7 +104,7 @@ class SSF_Medlemsfartyg_Owner_Dashboard
 
         SSF_Medlemsfartyg_Plugin::instance()->notifications->send_owner_update_notice($ship_id, get_current_user_id());
 
-        wp_safe_redirect(add_query_arg(array('page' => 'ssf-mina-fartyg', 'ship_id' => $ship_id, 'updated' => '1'), admin_url('edit.php?post_type=medlemsfartyg')));
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-mina-fartyg', 'ship_id' => $ship_id, 'updated' => '1'), admin_url('admin.php')));
         exit;
     }
 }

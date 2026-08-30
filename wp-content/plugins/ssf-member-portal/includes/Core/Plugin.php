@@ -62,21 +62,15 @@ final class Plugin
 
     public function admin_menu(): void
     {
-        add_menu_page(__('SSF Årsmöten', 'ssf-member-portal'), __('SSF Årsmöten', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'), 'dashicons-calendar-alt', 25);
-        add_submenu_page('ssf', __('SSF Årsmöten - Översikt', 'ssf-member-portal'), __('Översikt', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'));
+        add_menu_page(__('Årsmöten', 'ssf-member-portal'), __('Årsmöten', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'), 'dashicons-calendar-alt', 25);
+        add_submenu_page('ssf', __('Årsmöten - Översikt', 'ssf-member-portal'), __('Översikt', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf', array($this, 'render_dashboard'));
         $this->meetings->register_admin_menu('ssf');
         $this->motions->register_admin_menu('ssf');
-        add_submenu_page('ssf', __('Systemstatus', 'ssf-member-portal'), __('Systemstatus', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-status', array($this, 'render_system_status'));
+        add_submenu_page(class_exists('SSF_Admin_Navigation') ? null : 'ssf', __('Systemstatus', 'ssf-member-portal'), __('Systemstatus', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-status', array($this, 'render_system_status'));
     }
 
     public function render_dashboard(): void
     {
-        if (class_exists('SSF_Release_Manager')) {
-            \SSF_Release_Manager::render_dashboard_card();
-        }
-        if (class_exists('SSF_Feature_Manager')) {
-            \SSF_Feature_Manager::render_dashboard_card();
-        }
         $this->meetings->render_dashboard();
     }
 
@@ -100,6 +94,7 @@ final class Plugin
         );
         ?>
         <div class="wrap"><h1><?php esc_html_e('SSF systemstatus', 'ssf-member-portal'); ?></h1>
+        <?php if (class_exists('SSF_Admin_Navigation')) { \SSF_Admin_Navigation::render_system_tabs('ssf-member-portal-status'); } ?>
         <?php if ($release_available) : ?>
             <h2><?php esc_html_e('Release', 'ssf-member-portal'); ?></h2>
             <table class="widefat striped" style="max-width:760px"><tbody>

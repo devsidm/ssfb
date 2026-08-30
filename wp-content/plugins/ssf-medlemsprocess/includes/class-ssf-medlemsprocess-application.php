@@ -15,17 +15,20 @@ class SSF_Medlemsprocess_Application
 
     public function register_post_type(): void
     {
+        $show_in_menu = class_exists('SSF_Admin_Navigation') ? SSF_Admin_Navigation::MEMBERSHIP : true;
+
         register_post_type(self::POST_TYPE, array(
             'labels' => array(
-                'name' => 'Medlemsprocess',
+                'name' => 'Ansökningar',
                 'singular_name' => 'Ansökan',
+                'menu_name' => 'Ansökningar',
                 'edit_item' => 'Granska ansökan',
                 'all_items' => 'Alla ansökningar',
                 'search_items' => 'Sök ansökningar',
             ),
             'public' => false,
             'show_ui' => true,
-            'show_in_menu' => true,
+            'show_in_menu' => $show_in_menu,
             'menu_icon' => 'dashicons-clipboard',
             'supports' => array('title', 'editor', 'author', 'revisions'),
             'capability_type' => array('ssf_application', 'ssf_applications'),

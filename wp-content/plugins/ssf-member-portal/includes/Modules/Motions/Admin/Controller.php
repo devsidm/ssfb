@@ -56,7 +56,7 @@ final class Controller
     {
         add_submenu_page($parent, __('Alla motioner', 'ssf-member-portal'), __('Motioner', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'edit.php?post_type=' . MotionPostType::POST_TYPE);
         add_submenu_page($parent, __('Inställningar', 'ssf-member-portal'), __('Inställningar', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-settings', array($this, 'render_settings'));
-        add_submenu_page($parent, __('Microsoft 365', 'ssf-member-portal'), __('Microsoft 365', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'ssf-member-portal-microsoft365', array($this, 'render_microsoft365'));
+        add_submenu_page(class_exists('SSF_Admin_Navigation') ? null : $parent, __('Microsoft 365', 'ssf-member-portal'), __('Microsoft 365', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'ssf-member-portal-microsoft365', array($this, 'render_microsoft365'));
     }
 
     public function render_dashboard(): void
@@ -192,6 +192,7 @@ final class Controller
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('Motioner – Microsoft 365', 'ssf-member-portal'); ?></h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { \SSF_Admin_Navigation::render_system_tabs('ssf-member-portal-microsoft365'); } ?>
             <p><?php esc_html_e('Motionen sparas alltid först i WordPress. SharePoint är ett asynkront dokumentarkiv och kan inte blockera en inskickad motion.', 'ssf-member-portal'); ?></p>
             <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr($notice['type']); ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?></p></div><?php endif; ?>
 

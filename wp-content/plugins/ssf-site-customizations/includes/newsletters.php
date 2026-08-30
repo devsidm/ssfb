@@ -21,6 +21,8 @@ const SSF_SITE_NEWSLETTER_IMPORT_LOG_OPTION = 'ssf_site_newsletter_import_log';
 
 function ssf_site_register_newsletter_post_type(): void
 {
+    $show_in_menu = class_exists('SSF_Admin_Navigation') ? false : true;
+
     register_post_type(
         SSF_SITE_NEWSLETTER_POST_TYPE,
         array(
@@ -40,6 +42,7 @@ function ssf_site_register_newsletter_post_type(): void
                 'item_updated' => __('Nyhetsbrevet är uppdaterat.', 'ssf-site'),
             ),
             'public' => true,
+            'show_in_menu' => $show_in_menu,
             'show_in_rest' => true,
             'has_archive' => 'nyhetsbrev',
             'rewrite' => array('slug' => 'nyhetsbrev', 'with_front' => false),
@@ -152,10 +155,33 @@ function ssf_site_sanitize_newsletter_settings($value): array
 
 function ssf_site_add_newsletter_submenus(): void
 {
+    if (class_exists('SSF_Admin_Navigation')) {
+        add_submenu_page(SSF_Admin_Navigation::CONTENT, __('Nyhetsbrev', 'ssf-site'), __('Nyhetsbrev', 'ssf-site'), 'edit_ssf_newsletters', 'edit.php?post_type=' . SSF_SITE_NEWSLETTER_POST_TYPE, '', 40);
+        add_submenu_page(null, __('Importera äldre nummer', 'ssf-site'), __('Importera äldre nummer', 'ssf-site'), 'manage_ssf_newsletters', 'ssf-newsletter-import', 'ssf_site_render_newsletter_import_page');
+        add_submenu_page(null, __('Inställningar för nyhetsbrev', 'ssf-site'), __('Inställningar', 'ssf-site'), 'manage_ssf_newsletters', 'ssf-newsletter-settings', 'ssf_site_render_newsletter_settings_page');
+        return;
+    }
+
     add_submenu_page('edit.php?post_type=' . SSF_SITE_NEWSLETTER_POST_TYPE, __('Importera äldre nummer', 'ssf-site'), __('Importera äldre nummer', 'ssf-site'), 'manage_ssf_newsletters', 'ssf-newsletter-import', 'ssf_site_render_newsletter_import_page');
     add_submenu_page('edit.php?post_type=' . SSF_SITE_NEWSLETTER_POST_TYPE, __('Inställningar för nyhetsbrev', 'ssf-site'), __('Inställningar', 'ssf-site'), 'manage_ssf_newsletters', 'ssf-newsletter-settings', 'ssf_site_render_newsletter_settings_page');
 }
 add_action('admin_menu', 'ssf_site_add_newsletter_submenus');
+
+function ssf_site_render_newsletter_admin_tabs(string $active): void
+{
+    $tabs = array(
+        'list' => array(__('Alla nyhetsbrev', 'ssf-site'), admin_url('edit.php?post_type=' . SSF_SITE_NEWSLETTER_POST_TYPE)),
+        'import' => array(__('Importera äldre nummer', 'ssf-site'), admin_url('admin.php?page=ssf-newsletter-import')),
+        'settings' => array(__('Inställningar', 'ssf-site'), admin_url('admin.php?page=ssf-newsletter-settings')),
+    );
+    ?>
+    <nav class="nav-tab-wrapper" aria-label="<?php esc_attr_e('Nyhetsbrev', 'ssf-site'); ?>">
+        <?php foreach ($tabs as $key => $tab) : ?>
+            <a class="nav-tab <?php echo $active === $key ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url($tab[1]); ?>"><?php echo esc_html($tab[0]); ?></a>
+        <?php endforeach; ?>
+    </nav>
+    <?php
+}
 
 function ssf_site_render_newsletter_settings_page(): void
 {
@@ -167,6 +193,7 @@ function ssf_site_render_newsletter_settings_page(): void
     ?>
     <div class="wrap">
         <h1><?php esc_html_e('Inställningar för nyhetsbrev', 'ssf-site'); ?></h1>
+        <?php ssf_site_render_newsletter_admin_tabs('settings'); ?>
         <form method="post" action="options.php">
             <?php settings_fields('ssf_site_newsletter_settings'); ?>
             <table class="form-table" role="presentation">
@@ -225,7 +252,8 @@ function ssf_site_enqueue_newsletter_admin_assets(string $hook): void
 {
     $screen = get_current_screen();
     $is_editor = $screen && SSF_SITE_NEWSLETTER_POST_TYPE === $screen->post_type && in_array($hook, array('post.php', 'post-new.php'), true);
-    $is_import = 'ssf_newsletter_page_ssf-newsletter-import' === $hook;
+    $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+    $is_import = 'ssf-newsletter-import' === $page;
     if (! $is_editor && ! $is_import) {
         return;
     }
@@ -722,6 +750,7 @@ function ssf_site_render_newsletter_import_page(): void
     ?>
     <div class="wrap ssf-newsletter-import">
         <h1><?php esc_html_e('Importera äldre nummer', 'ssf-site'); ?></h1>
+        <?php ssf_site_render_newsletter_admin_tabs('import'); ?>
         <?php if (is_array($result)) : ?>
             <div class="notice notice-success"><p><?php printf(esc_html__('Import klar. %1$d PDF valda, %2$d importerade, %3$d dubletter, %4$d fel.', 'ssf-site'), (int) $result['selected'], (int) $result['imported'], (int) $result['duplicates'], (int) $result['errors']); ?></p></div>
         <?php endif; ?>
@@ -782,7 +811,7 @@ function ssf_site_handle_newsletter_import(): void
     ssf_site_clear_newsletter_cache();
     ssf_site_add_newsletter_import_log($result);
     set_transient('ssf_site_newsletter_import_result_' . get_current_user_id(), $result, 60);
-    wp_safe_redirect(add_query_arg(array('post_type' => SSF_SITE_NEWSLETTER_POST_TYPE, 'page' => 'ssf-newsletter-import'), admin_url('edit.php')));
+    wp_safe_redirect(admin_url('admin.php?page=ssf-newsletter-import'));
     exit;
 }
 add_action('admin_post_ssf_import_newsletters', 'ssf_site_handle_newsletter_import');

@@ -23,6 +23,14 @@ class SSF_Medlemsfartyg_Admin
 
     public function admin_menu(): void
     {
+        if (class_exists('SSF_Admin_Navigation')) {
+            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, __('Mina fartyg', 'ssf-medlemsfartyg'), __('Mina fartyg', 'ssf-medlemsfartyg'), 'read', 'ssf-mina-fartyg', array(SSF_Medlemsfartyg_Plugin::instance()->owner_dashboard, 'render'), 60);
+            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, __('Insamlingslänkar', 'ssf-medlemsfartyg'), __('Insamlingslänkar', 'ssf-medlemsfartyg'), 'manage_options', 'ssf-insamlingslankar', array(SSF_Medlemsfartyg_Plugin::instance()->tokens, 'render_links_page'), 70);
+            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, __('Inställningar för medlemsfartyg', 'ssf-medlemsfartyg'), __('Fartygsinställningar', 'ssf-medlemsfartyg'), 'manage_options', 'ssf-medlemsfartyg-settings', array($this, 'settings_page'), 90);
+            add_submenu_page(null, __('Exportera CSV', 'ssf-medlemsfartyg'), __('Exportera CSV', 'ssf-medlemsfartyg'), 'export_ssf_ships', 'ssf-medlemsfartyg-export', array(SSF_Medlemsfartyg_Plugin::instance()->export, 'render_page'));
+            return;
+        }
+
         add_submenu_page('edit.php?post_type=medlemsfartyg', __('Mina fartyg', 'ssf-medlemsfartyg'), __('Mina fartyg', 'ssf-medlemsfartyg'), 'read', 'ssf-mina-fartyg', array(SSF_Medlemsfartyg_Plugin::instance()->owner_dashboard, 'render'));
         add_submenu_page('edit.php?post_type=medlemsfartyg', __('Insamlingslänkar', 'ssf-medlemsfartyg'), __('Insamlingslänkar', 'ssf-medlemsfartyg'), 'manage_options', 'ssf-insamlingslankar', array(SSF_Medlemsfartyg_Plugin::instance()->tokens, 'render_links_page'));
         add_submenu_page('edit.php?post_type=medlemsfartyg', __('Inställningar', 'ssf-medlemsfartyg'), __('Inställningar', 'ssf-medlemsfartyg'), 'manage_options', 'ssf-medlemsfartyg-settings', array($this, 'settings_page'));

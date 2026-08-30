@@ -226,13 +226,19 @@ function ssf_site_content_groups(): array
 
 function ssf_site_content_admin_menu(): void
 {
+    if (class_exists('SSF_Admin_Navigation')) {
+        add_submenu_page(SSF_Admin_Navigation::CONTENT, 'Webbinnehåll', 'Webbinnehåll', 'manage_options', 'ssf-webbinnehall', 'ssf_site_content_admin_page', 20);
+        return;
+    }
+
     add_menu_page('Webbinnehåll', 'Webbinnehåll', 'manage_options', 'ssf-webbinnehall', 'ssf_site_content_admin_page', 'dashicons-admin-customizer', 24);
 }
 add_action('admin_menu', 'ssf_site_content_admin_menu');
 
 function ssf_site_content_admin_assets(string $hook): void
 {
-    if ('toplevel_page_ssf-webbinnehall' !== $hook) {
+    $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+    if ('ssf-webbinnehall' !== $page) {
         return;
     }
     wp_enqueue_media();

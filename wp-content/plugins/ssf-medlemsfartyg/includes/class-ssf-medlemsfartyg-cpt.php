@@ -21,6 +21,8 @@ class SSF_Medlemsfartyg_CPT
 
     public function register(): void
     {
+        $menu_parent = class_exists('SSF_Admin_Navigation') ? SSF_Admin_Navigation::MEMBERSHIP : true;
+
         register_post_type(
             self::POST_TYPE,
             array(
@@ -33,6 +35,7 @@ class SSF_Medlemsfartyg_CPT
                     'search_items' => __('Sök medlemsfartyg', 'ssf-medlemsfartyg'),
                 ),
                 'public' => true,
+                'show_in_menu' => $menu_parent,
                 'has_archive' => true,
                 'show_in_rest' => true,
                 'menu_icon' => 'dashicons-sos',
@@ -47,13 +50,14 @@ class SSF_Medlemsfartyg_CPT
             'ssf_ship_submission',
             array(
                 'labels' => array(
-                    'name' => __('Inskickade uppgifter', 'ssf-medlemsfartyg'),
+                    'name' => __('Inskickade fartygsuppgifter', 'ssf-medlemsfartyg'),
                     'singular_name' => __('Inskickad uppgift', 'ssf-medlemsfartyg'),
+                    'menu_name' => __('Inskickade fartygsuppgifter', 'ssf-medlemsfartyg'),
                     'edit_item' => __('Granska inskickade uppgifter', 'ssf-medlemsfartyg'),
                 ),
                 'public' => false,
                 'show_ui' => true,
-                'show_in_menu' => 'edit.php?post_type=medlemsfartyg',
+                'show_in_menu' => class_exists('SSF_Admin_Navigation') ? SSF_Admin_Navigation::MEMBERSHIP : 'edit.php?post_type=medlemsfartyg',
                 'menu_icon' => 'dashicons-clipboard',
                 'supports' => array('title', 'editor', 'custom-fields'),
                 'capability_type' => 'post',

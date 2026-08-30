@@ -33,7 +33,7 @@ final class Admin
 
     public function register_menu(string $parent): void
     {
-        add_submenu_page($parent, __('Årsmöten', 'ssf-member-portal'), __('Årsmöten', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'edit.php?post_type=' . Module::POST_TYPE);
+        add_submenu_page($parent, __('Alla årsmöten', 'ssf-member-portal'), __('Alla årsmöten', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'edit.php?post_type=' . Module::POST_TYPE);
         add_submenu_page($parent, __('Lägg till årsmöte', 'ssf-member-portal'), __('Lägg till årsmöte', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'post-new.php?post_type=' . Module::POST_TYPE);
         add_submenu_page($parent, __('Anmälningar', 'ssf-member-portal'), __('Anmälningar', 'ssf-member-portal'), Capabilities::MANAGE_ANNUAL_MEETINGS, 'ssf-member-portal-meeting-registrations', array($this, 'dashboard'));
     }

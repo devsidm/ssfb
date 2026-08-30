@@ -203,6 +203,12 @@ class SSF_Medlemsprocess_Admin
 
     public function add_menu_pages(): void
     {
+        if (class_exists('SSF_Admin_Navigation')) {
+            add_submenu_page(null, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
+            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Inställningar för medlemsprocessen', 'Processinställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'), 80);
+            return;
+        }
+
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Inställningar', 'Inställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'));
     }
@@ -227,7 +233,7 @@ class SSF_Medlemsprocess_Admin
         $raw = (array) wp_unslash($_POST['settings'] ?? array()); $settings = SSF_Medlemsprocess_Plugin::settings();
         $notification_email = sanitize_email($raw['application_notification_email'] ?? ''); $settings['application_notification_email'] = $notification_email ?: $settings['application_notification_email']; $settings['admin_email'] = sanitize_email($raw['admin_email'] ?? $settings['admin_email']); $settings['token_days'] = max(1, min(730, (int) ($raw['token_days'] ?? $settings['token_days']))); $settings['max_image_mb'] = max(1, min(32, (int) ($raw['max_image_mb'] ?? $settings['max_image_mb']))); $settings['max_file_mb'] = max(1, min(32, (int) ($raw['max_file_mb'] ?? $settings['max_file_mb'])));
         $settings['templates'] = array(); foreach ((array) ($raw['templates'] ?? array()) as $key => $template) { if (isset(SSF_Medlemsprocess_Emails::templates()[$key])) { $settings['templates'][$key] = array('subject' => sanitize_text_field($template['subject'] ?? ''), 'body' => sanitize_textarea_field($template['body'] ?? '')); } }
-        update_option('ssf_medlemsprocess_settings', $settings, false); wp_safe_redirect(add_query_arg('updated', '1', admin_url('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE . '&page=ssf-medlemsprocess-settings'))); exit;
+        update_option('ssf_medlemsprocess_settings', $settings, false); wp_safe_redirect(add_query_arg('updated', '1', admin_url('admin.php?page=ssf-medlemsprocess-settings'))); exit;
     }
 
     public function export_memlist(): void

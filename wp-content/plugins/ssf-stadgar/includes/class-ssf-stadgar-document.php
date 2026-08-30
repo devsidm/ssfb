@@ -24,6 +24,8 @@ class SSF_Stadgar_Document
 
     public function register(): void
     {
+        $show_in_menu = class_exists('SSF_Admin_Navigation') ? false : 'ssf';
+
         register_post_type(
             self::POST_TYPE,
             array(
@@ -43,7 +45,7 @@ class SSF_Stadgar_Document
                 ),
                 'public'             => false,
                 'show_ui'            => true,
-                'show_in_menu'       => 'ssf',
+                'show_in_menu'       => $show_in_menu,
                 'show_in_rest'       => true,
                 'rest_base'          => 'ssf-documents',
                 'menu_icon'          => 'dashicons-media-document',

@@ -124,6 +124,12 @@ final class Admin
 
     public function menu(): void
     {
+        if (class_exists('SSF_Admin_Navigation')) {
+            add_submenu_page(\SSF_Admin_Navigation::CONTENT, __('Kalender', 'ssf-calendar'), __('Kalender', 'ssf-calendar'), 'edit_posts', 'ssf-calendar-events', array($this, 'overview'), 50);
+            add_submenu_page(null, __('Kalenderinställningar', 'ssf-calendar'), __('Inställningar', 'ssf-calendar'), 'edit_posts', 'ssf-calendar-settings', array($this, 'settings_page'));
+            return;
+        }
+
         add_menu_page(__('Kalender', 'ssf-calendar'), __('Kalender', 'ssf-calendar'), 'edit_posts', 'ssf-calendar-events', array($this, 'overview'), 'dashicons-calendar-alt', 26);
         add_submenu_page('ssf-calendar-events', __('Alla event', 'ssf-calendar'), __('Alla event', 'ssf-calendar'), 'edit_posts', 'ssf-calendar-events', array($this, 'overview'));
         add_submenu_page('ssf-calendar-events', __('Lägg till event', 'ssf-calendar'), __('Lägg till event', 'ssf-calendar'), 'edit_posts', 'post-new.php?post_type=' . EventPostType::POST_TYPE);

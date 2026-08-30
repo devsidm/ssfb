@@ -3,7 +3,7 @@
  * Plugin Name: SSF Microsoft 365 Mailer
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Skickar WordPress e-post via Microsoft 365 och Microsoft Graph med OAuth 2.0.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: SIDM
  * Text Domain: ssf-office365-mailer
  * Requires at least: 5.8
@@ -49,6 +49,18 @@ final class SSF_Office365_Mailer
 
     public function register_settings_page(): void
     {
+        if (class_exists('SSF_Admin_Navigation')) {
+            add_submenu_page(
+                null,
+                __('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'),
+                __('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'),
+                'manage_options',
+                self::MENU_SLUG,
+                array($this, 'render_settings_page')
+            );
+            return;
+        }
+
         add_options_page(
             __('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'),
             __('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'),
@@ -149,6 +161,7 @@ final class SSF_Office365_Mailer
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'); ?></h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs(self::MENU_SLUG); } ?>
             <p><?php esc_html_e('Skickar WordPress e-post via den Microsoft 365-postlåda som godkänner anslutningen.', 'ssf-office365-mailer'); ?></p>
 
             <form method="post" action="options.php">
@@ -646,7 +659,8 @@ final class SSF_Office365_Mailer
 
     private function redirect_to_settings(): void
     {
-        wp_safe_redirect(admin_url('options-general.php?page=' . self::MENU_SLUG));
+        $path = class_exists('SSF_Admin_Navigation') ? 'admin.php?page=' : 'options-general.php?page=';
+        wp_safe_redirect(admin_url($path . self::MENU_SLUG));
         exit;
     }
 }

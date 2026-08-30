@@ -1,8 +1,20 @@
 # SSF Admin Navigation - inventering och förslag
 
-Datum: 2026-08-29
+Datum: 2026-08-30
 
-Status: Fas 1-5 klara. Detta dokument är granskningspunkten före implementation.
+Status: Implementerad för DEV. Meny-slugs, capabilities och publika funktioner är bevarade.
+
+## Implementerad struktur
+
+Den centrala navigationen registreras av `wp-content/mu-plugins/ssf-admin-navigation.php`. Befintliga plugin registrerar sina verksamhetssidor under de nya parent-sluggarna, medan tekniska System-sidor ligger kvar på samma page-slugs men presenteras som flikar.
+
+- `SSF`: Översikt och System
+- `Innehåll`: Webbinnehåll, Nyheter, Nyhetsbrev, Kalender, Stadgar & dokument
+- `Medlemskap`: Ansökningar, Äldre ansökningar, Medlemsfartyg, inskickade uppgifter och fartygsverktyg
+- `Årsmöten`: översikt, årsmöten, anmälningar, motioner och verksamhetsinställningar
+- `Kommunikation`: Kontaktmeddelanden
+
+Gamla GET-länkar till flyttade admin-sidor omdirigeras till motsvarande `admin.php?page=...`. POST-actions, REST/AJAX, CPT-nycklar, publika URL:er och datamodeller är oförändrade.
 
 ## Avgränsning
 
@@ -18,11 +30,9 @@ Följande ska inte ändras i implementationen:
 - befintliga capabilities eller vilka åtgärder de ger tillgång till
 - frontendmallar eller frontend-CSS
 
-Arbetskopian innehåller redan ocommittade ändringar för Release Controls och Nyhetsbrev. De ska bevaras och implementationen ska byggas ovanpå dem.
+## Tidigare menyträd
 
-## Nuvarande menyträd
-
-Den faktiska ordningen kan variera med pluginens laddningsordning. En administratör får i huvudsak följande SSF-relaterade toppmenyer:
+Före implementationen varierade den faktiska ordningen med pluginens laddningsordning. En administratör fick i huvudsak följande SSF-relaterade toppmenyer:
 
 ```text
 Webbinnehåll

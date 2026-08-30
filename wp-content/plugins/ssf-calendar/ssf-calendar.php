@@ -3,7 +3,7 @@
  * Plugin Name: SSF Kalender
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Kalender för SSF:s aktiviteter med direktvisning av aktiva årsmöten.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: SIDM
  * Text Domain: ssf-calendar
  * Requires at least: 6.0
@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_CALENDAR_VERSION', '0.1.1');
+define('SSF_CALENDAR_VERSION', '0.1.2');
 define('SSF_CALENDAR_FILE', __FILE__);
 define('SSF_CALENDAR_PATH', plugin_dir_path(__FILE__));
 define('SSF_CALENDAR_URL', plugin_dir_url(__FILE__));

@@ -248,7 +248,7 @@ final class SSF_Release_Manager
 
     public static function register_admin_page(): void
     {
-        add_submenu_page('ssf', 'SSF Release', 'Release', self::CAPABILITY, 'ssf-release', array(__CLASS__, 'render_admin_page'));
+        add_submenu_page(class_exists('SSF_Admin_Navigation') ? null : 'ssf', 'SSF Release', 'Release', self::CAPABILITY, 'ssf-release', array(__CLASS__, 'render_admin_page'));
     }
 
     public static function register_dashboard_widget(): void
@@ -292,6 +292,7 @@ final class SSF_Release_Manager
         ?>
         <div class="wrap ssf-release-admin">
             <h1>SSF Release</h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-release'); } ?>
             <?php if ($updated) : ?><div class="notice notice-success is-dismissible"><p>Releaseinformationen har sparats.</p></div><?php endif; ?>
             <?php if ($error) : ?><div class="notice notice-error"><p><?php echo esc_html(self::error_message($error)); ?></p></div><?php endif; ?>
             <section class="ssf-release-current">
@@ -900,7 +901,7 @@ final class SSF_Feature_Manager
 
     public static function register_admin_page(): void
     {
-        add_submenu_page('ssf', 'SSF Funktioner', 'Funktioner', self::CAPABILITY, 'ssf-features', array(__CLASS__, 'render_admin_page'));
+        add_submenu_page(class_exists('SSF_Admin_Navigation') ? null : 'ssf', 'SSF Funktioner', 'Funktioner', self::CAPABILITY, 'ssf-features', array(__CLASS__, 'render_admin_page'));
     }
 
     public static function render_admin_page(): void
@@ -915,6 +916,7 @@ final class SSF_Feature_Manager
         ?>
         <div class="wrap ssf-feature-admin">
             <h1>SSF Funktioner</h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-features'); } ?>
             <div class="ssf-feature-environment ssf-feature-environment--<?php echo esc_attr(SSF_Environment::get_environment()); ?>">
                 <strong>Miljö: <?php echo esc_html(SSF_Environment::label()); ?></strong>
                 <?php if (SSF_Environment::is_production()) : ?><p>Du ändrar funktioner på den publika webbplatsen.</p><?php else : ?><p>Inställningarna gäller endast denna WordPress-installation.</p><?php endif; ?>
