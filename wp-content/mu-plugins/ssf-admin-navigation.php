@@ -301,7 +301,7 @@ final class SSF_Admin_Navigation
         if (isset(self::SYSTEM_PAGES[$page])) {
             return self::ROOT;
         }
-        if (in_array($page, array('ssf-webbinnehall', 'ssf-calendar-events', 'ssf-calendar-settings', 'ssf-newsletter-import', 'ssf-newsletter-settings', 'ssf-stadgar-settings'), true) || in_array($post_type, array('post', 'ssf_newsletter', 'ssf_event', 'ssf_document'), true)) {
+        if (in_array($page, array('ssf-webbinnehall', 'ssf-calendar-events', 'ssf-calendar-settings', 'ssf-newsletter-editor', 'ssf-newsletter-import', 'ssf-newsletter-settings', 'ssf-stadgar-settings'), true) || in_array($post_type, array('post', 'ssf_newsletter', 'ssf_event', 'ssf_document'), true)) {
             return self::CONTENT;
         }
         if (in_array($page, array('ssf-medlemsprocess-overview', 'ssf-medlemsprocess-settings', 'ssf-mina-fartyg', 'ssf-insamlingslankar', 'ssf-medlemsfartyg-settings', 'ssf-medlemsfartyg-export'), true) || in_array($post_type, array('ssf_application', 'ssf_ansokan', 'medlemsfartyg', 'ssf_ship_submission'), true)) {
@@ -321,7 +321,7 @@ final class SSF_Admin_Navigation
         if (isset(self::SYSTEM_PAGES[$page])) {
             return self::SYSTEM;
         }
-        if (in_array($page, array('ssf-newsletter-import', 'ssf-newsletter-settings'), true) || 'ssf_newsletter' === $post_type) {
+        if (in_array($page, array('ssf-newsletter-editor', 'ssf-newsletter-import', 'ssf-newsletter-settings'), true) || 'ssf_newsletter' === $post_type) {
             return 'edit.php?post_type=ssf_newsletter';
         }
         if ('ssf-calendar-settings' === $page || 'ssf_event' === $post_type) {
@@ -429,6 +429,7 @@ final class SSF_Admin_Navigation
         ?>
         <div class="ssf-admin-tools">
             <?php if (current_user_can('manage_ssf_newsletters')) : ?>
+                <a class="button button-primary" href="<?php echo esc_url(admin_url('admin.php?page=ssf-newsletter-editor')); ?>">Lägg till nyhetsbrev</a>
                 <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-newsletter-import')); ?>">Importera nyhetsbrev</a>
                 <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-newsletter-settings')); ?>">Nyhetsbrevsinställningar</a>
             <?php endif; ?>

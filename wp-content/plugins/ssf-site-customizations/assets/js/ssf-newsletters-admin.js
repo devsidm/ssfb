@@ -13,9 +13,23 @@
 
     frame.on("select", function () {
       var attachment = frame.state().get("selection").first().toJSON();
+      var parsed = parseNewsletterFilename(attachment.filename || attachment.title);
       $("[data-ssf-newsletter-pdf-id]").val(attachment.id);
       $("[data-ssf-newsletter-pdf-name]").text(attachment.filename || attachment.title);
+      $("[data-ssf-newsletter-pdf-size]").text(attachment.filesizeHumanReadable || "");
+      $("[data-ssf-newsletter-pdf-link]").attr("href", attachment.url || "").prop("hidden", !attachment.url);
       $("[data-ssf-remove-newsletter-pdf]").prop("disabled", false);
+
+      if ($(".ssf-newsletter-editor__form").length && !$("#newsletter-title").val()) {
+        $("#newsletter-title").val(parsed.title);
+        $("#ssf-newsletter-series").val(parsed.series);
+        $("#ssf-newsletter-issue").val(parsed.issue);
+        if (parsed.year) {
+          $("[data-ssf-newsletter-year-only]").prop("checked", true);
+          $("#ssf-newsletter-year").val(parsed.year);
+          syncYearOnly();
+        }
+      }
     });
 
     frame.open();
@@ -25,13 +39,46 @@
     event.preventDefault();
     $("[data-ssf-newsletter-pdf-id]").val("");
     $("[data-ssf-newsletter-pdf-name]").text("Ingen PDF vald.");
+    $("[data-ssf-newsletter-pdf-size]").text("");
+    $("[data-ssf-newsletter-pdf-link]").attr("href", "").prop("hidden", true);
+    $(this).prop("disabled", true);
+  });
+
+  $(document).on("click", "[data-ssf-select-newsletter-cover]", function (event) {
+    event.preventDefault();
+
+    var frame = wp.media({
+      title: "Välj omslagsbild",
+      button: { text: "Använd denna bild" },
+      library: { type: "image" },
+      multiple: false
+    });
+
+    frame.on("select", function () {
+      var attachment = frame.state().get("selection").first().toJSON();
+      var preview = attachment.sizes && attachment.sizes.medium ? attachment.sizes.medium.url : attachment.url;
+      $("[data-ssf-newsletter-cover-id]").val(attachment.id);
+      $("[data-ssf-newsletter-cover-preview]").html(preview ? '<img src="' + preview + '" alt="">' : "");
+      $("[data-ssf-remove-newsletter-cover]").prop("disabled", false);
+    });
+
+    frame.open();
+  });
+
+  $(document).on("click", "[data-ssf-remove-newsletter-cover]", function (event) {
+    event.preventDefault();
+    $("[data-ssf-newsletter-cover-id]").val("");
+    $("[data-ssf-newsletter-cover-preview]").empty();
     $(this).prop("disabled", true);
   });
 
   function syncYearOnly() {
     var yearOnly = $("[data-ssf-newsletter-year-only]").is(":checked");
     $("#ssf-newsletter-date").prop("disabled", yearOnly);
+    $("[data-ssf-newsletter-date-field]").toggle(!yearOnly);
     $("[data-ssf-newsletter-year-field]").toggle(yearOnly);
+    $("#ssf-newsletter-year").prop("required", yearOnly);
+    $("#ssf-newsletter-date").prop("required", !yearOnly);
     if (!yearOnly && $("#ssf-newsletter-date").val()) {
       $("#ssf-newsletter-year").val($("#ssf-newsletter-date").val().slice(0, 4));
     }
