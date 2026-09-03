@@ -556,7 +556,9 @@ final class Module
                 'order' => max(0, absint($row['order'] ?? count($program))),
             );
         }
-        usort($program, static function (array $a, array $b): int { return $a['order'] <=> $b['order']; });
+        usort($program, static function (array $a, array $b): int {
+            return ((int) $a['day'] <=> (int) $b['day']) ?: ((int) $a['order'] <=> (int) $b['order']);
+        });
         return $program;
     }
 
@@ -709,7 +711,9 @@ final class Module
             }
             $program[] = $item;
         }
-        usort($program, static function (array $a, array $b): int { return (int) $a['order'] <=> (int) $b['order']; });
+        usort($program, static function (array $a, array $b): int {
+            return ((int) $a['day'] <=> (int) $b['day']) ?: ((int) $a['order'] <=> (int) $b['order']);
+        });
         return $program;
     }
 
