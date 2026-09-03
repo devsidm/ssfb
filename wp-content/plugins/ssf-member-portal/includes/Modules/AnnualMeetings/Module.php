@@ -16,16 +16,18 @@ final class Module
 
     private RegistrationPostType $registrations;
     private RegistrationService $registration_service;
+    private CalendarService $calendar;
     private Admin $admin;
     private Editor $editor;
 
     public function __construct()
     {
         $this->registrations = new RegistrationPostType();
-        $this->registration_service = new RegistrationService($this, new RegistrationMailer(), new RegistrationExport(), new SharePoint(new GraphClient(new Authentication())));
+        $this->calendar = new CalendarService($this);
+        $this->registration_service = new RegistrationService($this, $this->calendar, new RegistrationMailer(), new RegistrationExport(), new SharePoint(new GraphClient(new Authentication())));
         $this->admin = new Admin($this, $this->registration_service);
         $this->editor = new Editor($this, $this->registration_service);
-        new Frontend($this, $this->registration_service);
+        new Frontend($this, $this->registration_service, $this->calendar);
 
         add_action('add_meta_boxes_' . self::POST_TYPE, array($this, 'add_meta_box'));
         add_action('save_post_' . self::POST_TYPE, array($this, 'save'), 10, 2);

@@ -35,6 +35,15 @@
     message.focus();
   });
 
+  document.querySelectorAll('.ssf-am-calendar-menu').forEach(function (menu) {
+    menu.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && menu.open) {
+        menu.open = false;
+        menu.querySelector('summary').focus();
+      }
+    });
+  });
+
   document.querySelectorAll('.ssf-am-form').forEach(function (form) {
     refreshRelations(form);
     refreshFood(form);

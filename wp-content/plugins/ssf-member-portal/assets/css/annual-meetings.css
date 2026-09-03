@@ -12,6 +12,13 @@
 .ssf-am-lead { font-size: 1.05rem; }
 .ssf-am-lead { max-width: 45rem; line-height: 1.65; }
 .ssf-am-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
+.ssf-am-calendar-menu { position: relative; }
+.ssf-am-calendar-menu summary { list-style: none; }
+.ssf-am-calendar-menu summary::-webkit-details-marker { display: none; }
+.ssf-am-calendar-menu[open] summary { background: #eef7f7; }
+.ssf-am-calendar-menu__options { position: absolute; z-index: 3; top: calc(100% + .4rem); left: 0; display: grid; min-width: 15rem; padding: .35rem; border: 1px solid #92a6b5; border-radius: 2px; background: #fff; box-shadow: 0 .5rem 1.25rem rgba(16, 47, 87, .16); }
+.ssf-am-calendar-menu__options a { padding: .65rem .75rem; color: #0c5865; font-weight: 700; text-decoration: none; }
+.ssf-am-calendar-menu__options a:hover, .ssf-am-calendar-menu__options a:focus { background: #eef7f7; outline: 0; }
 .ssf-am-facts, .ssf-am-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 1.5rem 0; border-top: 1px solid #c9d7df; }
 .ssf-am-facts div, .ssf-am-summary div { padding: .9rem 0; border-bottom: 1px solid #c9d7df; }
 .ssf-am-facts dt, .ssf-am-summary dt { color: #536677; font-size: .86rem; font-weight: 700; }
@@ -83,4 +90,4 @@
 .ssf-am-button--secondary:hover { background: #eef7f7; }
 .ssf-am-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .ssf-am-cancel { margin-top: 1.5rem; }
-@media (max-width: 600px) { .ssf-am-grid, .ssf-am-facts, .ssf-am-summary, .ssf-am-options, .ssf-am-callout { grid-template-columns: 1fr; }.ssf-am-program li, .ssf-am-activity { grid-template-columns: 1fr; gap: .5rem; }.ssf-am-program span, .ssf-am-activity__meta { text-align: left; }.ssf-am-section-heading { align-items: flex-start; flex-direction: column; gap: .55rem; }.ssf-am-documents a { display: block; }.ssf-am-documents span { display: block; margin-top: .2rem; text-align: left; }.ssf-am-archive__past li { display: block; }.ssf-am-archive__past span { display: block; margin-top: .25rem; text-align: left; } }
+@media (max-width: 600px) { .ssf-am-grid, .ssf-am-facts, .ssf-am-summary, .ssf-am-options, .ssf-am-callout { grid-template-columns: 1fr; }.ssf-am-program li, .ssf-am-activity { grid-template-columns: 1fr; gap: .5rem; }.ssf-am-program span, .ssf-am-activity__meta { text-align: left; }.ssf-am-section-heading { align-items: flex-start; flex-direction: column; gap: .55rem; }.ssf-am-documents a { display: block; }.ssf-am-documents span { display: block; margin-top: .2rem; text-align: left; }.ssf-am-archive__past li { display: block; }.ssf-am-archive__past span { display: block; margin-top: .25rem; text-align: left; }.ssf-am-calendar-menu { width: 100%; }.ssf-am-calendar-menu summary { width: 100%; }.ssf-am-calendar-menu__options { right: 0; left: 0; min-width: 0; } }

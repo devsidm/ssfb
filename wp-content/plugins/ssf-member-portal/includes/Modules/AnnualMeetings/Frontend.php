@@ -12,12 +12,14 @@ final class Frontend
 {
     private Module $meetings;
     private RegistrationService $registrations;
+    private CalendarService $calendar;
     private MotionDeadline $motions;
 
-    public function __construct(Module $meetings, RegistrationService $registrations)
+    public function __construct(Module $meetings, RegistrationService $registrations, CalendarService $calendar)
     {
         $this->meetings = $meetings;
         $this->registrations = $registrations;
+        $this->calendar = $calendar;
         $this->motions = new MotionDeadline($meetings);
         add_shortcode('ssf_member_portal_annual_meeting', array($this, 'meeting_shortcode'));
         add_shortcode('ssf_member_portal_annual_meetings', array($this, 'archive_shortcode'));
@@ -54,7 +56,7 @@ final class Frontend
         $contact_url = $this->contact_url($meeting);
         $choices = (array) $registration_state['choices'];
         $choice_states = (array) $registration_state['choice_states'];
-        $calendar_url = $this->meetings->calendar_url((int) $meeting['id']);
+        $calendar = $this->calendar->urls($meeting);
         $motion = $this->motions->state($meeting);
         ob_start();
         include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/meeting.php';
@@ -196,10 +198,15 @@ final class Frontend
             status_header(404);
             exit;
         }
+        $meeting = $this->meetings->data((int) $registration->post_parent);
+        if (! $this->calendar->event_data($meeting)) {
+            status_header(404);
+            exit;
+        }
         nocache_headers();
         header('Content-Type: text/calendar; charset=utf-8');
-        header('Content-Disposition: attachment; filename="ssf-arsmote.ics"');
-        echo $this->registrations->calendar($registration); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        header('Content-Disposition: attachment; filename="ssf-arsmoteshelg-' . (int) $meeting['year'] . '.ics"');
+        echo $this->calendar->ics($meeting); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         exit;
     }
 
@@ -216,14 +223,14 @@ final class Frontend
             exit;
         }
         $meeting = $this->meetings->data($meeting_id);
-        if (! $this->is_publicly_configured($post, $meeting) || ! $this->meetings->module_enabled($meeting, 'calendar')) {
+        if (! $this->is_publicly_configured($post, $meeting) || ! $this->meetings->module_enabled($meeting, 'calendar') || ! $this->calendar->event_data($meeting)) {
             status_header(404);
             exit;
         }
         nocache_headers();
         header('Content-Type: text/calendar; charset=utf-8');
         header('Content-Disposition: attachment; filename="ssf-arsmoteshelg-' . (int) $meeting['year'] . '.ics"');
-        echo $this->registrations->calendar_for_meeting($meeting_id); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        echo $this->calendar->ics($meeting); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         exit;
     }
 

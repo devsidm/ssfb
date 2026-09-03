@@ -23,13 +23,15 @@ final class RegistrationService
     public const AVAILABILITY_SOLD_OUT = 'sold_out';
 
     private Module $meetings;
+    private CalendarService $calendar;
     private RegistrationMailer $mailer;
     private RegistrationExport $export;
     private SharePoint $sharepoint;
 
-    public function __construct(Module $meetings, RegistrationMailer $mailer, RegistrationExport $export, SharePoint $sharepoint)
+    public function __construct(Module $meetings, CalendarService $calendar, RegistrationMailer $mailer, RegistrationExport $export, SharePoint $sharepoint)
     {
         $this->meetings = $meetings;
+        $this->calendar = $calendar;
         $this->mailer = $mailer;
         $this->export = $export;
         $this->sharepoint = $sharepoint;
@@ -410,34 +412,7 @@ final class RegistrationService
 
     public function calendar_for_meeting(int $meeting_id): string
     {
-        $meeting = $this->meetings->data($meeting_id);
-        $year = (int) $meeting['year'];
-        $uid = 'annual-meeting-' . $meeting_id . '@ssfb.se';
-        $description = trim((string) $meeting['calendar_description']);
-        if (! $description) {
-            $description = (string) $meeting['intro'];
-        }
-        $meeting_url = $this->meetings->meeting_url(array('meeting' => $meeting_id));
-        $description .= "\n" . $meeting_url;
-        return implode("\r\n", array(
-            'BEGIN:VCALENDAR',
-            'VERSION:2.0',
-            'PRODID:-//Sveriges Segelfartygsförbund//Årsmöte//SV',
-            'CALSCALE:GREGORIAN',
-            'METHOD:PUBLISH',
-            'BEGIN:VEVENT',
-            'UID:' . $uid,
-            'DTSTAMP:' . gmdate('Ymd\\THis\\Z'),
-            'DTSTART:' . gmdate('Ymd\\THis\\Z', (int) $meeting['start_at']),
-            'DTEND:' . gmdate('Ymd\\THis\\Z', (int) ($meeting['end_at'] ?: $meeting['start_at'] + HOUR_IN_SECONDS)),
-            'SUMMARY:' . $this->ics((string) ($meeting['calendar_title'] ?: 'SSF Årsmöte ' . $year)),
-            'LOCATION:' . $this->ics(trim((string) $meeting['location'] . ' ' . (string) $meeting['address'])),
-            'DESCRIPTION:' . $this->ics($description),
-            'URL:' . esc_url_raw($meeting_url),
-            'END:VEVENT',
-            'END:VCALENDAR',
-            '',
-        ));
+        return $this->calendar->ics($this->meetings->data($meeting_id));
     }
 
     public function calendar(\WP_Post $registration): string
@@ -788,8 +763,4 @@ final class RegistrationService
         wp_schedule_single_event($this->now() + $delays[$attempt], 'ssf_member_portal_sync_meeting_registrations', array($meeting_id, $attempt + 1));
     }
 
-    private function ics(string $value): string
-    {
-        return str_replace(array('\\', ';', ',', "\r\n", "\n", "\r"), array('\\\\', '\\;', '\\,', '\\n', '\\n', '\\n'), $value);
-    }
 }

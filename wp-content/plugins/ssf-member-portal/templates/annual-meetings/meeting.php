@@ -3,7 +3,7 @@
 /** @var WP_Post $meeting_post */
 /** @var array $choices */
 /** @var array $choice_states */
-/** @var string $calendar_url */
+/** @var array $calendar */
 /** @var array $registration_state */
 /** @var string $page_title */
 /** @var string $location_summary */
@@ -53,7 +53,17 @@ $format_time = static function (int $timestamp): string {
         <?php endif; ?>
         <?php if ($meeting['intro']) : ?><p class="ssf-am-lead"><?php echo esc_html($meeting['intro']); ?></p><?php endif; ?>
         <div class="ssf-am-actions">
-            <?php if ($this->meetings->module_enabled($meeting, 'calendar')) : ?><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($calendar_url); ?>"><?php esc_html_e('Lägg till helgen i kalendern', 'ssf-member-portal'); ?></a><?php endif; ?>
+            <?php if ($this->meetings->module_enabled($meeting, 'calendar') && $calendar) : ?>
+                <details class="ssf-am-calendar-menu">
+                    <summary class="ssf-am-button ssf-am-button--secondary"><?php esc_html_e('Lägg till i kalender', 'ssf-member-portal'); ?></summary>
+                    <div class="ssf-am-calendar-menu__options" aria-label="<?php esc_attr_e('Välj kalender', 'ssf-member-portal'); ?>">
+                        <a href="<?php echo esc_url($calendar['outlook']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Outlook', 'ssf-member-portal'); ?></a>
+                        <a href="<?php echo esc_url($calendar['google']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Google Kalender', 'ssf-member-portal'); ?></a>
+                        <a href="<?php echo esc_url($calendar['apple']); ?>"><?php esc_html_e('Apple Kalender / iCal', 'ssf-member-portal'); ?></a>
+                        <a href="<?php echo esc_url($calendar['ics']); ?>"><?php esc_html_e('Ladda ner kalenderfil (.ics)', 'ssf-member-portal'); ?></a>
+                    </div>
+                </details>
+            <?php endif; ?>
             <?php if ($show_invitation && ! empty($invitation['pdf_id'])) : ?><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url(wp_get_attachment_url((int) $invitation['pdf_id'])); ?>"><?php esc_html_e('Läs kallelsen', 'ssf-member-portal'); ?></a><?php elseif ($show_invitation) : ?><a class="ssf-am-button ssf-am-button--secondary" href="#ssf-am-invitation"><?php esc_html_e('Läs kallelsen', 'ssf-member-portal'); ?></a><?php endif; ?>
             <a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($contact_url); ?>"><?php esc_html_e('Kontakt', 'ssf-member-portal'); ?></a>
         </div>
