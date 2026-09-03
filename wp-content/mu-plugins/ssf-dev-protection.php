@@ -90,6 +90,10 @@ add_action('admin_init', 'ssf_dev_protection_send_robots_header', 0);
 add_action('login_head', 'ssf_dev_protection_login_head');
 add_action('template_redirect', 'ssf_dev_protection_require_login', 0);
 add_filter('wp_robots', 'ssf_dev_protection_robots');
+add_filter('rest_pre_serve_request', static function (bool $served): bool {
+    ssf_dev_protection_send_robots_header();
+    return $served;
+}, 100);
 add_filter('wp_sitemaps_enabled', static function (bool $enabled): bool {
     return ssf_dev_protection_enabled() ? false : $enabled;
 });
