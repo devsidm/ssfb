@@ -133,39 +133,16 @@ final class Module
         $registration_state = $this->registration_service->registration_state($meeting, $post);
         $warnings = array();
         if (! $meeting['start_at']) {
-            $warnings[] = __('Datum saknas.', 'ssf-member-portal');
+            $warnings[] = __('Välj startdatum för årsmöteshelgen.', 'ssf-member-portal');
         }
-        if (! $meeting['location']) {
-            $warnings[] = __('Plats saknas.', 'ssf-member-portal');
-        }
-        if ($meeting['registration_open'] && ! $meeting['registration_closes_at']) {
-            $warnings[] = __('Anmälan saknar deadline.', 'ssf-member-portal');
-        }
-        if (! $meeting['meeting_start_at']) {
-            $warnings[] = __('Själva årsmötets starttid saknas.', 'ssf-member-portal');
+        if ($meeting['registration_open'] && (bool) $meeting['registration_opens_at'] !== (bool) $meeting['registration_closes_at']) {
+            $warnings[] = __('Anmälningsperioden behöver både en öppnings- och en stängningstid.', 'ssf-member-portal');
         }
         if ($this->module_enabled($meeting, 'invitation') && empty($meeting['invitation']['text']) && empty($meeting['invitation']['pdf_id'])) {
             $warnings[] = __('Kallelsen är aktiv men saknar innehåll.', 'ssf-member-portal');
         }
-        if ($this->module_enabled($meeting, 'dinner') && empty($meeting['dinner']['start_at'])) {
-            $warnings[] = __('Middagen är aktiv men starttid saknas.', 'ssf-member-portal');
-        }
-        if ($this->module_enabled($meeting, 'dinner') && empty($meeting['dinner']['deadline'])) {
-            $warnings[] = __('Middagen är aktiv men deadline saknas.', 'ssf-member-portal');
-        }
-        if ($this->module_enabled($meeting, 'day2')) {
-            foreach ((array) $meeting['program'] as $item) {
-                if (empty($item['date']) || empty($item['start']) || empty($item['end'])) {
-                    $warnings[] = __('En programpunkt dag 2 saknar giltigt datum eller tid.', 'ssf-member-portal');
-                    break;
-                }
-            }
-        }
-        if (! $meeting['motion_opens_at'] || ! $meeting['motion_closes_at']) {
+        if ($this->module_enabled($meeting, 'motions') && (bool) $meeting['motion_opens_at'] !== (bool) $meeting['motion_closes_at']) {
             $warnings[] = __('Motionsperioden är inte komplett.', 'ssf-member-portal');
-        }
-        if (! has_post_thumbnail($post)) {
-            $warnings[] = __('Kalenderbild saknas.', 'ssf-member-portal');
         }
         ?>
         <p><strong><?php echo esc_html($post->post_status === 'publish' ? __('Publicerad', 'ssf-member-portal') : __('Utkast', 'ssf-member-portal')); ?></strong></p>
@@ -230,38 +207,58 @@ final class Module
             return;
         }
 
+        $current = $this->data($post_id);
         $year = min(2100, max(2000, absint($_POST['ssf_meeting_year'] ?? 0)));
-        $start_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_start_at'] ?? '')));
-        $end_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_end_at'] ?? '')));
-        if ($start_at && $end_at && $end_at <= $start_at) {
-            $end_at = 0;
+        $start_date = sanitize_text_field(wp_unslash($_POST['ssf_meeting_start_date'] ?? ''));
+        $start_at = $this->date_timestamp($start_date);
+        if (! $start_at) {
+            $start_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_start_at'] ?? '')));
         }
+        $duration_days = min(3, max(1, absint($_POST['ssf_meeting_duration_days'] ?? ($current['duration_days'] ?? 1))));
+        $end_at = $start_at ? $this->date_at_offset($start_at, $duration_days) : 0;
         $legacy_meeting_date = (string) get_post_meta($post_id, '_ssf_mp_meeting_date', true);
-        $opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_opens_at'] ?? '')));
-        $closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_closes_at'] ?? '')));
-        $registration_opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_opens_at'] ?? '')));
-        $registration_closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_closes_at'] ?? '')));
-        $meeting_start_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_session_start_at'] ?? '')));
-        $meeting_end_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_session_end_at'] ?? '')));
+        $opens_at = $this->date_timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_opens_on'] ?? '')));
+        $closes_at = $this->date_timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_closes_on'] ?? '')));
+        $registration_opens_at = $this->date_timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_opens_on'] ?? '')));
+        $registration_closes_at = $this->date_timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_closes_on'] ?? '')));
+        if (! $opens_at) {
+            $opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_opens_at'] ?? '')));
+        }
+        if (! $closes_at) {
+            $closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_closes_at'] ?? '')));
+        } else {
+            $closes_at = $this->date_at_offset($closes_at, 1) - 1;
+        }
+        if (! $registration_opens_at) {
+            $registration_opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_opens_at'] ?? '')));
+        }
+        if (! $registration_closes_at) {
+            $registration_closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_closes_at'] ?? '')));
+        } else {
+            $registration_closes_at = $this->date_at_offset($registration_closes_at, 1) - 1;
+        }
         if ($opens_at && $closes_at && $closes_at <= $opens_at) {
             $closes_at = 0;
         }
         if ($registration_opens_at && $registration_closes_at && $registration_closes_at <= $registration_opens_at) {
             $registration_closes_at = 0;
         }
-        if ($meeting_start_at && $meeting_end_at && $meeting_end_at <= $meeting_start_at) {
-            $meeting_end_at = 0;
-        }
         $modules = $this->sanitize_modules((array) wp_unslash($_POST['ssf_meeting_modules'] ?? array()));
         $invitation = $this->sanitize_invitation((array) wp_unslash($_POST['ssf_meeting_invitation'] ?? array()));
-        $dinner = $this->sanitize_dinner((array) wp_unslash($_POST['ssf_meeting_dinner'] ?? array()));
+        $dinner = isset($_POST['ssf_meeting_dinner']) ? $this->sanitize_dinner((array) wp_unslash($_POST['ssf_meeting_dinner'])) : $current['dinner'];
+        $program = $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array()), $start_at, $duration_days);
+        $program = $this->migrate_legacy_activities($program, $current, $start_at, $duration_days);
+        if ($program) {
+            $modules['day2'] = 1;
+        }
         $values = array(
             'year' => $year,
             'meeting_date' => $start_at ? wp_date('Y-m-d', $start_at, wp_timezone()) : $legacy_meeting_date,
             'start_at' => $start_at,
             'end_at' => $end_at,
-            'meeting_start_at' => $meeting_start_at,
-            'meeting_end_at' => $meeting_end_at,
+            'duration_days' => $duration_days,
+            'meeting_start_at' => (int) $current['meeting_start_at'],
+            'meeting_end_at' => (int) $current['meeting_end_at'],
             'location' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_location'] ?? '')),
             'address' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_address'] ?? '')),
             'postal_code' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_postal_code'] ?? '')),
@@ -275,9 +272,9 @@ final class Module
             'allow_late_motions' => ! empty($_POST['ssf_meeting_allow_late_motions']) ? 1 : 0,
             'motions_public' => ! empty($_POST['ssf_meeting_motions_public']) ? 1 : 0,
             'motion_instructions' => wp_kses_post(wp_unslash($_POST['ssf_meeting_motion_instructions'] ?? '')),
-            'motion_contact_email' => sanitize_email(wp_unslash($_POST['ssf_meeting_motion_contact_email'] ?? '')),
-            'contact_name' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_contact_name'] ?? '')),
-            'contact_email' => sanitize_email(wp_unslash($_POST['ssf_meeting_contact_email'] ?? '')),
+            'motion_contact_email' => (string) $current['motion_contact_email'],
+            'contact_name' => (string) $current['contact_name'],
+            'contact_email' => (string) $current['contact_email'],
             'registration_open' => ! empty($_POST['ssf_meeting_registration_open']) ? 1 : 0,
             'allow_guest' => ! empty($_POST['ssf_meeting_allow_guest']) ? 1 : 0,
             'allow_edits' => ! empty($_POST['ssf_meeting_allow_edits']) ? 1 : 0,
@@ -288,7 +285,7 @@ final class Module
             'modules' => $modules,
             'invitation' => $invitation,
             'dinner' => $dinner,
-            'program' => $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array()), $start_at, $end_at),
+            'program' => $program,
             'program_pdf_id' => $this->pdf_attachment_id(absint($_POST['ssf_meeting_program_pdf_id'] ?? 0)),
             'documents' => $this->sanitize_documents((array) wp_unslash($_POST['ssf_meeting_documents'] ?? array())),
             'food_options' => $this->lines(sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_food_options'] ?? ''))),
@@ -322,7 +319,10 @@ final class Module
         };
         $legacy_year = (int) get_post_meta($meeting_id, '_ssf_mp_meeting_year', true);
         $legacy_date = (string) get_post_meta($meeting_id, '_ssf_mp_meeting_date', true);
-        $program = (array) $meta('program', array());
+        $start_at = (int) $meta('start_at', 0);
+        $end_at = (int) $meta('end_at', 0);
+        $duration_days = $this->duration_days($start_at, $end_at, absint($meta('duration_days', 0)));
+        $program = $this->normalise_program((array) $meta('program', array()), $start_at, $duration_days);
         $documents = (array) $meta('documents', array());
         $invitation = wp_parse_args((array) $meta('invitation', array()), array('title' => 'Kallelse', 'text' => '', 'publish_at' => 0, 'pdf_id' => 0, 'visible' => 1));
         $dinner = wp_parse_args((array) $meta('dinner', array()), array('title' => 'Middag', 'start_at' => 0, 'end_at' => 0, 'opens_at' => 0, 'location' => '', 'description' => '', 'price' => '', 'deadline' => 0, 'capacity' => 0, 'food_enabled' => 1, 'manual_open' => 0));
@@ -331,7 +331,7 @@ final class Module
             'invitation' => ! empty($invitation['text']) || ! empty($invitation['pdf_id']),
             'meeting' => 1,
             'dinner' => ! empty($dinner['start_at']),
-            'day2' => ! empty($program),
+            'day2' => true,
             'motions' => (bool) $meta('motions_public', 1),
             'documents' => ! empty($documents),
             'calendar' => 1,
@@ -343,8 +343,9 @@ final class Module
             'motion_opens_at' => (int) $meta('motion_opens_at', (int) get_post_meta($meeting_id, '_ssf_mp_motion_opens_at', true)),
             'motion_closes_at' => (int) $meta('motion_closes_at', (int) get_post_meta($meeting_id, '_ssf_mp_motion_closes_at', true)),
             'sharepoint_folder' => (string) get_post_meta($meeting_id, '_ssf_mp_sharepoint_folder', true),
-            'start_at' => (int) $meta('start_at', 0),
-            'end_at' => (int) $meta('end_at', 0),
+            'start_at' => $start_at,
+            'end_at' => $end_at,
+            'duration_days' => $duration_days,
             'meeting_start_at' => (int) $meta('meeting_start_at', 0),
             'meeting_end_at' => (int) $meta('meeting_end_at', 0),
             'location' => (string) $meta('location', ''),
@@ -371,7 +372,7 @@ final class Module
             'modules' => array_map('boolval', $modules),
             'invitation' => $invitation,
             'dinner' => $dinner,
-            'program' => $this->normalise_program($program),
+            'program' => $program,
             'program_pdf_id' => (int) $meta('program_pdf_id', 0),
             'documents' => $documents,
             'food_options' => (array) $meta('food_options', array('Vegetariskt', 'Veganskt', 'Glutenfritt', 'Laktosfritt')),
@@ -440,7 +441,21 @@ final class Module
     public function registration_choices(array $meeting): array
     {
         $choices = array();
-        if ($this->module_enabled($meeting, 'dinner') && ! empty($meeting['dinner']['start_at'])) {
+        $has_program_dinner = false;
+        if ($this->module_enabled($meeting, 'day2')) {
+            foreach ((array) $meeting['program'] as $item) {
+                if (empty($item['visible']) || empty($item['requires_registration'])) {
+                    continue;
+                }
+                if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
+                    $has_program_dinner = true;
+                }
+                $starts_at = ! empty($item['date']) && ! empty($item['start']) ? $this->timestamp($item['date'] . 'T' . $item['start']) : 0;
+                $ends_at = ! empty($item['date']) && ! empty($item['end']) ? $this->timestamp($item['date'] . 'T' . $item['end']) : 0;
+                $choices[] = array_merge($item, array('source' => 'activity', 'starts_at' => $starts_at, 'ends_at' => $ends_at));
+            }
+        }
+        if ($this->module_enabled($meeting, 'dinner') && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
             $dinner = $meeting['dinner'];
             $choices[] = array(
                 'key' => 'dinner',
@@ -463,16 +478,6 @@ final class Module
                 'visible' => 1,
                 'source' => 'dinner',
             );
-        }
-        if ($this->module_enabled($meeting, 'day2')) {
-            foreach ((array) $meeting['program'] as $item) {
-                if (empty($item['visible']) || empty($item['requires_registration'])) {
-                    continue;
-                }
-                $starts_at = ! empty($item['date']) && ! empty($item['start']) ? $this->timestamp($item['date'] . 'T' . $item['start']) : 0;
-                $ends_at = ! empty($item['date']) && ! empty($item['end']) ? $this->timestamp($item['date'] . 'T' . $item['end']) : 0;
-                $choices[] = array_merge($item, array('source' => 'activity', 'starts_at' => $starts_at, 'ends_at' => $ends_at));
-            }
         }
         return $choices;
     }
@@ -503,7 +508,7 @@ final class Module
         return array('key' => '', 'title' => '', 'help' => '', 'type' => 'text', 'options' => array(), 'required' => 0, 'visible' => 1, 'order' => 0);
     }
 
-    private function sanitize_program(array $rows, int $weekend_start = 0, int $weekend_end = 0): array
+    private function sanitize_program(array $rows, int $weekend_start = 0, int $duration_days = 1): array
     {
         $program = array();
         $used = array();
@@ -517,30 +522,23 @@ final class Module
                 $key = 'program_' . (count($program) + 1);
             }
             $used[$key] = true;
-            $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($row['date'] ?? '')) ? (string) $row['date'] : '';
+            $day = min(max(1, absint($row['day'] ?? 1)), max(1, $duration_days));
+            $date = $weekend_start ? wp_date('Y-m-d', $this->date_at_offset($weekend_start, $day - 1), wp_timezone()) : '';
             $start = preg_match('/^\d{2}:\d{2}$/', (string) ($row['start'] ?? '')) ? (string) $row['start'] : '';
             $end = preg_match('/^\d{2}:\d{2}$/', (string) ($row['end'] ?? '')) ? (string) $row['end'] : '';
             if ($start && $end && $end <= $start) {
                 $end = '';
             }
-            $deadline = $this->timestamp(sanitize_text_field((string) ($row['deadline'] ?? '')));
-            $opens_at = $this->timestamp(sanitize_text_field((string) ($row['opens_at'] ?? '')));
-            if ($date && $weekend_start && ($date < wp_date('Y-m-d', $weekend_start, wp_timezone()) || ($weekend_end && $date > wp_date('Y-m-d', $weekend_end, wp_timezone())))) {
-                $date = '';
-            }
-            $event_at = $date && $start ? $this->timestamp($date . 'T' . $start) : 0;
-            if ($deadline && $event_at && $deadline > $event_at) {
-                $deadline = 0;
-            }
-            if ($opens_at && $deadline && $opens_at > $deadline) {
-                $opens_at = 0;
-            }
             $requires_registration = ! empty($row['requires_registration']) || ! empty($row['ask']);
+            $type = sanitize_key($row['type'] ?? 'activity');
+            $types = array('annual_meeting', 'dinner', 'presentation', 'activity', 'other');
             $program[] = array(
                 'key' => $key,
+                'day' => $day,
                 'date' => $date,
                 'start' => $start,
                 'end' => $end,
+                'type' => in_array($type, $types, true) ? $type : 'activity',
                 'title' => $title,
                 'description' => sanitize_textarea_field($row['description'] ?? ''),
                 'location' => sanitize_text_field($row['location'] ?? ''),
@@ -549,10 +547,10 @@ final class Module
                 'optional' => ! empty($row['optional']) ? 1 : 0,
                 'food' => ! empty($row['food']) ? 1 : 0,
                 'closed' => ! empty($row['closed']) ? 1 : 0,
-                'manual_open' => ! empty($row['manual_open']) ? 1 : 0,
+                'manual_open' => 0,
                 'capacity' => max(0, absint($row['capacity'] ?? 0)),
-                'opens_at' => $opens_at,
-                'deadline' => $deadline,
+                'opens_at' => 0,
+                'deadline' => 0,
                 'price' => sanitize_text_field($row['price'] ?? ''),
                 'visible' => ! empty($row['visible']) ? 1 : 0,
                 'order' => max(0, absint($row['order'] ?? count($program))),
@@ -668,16 +666,18 @@ final class Module
         return $documents;
     }
 
-    private function normalise_program(array $rows): array
+    private function normalise_program(array $rows, int $weekend_start = 0, int $duration_days = 1): array
     {
         $program = array();
         foreach ($rows as $index => $row) {
             $requires_registration = ! empty($row['requires_registration']) || ! empty($row['ask']);
             $item = wp_parse_args($row, array(
                 'key' => 'program_' . ($index + 1),
+                'day' => 0,
                 'date' => '',
                 'start' => '',
                 'end' => '',
+                'type' => 'activity',
                 'title' => '',
                 'description' => '',
                 'location' => '',
@@ -697,10 +697,115 @@ final class Module
             $item['requires_registration'] = $requires_registration ? 1 : 0;
             $item['ask'] = $requires_registration ? 1 : 0;
             $item['visible'] = array_key_exists('visible', $row) ? (! empty($row['visible']) ? 1 : 0) : 1;
+            $item['day'] = min(max(1, absint($item['day'])), max(1, $duration_days));
+            if ($weekend_start) {
+                if (empty($row['day']) && ! empty($item['date'])) {
+                    $day_start = $this->date_timestamp((string) $item['date']);
+                    if ($day_start) {
+                        $item['day'] = min(max(1, (int) floor(($day_start - $weekend_start) / DAY_IN_SECONDS) + 1), max(1, $duration_days));
+                    }
+                }
+                $item['date'] = wp_date('Y-m-d', $this->date_at_offset($weekend_start, $item['day'] - 1), wp_timezone());
+            }
             $program[] = $item;
         }
         usort($program, static function (array $a, array $b): int { return (int) $a['order'] <=> (int) $b['order']; });
         return $program;
+    }
+
+    private function migrate_legacy_activities(array $program, array $meeting, int $weekend_start, int $duration_days): array
+    {
+        $types = array_column($program, 'type');
+        $keys = array_column($program, 'key');
+        if (! in_array('annual_meeting', $types, true) && ! empty($meeting['meeting_start_at'])) {
+            $program[] = array(
+                'key' => 'annual_meeting',
+                'day' => $this->day_for_timestamp((int) $meeting['meeting_start_at'], $weekend_start, $duration_days),
+                'date' => '',
+                'start' => wp_date('H:i', (int) $meeting['meeting_start_at'], wp_timezone()),
+                'end' => ! empty($meeting['meeting_end_at']) ? wp_date('H:i', (int) $meeting['meeting_end_at'], wp_timezone()) : '',
+                'type' => 'annual_meeting',
+                'title' => __('Årsmöte', 'ssf-member-portal'),
+                'description' => '',
+                'location' => '',
+                'requires_registration' => 0,
+                'ask' => 0,
+                'optional' => 1,
+                'food' => 0,
+                'closed' => 0,
+                'manual_open' => 0,
+                'capacity' => 0,
+                'opens_at' => 0,
+                'deadline' => 0,
+                'price' => '',
+                'visible' => 1,
+                'order' => count($program),
+            );
+        }
+        if (! in_array('dinner', $types, true) && ! in_array('dinner', $keys, true) && ! empty($meeting['dinner']['start_at'])) {
+            $dinner = $meeting['dinner'];
+            $program[] = array(
+                'key' => 'dinner',
+                'day' => $this->day_for_timestamp((int) $dinner['start_at'], $weekend_start, $duration_days),
+                'date' => '',
+                'start' => wp_date('H:i', (int) $dinner['start_at'], wp_timezone()),
+                'end' => ! empty($dinner['end_at']) ? wp_date('H:i', (int) $dinner['end_at'], wp_timezone()) : '',
+                'type' => 'dinner',
+                'title' => (string) ($dinner['title'] ?: __('Middag', 'ssf-member-portal')),
+                'description' => (string) $dinner['description'],
+                'location' => (string) $dinner['location'],
+                'requires_registration' => 1,
+                'ask' => 1,
+                'optional' => 1,
+                'food' => ! empty($dinner['food_enabled']) ? 1 : 0,
+                'closed' => 0,
+                'manual_open' => 0,
+                'capacity' => max(0, (int) $dinner['capacity']),
+                'opens_at' => 0,
+                'deadline' => 0,
+                'price' => (string) $dinner['price'],
+                'visible' => 1,
+                'order' => count($program),
+            );
+        }
+        return $this->normalise_program($program, $weekend_start, $duration_days);
+    }
+
+    private function duration_days(int $start_at, int $end_at, int $stored_duration = 0): int
+    {
+        if ($stored_duration) {
+            return min(3, max(1, $stored_duration));
+        }
+        if (! $start_at || ! $end_at || $end_at <= $start_at) {
+            return 1;
+        }
+        $start = (new \DateTimeImmutable('@' . $start_at))->setTimezone(wp_timezone())->setTime(0, 0);
+        $end = (new \DateTimeImmutable('@' . $end_at))->setTimezone(wp_timezone())->setTime(0, 0);
+        return min(3, max(1, (int) $start->diff($end)->days));
+    }
+
+    private function day_for_timestamp(int $timestamp, int $weekend_start, int $duration_days): int
+    {
+        if (! $timestamp || ! $weekend_start) {
+            return 1;
+        }
+        $start = (new \DateTimeImmutable('@' . $weekend_start))->setTimezone(wp_timezone())->setTime(0, 0);
+        $date = (new \DateTimeImmutable('@' . $timestamp))->setTimezone(wp_timezone())->setTime(0, 0);
+        return min(max(1, (int) $start->diff($date)->days + 1), max(1, $duration_days));
+    }
+
+    private function date_at_offset(int $timestamp, int $days): int
+    {
+        return (new \DateTimeImmutable('@' . $timestamp))->setTimezone(wp_timezone())->setTime(0, 0)->modify(($days >= 0 ? '+' : '') . $days . ' days')->getTimestamp();
+    }
+
+    private function date_timestamp(string $value): int
+    {
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return 0;
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, wp_timezone());
+        return $date && $date->format('Y-m-d') === $value ? $date->getTimestamp() : 0;
     }
 
     private function pdf_attachment_id(int $attachment_id): int

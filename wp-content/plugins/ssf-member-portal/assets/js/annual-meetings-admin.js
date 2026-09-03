@@ -42,6 +42,31 @@
     });
   }
 
+  function updateProgramDays() {
+    var start = editor.querySelector('[data-ssf-weekend-start]');
+    var duration = editor.querySelector('[data-ssf-weekend-duration]');
+    var days = duration ? Number(duration.value) : 1;
+    var startDate = start && start.value ? new Date(start.value + 'T12:00:00') : null;
+    editor.querySelectorAll('[data-ssf-program-day]').forEach(function (select) {
+      select.querySelectorAll('option').forEach(function (option) {
+        var day = Number(option.value);
+        var available = day <= days;
+        option.disabled = !available;
+        option.hidden = !available;
+        if (startDate) {
+          var date = new Date(startDate.getTime());
+          date.setDate(date.getDate() + day - 1);
+          option.textContent = 'Dag ' + day + ' - ' + date.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+        } else {
+          option.textContent = 'Dag ' + day;
+        }
+      });
+      if (Number(select.value) > days) {
+        select.value = String(days);
+      }
+    });
+  }
+
   function updateOrder(repeater) {
     repeater.querySelectorAll('[data-ssf-repeater-row]').forEach(function (row, index) {
       var order = row.querySelector('[data-ssf-order]');
@@ -104,6 +129,9 @@
         var row = repeater.lastElementChild;
         initialiseRow(row);
         updateOrder(repeater);
+        if (kind === 'program') {
+          updateProgramDays();
+        }
       }
       return;
     }
@@ -156,10 +184,14 @@
     if (event.target.matches('[data-ssf-registration-toggle]')) {
       updateRegistrationFields(event.target.closest('[data-ssf-repeater-row]'));
     }
+    if (event.target.matches('[data-ssf-weekend-start], [data-ssf-weekend-duration]')) {
+      updateProgramDays();
+    }
   });
 
   editor.querySelectorAll('[data-ssf-module-toggle]').forEach(function (toggle) {
     updateModule(toggle.getAttribute('data-ssf-module-toggle'), toggle.checked, toggle);
   });
   editor.querySelectorAll('[data-ssf-repeater-row]').forEach(initialiseRow);
+  updateProgramDays();
 }());

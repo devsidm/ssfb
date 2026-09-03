@@ -31,12 +31,11 @@ final class Editor
         $tabs = array(
             'overview' => 'Översikt',
             'invitation' => 'Kallelse',
-            'time-place' => 'Tider & plats',
-            'dinner' => 'Middag',
-            'day2' => 'Dag 2',
+            'time-place' => 'Helg & plats',
+            'day2' => 'Program & aktiviteter',
             'motions' => 'Motioner',
             'documents' => 'Handlingar',
-            'publishing' => 'Kalender & publicering',
+            'publishing' => 'Anmälan & publicering',
         );
         ?>
         <div class="ssf-am-editor" data-ssf-am-editor>
@@ -49,13 +48,11 @@ final class Editor
                 <div class="ssf-am-admin-grid">
                     <label>År<input name="ssf_meeting_year" type="number" min="2000" max="2100" value="<?php echo esc_attr((string) $data['year']); ?>"></label>
                     <label>Kort ingress<textarea name="ssf_meeting_intro" rows="4"><?php echo esc_textarea($data['intro']); ?></textarea></label>
-                    <label>Kontaktperson<input name="ssf_meeting_contact_name" value="<?php echo esc_attr($data['contact_name']); ?>"></label>
-                    <label>Kontakt-e-post<input type="email" name="ssf_meeting_contact_email" value="<?php echo esc_attr($data['contact_email']); ?>"></label>
                 </div>
                 <label class="ssf-am-admin-switch"><input type="checkbox" name="ssf_meeting_active" value="1" <?php checked((int) get_option('ssf_member_portal_active_meeting_id', 0), $post->ID); ?>><span>Aktivt årsmöte</span><small>Detta årsmöte används på den publika huvudsidan och i anmälningsflödet.</small></label>
                 <h3>Aktiva moduler</h3>
                 <div class="ssf-am-module-switches">
-                    <?php foreach (array('invitation' => 'Kallelse', 'dinner' => 'Middag', 'day2' => 'Dag 2', 'motions' => 'Motioner', 'documents' => 'Handlingar', 'calendar' => 'Kalender') as $key => $label) : ?><label><input type="checkbox" name="ssf_meeting_modules[<?php echo esc_attr($key); ?>]" value="1" <?php checked(! empty($data['modules'][$key])); ?> data-ssf-module-toggle="<?php echo esc_attr($key); ?>"> <span><?php echo esc_html($label); ?></span></label><?php endforeach; ?>
+                    <?php foreach (array('invitation' => 'Kallelse', 'day2' => 'Program & aktiviteter', 'motions' => 'Motioner', 'documents' => 'Handlingar', 'calendar' => 'Kalender') as $key => $label) : ?><label><input type="checkbox" name="ssf_meeting_modules[<?php echo esc_attr($key); ?>]" value="1" <?php checked(! empty($data['modules'][$key])); ?> data-ssf-module-toggle="<?php echo esc_attr($key); ?>"> <span><?php echo esc_html($label); ?></span></label><?php endforeach; ?>
                     <input type="hidden" name="ssf_meeting_modules[meeting]" value="1">
                 </div>
                 <p class="description">Titel, lång beskrivning och huvudbild hanteras med WordPress-fälten ovanför denna ruta.</p>
@@ -76,23 +73,18 @@ final class Editor
             </section>
 
             <section id="ssf-am-tab-time-place" role="tabpanel" aria-labelledby="ssf-am-tab-button-time-place" data-ssf-admin-panel="time-place" class="ssf-am-admin-panel" hidden>
-                <div class="ssf-am-admin-heading"><div><h2>Tider & plats</h2><p>Helgen styr kalendern. Själva årsmötet visas separat och kräver ingen anmälan.</p></div></div>
+                <div class="ssf-am-admin-heading"><div><h2>Helg & plats</h2><p>Välj datum och hur många dagar årsmöteshelgen omfattar. Tider läggs bara på de aktiviteter där de behövs.</p></div></div>
                 <h3>Årsmöteshelgen</h3>
                 <div class="ssf-am-admin-grid">
-                    <label>Start<input name="ssf_meeting_start_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['start_at'])); ?>"></label>
-                    <label>Slut<input name="ssf_meeting_end_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['end_at'])); ?>"></label>
+                    <label>Startdatum<input name="ssf_meeting_start_date" type="date" value="<?php echo esc_attr($this->input_day((int) $data['start_at'])); ?>" data-ssf-weekend-start></label>
+                    <label>Helgens längd<select name="ssf_meeting_duration_days" data-ssf-weekend-duration><?php foreach (array(1 => '1 dag', 2 => '2 dagar', 3 => '3 dagar') as $days => $label) : ?><option value="<?php echo esc_attr((string) $days); ?>" <?php selected((int) $data['duration_days'], $days); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label>
                     <label>Platsnamn<input name="ssf_meeting_location" value="<?php echo esc_attr($data['location']); ?>"></label>
                     <label>Ort<input name="ssf_meeting_city" value="<?php echo esc_attr($data['city']); ?>"></label>
                     <label>Adress<textarea rows="3" name="ssf_meeting_address"><?php echo esc_textarea($data['address']); ?></textarea></label>
                     <label>Postnummer<input name="ssf_meeting_postal_code" value="<?php echo esc_attr($data['postal_code']); ?>"></label>
                     <label>Google Maps-länk<input type="url" name="ssf_meeting_maps_url" value="<?php echo esc_attr($data['maps_url']); ?>"><small>Valfri. Tomt bygger en söklänk från plats och adress.</small></label>
                 </div>
-                <h3>Själva årsmötet</h3>
-                <div class="ssf-am-admin-grid">
-                    <label>Start<input name="ssf_meeting_session_start_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['meeting_start_at'])); ?>"></label>
-                    <label>Slut<input name="ssf_meeting_session_end_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['meeting_end_at'])); ?>"></label>
-                </div>
-                <div class="ssf-am-admin-notice"><strong>Ingen anmälan till själva årsmötet</strong><p>Alla medlemmar har rätt att delta. Anmälningsfunktionen används endast för middag och valfria aktiviteter.</p></div>
+                <div class="ssf-am-admin-notice"><strong>Programmet byggs per dag</strong><p>Lägg till årsmöte, middag, presentationer och andra aktiviteter under Program & aktiviteter. Aktiviteter behöver bara tid om den ska visas för deltagarna.</p></div>
             </section>
 
             <section id="ssf-am-tab-dinner" role="tabpanel" aria-labelledby="ssf-am-tab-button-dinner" data-ssf-admin-panel="dinner" class="ssf-am-admin-panel" hidden>
@@ -116,13 +108,13 @@ final class Editor
             </section>
 
             <section id="ssf-am-tab-day2" role="tabpanel" aria-labelledby="ssf-am-tab-button-day2" data-ssf-admin-panel="day2" class="ssf-am-admin-panel" hidden>
-                <?php $this->module_heading('day2', 'Program dag 2', 'Bygg programmet i ordning. Aktivera anmälan endast på aktiviteter där SSF behöver deltagarantal.', $data); ?>
+                <?php $this->module_heading('day2', 'Program & aktiviteter', 'Bygg helgen i ordning. Välj dag och typ för varje aktivitet. Aktivera anmälan endast där SSF behöver deltagarantal.', $data); ?>
                 <div data-ssf-module-fields="day2">
                     <div class="ssf-am-admin-list" data-ssf-repeater="program">
                         <?php foreach ($program as $index => $item) : $this->render_program_row((string) $index, $item); endforeach; ?>
                     </div>
-                    <p><button class="button" type="button" data-ssf-add-row="program"><span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span> Lägg till programpunkt</button></p>
-                    <?php $this->media_field('Program dag 2 PDF', 'ssf_meeting_program_pdf_id', (int) $data['program_pdf_id'], 'application/pdf'); ?>
+                    <p><button class="button" type="button" data-ssf-add-row="program"><span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span> Lägg till aktivitet</button></p>
+                    <?php $this->media_field('Program PDF', 'ssf_meeting_program_pdf_id', (int) $data['program_pdf_id'], 'application/pdf'); ?>
                 </div>
             </section>
 
@@ -130,9 +122,8 @@ final class Editor
                 <?php $this->module_heading('motions', 'Motioner', 'Befintlig motions- och SharePoint-logik används oförändrad och kopplas till detta årsmöte.', $data); ?>
                 <div data-ssf-module-fields="motions">
                     <div class="ssf-am-admin-grid">
-                        <label>Motioner öppnar<input name="ssf_motion_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['motion_opens_at'])); ?>"></label>
-                        <label>Motioner stänger<input name="ssf_motion_closes_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['motion_closes_at'])); ?>"></label>
-                        <label>Kontakt för motionsfrågor<input type="email" name="ssf_meeting_motion_contact_email" value="<?php echo esc_attr($data['motion_contact_email']); ?>"></label>
+                        <label>Motioner öppnar<input name="ssf_motion_opens_on" type="date" value="<?php echo esc_attr($this->input_day((int) $data['motion_opens_at'])); ?>"></label>
+                        <label>Motioner stänger<input name="ssf_motion_closes_on" type="date" value="<?php echo esc_attr($this->input_day((int) $data['motion_closes_at'])); ?>"></label>
                     </div>
                     <div class="ssf-am-admin-checks"><label><input type="checkbox" name="ssf_meeting_allow_late_motions" value="1" <?php checked($data['allow_late_motions']); ?>> Tillåt sena motioner</label><label><input type="checkbox" name="ssf_meeting_motions_public" value="1" <?php checked($data['motions_public']); ?>> Visa motionsinformation publikt</label></div>
                     <label class="ssf-am-editor-label">Instruktion till medlem</label>
@@ -156,10 +147,10 @@ final class Editor
                 <div data-ssf-module-fields="calendar">
                     <div class="ssf-am-admin-grid"><label>Kalendertitel<input name="ssf_meeting_calendar_title" value="<?php echo esc_attr($data['calendar_title']); ?>"></label><label>Kalenderbeskrivning<textarea rows="3" name="ssf_meeting_calendar_description"><?php echo esc_textarea($data['calendar_description']); ?></textarea></label></div>
                 </div>
-                <h3>Anmälan till middag och aktiviteter</h3>
+                <h3>Gemensam anmälan till aktiviteter</h3>
                 <div class="ssf-am-admin-grid">
-                    <label>Anmälan öppnar<input name="ssf_meeting_registration_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['registration_opens_at'])); ?>"></label>
-                    <label>Gemensam sista anmälningsdag<input name="ssf_meeting_registration_closes_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['registration_closes_at'])); ?>"></label>
+                    <label>Anmälan öppnar<input name="ssf_meeting_registration_opens_on" type="date" value="<?php echo esc_attr($this->input_day((int) $data['registration_opens_at'])); ?>"></label>
+                    <label>Sista anmälningsdag<input name="ssf_meeting_registration_closes_on" type="date" value="<?php echo esc_attr($this->input_day((int) $data['registration_closes_at'])); ?>"><small>Gäller middag och samtliga aktiviteter.</small></label>
                     <label>Notifieringsadress<input type="email" name="ssf_meeting_notification_email" value="<?php echo esc_attr($data['notification_email']); ?>"></label>
                     <label>Gallra personuppgifter efter<input type="number" min="1" max="60" name="ssf_meeting_retention_months" value="<?php echo esc_attr((string) $data['retention_months']); ?>"><small>Månader efter årsmötets slut.</small></label>
                 </div>
@@ -203,10 +194,10 @@ final class Editor
         <article class="ssf-am-admin-item" data-ssf-repeater-row>
             <header><span class="dashicons dashicons-move" aria-hidden="true"></span><strong data-ssf-item-title><?php echo esc_html($item['title'] ?: 'Ny programpunkt'); ?></strong><div><button type="button" class="button-link" data-ssf-move="up" aria-label="Flytta upp"><span class="dashicons dashicons-arrow-up-alt2"></span></button><button type="button" class="button-link" data-ssf-move="down" aria-label="Flytta ned"><span class="dashicons dashicons-arrow-down-alt2"></span></button><button type="button" class="button-link-delete" data-ssf-remove-row>Ta bort</button></div></header>
             <input type="hidden" name="<?php echo esc_attr($prefix); ?>[key]" value="<?php echo esc_attr($item['key']); ?>"><input type="hidden" name="<?php echo esc_attr($prefix); ?>[order]" value="<?php echo esc_attr((string) $item['order']); ?>" data-ssf-order>
-            <div class="ssf-am-admin-grid ssf-am-admin-grid--three"><label>Rubrik<input name="<?php echo esc_attr($prefix); ?>[title]" value="<?php echo esc_attr($item['title']); ?>" data-ssf-title-input></label><label>Datum<input type="date" name="<?php echo esc_attr($prefix); ?>[date]" value="<?php echo esc_attr($item['date']); ?>"></label><label>Plats<input name="<?php echo esc_attr($prefix); ?>[location]" value="<?php echo esc_attr($item['location']); ?>"></label><label>Start<input type="time" name="<?php echo esc_attr($prefix); ?>[start]" value="<?php echo esc_attr($item['start']); ?>"></label><label>Slut<input type="time" name="<?php echo esc_attr($prefix); ?>[end]" value="<?php echo esc_attr($item['end']); ?>"></label><label>Pris<input name="<?php echo esc_attr($prefix); ?>[price]" value="<?php echo esc_attr($item['price']); ?>"></label></div>
+            <div class="ssf-am-admin-grid ssf-am-admin-grid--three"><label>Rubrik<input name="<?php echo esc_attr($prefix); ?>[title]" value="<?php echo esc_attr($item['title']); ?>" data-ssf-title-input></label><label>Dag<select name="<?php echo esc_attr($prefix); ?>[day]" data-ssf-program-day><?php for ($day = 1; $day <= 3; $day++) : ?><option value="<?php echo esc_attr((string) $day); ?>" <?php selected((int) $item['day'], $day); ?>><?php echo esc_html(sprintf(__('Dag %d', 'ssf-member-portal'), $day)); ?></option><?php endfor; ?></select></label><label>Typ<select name="<?php echo esc_attr($prefix); ?>[type]"><?php foreach (array('annual_meeting' => 'Årsmöte', 'dinner' => 'Middag', 'presentation' => 'Presentation', 'activity' => 'Aktivitet', 'other' => 'Övrigt') as $type => $label) : ?><option value="<?php echo esc_attr($type); ?>" <?php selected($item['type'], $type); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label><label>Plats<input name="<?php echo esc_attr($prefix); ?>[location]" value="<?php echo esc_attr($item['location']); ?>"></label><label>Start, valfritt<input type="time" name="<?php echo esc_attr($prefix); ?>[start]" value="<?php echo esc_attr($item['start']); ?>"></label><label>Slut, valfritt<input type="time" name="<?php echo esc_attr($prefix); ?>[end]" value="<?php echo esc_attr($item['end']); ?>"></label><label>Pris<input name="<?php echo esc_attr($prefix); ?>[price]" value="<?php echo esc_attr($item['price']); ?>"></label></div>
             <label>Beskrivning<textarea rows="3" name="<?php echo esc_attr($prefix); ?>[description]"><?php echo esc_textarea($item['description']); ?></textarea></label>
-            <div class="ssf-am-admin-checks"><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[visible]" value="1" <?php checked(! empty($item['visible'])); ?>> Synlig</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[requires_registration]" value="1" <?php checked(! empty($item['requires_registration'])); ?> data-ssf-registration-toggle> Kräver anmälan</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[food]" value="1" <?php checked(! empty($item['food'])); ?>> Påverkar mat</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[closed]" value="1" <?php checked(! empty($item['closed'])); ?>> Stäng anmälan manuellt</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[manual_open]" value="1" <?php checked(! empty($item['manual_open'])); ?>> Håll öppen efter deadline</label></div>
-            <div class="ssf-am-admin-grid" data-ssf-registration-fields><label>Anmälan öppnar<input type="datetime-local" name="<?php echo esc_attr($prefix); ?>[opens_at]" value="<?php echo esc_attr($this->input_date((int) ($item['opens_at'] ?? 0))); ?>"><small>Tomt använder årsmötets gemensamma öppning.</small></label><label>Sista anmälningsdag<input type="datetime-local" name="<?php echo esc_attr($prefix); ?>[deadline]" value="<?php echo esc_attr($this->input_date((int) $item['deadline'])); ?>"><small>Tomt använder gemensam deadline, sedan aktivitetens start.</small></label><label>Max antal<input type="number" min="0" name="<?php echo esc_attr($prefix); ?>[capacity]" value="<?php echo esc_attr((string) $item['capacity']); ?>"><small>0 betyder obegränsat.</small></label></div>
+            <div class="ssf-am-admin-checks"><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[visible]" value="1" <?php checked(! empty($item['visible'])); ?>> Synlig</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[requires_registration]" value="1" <?php checked(! empty($item['requires_registration'])); ?> data-ssf-registration-toggle> Kräver anmälan</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[food]" value="1" <?php checked(! empty($item['food'])); ?>> Påverkar mat</label><label><input type="checkbox" name="<?php echo esc_attr($prefix); ?>[closed]" value="1" <?php checked(! empty($item['closed'])); ?>> Stäng anmälan manuellt</label></div>
+            <div class="ssf-am-admin-grid" data-ssf-registration-fields><label>Max antal<input type="number" min="0" name="<?php echo esc_attr($prefix); ?>[capacity]" value="<?php echo esc_attr((string) $item['capacity']); ?>"><small>0 betyder obegränsat. Anmälningsdatum styrs gemensamt för alla aktiviteter.</small></label></div>
             <?php if (! empty($item['key']) && ! empty($item['requires_registration'])) : ?><p class="ssf-am-admin-selection-status"><strong><?php echo esc_html(sprintf('%1$d%2$s anmälda', (int) ($this->selection_counts[$item['key']] ?? 0), $item['capacity'] ? ' / ' . (int) $item['capacity'] : '')); ?></strong> <a href="<?php echo esc_url($this->registration_list_url((string) $item['key'])); ?>">Visa anmälda</a></p><?php endif; ?>
             <input type="hidden" name="<?php echo esc_attr($prefix); ?>[optional]" value="1">
         </article>
@@ -232,7 +223,7 @@ final class Editor
 
     private function program_row(): array
     {
-        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'requires_registration' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'opens_at' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'order' => 0);
+        return array('key' => '', 'day' => 1, 'date' => '', 'start' => '', 'end' => '', 'type' => 'activity', 'title' => '', 'description' => '', 'location' => '', 'requires_registration' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'opens_at' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'order' => 0);
     }
 
     private function document_row(): array
@@ -253,6 +244,11 @@ final class Editor
     private function input_date(int $timestamp): string
     {
         return $timestamp ? wp_date('Y-m-d\TH:i', $timestamp, wp_timezone()) : '';
+    }
+
+    private function input_day(int $timestamp): string
+    {
+        return $timestamp ? wp_date('Y-m-d', $timestamp, wp_timezone()) : '';
     }
 
     private function registration_list_url(string $choice): string

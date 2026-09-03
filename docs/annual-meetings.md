@@ -4,11 +4,12 @@
 
 `ssf_annual_meeting` är huvudobjekt och enda källa för titel, beskrivning, bild, helgens datum, plats, program och kalenderinformation. WordPress poststatus används för utkast/publicering.
 
+Helgen konfigureras med ett startdatum och en längd på en, två eller tre dagar. Klockslag hör till enskilda programpunkter och är alltid valfria. Varje programpunkt väljer en dag samt typ: årsmöte, middag, presentation, aktivitet eller övrigt.
+
 Modulerna lagras i `_ssf_am_modules` med nycklarna `invitation`, `meeting`, `dinner`, `day2`, `motions`, `documents` och `calendar`. `meeting` är alltid aktiv. Avstängda moduler behåller sin data men visas inte i frontend.
 
 - Kallelse: `_ssf_am_invitation` med rubrik, text, publiceringstid, PDF-ID och synlighet.
-- Middag: `_ssf_am_dinner` med tider, plats, beskrivning, pris, deadline, kapacitet och matinställningar.
-- Dag 2: `_ssf_am_program`. En programpunkt blir en aktivitet när `requires_registration` är satt. Samma post innehåller deadline, kapacitet och manuell status.
+- Program och aktiviteter: `_ssf_am_program`. En programpunkt blir en aktivitet när `requires_registration` är satt och kan vara middag eller ett annat arrangemang. Kapacitet och manuell stängning ligger på aktiviteten.
 - Handlingar: `_ssf_am_documents`, en ordnad lista med attachment-ID, titel, dokumenttyp och synlighet.
 - Program-PDF: `_ssf_am_program_pdf_id`.
 - Plats: `_ssf_am_location`, `_ssf_am_address`, `_ssf_am_postal_code`, `_ssf_am_city` och valfri `_ssf_am_maps_url`. Saknas explicit kartlänk byggs en Google Maps-sökning från sparad plats och adress.
@@ -27,7 +28,7 @@ Motioner behåller `_ssf_mp_annual_meeting_id` och befintlig motions-, behörigh
 
 Middag och varje aktivitet räknas separat. Avbokade och reservlistade poster tar inte en plats. När kapaciteten är nådd visas fullbokat och nya val stoppas även i servervalideringen.
 
-Deadline stänger respektive val automatiskt. Admin kan hålla ett val öppet efter deadline. Den äldre gemensamma kapaciteten och reservlistan finns kvar enbart för bakåtkompatibilitet.
+Anmälans öppnings- och stängningsdatum styrs en gång per årsmöte och gäller alla aktiviteter, inklusive middag. Den äldre gemensamma kapaciteten och reservlistan finns kvar enbart för bakåtkompatibilitet.
 
 ## Statuslogik för anmälan
 
@@ -35,7 +36,7 @@ Anmälningsstatus beräknas centralt i `RegistrationService::registration_state(
 
 All tidslogik använder WordPress tidszon via `current_datetime()` och `wp_timezone()`. Exakt öppningstid är öppen, exakt stängningstid är fortfarande öppen och först efter stängningstid räknas anmälan som stängd. Årsmötets sluttid är en yttre spärr: när årsmöteshelgen har passerat stoppas anmälan även om en generell deadline råkar ligga senare.
 
-Middag och aktiviteter kan ha egna öppnings- och stängningstider samt egen kapacitet. Saknas en egen öppning används årsmötets gemensamma öppning. Saknas en egen deadline används årsmötets gemensamma deadline, därefter aktivitetens starttid och sist årsmötets sluttid som fallback.
+Middag och aktiviteter har egen kapacitet, men delar alltid årsmötets gemensamma anmälningsperiod. Om ingen särskild period är angiven avslutas anmälan när årsmöteshelgen passerat.
 
 ## iCal och SSF-kalendern
 
@@ -53,7 +54,7 @@ Huvudmenyn använder befintlig SSF-struktur:
 - `admin.php?page=ssf-member-portal-meeting-registrations` - anmälningsöversikt
 - `edit.php?post_type=ssf_meeting_registration` - deltagarlista och filter
 
-Redigeraren för ett årsmöte har flikarna Översikt, Kallelse, Tider & plats, Middag, Dag 2, Motioner, Handlingar samt Kalender & publicering. WordPress egna titel-, innehålls-, bild-, förhandsgransknings- och publiceringsfunktioner används.
+Redigeraren för ett årsmöte har flikarna Översikt, Kallelse, Helg & plats, Program & aktiviteter, Motioner, Handlingar samt Anmälan & publicering. Kontakt går alltid via det publika kontaktformuläret och kräver därför ingen separat kontaktperson i årsmötesadministrationen. WordPress egna titel-, innehålls-, bild-, förhandsgransknings- och publiceringsfunktioner används.
 
 Befintlig capability `manage_ssf_annual_meetings` används. Inga nya rättigheter eller Graph-behörigheter har införts.
 

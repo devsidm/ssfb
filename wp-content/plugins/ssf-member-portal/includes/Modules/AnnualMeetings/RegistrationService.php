@@ -608,15 +608,12 @@ final class RegistrationService
 
     private function choice_open_at(array $meeting, array $choice): int
     {
-        return (int) (($choice['opens_at'] ?? 0) ?: ($meeting['registration_opens_at'] ?? 0));
+        return (int) ($meeting['registration_opens_at'] ?? 0);
     }
 
     private function choice_close_at(array $meeting, array $choice): int
     {
-        if (empty($choice['manual_open']) && ! empty($choice['deadline'])) {
-            return (int) $choice['deadline'];
-        }
-        return (int) (($meeting['registration_closes_at'] ?? 0) ?: ($choice['starts_at'] ?? 0) ?: $this->meeting_end_at($meeting));
+        return (int) (($meeting['registration_closes_at'] ?? 0) ?: $this->meeting_end_at($meeting));
     }
 
     private function meeting_end_at(array $meeting): int

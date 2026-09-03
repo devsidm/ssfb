@@ -51,8 +51,9 @@
 .ssf-am-program p { margin: .3rem 0 0; color: #4c5d70; }
 .ssf-am-program span { color: #536677; font-size: .92rem; text-align: right; }
 .ssf-am-activity-list { border-top: 1px solid #c9d7df; }
+.ssf-am-program-day { margin: 1.5rem 0 .45rem; color: #17233b; font-size: 1.05rem; }
 .ssf-am-activity { display: grid; grid-template-columns: minmax(0, 1fr) 11rem; gap: 1.25rem; padding: 1.15rem 0; border-bottom: 1px solid #c9d7df; }
-.ssf-am-activity h3 { font-size: 1.05rem; }
+.ssf-am-activity h3, .ssf-am-activity h4 { font-size: 1.05rem; }
 .ssf-am-activity__main p { margin: .45rem 0 0; color: #4c5d70; }
 .ssf-am-activity__meta { margin: 0; color: #536677; font-size: .9rem; text-align: right; }
 .ssf-am-documents { margin: 0; padding: 0; list-style: none; border-top: 1px solid #c9d7df; }

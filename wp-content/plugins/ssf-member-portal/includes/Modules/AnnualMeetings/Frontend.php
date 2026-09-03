@@ -293,8 +293,16 @@ final class Frontend
         if (empty($meeting['start_at'])) {
             return __('Datum meddelas senare', 'ssf-member-portal');
         }
-        $start = wp_date('j F Y, H:i', (int) $meeting['start_at'], wp_timezone());
-        return empty($meeting['end_at']) ? $start : $start . ' – ' . wp_date('j F Y, H:i', (int) $meeting['end_at'], wp_timezone());
+        $start = (int) $meeting['start_at'];
+        $end = (int) ($meeting['end_at'] ?? 0);
+        if (! $end || $end <= $start) {
+            return wp_date('j F Y', $start, wp_timezone());
+        }
+        $last_day = $end - 1;
+        if (wp_date('Y-m-d', $start, wp_timezone()) === wp_date('Y-m-d', $last_day, wp_timezone())) {
+            return wp_date('j F Y', $start, wp_timezone());
+        }
+        return wp_date('j F', $start, wp_timezone()) . ' – ' . wp_date('j F Y', $last_day, wp_timezone());
     }
 
     public function render_question(array $question, array $answers): void
