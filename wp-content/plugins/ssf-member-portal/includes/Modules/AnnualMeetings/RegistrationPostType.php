@@ -8,7 +8,9 @@ if (! defined('ABSPATH')) {
 
 final class RegistrationPostType
 {
-    public const POST_TYPE = 'ssf_meeting_registration';
+    // WordPress stores post types in a VARCHAR(20) database column.
+    // This also matches the value older non-strict MySQL installations stored.
+    public const POST_TYPE = 'ssf_meeting_registra';
 
     public function register(): void
     {
