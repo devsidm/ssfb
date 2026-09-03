@@ -129,6 +129,7 @@ final class Frontend
         $choices = (array) $registration_state['choices'];
         $choice_states = (array) $registration_state['choice_states'];
         if ($registration_post && isset($_GET['ssf_am_confirmation'])) {
+            $calendar = $this->calendar->urls($meeting);
             ob_start();
             include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/confirmation.php';
             return (string) ob_get_clean();
