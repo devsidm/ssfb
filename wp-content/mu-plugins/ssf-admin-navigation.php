@@ -83,6 +83,7 @@ final class SSF_Admin_Navigation
         remove_menu_page('edit.php?post_type=ssf_ansokan');
         remove_menu_page('edit.php?post_type=ssf_kontakt');
         remove_menu_page('edit.php?post_type=ssf_newsletter');
+        remove_menu_page('edit.php?post_type=ssf_promotion');
 
         foreach ($menu as &$item) {
             if (($item[2] ?? '') === self::ANNUAL_MEETINGS) {
@@ -117,10 +118,11 @@ final class SSF_Admin_Navigation
             array(
                 self::CONTENT => 10,
                 'ssf-webbinnehall' => 20,
-                'edit.php' => 30,
-                'edit.php?post_type=ssf_newsletter' => 40,
-                'ssf-calendar-events' => 50,
-                'edit.php?post_type=ssf_document' => 60,
+                'edit.php?post_type=ssf_promotion' => 30,
+                'edit.php' => 40,
+                'edit.php?post_type=ssf_newsletter' => 50,
+                'ssf-calendar-events' => 60,
+                'edit.php?post_type=ssf_document' => 70,
             )
         );
         self::sort_submenus(
@@ -172,6 +174,7 @@ final class SSF_Admin_Navigation
             <div class="ssf-admin-grid">
                 <?php self::render_membership_card(); ?>
                 <?php self::render_annual_meeting_card(); ?>
+                <?php do_action('ssf_admin_overview_cards'); ?>
                 <?php self::render_content_card(); ?>
                 <section class="ssf-admin-card">
                     <h2>System</h2>
@@ -218,6 +221,7 @@ final class SSF_Admin_Navigation
             <p class="ssf-admin-hub__intro">Publicera och underhåll webbplatsens redaktionella innehåll.</p>
             <div class="ssf-admin-grid">
                 <?php self::render_hub_link_card('Webbinnehåll', 'Startsida, kontakt och ansökningssida.', 'ssf-webbinnehall', 'manage_options'); ?>
+                <?php do_action('ssf_admin_content_cards'); ?>
                 <?php self::render_hub_link_card('Nyheter', self::count_label('post', 'publicerad nyhet', 'publicerade nyheter'), 'edit.php', 'edit_posts', true); ?>
                 <?php self::render_hub_link_card('Nyhetsbrev', self::count_label('ssf_newsletter', 'nyhetsbrev', 'nyhetsbrev'), 'edit.php?post_type=ssf_newsletter', 'edit_ssf_newsletters', true); ?>
                 <?php self::render_hub_link_card('Kalender', self::count_label('ssf_event', 'event', 'event'), 'ssf-calendar-events', 'edit_posts'); ?>
@@ -301,7 +305,7 @@ final class SSF_Admin_Navigation
         if (isset(self::SYSTEM_PAGES[$page])) {
             return self::ROOT;
         }
-        if (in_array($page, array('ssf-webbinnehall', 'ssf-calendar-events', 'ssf-calendar-settings', 'ssf-newsletter-editor', 'ssf-newsletter-import', 'ssf-newsletter-settings', 'ssf-stadgar-settings'), true) || in_array($post_type, array('post', 'ssf_newsletter', 'ssf_event', 'ssf_document'), true)) {
+        if (in_array($page, array('ssf-webbinnehall', 'ssf-calendar-events', 'ssf-calendar-settings', 'ssf-newsletter-editor', 'ssf-newsletter-import', 'ssf-newsletter-settings', 'ssf-stadgar-settings'), true) || in_array($post_type, array('post', 'ssf_promotion', 'ssf_newsletter', 'ssf_event', 'ssf_document'), true)) {
             return self::CONTENT;
         }
         if (in_array($page, array('ssf-medlemsprocess-overview', 'ssf-medlemsprocess-settings', 'ssf-mina-fartyg', 'ssf-insamlingslankar', 'ssf-medlemsfartyg-settings', 'ssf-medlemsfartyg-export'), true) || in_array($post_type, array('ssf_application', 'ssf_ansokan', 'medlemsfartyg', 'ssf_ship_submission'), true)) {
@@ -323,6 +327,9 @@ final class SSF_Admin_Navigation
         }
         if (in_array($page, array('ssf-newsletter-editor', 'ssf-newsletter-import', 'ssf-newsletter-settings'), true) || 'ssf_newsletter' === $post_type) {
             return 'edit.php?post_type=ssf_newsletter';
+        }
+        if ('ssf_promotion' === $post_type) {
+            return 'edit.php?post_type=ssf_promotion';
         }
         if ('ssf-calendar-settings' === $page || 'ssf_event' === $post_type) {
             return 'ssf-calendar-events';
@@ -421,7 +428,7 @@ final class SSF_Admin_Navigation
         if (! current_user_can('edit_posts')) {
             return;
         }
-        self::render_hub_link_card('Innehåll', 'Nyheter, nyhetsbrev, kalender och dokument.', self::CONTENT, 'edit_posts');
+        self::render_hub_link_card('Innehåll', 'Aktuellt, nyheter, nyhetsbrev, kalender och dokument.', self::CONTENT, 'edit_posts');
     }
 
     private static function render_content_tools(): void
@@ -525,7 +532,7 @@ final class SSF_Admin_Navigation
         if (0 === strpos($page, 'ssf-') || in_array($page, array(self::ROOT, self::CONTENT, self::MEMBERSHIP, self::COMMUNICATION), true)) {
             return true;
         }
-        return in_array(self::current_post_type(), array('ssf_newsletter', 'ssf_event', 'ssf_document', 'ssf_application', 'ssf_ansokan', 'medlemsfartyg', 'ssf_ship_submission', 'ssf_annual_meeting', 'ssf_meeting_registration', 'ssf_motion', 'ssf_kontakt'), true);
+        return in_array(self::current_post_type(), array('ssf_promotion', 'ssf_newsletter', 'ssf_event', 'ssf_document', 'ssf_application', 'ssf_ansokan', 'medlemsfartyg', 'ssf_ship_submission', 'ssf_annual_meeting', 'ssf_meeting_registration', 'ssf_motion', 'ssf_kontakt'), true);
     }
 
     private static function current_post_type(): string

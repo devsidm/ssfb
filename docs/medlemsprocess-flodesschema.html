@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSF - flödesschema för ansökan och medlemsprocess</title>
+  <style>
+    :root {
+      --ink: #183044;
+      --muted: #587080;
+      --line: #8194a0;
+      --paper: #ffffff;
+      --page: #edf1f3;
+      --applicant: #15766f;
+      --applicant-soft: #e8f5f2;
+      --system: #245889;
+      --system-soft: #eaf1f8;
+      --staff: #a46116;
+      --staff-soft: #fff3df;
+      --decision: #7a3d6e;
+      --decision-soft: #f6eaf3;
+      --warning: #9b3d2f;
+      --warning-soft: #fff0ed;
+      --success: #26734d;
+      --success-soft: #eaf6ef;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .document {
+      width: min(1760px, calc(100% - 32px));
+      margin: 24px auto;
+      background: var(--paper);
+      box-shadow: 0 8px 30px rgba(24, 48, 68, 0.12);
+    }
+
+    .document-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 40px;
+      padding: 42px 48px 28px;
+      border-bottom: 1px solid #dce4e8;
+    }
+
+    .kicker {
+      margin: 0 0 8px;
+      color: var(--system);
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 1050px;
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.12;
+    }
+
+    .subtitle {
+      max-width: 1040px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.5;
+    }
+
+    .dev-state {
+      flex: 0 0 360px;
+      padding: 16px 18px;
+      border-left: 5px solid var(--warning);
+      background: var(--warning-soft);
+    }
+
+    .dev-state strong,
+    .dev-state span { display: block; }
+    .dev-state strong { margin-bottom: 5px; font-size: 17px; }
+    .dev-state span { color: #693228; font-size: 15px; line-height: 1.4; }
+
+    .diagram-scroll { overflow-x: auto; padding: 30px 20px 14px; }
+
+    .diagram {
+      position: relative;
+      width: 1700px;
+      height: 1740px;
+      margin: 0 auto;
+      background: #f8fafb;
+      border: 1px solid #d7e0e5;
+      overflow: hidden;
+    }
+
+    .lane {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 400px;
+      border-right: 1px solid #dce4e8;
+    }
+
+    .lane--applicant { left: 0; background: rgba(232, 245, 242, 0.42); }
+    .lane--system { left: 420px; background: rgba(234, 241, 248, 0.5); }
+    .lane--staff { left: 840px; background: rgba(255, 243, 223, 0.45); }
+    .lane--decision { left: 1260px; width: 440px; background: rgba(246, 234, 243, 0.5); border-right: 0; }
+
+    .lane-title {
+      position: absolute;
+      top: 18px;
+      z-index: 3;
+      width: 340px;
+      padding: 15px 18px;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .lane-title small {
+      display: block;
+      margin-top: 3px;
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.9;
+    }
+
+    .lane-title--applicant { left: 30px; background: var(--applicant); }
+    .lane-title--system { left: 450px; background: var(--system); }
+    .lane-title--staff { left: 870px; background: var(--staff); }
+    .lane-title--decision { left: 1290px; width: 380px; background: var(--decision); }
+
+    .node {
+      position: absolute;
+      z-index: 2;
+      padding: 15px 17px;
+      border: 2px solid;
+      background: #fff;
+      box-shadow: 0 3px 8px rgba(24, 48, 68, 0.08);
+    }
+
+    .node h2,
+    .node h3,
+    .node p { margin: 0; }
+
+    .node h3 { font-size: 18px; line-height: 1.23; }
+    .node p { margin-top: 7px; font-size: 14px; line-height: 1.4; color: #435c6d; }
+
+    .node ul {
+      margin: 8px 0 0;
+      padding-left: 19px;
+      color: #435c6d;
+      font-size: 13.5px;
+      line-height: 1.42;
+    }
+
+    .node .tag {
+      margin: 0 0 5px;
+      color: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .node--applicant { border-color: var(--applicant); background: var(--applicant-soft); }
+    .node--system { border-color: var(--system); background: var(--system-soft); }
+    .node--staff { border-color: var(--staff); background: var(--staff-soft); }
+    .node--decision { border-color: var(--decision); background: var(--decision-soft); }
+    .node--warning { border-color: var(--warning); background: var(--warning-soft); }
+    .node--success { border-color: var(--success); background: var(--success-soft); }
+    .node--question { border-style: dashed; border-width: 3px; }
+
+    .node--start { left: 45px; top: 112px; width: 320px; min-height: 78px; }
+    .node--gate { left: 470px; top: 105px; width: 300px; min-height: 112px; }
+    .node--closed { left: 470px; top: 258px; width: 300px; min-height: 104px; }
+    .node--form { left: 35px; top: 265px; width: 340px; min-height: 282px; }
+    .node--register { left: 465px; top: 570px; width: 310px; min-height: 190px; }
+    .node--confirmation { left: 35px; top: 615px; width: 340px; min-height: 142px; }
+    .node--review { left: 875px; top: 560px; width: 330px; min-height: 190px; }
+    .node--complete { left: 920px; top: 810px; width: 240px; min-height: 110px; text-align: center; }
+    .node--completion { left: 35px; top: 820px; width: 340px; min-height: 154px; }
+    .node--completion-system { left: 465px; top: 840px; width: 310px; min-height: 125px; }
+    .node--inspection-plan { left: 875px; top: 1040px; width: 330px; min-height: 160px; }
+    .node--inspection { left: 1285px; top: 1005px; width: 380px; min-height: 230px; }
+    .node--board-decision { left: 1285px; top: 1305px; width: 380px; min-height: 184px; }
+    .node--applicant-status { left: 35px; top: 1310px; width: 340px; min-height: 165px; }
+    .node--status-system { left: 465px; top: 1330px; width: 310px; min-height: 145px; }
+    .node--membership { left: 875px; top: 1530px; width: 330px; min-height: 175px; }
+    .node--end { left: 1285px; top: 1550px; width: 380px; min-height: 155px; }
+
+    .connectors {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 1700px;
+      height: 1740px;
+      pointer-events: none;
+    }
+
+    .connector {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 3;
+      marker-end: url(#arrow);
+    }
+
+    .connector--loop { stroke: var(--warning); stroke-dasharray: 9 7; }
+    .connector--success { stroke: var(--success); }
+
+    .arrow-label {
+      position: absolute;
+      z-index: 4;
+      padding: 3px 7px;
+      background: #fff;
+      color: #4b6372;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      padding: 14px 32px 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 18px;
+      height: 10px;
+      margin-right: 7px;
+      border: 2px solid var(--line);
+      vertical-align: -1px;
+    }
+
+    .legend .implemented::before { background: #fff; }
+    .legend .manual::before { border-style: dashed; background: #fff9ef; }
+    .legend .attention::before { border-color: var(--warning); background: var(--warning-soft); }
+
+    .review {
+      padding: 38px 48px 48px;
+      border-top: 1px solid #dce4e8;
+    }
+
+    .review h2 { margin: 0; font-size: 28px; }
+    .review-intro { max-width: 1050px; color: var(--muted); font-size: 16px; line-height: 1.5; }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 36px;
+      margin-top: 24px;
+      border-top: 1px solid #dce4e8;
+    }
+
+    .review-item {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      padding: 17px 0;
+      border-bottom: 1px solid #dce4e8;
+    }
+
+    .review-item input { width: 19px; height: 19px; margin: 2px 0 0; accent-color: var(--system); }
+    .review-item strong { display: block; margin-bottom: 4px; font-size: 16px; }
+    .review-item span { color: var(--muted); font-size: 14px; line-height: 1.42; }
+
+    .observations {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      margin-top: 34px;
+    }
+
+    .observation {
+      padding: 18px;
+      border-left: 4px solid var(--warning);
+      background: var(--warning-soft);
+    }
+
+    .observation strong { display: block; margin-bottom: 5px; }
+    .observation span { color: #693228; font-size: 14px; line-height: 1.4; }
+
+    .source-note {
+      margin: 28px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .document { width: 100%; margin: 0; box-shadow: none; }
+      .document-header { display: block; padding: 28px 22px; }
+      h1 { font-size: 32px; }
+      .dev-state { margin-top: 22px; }
+      .review { padding: 30px 22px; }
+      .review-grid, .observations { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      @page { size: A3 landscape; margin: 9mm; }
+      body { background: #fff; }
+      .document { width: 100%; margin: 0; box-shadow: none; }
+      .document-header { padding: 18px 26px; }
+      .diagram-scroll { overflow: visible; padding: 14px 0 0; }
+      .diagram { transform: scale(0.72); transform-origin: top left; margin-bottom: -470px; }
+      .review { break-before: page; padding: 18px 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="document">
+    <header class="document-header">
+      <div>
+        <p class="kicker">Sveriges Segelfartygsförbund</p>
+        <h1>Ansökan och medlemsprocess för fartygsombud</h1>
+        <p class="subtitle">Implementerat huvudflöde från digital fartygsansökan till granskning, inspektion, beslut, medlemsfartygsprofil och manuell Memlist-export.</p>
+      </div>
+      <aside class="dev-state">
+        <strong>Nuvarande läge på DEV: AVSTÄNGD</strong>
+        <span>/ansokan/ visar endast ett stängningsmeddelande. Diagrammet nedan gäller när funktionen Ansökan sätts till PUBLIK.</span>
+      </aside>
+    </header>
+
+    <section class="diagram-scroll" aria-label="Flödesschema">
+      <div class="diagram">
+        <div class="lane lane--applicant"></div>
+        <div class="lane lane--system"></div>
+        <div class="lane lane--staff"></div>
+        <div class="lane lane--decision"></div>
+
+        <div class="lane-title lane-title--applicant">Sökande / fartygsombud<small>Publik webb och personlig statuslänk</small></div>
+        <div class="lane-title lane-title--system">WordPress / system<small>Validering, lagring, status och e-post</small></div>
+        <div class="lane-title lane-title--staff">SSF-handläggare<small>Granskning, kontakt och bokning</small></div>
+        <div class="lane-title lane-title--decision">Inspektör / beslutsfattare<small>Inspektionsunderlag och formellt beslut</small></div>
+
+        <svg class="connectors" viewBox="0 0 1700 1740" aria-hidden="true">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8194a0"></path>
+            </marker>
+          </defs>
+          <path class="connector" d="M365 151 H470"></path>
+          <path class="connector" d="M620 217 V258"></path>
+          <path class="connector connector--success" d="M470 161 C420 161 420 405 375 405"></path>
+          <path class="connector" d="M205 547 C205 575 380 665 465 665"></path>
+          <path class="connector" d="M465 665 H375"></path>
+          <path class="connector" d="M775 665 H875"></path>
+          <path class="connector" d="M1040 750 V810"></path>
+          <path class="connector connector--loop" d="M920 865 C780 865 470 885 375 895"></path>
+          <path class="connector connector--loop" d="M375 895 H465"></path>
+          <path class="connector connector--loop" d="M620 840 C620 790 825 790 875 665"></path>
+          <path class="connector" d="M1040 920 V1040"></path>
+          <path class="connector" d="M1205 1120 H1285"></path>
+          <path class="connector connector--loop" d="M1285 1115 C1115 1115 1115 950 775 900"></path>
+          <path class="connector" d="M1475 1235 V1305"></path>
+          <path class="connector" d="M1160 865 C1235 865 1235 1380 1285 1380"></path>
+          <path class="connector" d="M1285 1395 C1110 1395 875 1400 775 1400"></path>
+          <path class="connector" d="M465 1400 H375"></path>
+          <path class="connector connector--success" d="M1475 1489 V1550"></path>
+          <path class="connector connector--success" d="M1285 1415 C1190 1415 1190 1610 1205 1610"></path>
+        </svg>
+
+        <span class="arrow-label" style="left: 392px; top: 132px;">Öppna sidan</span>
+        <span class="arrow-label" style="left: 630px; top: 229px;">OFF / ADMIN för besökare</span>
+        <span class="arrow-label" style="left: 390px; top: 327px; color: var(--success);">PUBLIC</span>
+        <span class="arrow-label" style="left: 387px; top: 640px;">Skicka</span>
+        <span class="arrow-label" style="left: 790px; top: 640px;">Intern notis</span>
+        <span class="arrow-label" style="left: 675px; top: 850px; color: var(--warning);">Nej: begär komplettering</span>
+        <span class="arrow-label" style="left: 1053px; top: 958px;">Ja: inspektion behövs</span>
+        <span class="arrow-label" style="left: 1110px; top: 1074px; color: var(--warning);">Kan begära komplettering</span>
+        <span class="arrow-label" style="left: 1180px; top: 837px;">Ja: ingen inspektion</span>
+        <span class="arrow-label" style="left: 1180px; top: 1380px;">Beslut registreras</span>
+
+        <article class="node node--applicant node--start">
+          <p class="tag">Start</p>
+          <h3>Öppnar ssfb.se/dev/ansokan/</h3>
+        </article>
+
+        <article class="node node--system node--gate node--question">
+          <p class="tag">Release control</p>
+          <h3>Är Ansökan tillgänglig?</h3>
+          <p>Funktionen kan vara OFF, ADMIN eller PUBLIC.</p>
+        </article>
+
+        <article class="node node--warning node--closed">
+          <p class="tag">Stopp</p>
+          <h3>Ansökan visas inte publikt</h3>
+          <p>OFF visar stängningsmeddelande. ADMIN visar processen endast för inloggade administratörer.</p>
+        </article>
+
+        <article class="node node--applicant node--form">
+          <p class="tag">10 formulärsteg</p>
+          <h3>Fyller i fartygsansökan</h3>
+          <ul>
+            <li>Standardväg eller särskild prövning</li>
+            <li>Segelfartyg, yrkesbruk och traditionell nybyggnation</li>
+            <li>Mått och registrering</li>
+            <li>Fartygsuppgifter, historia och användning</li>
+            <li>Fartygsombudets kontaktuppgifter</li>
+            <li>Bilder och PDF-filer</li>
+            <li>Riktighet, personuppgifter och uppladdningsrätt</li>
+          </ul>
+        </article>
+
+        <article class="node node--system node--register">
+          <p class="tag">Automatiskt</p>
+          <h3>Validerar och registrerar ärendet</h3>
+          <ul>
+            <li>Nonce, honeypot och spärr mot täta försök</li>
+            <li>Kontrollerar obligatoriska uppgifter och filtyper</li>
+            <li>Skapar ärendenummer SSF-ÅÅÅÅ-NNNN</li>
+            <li>Status: Inskickad</li>
+            <li>Skapar personlig statuslänk</li>
+          </ul>
+        </article>
+
+        <article class="node node--applicant node--confirmation">
+          <p class="tag">Bekräftelse</p>
+          <h3>Får statuslänk via webb och e-post</h3>
+          <p>Kan följa status, nästa steg, bokningar, publika meddelanden och synliga filer.</p>
+        </article>
+
+        <article class="node node--staff node--review">
+          <p class="tag">Mottagen / under granskning</p>
+          <h3>Öppnar och granskar ansökan</h3>
+          <ul>
+            <li>Tilldelar ansvarig handläggare</li>
+            <li>Kontrollerar uppgifter och bilagor</li>
+            <li>Fyller granskningschecklista</li>
+            <li>Sätter nästa åtgärd och publikt meddelande</li>
+          </ul>
+        </article>
+
+        <article class="node node--staff node--complete node--question">
+          <p class="tag">Manuellt vägval</p>
+          <h3>Är underlaget komplett?</h3>
+        </article>
+
+        <article class="node node--applicant node--completion">
+          <p class="tag">Komplettering krävs</p>
+          <h3>Svarar via den personliga länken</h3>
+          <p>Skickar meddelande och/eller nya bilder och PDF-filer.</p>
+        </article>
+
+        <article class="node node--system node--completion-system">
+          <p class="tag">Automatiskt</p>
+          <h3>Registrerar kompletteringen</h3>
+          <p>Status: Komplettering inskickad. Ny statuslänk skapas och SSF meddelas.</p>
+        </article>
+
+        <article class="node node--staff node--inspection-plan">
+          <p class="tag">Inspektion planeras / bokas</p>
+          <h3>Tilldelar inspektör och bokar tid</h3>
+          <p>Anger uppdrag, deadline, plats eller möteslänk och kan skicka bokningsmail.</p>
+        </article>
+
+        <article class="node node--decision node--inspection">
+          <p class="tag">Inspektörsportalen</p>
+          <h3>Genomför och dokumenterar inspektionen</h3>
+          <ul>
+            <li>Checklista med uppfyllt, ej uppfyllt eller komplettering</li>
+            <li>Bilder, PDF-filer och kommunikation</li>
+            <li>Samlad bedömning och rekommendation</li>
+            <li>När alla rapporter är klara: Inspektion genomförd</li>
+          </ul>
+        </article>
+
+        <article class="node node--decision node--board-decision node--question">
+          <p class="tag">Formellt beslut</p>
+          <h3>Beslutsfattare registrerar beslut</h3>
+          <ul>
+            <li>Godkänd</li>
+            <li>Godkänd som aspirant</li>
+            <li>Avslagen</li>
+            <li>Vilande</li>
+          </ul>
+        </article>
+
+        <article class="node node--applicant node--applicant-status">
+          <p class="tag">Sökandens vy</p>
+          <h3>Får beslut och motivering</h3>
+          <p>Statuslänken visar beslutet och den publika historiken. Statusändringar kan även skickas via e-post.</p>
+        </article>
+
+        <article class="node node--system node--status-system">
+          <p class="tag">Ärendehistorik</p>
+          <h3>Sparar status och kommunikation</h3>
+          <p>Internt och publikt innehåll hålls åtskilt. Ärendet kan senare arkiveras.</p>
+        </article>
+
+        <article class="node node--staff node--membership">
+          <p class="tag">Efter godkännande</p>
+          <h3>Förbereder medlemsregistreringen</h3>
+          <ul>
+            <li>Kan skapa publik medlemsfartygsprofil</li>
+            <li>Exporterar godkända ärenden till CSV</li>
+            <li>Registrerar Memlist-ID och överföringsstatus manuellt</li>
+          </ul>
+        </article>
+
+        <article class="node node--success node--end">
+          <p class="tag">Utfall</p>
+          <h3>Godkänd / aspirant / avslag / vilande</h3>
+          <p>Godkända ärenden kan bli medlemsfartyg och föras över till Memlist. Övriga ärenden avslutas, pausas eller arkiveras manuellt.</p>
+        </article>
+      </div>
+    </section>
+
+    <div class="legend">
+      <span class="implemented">Implementerad funktion</span>
+      <span class="manual">Manuellt beslut eller statusbyte</span>
+      <span class="attention">Nuvarande stopp eller kontrollpunkt</span>
+    </div>
+
+    <section class="review">
+      <h2>Punkter att bekräfta innan processen öppnas</h2>
+      <p class="review-intro">Markera det som stämmer och notera ändringar där SSF:s verkliga arbetssätt skiljer sig från diagrammet.</p>
+
+      <div class="review-grid">
+        <label class="review-item"><input type="checkbox"><span><strong>Medlemmen är fartygsombudet</strong>Ett ombud kan företräda ett eller flera godkända fartyg.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Ansökningsvägen väljs av sökanden</strong>Standard eller särskild prövning sparas, men systemet gör ingen automatisk behörighetsbedömning.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Handläggaren avgör om inspektion behövs</strong>Det finns ingen tvingande regel i systemet för när inspektion ska ske.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Komplettering kan upprepas</strong>Sökanden svarar via statuslänken och ärendet går tillbaka till granskning.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Beslut fattas av behörig beslutsfattare</strong>Godkänd, aspirant, avslag eller vilande registreras manuellt.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Aspirant och godkänd ska båda kunna exporteras</strong>Båda statusarna ingår i nuvarande Memlist-CSV.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Medlemsfartygsprofil skapas efter godkännande</strong>Detta är i dag ett val i beslutet, inte en automatisk följd.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Memlist-överföringen ska vara manuell</strong>Systemet exporterar CSV men har ingen direkt integration.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Avgift, betalning och medlemsnummer hanteras utanför flödet</strong>Dessa moment saknas i den implementerade processen.</span></label>
+        <label class="review-item"><input type="checkbox"><span><strong>Ansökan ska först testas i ADMIN-läge</strong>Därefter kan funktionen sättas till PUBLIC i release controls.</span></label>
+      </div>
+
+      <div class="observations">
+        <div class="observation"><strong>Utkastssparning saknas</strong><span>Ingressen säger att uppgifterna kan sparas i lugn takt, men formuläret sparar inte ett påbörjat utkast.</span></div>
+        <div class="observation"><strong>Inspektörsportalen behöver rättas</strong><span>Den nuvarande templaten innehåller ett PHP-syntaxfel och måste verifieras innan inspektionssteget kan användas.</span></div>
+        <div class="observation"><strong>Statusväxlingar är fria</strong><span>Behörig personal kan välja status manuellt; systemet upprätthåller inte en strikt ordning mellan alla steg.</span></div>
+      </div>
+
+      <p class="source-note">Underlag: DEV-sidan /ansokan/ samt SSF Medlemsprocess 0.2.5 i kodbasen, granskat 2026-08-30.</p>
+    </section>
+  </main>
+</body>
+</html>

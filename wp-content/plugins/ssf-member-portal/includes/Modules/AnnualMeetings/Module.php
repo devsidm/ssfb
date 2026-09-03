@@ -17,17 +17,21 @@ final class Module
     private RegistrationPostType $registrations;
     private RegistrationService $registration_service;
     private Admin $admin;
+    private Editor $editor;
 
     public function __construct()
     {
         $this->registrations = new RegistrationPostType();
         $this->registration_service = new RegistrationService($this, new RegistrationMailer(), new RegistrationExport(), new SharePoint(new GraphClient(new Authentication())));
         $this->admin = new Admin($this, $this->registration_service);
+        $this->editor = new Editor($this, $this->registration_service);
         new Frontend($this, $this->registration_service);
 
         add_action('add_meta_boxes_' . self::POST_TYPE, array($this, 'add_meta_box'));
         add_action('save_post_' . self::POST_TYPE, array($this, 'save'), 10, 2);
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_filter('manage_' . self::POST_TYPE . '_posts_columns', array($this, 'admin_columns'));
+        add_action('manage_' . self::POST_TYPE . '_posts_custom_column', array($this, 'admin_column'), 10, 2);
     }
 
     public function register(): void
@@ -71,7 +75,7 @@ final class Module
             'post_status' => 'publish',
             'post_parent' => $meeting_id,
             'post_name' => 'anmalan',
-            'post_title' => 'Anmälan till årsmöte',
+            'post_title' => 'Anmälan till middag och aktiviteter',
             'post_content' => '[ssf_member_portal_annual_meeting_registration]',
         ));
         update_option('ssf_member_portal_annual_meeting_registration_page_id', $registration_id, false);
@@ -99,7 +103,7 @@ final class Module
 
     public function add_meta_box(): void
     {
-        add_meta_box('ssf-member-portal-meeting', __('Årsmötesuppgifter', 'ssf-member-portal'), array($this, 'render_meta_box'), self::POST_TYPE, 'normal', 'high');
+        add_meta_box('ssf-member-portal-meeting', __('Redigera årsmötet', 'ssf-member-portal'), array($this, 'render_meta_box'), self::POST_TYPE, 'normal', 'high');
         add_meta_box('ssf-member-portal-meeting-status', __('Årsmötesöversikt', 'ssf-member-portal'), array($this, 'render_status_meta_box'), self::POST_TYPE, 'side', 'high');
     }
 
@@ -110,71 +114,13 @@ final class Module
             return;
         }
         wp_enqueue_script('ssf-member-portal-annual-meeting-admin', SSF_MEMBER_PORTAL_URL . 'assets/js/annual-meetings-admin.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
+        wp_enqueue_style('ssf-member-portal-annual-meeting-admin', SSF_MEMBER_PORTAL_URL . 'assets/css/annual-meetings-admin.css', array(), SSF_MEMBER_PORTAL_VERSION);
+        wp_enqueue_media();
     }
 
     public function render_meta_box(\WP_Post $post): void
     {
-        wp_nonce_field('ssf_member_portal_meeting', 'ssf_member_portal_meeting_nonce');
-        $data = $this->data($post->ID);
-        $program = $data['program'] ?: array($this->program_row());
-        $questions = $data['questions'] ?: array($this->question_row());
-        ?>
-        <div class="ssf-am-admin">
-            <h2><?php esc_html_e('Grunduppgifter', 'ssf-member-portal'); ?></h2>
-            <p><label><strong><?php esc_html_e('År', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_year" type="number" min="2000" max="2100" value="<?php echo esc_attr($data['year']); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Start', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_start_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['start_at'])); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Slut', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_end_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['end_at'])); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Plats', 'ssf-member-portal'); ?></strong><br><input class="widefat" name="ssf_meeting_location" value="<?php echo esc_attr($data['location']); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Adress', 'ssf-member-portal'); ?></strong><br><textarea class="widefat" rows="2" name="ssf_meeting_address"><?php echo esc_textarea($data['address']); ?></textarea></label></p>
-            <p><label><strong><?php esc_html_e('Kort introduktion', 'ssf-member-portal'); ?></strong><br><textarea class="widefat" rows="3" name="ssf_meeting_intro"><?php echo esc_textarea($data['intro']); ?></textarea></label></p>
-            <p><label><strong><?php esc_html_e('Anmälan öppnar', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_registration_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['registration_opens_at'])); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Sista anmälningsdag', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_registration_closes_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['registration_closes_at'])); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Kontaktperson', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_contact_name" value="<?php echo esc_attr($data['contact_name']); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Kontakt-e-post', 'ssf-member-portal'); ?></strong><br><input type="email" name="ssf_meeting_contact_email" value="<?php echo esc_attr($data['contact_email']); ?>"></label></p>
-            <p><label><input type="checkbox" name="ssf_meeting_active" value="1" <?php checked((int) get_option('ssf_member_portal_active_meeting_id', 0), $post->ID); ?>> <?php esc_html_e('Detta är det aktiva årsmötet som visas publikt', 'ssf-member-portal'); ?></label></p>
-
-            <h2><?php esc_html_e('Motionsperiod', 'ssf-member-portal'); ?></h2>
-            <p><label><strong><?php esc_html_e('Motioner öppnar', 'ssf-member-portal'); ?></strong><br><input name="ssf_motion_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['motion_opens_at'])); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Motioner stänger', 'ssf-member-portal'); ?></strong><br><input name="ssf_motion_closes_at" type="datetime-local" value="<?php echo esc_attr($this->input_date($data['motion_closes_at'])); ?>"></label><br><span class="description"><?php esc_html_e('Motionsfunktionen behåller sin befintliga period och SharePoint-mapp.', 'ssf-member-portal'); ?></span></p>
-            <p><label><input type="checkbox" name="ssf_meeting_allow_late_motions" value="1" <?php checked($data['allow_late_motions']); ?>> <?php esc_html_e('Tillåt sena motioner efter deadline', 'ssf-member-portal'); ?></label></p>
-            <p><label><input type="checkbox" name="ssf_meeting_motions_public" value="1" <?php checked($data['motions_public']); ?>> <?php esc_html_e('Visa motionsinformation publikt', 'ssf-member-portal'); ?></label></p>
-            <p><label><strong><?php esc_html_e('Instruktion till medlem', 'ssf-member-portal'); ?></strong></label><?php wp_editor($data['motion_instructions'], 'ssf_meeting_motion_instructions', array('textarea_name' => 'ssf_meeting_motion_instructions', 'textarea_rows' => 5, 'media_buttons' => false)); ?></p>
-            <p><label><strong><?php esc_html_e('Kontakt för motionsfrågor', 'ssf-member-portal'); ?></strong><br><input type="email" class="regular-text" name="ssf_meeting_motion_contact_email" value="<?php echo esc_attr($data['motion_contact_email']); ?>"></label></p>
-
-            <h2><?php esc_html_e('Anmälan och kalender', 'ssf-member-portal'); ?></h2>
-            <p><label><input type="checkbox" name="ssf_meeting_registration_open" value="1" <?php checked($data['registration_open']); ?>> <?php esc_html_e('Anmälan är öppen', 'ssf-member-portal'); ?></label></p>
-            <p><label><input type="checkbox" name="ssf_meeting_allow_guest" value="1" <?php checked($data['allow_guest']); ?>> <?php esc_html_e('Tillåt annan eller inbjuden deltagare', 'ssf-member-portal'); ?></label></p>
-            <p><label><input type="checkbox" name="ssf_meeting_allow_edits" value="1" <?php checked($data['allow_edits']); ?>> <?php esc_html_e('Tillåt ändring och avbokning fram till sista anmälningsdag', 'ssf-member-portal'); ?></label></p>
-            <p><label><strong><?php esc_html_e('Max antal deltagare', 'ssf-member-portal'); ?></strong><br><input name="ssf_meeting_capacity" type="number" min="0" value="<?php echo esc_attr($data['capacity']); ?>"><br><span class="description"><?php esc_html_e('Lämna 0 för obegränsat.', 'ssf-member-portal'); ?></span></label></p>
-            <p><label><input type="checkbox" name="ssf_meeting_waitlist" value="1" <?php checked($data['waitlist']); ?>> <?php esc_html_e('Använd reservlista när mötet är fullt', 'ssf-member-portal'); ?></label></p>
-            <p><label><strong><?php esc_html_e('Kalendertitel', 'ssf-member-portal'); ?></strong><br><input class="widefat" name="ssf_meeting_calendar_title" value="<?php echo esc_attr($data['calendar_title']); ?>"></label></p>
-            <p><label><strong><?php esc_html_e('Kalenderbeskrivning', 'ssf-member-portal'); ?></strong><br><textarea class="widefat" rows="3" name="ssf_meeting_calendar_description"><?php echo esc_textarea($data['calendar_description']); ?></textarea></label></p>
-
-            <h2><?php esc_html_e('Program', 'ssf-member-portal'); ?></h2>
-            <p class="description"><?php esc_html_e('Markera Fråga deltagaren för de programpunkter som ska visas i anmälan. Markera Påverkar mat för måltider.', 'ssf-member-portal'); ?></p>
-            <table class="widefat striped ssf-am-repeater" data-ssf-repeater="program"><thead><tr><th><?php esc_html_e('Datum/tid', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Programpunkt', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Val', 'ssf-member-portal'); ?></th><th></th></tr></thead><tbody>
-                <?php foreach ($program as $index => $item) : $this->render_program_row((int) $index, $item); endforeach; ?>
-            </tbody></table>
-            <p><button class="button" type="button" data-ssf-add-row="program"><?php esc_html_e('Lägg till programpunkt', 'ssf-member-portal'); ?></button></p>
-
-            <h2><?php esc_html_e('Mat och specialkost', 'ssf-member-portal'); ?></h2>
-            <p><label><strong><?php esc_html_e('Alternativ, ett per rad', 'ssf-member-portal'); ?></strong><br><textarea class="widefat" rows="5" name="ssf_meeting_food_options"><?php echo esc_textarea(implode("\n", $data['food_options'])); ?></textarea></label><br><span class="description"><?php esc_html_e('Ange bara det arrangören behöver för maten, inte medicinska diagnoser.', 'ssf-member-portal'); ?></span></p>
-
-            <h2><?php esc_html_e('Extra frågor', 'ssf-member-portal'); ?></h2>
-            <table class="widefat striped ssf-am-repeater" data-ssf-repeater="question"><thead><tr><th><?php esc_html_e('Fråga', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Typ och alternativ', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Inställningar', 'ssf-member-portal'); ?></th><th></th></tr></thead><tbody>
-                <?php foreach ($questions as $index => $item) : $this->render_question_row((int) $index, $item); endforeach; ?>
-            </tbody></table>
-            <p><button class="button" type="button" data-ssf-add-row="question"><?php esc_html_e('Lägg till fråga', 'ssf-member-portal'); ?></button></p>
-
-            <h2><?php esc_html_e('Administration och integritet', 'ssf-member-portal'); ?></h2>
-            <p><strong><?php esc_html_e('SharePoint-mapp', 'ssf-member-portal'); ?></strong><br><code><?php echo esc_html('Årsmöten/' . ($data['year'] ?: 'YYYY') . '/'); ?></code><br><span class="description"><?php esc_html_e('Årsmötesåret används gemensamt för motioner, anmälningar och handlingar.', 'ssf-member-portal'); ?></span></p>
-            <p><label><strong><?php esc_html_e('Mottagare för notifiering', 'ssf-member-portal'); ?></strong><br><input type="email" class="regular-text" name="ssf_meeting_notification_email" value="<?php echo esc_attr($data['notification_email']); ?>"></label></p>
-            <p><label><input type="checkbox" name="ssf_meeting_notify_each" value="1" <?php checked($data['notify_each']); ?>> <?php esc_html_e('Maila mottagaren vid varje ny anmälan', 'ssf-member-portal'); ?></label></p>
-            <p><label><strong><?php esc_html_e('Gallra personuppgifter efter', 'ssf-member-portal'); ?></strong><br><input type="number" min="1" max="60" name="ssf_meeting_retention_months" value="<?php echo esc_attr($data['retention_months']); ?>"> <?php esc_html_e('månader efter mötets slut', 'ssf-member-portal'); ?></label></p>
-        </div>
-        <script type="text/html" id="tmpl-ssf-am-program-row"><?php $this->render_program_row('__INDEX__', $this->program_row()); ?></script>
-        <script type="text/html" id="tmpl-ssf-am-question-row"><?php $this->render_question_row('__INDEX__', $this->question_row()); ?></script>
-        <?php
+        $this->editor->render($post);
     }
 
     public function render_status_meta_box(\WP_Post $post): void
@@ -191,6 +137,26 @@ final class Module
         }
         if ($meeting['registration_open'] && ! $meeting['registration_closes_at']) {
             $warnings[] = __('Anmälan saknar deadline.', 'ssf-member-portal');
+        }
+        if (! $meeting['meeting_start_at']) {
+            $warnings[] = __('Själva årsmötets starttid saknas.', 'ssf-member-portal');
+        }
+        if ($this->module_enabled($meeting, 'invitation') && empty($meeting['invitation']['text']) && empty($meeting['invitation']['pdf_id'])) {
+            $warnings[] = __('Kallelsen är aktiv men saknar innehåll.', 'ssf-member-portal');
+        }
+        if ($this->module_enabled($meeting, 'dinner') && empty($meeting['dinner']['start_at'])) {
+            $warnings[] = __('Middagen är aktiv men starttid saknas.', 'ssf-member-portal');
+        }
+        if ($this->module_enabled($meeting, 'dinner') && empty($meeting['dinner']['deadline'])) {
+            $warnings[] = __('Middagen är aktiv men deadline saknas.', 'ssf-member-portal');
+        }
+        if ($this->module_enabled($meeting, 'day2')) {
+            foreach ((array) $meeting['program'] as $item) {
+                if (empty($item['date']) || empty($item['start']) || empty($item['end'])) {
+                    $warnings[] = __('En programpunkt dag 2 saknar giltigt datum eller tid.', 'ssf-member-portal');
+                    break;
+                }
+            }
         }
         if (! $meeting['motion_opens_at'] || ! $meeting['motion_closes_at']) {
             $warnings[] = __('Motionsperioden är inte komplett.', 'ssf-member-portal');
@@ -210,6 +176,49 @@ final class Module
         <?php
     }
 
+    public function admin_columns(array $columns): array
+    {
+        return array(
+            'cb' => $columns['cb'] ?? '<input type="checkbox">',
+            'title' => __('Årsmöte', 'ssf-member-portal'),
+            'ssf_am_date' => __('Datum', 'ssf-member-portal'),
+            'ssf_am_location' => __('Plats', 'ssf-member-portal'),
+            'ssf_am_dinner' => __('Middag', 'ssf-member-portal'),
+            'ssf_am_day2' => __('Dag 2', 'ssf-member-portal'),
+            'ssf_am_registrations' => __('Anmälningar', 'ssf-member-portal'),
+            'ssf_am_motions' => __('Motioner', 'ssf-member-portal'),
+            'date' => __('Status och publicering', 'ssf-member-portal'),
+        );
+    }
+
+    public function admin_column(string $column, int $post_id): void
+    {
+        $meeting = $this->data($post_id);
+        $counts = $this->registration_service->selection_counts($post_id);
+        switch ($column) {
+            case 'ssf_am_date':
+                echo esc_html($meeting['start_at'] ? wp_date('j M Y', (int) $meeting['start_at'], wp_timezone()) : __('Saknas', 'ssf-member-portal'));
+                break;
+            case 'ssf_am_location':
+                echo esc_html($meeting['location'] ?: __('Saknas', 'ssf-member-portal'));
+                break;
+            case 'ssf_am_dinner':
+                echo $this->module_enabled($meeting, 'dinner') ? esc_html(sprintf(__('%d anmälda', 'ssf-member-portal'), (int) ($counts['dinner'] ?? 0))) : esc_html__('Av', 'ssf-member-portal');
+                break;
+            case 'ssf_am_day2':
+                $activities = array_filter((array) $meeting['program'], static function (array $item): bool { return ! empty($item['requires_registration']); });
+                echo $this->module_enabled($meeting, 'day2') ? esc_html(sprintf(__('%1$d programpunkter, %2$d aktiviteter', 'ssf-member-portal'), count($meeting['program']), count($activities))) : esc_html__('Av', 'ssf-member-portal');
+                break;
+            case 'ssf_am_registrations':
+                echo esc_html((string) count($this->registration_service->registrations($post_id, array('status' => RegistrationService::REGISTERED))));
+                break;
+            case 'ssf_am_motions':
+                $motion_count = post_type_exists('ssf_motion') ? count(get_posts(array('post_type' => 'ssf_motion', 'post_status' => 'any', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => '_ssf_mp_annual_meeting_id', 'meta_value' => $post_id))) : 0;
+                echo esc_html((string) $motion_count);
+                break;
+        }
+    }
+
     public function save(int $post_id, \WP_Post $post): void
     {
         if ((defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || ! current_user_can('edit_post', $post_id) || ! isset($_POST['ssf_member_portal_meeting_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_nonce'])), 'ssf_member_portal_meeting')) {
@@ -227,17 +236,27 @@ final class Module
         $closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_motion_closes_at'] ?? '')));
         $registration_opens_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_opens_at'] ?? '')));
         $registration_closes_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_registration_closes_at'] ?? '')));
+        $meeting_start_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_session_start_at'] ?? '')));
+        $meeting_end_at = $this->timestamp(sanitize_text_field(wp_unslash($_POST['ssf_meeting_session_end_at'] ?? '')));
         if ($opens_at && $closes_at && $closes_at <= $opens_at) {
             $closes_at = 0;
         }
         if ($registration_opens_at && $registration_closes_at && $registration_closes_at <= $registration_opens_at) {
             $registration_closes_at = 0;
         }
+        if ($meeting_start_at && $meeting_end_at && $meeting_end_at <= $meeting_start_at) {
+            $meeting_end_at = 0;
+        }
+        $modules = $this->sanitize_modules((array) wp_unslash($_POST['ssf_meeting_modules'] ?? array()));
+        $invitation = $this->sanitize_invitation((array) wp_unslash($_POST['ssf_meeting_invitation'] ?? array()));
+        $dinner = $this->sanitize_dinner((array) wp_unslash($_POST['ssf_meeting_dinner'] ?? array()));
         $values = array(
             'year' => $year,
             'meeting_date' => $start_at ? wp_date('Y-m-d', $start_at, wp_timezone()) : $legacy_meeting_date,
             'start_at' => $start_at,
             'end_at' => $end_at,
+            'meeting_start_at' => $meeting_start_at,
+            'meeting_end_at' => $meeting_end_at,
             'location' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_location'] ?? '')),
             'address' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_address'] ?? '')),
             'intro' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_intro'] ?? '')),
@@ -258,7 +277,12 @@ final class Module
             'waitlist' => ! empty($_POST['ssf_meeting_waitlist']) ? 1 : 0,
             'calendar_title' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_calendar_title'] ?? '')),
             'calendar_description' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_calendar_description'] ?? '')),
-            'program' => $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array())),
+            'modules' => $modules,
+            'invitation' => $invitation,
+            'dinner' => $dinner,
+            'program' => $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array()), $start_at, $end_at),
+            'program_pdf_id' => $this->pdf_attachment_id(absint($_POST['ssf_meeting_program_pdf_id'] ?? 0)),
+            'documents' => $this->sanitize_documents((array) wp_unslash($_POST['ssf_meeting_documents'] ?? array())),
             'food_options' => $this->lines(sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_food_options'] ?? ''))),
             'questions' => $this->sanitize_questions((array) wp_unslash($_POST['ssf_meeting_questions'] ?? array())),
             'sharepoint_year' => $year,
@@ -290,6 +314,20 @@ final class Module
         };
         $legacy_year = (int) get_post_meta($meeting_id, '_ssf_mp_meeting_year', true);
         $legacy_date = (string) get_post_meta($meeting_id, '_ssf_mp_meeting_date', true);
+        $program = (array) $meta('program', array());
+        $documents = (array) $meta('documents', array());
+        $invitation = wp_parse_args((array) $meta('invitation', array()), array('title' => 'Kallelse', 'text' => '', 'publish_at' => 0, 'pdf_id' => 0, 'visible' => 1));
+        $dinner = wp_parse_args((array) $meta('dinner', array()), array('title' => 'Middag', 'start_at' => 0, 'end_at' => 0, 'location' => '', 'description' => '', 'price' => '', 'deadline' => 0, 'capacity' => 0, 'food_enabled' => 1, 'manual_open' => 0));
+        $stored_modules = (array) $meta('modules', array());
+        $modules = wp_parse_args($stored_modules, array(
+            'invitation' => ! empty($invitation['text']) || ! empty($invitation['pdf_id']),
+            'meeting' => 1,
+            'dinner' => ! empty($dinner['start_at']),
+            'day2' => ! empty($program),
+            'motions' => (bool) $meta('motions_public', 1),
+            'documents' => ! empty($documents),
+            'calendar' => 1,
+        ));
         return array(
             'id' => $meeting_id,
             'year' => (int) $meta('year', $legacy_year),
@@ -299,6 +337,8 @@ final class Module
             'sharepoint_folder' => (string) get_post_meta($meeting_id, '_ssf_mp_sharepoint_folder', true),
             'start_at' => (int) $meta('start_at', 0),
             'end_at' => (int) $meta('end_at', 0),
+            'meeting_start_at' => (int) $meta('meeting_start_at', 0),
+            'meeting_end_at' => (int) $meta('meeting_end_at', 0),
             'location' => (string) $meta('location', ''),
             'address' => (string) $meta('address', ''),
             'intro' => (string) $meta('intro', ''),
@@ -317,7 +357,12 @@ final class Module
             'waitlist' => (bool) $meta('waitlist', 0),
             'calendar_title' => (string) $meta('calendar_title', ''),
             'calendar_description' => (string) $meta('calendar_description', ''),
-            'program' => (array) $meta('program', array()),
+            'modules' => array_map('boolval', $modules),
+            'invitation' => $invitation,
+            'dinner' => $dinner,
+            'program' => $this->normalise_program($program),
+            'program_pdf_id' => (int) $meta('program_pdf_id', 0),
+            'documents' => $documents,
             'food_options' => (array) $meta('food_options', array('Vegetariskt', 'Veganskt', 'Glutenfritt', 'Laktosfritt')),
             'questions' => (array) $meta('questions', array()),
             'sharepoint_year' => (int) $meta('sharepoint_year', $legacy_year),
@@ -351,6 +396,14 @@ final class Module
         return add_query_arg($args, $page_id ? get_permalink($page_id) : home_url('/arsmote/'));
     }
 
+    public function calendar_url(int $meeting_id): string
+    {
+        return add_query_arg(
+            array('action' => 'ssf_member_portal_annual_meeting_calendar_public', 'meeting' => $meeting_id),
+            admin_url('admin-post.php')
+        );
+    }
+
     public function motion_url(array $args = array()): string
     {
         $page_id = (int) get_option('ssf_member_portal_motion_form_page_id');
@@ -374,6 +427,46 @@ final class Module
         return ! $meeting['registration_closes_at'] || time() <= (int) $meeting['registration_closes_at'];
     }
 
+    public function module_enabled(array $meeting, string $module): bool
+    {
+        return ! empty($meeting['modules'][$module]);
+    }
+
+    public function registration_choices(array $meeting): array
+    {
+        $choices = array();
+        if ($this->module_enabled($meeting, 'dinner') && ! empty($meeting['dinner']['start_at'])) {
+            $dinner = $meeting['dinner'];
+            $choices[] = array(
+                'key' => 'dinner',
+                'title' => (string) ($dinner['title'] ?: __('Middag', 'ssf-member-portal')),
+                'date' => wp_date('Y-m-d', (int) $dinner['start_at'], wp_timezone()),
+                'start' => wp_date('H:i', (int) $dinner['start_at'], wp_timezone()),
+                'end' => ! empty($dinner['end_at']) ? wp_date('H:i', (int) $dinner['end_at'], wp_timezone()) : '',
+                'location' => (string) $dinner['location'],
+                'description' => (string) $dinner['description'],
+                'capacity' => max(0, (int) $dinner['capacity']),
+                'deadline' => (int) $dinner['deadline'],
+                'food' => ! empty($dinner['food_enabled']) ? 1 : 0,
+                'closed' => empty($dinner['manual_open']) && ! empty($dinner['deadline']) && time() > (int) $dinner['deadline'],
+                'manual_open' => ! empty($dinner['manual_open']) ? 1 : 0,
+                'price' => (string) $dinner['price'],
+                'optional' => 1,
+                'visible' => 1,
+                'source' => 'dinner',
+            );
+        }
+        if ($this->module_enabled($meeting, 'day2')) {
+            foreach ((array) $meeting['program'] as $item) {
+                if (empty($item['visible']) || empty($item['requires_registration'])) {
+                    continue;
+                }
+                $choices[] = array_merge($item, array('source' => 'activity'));
+            }
+        }
+        return $choices;
+    }
+
     private function render_program_row($index, array $item): void
     {
         $prefix = 'ssf_meeting_program[' . $index . ']';
@@ -392,7 +485,7 @@ final class Module
 
     private function program_row(): array
     {
-        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'ask' => 1, 'optional' => 1, 'food' => 0, 'closed' => 0, 'capacity' => 0);
+        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'requires_registration' => 0, 'ask' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'order' => 0);
     }
 
     private function question_row(): array
@@ -400,7 +493,7 @@ final class Module
         return array('key' => '', 'title' => '', 'help' => '', 'type' => 'text', 'options' => array(), 'required' => 0, 'visible' => 1, 'order' => 0);
     }
 
-    private function sanitize_program(array $rows): array
+    private function sanitize_program(array $rows, int $weekend_start = 0, int $weekend_end = 0): array
     {
         $program = array();
         $used = array();
@@ -414,21 +507,43 @@ final class Module
                 $key = 'program_' . (count($program) + 1);
             }
             $used[$key] = true;
+            $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($row['date'] ?? '')) ? (string) $row['date'] : '';
+            $start = preg_match('/^\d{2}:\d{2}$/', (string) ($row['start'] ?? '')) ? (string) $row['start'] : '';
+            $end = preg_match('/^\d{2}:\d{2}$/', (string) ($row['end'] ?? '')) ? (string) $row['end'] : '';
+            if ($start && $end && $end <= $start) {
+                $end = '';
+            }
+            $deadline = $this->timestamp(sanitize_text_field((string) ($row['deadline'] ?? '')));
+            if ($date && $weekend_start && ($date < wp_date('Y-m-d', $weekend_start, wp_timezone()) || ($weekend_end && $date > wp_date('Y-m-d', $weekend_end, wp_timezone())))) {
+                $date = '';
+            }
+            $event_at = $date && $start ? $this->timestamp($date . 'T' . $start) : 0;
+            if ($deadline && $event_at && $deadline > $event_at) {
+                $deadline = 0;
+            }
+            $requires_registration = ! empty($row['requires_registration']) || ! empty($row['ask']);
             $program[] = array(
                 'key' => $key,
-                'date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($row['date'] ?? '')) ? (string) $row['date'] : '',
-                'start' => preg_match('/^\d{2}:\d{2}$/', (string) ($row['start'] ?? '')) ? (string) $row['start'] : '',
-                'end' => preg_match('/^\d{2}:\d{2}$/', (string) ($row['end'] ?? '')) ? (string) $row['end'] : '',
+                'date' => $date,
+                'start' => $start,
+                'end' => $end,
                 'title' => $title,
                 'description' => sanitize_textarea_field($row['description'] ?? ''),
                 'location' => sanitize_text_field($row['location'] ?? ''),
-                'ask' => ! empty($row['ask']) ? 1 : 0,
+                'requires_registration' => $requires_registration ? 1 : 0,
+                'ask' => $requires_registration ? 1 : 0,
                 'optional' => ! empty($row['optional']) ? 1 : 0,
                 'food' => ! empty($row['food']) ? 1 : 0,
                 'closed' => ! empty($row['closed']) ? 1 : 0,
+                'manual_open' => ! empty($row['manual_open']) ? 1 : 0,
                 'capacity' => max(0, absint($row['capacity'] ?? 0)),
+                'deadline' => $deadline,
+                'price' => sanitize_text_field($row['price'] ?? ''),
+                'visible' => ! empty($row['visible']) ? 1 : 0,
+                'order' => max(0, absint($row['order'] ?? count($program))),
             );
         }
+        usort($program, static function (array $a, array $b): int { return $a['order'] <=> $b['order']; });
         return $program;
     }
 
@@ -463,6 +578,113 @@ final class Module
         }
         usort($questions, static function (array $a, array $b): int { return $a['order'] <=> $b['order']; });
         return $questions;
+    }
+
+    private function sanitize_modules(array $values): array
+    {
+        $modules = array();
+        foreach (array('invitation', 'meeting', 'dinner', 'day2', 'motions', 'documents', 'calendar') as $key) {
+            $modules[$key] = ! empty($values[$key]) ? 1 : 0;
+        }
+        $modules['meeting'] = 1;
+        return $modules;
+    }
+
+    private function sanitize_invitation(array $value): array
+    {
+        return array(
+            'title' => sanitize_text_field($value['title'] ?? '') ?: __('Kallelse', 'ssf-member-portal'),
+            'text' => wp_kses_post($value['text'] ?? ''),
+            'publish_at' => $this->timestamp(sanitize_text_field((string) ($value['publish_at'] ?? ''))),
+            'pdf_id' => $this->pdf_attachment_id(absint($value['pdf_id'] ?? 0)),
+            'visible' => ! empty($value['visible']) ? 1 : 0,
+        );
+    }
+
+    private function sanitize_dinner(array $value): array
+    {
+        $start_at = $this->timestamp(sanitize_text_field((string) ($value['start_at'] ?? '')));
+        $end_at = $this->timestamp(sanitize_text_field((string) ($value['end_at'] ?? '')));
+        $deadline = $this->timestamp(sanitize_text_field((string) ($value['deadline'] ?? '')));
+        if ($start_at && $end_at && $end_at <= $start_at) {
+            $end_at = 0;
+        }
+        if ($start_at && $deadline && $deadline > $start_at) {
+            $deadline = 0;
+        }
+        return array(
+            'title' => sanitize_text_field($value['title'] ?? '') ?: __('Middag', 'ssf-member-portal'),
+            'start_at' => $start_at,
+            'end_at' => $end_at,
+            'location' => sanitize_text_field($value['location'] ?? ''),
+            'description' => sanitize_textarea_field($value['description'] ?? ''),
+            'price' => sanitize_text_field($value['price'] ?? ''),
+            'deadline' => $deadline,
+            'capacity' => max(0, absint($value['capacity'] ?? 0)),
+            'food_enabled' => ! empty($value['food_enabled']) ? 1 : 0,
+            'manual_open' => ! empty($value['manual_open']) ? 1 : 0,
+        );
+    }
+
+    private function sanitize_documents(array $rows): array
+    {
+        $documents = array();
+        $types = array('agenda', 'annual_report', 'financial_report', 'budget', 'motions', 'board_response', 'minutes', 'other');
+        foreach ($rows as $index => $row) {
+            $attachment_id = $this->pdf_attachment_id(absint($row['attachment_id'] ?? 0));
+            if (! $attachment_id) {
+                continue;
+            }
+            $type = sanitize_key($row['type'] ?? 'other');
+            $documents[] = array(
+                'attachment_id' => $attachment_id,
+                'title' => sanitize_text_field($row['title'] ?? '') ?: get_the_title($attachment_id),
+                'type' => in_array($type, $types, true) ? $type : 'other',
+                'visible' => ! empty($row['visible']) ? 1 : 0,
+                'order' => max(0, absint($row['order'] ?? $index)),
+            );
+        }
+        usort($documents, static function (array $a, array $b): int { return $a['order'] <=> $b['order']; });
+        return $documents;
+    }
+
+    private function normalise_program(array $rows): array
+    {
+        $program = array();
+        foreach ($rows as $index => $row) {
+            $requires_registration = ! empty($row['requires_registration']) || ! empty($row['ask']);
+            $item = wp_parse_args($row, array(
+                'key' => 'program_' . ($index + 1),
+                'date' => '',
+                'start' => '',
+                'end' => '',
+                'title' => '',
+                'description' => '',
+                'location' => '',
+                'requires_registration' => $requires_registration ? 1 : 0,
+                'ask' => $requires_registration ? 1 : 0,
+                'optional' => 1,
+                'food' => 0,
+                'closed' => 0,
+                'manual_open' => 0,
+                'capacity' => 0,
+                'deadline' => 0,
+                'price' => '',
+                'visible' => 1,
+                'order' => $index,
+            ));
+            $item['requires_registration'] = $requires_registration ? 1 : 0;
+            $item['ask'] = $requires_registration ? 1 : 0;
+            $item['visible'] = array_key_exists('visible', $row) ? (! empty($row['visible']) ? 1 : 0) : 1;
+            $program[] = $item;
+        }
+        usort($program, static function (array $a, array $b): int { return (int) $a['order'] <=> (int) $b['order']; });
+        return $program;
+    }
+
+    private function pdf_attachment_id(int $attachment_id): int
+    {
+        return $attachment_id && 'application/pdf' === get_post_mime_type($attachment_id) ? $attachment_id : 0;
     }
 
     private function lines(string $value): array

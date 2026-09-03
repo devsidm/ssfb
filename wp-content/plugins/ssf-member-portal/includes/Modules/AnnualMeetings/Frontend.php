@@ -29,6 +29,8 @@ final class Frontend
         add_action('admin_post_ssf_member_portal_cancel_meeting_registration', array($this, 'cancel'));
         add_action('admin_post_nopriv_ssf_member_portal_meeting_calendar', array($this, 'calendar'));
         add_action('admin_post_ssf_member_portal_meeting_calendar', array($this, 'calendar'));
+        add_action('admin_post_nopriv_ssf_member_portal_annual_meeting_calendar_public', array($this, 'public_calendar'));
+        add_action('admin_post_ssf_member_portal_annual_meeting_calendar_public', array($this, 'public_calendar'));
     }
 
     public function meeting_shortcode(): string
@@ -44,7 +46,15 @@ final class Frontend
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
-        $can_register = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->meetings->is_registration_open($meeting) && $this->feature_enabled('annual_meeting_registration');
+        $registration_enabled = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->feature_enabled('annual_meeting_registration');
+        $can_register = $registration_enabled && $this->meetings->is_registration_open($meeting);
+        $choices = $this->meetings->registration_choices($meeting);
+        $choice_states = array();
+        foreach ($choices as $choice) {
+            $choice_states[$choice['key']] = $this->registrations->choice_state($meeting, $choice);
+        }
+        $has_available_choice = (bool) array_filter($choice_states, static function (array $state): bool { return ! empty($state['available']); });
+        $calendar_url = $this->meetings->calendar_url((int) $meeting['id']);
         $motion = $this->motions->state($meeting);
         ob_start();
         include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/meeting.php';
@@ -96,15 +106,15 @@ final class Frontend
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
         if (! $this->feature_enabled('annual_meeting_registration')) {
-            return $this->message(__('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
+            return $this->message(__('Anmälan till middag och aktiviteter är inte öppen just nu.', 'ssf-member-portal'));
         }
         $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
-            return $this->message(__('Det finns inget årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
+            return $this->message(__('Det finns ingen middag eller aktivitet att anmäla sig till just nu.', 'ssf-member-portal'));
         }
         $meeting = $this->meetings->data($meeting_post->ID);
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
-            return $this->message(__('Det finns inget årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
+            return $this->message(__('Det finns ingen middag eller aktivitet att anmäla sig till just nu.', 'ssf-member-portal'));
         }
         $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
         $registration_post = $token ? $this->registrations->find_by_token($token) : null;
@@ -113,6 +123,11 @@ final class Frontend
             $token = '';
         }
         $registration = $registration_post ? $this->registrations->details($registration_post->ID, $meeting) : array();
+        $choices = $this->meetings->registration_choices($meeting);
+        $choice_states = array();
+        foreach ($choices as $choice) {
+            $choice_states[$choice['key']] = $this->registrations->choice_state($meeting, $choice, $registration_post ? (int) $registration_post->ID : 0);
+        }
         if ($registration_post && isset($_GET['ssf_am_confirmation'])) {
             ob_start();
             include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/confirmation.php';
@@ -128,7 +143,7 @@ final class Frontend
     {
         $redirect = $this->meetings->registration_url();
         if (! $this->feature_enabled('annual_meetings') || ! $this->feature_enabled('annual_meeting_registration')) {
-            $this->redirect_error($redirect, __('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
+            $this->redirect_error($redirect, __('Anmälan till middag och aktiviteter är inte öppen just nu.', 'ssf-member-portal'));
         }
         if (! isset($_POST['ssf_member_portal_meeting_registration_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_registration_nonce'])), 'ssf_member_portal_submit_meeting_registration') || ! empty($_POST['website'])) {
             $this->redirect_error($redirect, __('Formuläret kunde inte verifieras. Försök igen.', 'ssf-member-portal'));
@@ -155,7 +170,7 @@ final class Frontend
     public function cancel(): void
     {
         if (! $this->feature_enabled('annual_meeting_registration')) {
-            $this->redirect_error($this->meetings->registration_url(), __('Anmälan till årsmötet är inte öppen just nu.', 'ssf-member-portal'));
+            $this->redirect_error($this->meetings->registration_url(), __('Anmälan till middag och aktiviteter är inte öppen just nu.', 'ssf-member-portal'));
         }
         $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '';
         $registration = $this->registrations->find_by_token($token);
@@ -187,6 +202,30 @@ final class Frontend
         header('Content-Type: text/calendar; charset=utf-8');
         header('Content-Disposition: attachment; filename="ssf-arsmote.ics"');
         echo $this->registrations->calendar($registration); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        exit;
+    }
+
+    public function public_calendar(): void
+    {
+        if (! $this->feature_enabled('annual_meetings')) {
+            status_header(404);
+            exit;
+        }
+        $meeting_id = isset($_GET['meeting']) && is_scalar($_GET['meeting']) ? absint(wp_unslash($_GET['meeting'])) : 0;
+        $post = $meeting_id ? get_post($meeting_id) : null;
+        if (! $post || Module::POST_TYPE !== $post->post_type || 'publish' !== $post->post_status) {
+            status_header(404);
+            exit;
+        }
+        $meeting = $this->meetings->data($meeting_id);
+        if (! $this->is_publicly_configured($post, $meeting) || ! $this->meetings->module_enabled($meeting, 'calendar')) {
+            status_header(404);
+            exit;
+        }
+        nocache_headers();
+        header('Content-Type: text/calendar; charset=utf-8');
+        header('Content-Disposition: attachment; filename="ssf-arsmoteshelg-' . (int) $meeting['year'] . '.ics"');
+        echo $this->registrations->calendar_for_meeting($meeting_id); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         exit;
     }
 

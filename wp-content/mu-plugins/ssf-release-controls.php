@@ -687,11 +687,11 @@ final class SSF_Feature_Manager
             'unavailable' => 'Årsmöten är inte tillgängliga just nu. Information om nästa årsmöte publiceras här.',
         ),
         'annual_meeting_registration' => array(
-            'label' => 'Årsmötesanmälan',
-            'description' => 'Anmälan till ett publicerat årsmöte.',
+            'label' => 'Middag och aktiviteter vid årsmötet',
+            'description' => 'Anmälan till middag och valfria aktiviteter. Själva årsmötet kräver ingen anmälan.',
             'default' => 'off',
             'sensitive' => true,
-            'unavailable' => 'Anmälan till årsmötet är inte öppen just nu.',
+            'unavailable' => 'Anmälan till middag och aktiviteter är inte öppen just nu.',
         ),
         'motions' => array(
             'label' => 'Motioner',
@@ -706,6 +706,13 @@ final class SSF_Feature_Manager
             'default' => 'public',
             'sensitive' => false,
             'unavailable' => 'Kalendern är inte tillgänglig just nu.',
+        ),
+        'promotions' => array(
+            'label' => 'Aktuellt',
+            'description' => 'Tidsstyrda och prioriterade budskap på startsidan och andra valda platser.',
+            'default' => 'admin',
+            'sensitive' => false,
+            'unavailable' => 'Aktuella budskap är inte tillgängliga just nu.',
         ),
         'newsletters' => array(
             'label' => 'Nyhetsbrev',

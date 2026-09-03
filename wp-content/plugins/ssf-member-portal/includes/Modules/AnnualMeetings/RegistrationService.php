@@ -36,7 +36,7 @@ final class RegistrationService
     {
         $meeting_post = $this->meetings->active();
         if (! $meeting_post || 'publish' !== $meeting_post->post_status) {
-            return new \WP_Error('annual_meeting_missing', __('Det finns inget aktivt årsmöte att anmäla sig till.', 'ssf-member-portal'));
+            return new \WP_Error('annual_meeting_missing', __('Det finns ingen aktiv middag eller aktivitet att anmäla sig till.', 'ssf-member-portal'));
         }
         $meeting = $this->meetings->data($meeting_post->ID);
         $existing = $token ? $this->find_by_token($token) : null;
@@ -95,7 +95,7 @@ final class RegistrationService
 
         $registration = $this->details((int) $post_id, $meeting);
         $manage_url = $this->meetings->registration_url(array('token' => rawurlencode((string) $token)));
-        $calendar_url = add_query_arg(array('action' => 'ssf_member_portal_meeting_calendar', 'token' => rawurlencode((string) $token)), admin_url('admin-post.php'));
+        $calendar_url = $this->meetings->calendar_url((int) $meeting['id']);
         $this->mailer->confirmation($meeting, $registration, $manage_url, $calendar_url);
         if ($is_new) {
             $this->mailer->notification($meeting, $registration);
@@ -131,8 +131,8 @@ final class RegistrationService
         };
         $program = (array) $get('program', array());
         $labels = array();
-        foreach ((array) ($meeting['program'] ?? array()) as $item) {
-            if (! empty($item['ask']) && ! empty($program[$item['key']])) {
+        foreach ($this->meetings->registration_choices($meeting) as $item) {
+            if (! empty($program[$item['key']])) {
                 $labels[] = (string) $item['title'];
             }
         }
@@ -211,7 +211,42 @@ final class RegistrationService
             $meeting,
             $registration,
             $this->meetings->registration_url(array('token' => rawurlencode($token))),
-            add_query_arg(array('action' => 'ssf_member_portal_meeting_calendar', 'token' => rawurlencode($token)), admin_url('admin-post.php'))
+            $this->meetings->calendar_url((int) $meeting['id'])
+        );
+    }
+
+    public function selection_counts(int $meeting_id, int $exclude_id = 0): array
+    {
+        $counts = array();
+        foreach ($this->registrations($meeting_id, array('status' => self::REGISTERED)) as $registration) {
+            if ((int) $registration->ID === $exclude_id) {
+                continue;
+            }
+            foreach ((array) get_post_meta($registration->ID, '_ssf_am_program', true) as $key => $selected) {
+                if ($selected) {
+                    $counts[(string) $key] = ($counts[(string) $key] ?? 0) + 1;
+                }
+            }
+        }
+        return $counts;
+    }
+
+    public function choice_state(array $meeting, array $choice, int $exclude_id = 0): array
+    {
+        $counts = $this->selection_counts((int) $meeting['id'], $exclude_id);
+        $capacity = max(0, (int) ($choice['capacity'] ?? 0));
+        $count = (int) ($counts[(string) ($choice['key'] ?? '')] ?? 0);
+        $deadline = (int) ($choice['deadline'] ?? 0);
+        $closed = ! empty($choice['closed']) || (empty($choice['manual_open']) && $deadline && time() > $deadline);
+        $registration_open = $this->meetings->is_registration_open($meeting);
+        return array(
+            'count' => $count,
+            'capacity' => $capacity,
+            'remaining' => $capacity ? max(0, $capacity - $count) : null,
+            'full' => $capacity > 0 && $count >= $capacity,
+            'closed' => $closed,
+            'registration_open' => $registration_open,
+            'available' => $registration_open && ! $closed && (! $capacity || $count < $capacity),
         );
     }
 
@@ -256,16 +291,17 @@ final class RegistrationService
         update_post_meta($meeting_id, '_ssf_am_sharepoint_excel_synced_at', $now);
     }
 
-    public function calendar(\WP_Post $registration): string
+    public function calendar_for_meeting(int $meeting_id): string
     {
-        $meeting = $this->meetings->data((int) $registration->post_parent);
+        $meeting = $this->meetings->data($meeting_id);
         $year = (int) $meeting['year'];
-        $uid = 'ssf-arsmote-' . $year . '-' . $registration->ID . '@ssfb.se';
+        $uid = 'annual-meeting-' . $meeting_id . '@ssfb.se';
         $description = trim((string) $meeting['calendar_description']);
         if (! $description) {
             $description = (string) $meeting['intro'];
         }
-        $description .= "\n" . $this->meetings->meeting_url();
+        $meeting_url = $this->meetings->meeting_url(array('meeting' => $meeting_id));
+        $description .= "\n" . $meeting_url;
         return implode("\r\n", array(
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
@@ -276,15 +312,20 @@ final class RegistrationService
             'UID:' . $uid,
             'DTSTAMP:' . gmdate('Ymd\\THis\\Z'),
             'DTSTART:' . gmdate('Ymd\\THis\\Z', (int) $meeting['start_at']),
-            'DTEND:' . gmdate('Ymd\\THis\\Z', (int) ($meeting['end_at'] ?: $meeting['start_at'])),
+            'DTEND:' . gmdate('Ymd\\THis\\Z', (int) ($meeting['end_at'] ?: $meeting['start_at'] + HOUR_IN_SECONDS)),
             'SUMMARY:' . $this->ics((string) ($meeting['calendar_title'] ?: 'SSF Årsmöte ' . $year)),
             'LOCATION:' . $this->ics(trim((string) $meeting['location'] . ' ' . (string) $meeting['address'])),
             'DESCRIPTION:' . $this->ics($description),
-            'URL:' . esc_url_raw($this->meetings->meeting_url()),
+            'URL:' . esc_url_raw($meeting_url),
             'END:VEVENT',
             'END:VCALENDAR',
             '',
         ));
+    }
+
+    public function calendar(\WP_Post $registration): string
+    {
+        return $this->calendar_for_meeting((int) $registration->post_parent);
     }
 
     public function run_retention(): void
@@ -371,23 +412,34 @@ final class RegistrationService
         }
         $submitted_program = (array) ($input['program'] ?? array());
         $existing_program = $exclude_id ? (array) get_post_meta($exclude_id, '_ssf_am_program', true) : array();
-        foreach ((array) $meeting['program'] as $item) {
-            if (empty($item['ask']) || empty($item['key'])) {
-                continue;
-            }
-            if (! empty($item['closed'])) {
-                if (! empty($existing_program[$item['key']])) {
-                    $data['program'][$item['key']] = 1;
-                }
+        foreach ($this->meetings->registration_choices($meeting) as $item) {
+            if (empty($item['key'])) {
                 continue;
             }
             $selected = ! empty($submitted_program[$item['key']]);
+            $was_selected = ! empty($existing_program[$item['key']]);
+            $state = $this->choice_state($meeting, $item, $exclude_id);
+            if ($state['closed'] || ($state['full'] && ! $was_selected)) {
+                if ($was_selected) {
+                    $data['program'][$item['key']] = 1;
+                }
+                if ($selected && ! $was_selected) {
+                    return new \WP_Error(
+                        $state['full'] ? 'annual_meeting_choice_full' : 'annual_meeting_choice_closed',
+                        sprintf($state['full'] ? __('Tyvärr är %s fullbokad.', 'ssf-member-portal') : __('Anmälan till %s är stängd.', 'ssf-member-portal'), $item['title'])
+                    );
+                }
+                continue;
+            }
             if (empty($item['optional']) && ! $selected) {
                 return new \WP_Error('annual_meeting_program_required', sprintf(__('Välj %s.', 'ssf-member-portal'), $item['title']));
             }
             if ($selected) {
                 $data['program'][$item['key']] = 1;
             }
+        }
+        if (! $data['program']) {
+            return new \WP_Error('annual_meeting_choice_required', __('Välj minst en middag eller aktivitet.', 'ssf-member-portal'));
         }
         $selected_food = (array) ($input['food'] ?? array());
         foreach ((array) $meeting['food_options'] as $option) {
@@ -414,17 +466,6 @@ final class RegistrationService
         $active = $this->registrations((int) $meeting['id'], array('status' => self::REGISTERED));
         $active = array_filter($active, static function (\WP_Post $post) use ($exclude_id): bool { return (int) $post->ID !== $exclude_id; });
         $full = ! empty($meeting['capacity']) && count($active) >= (int) $meeting['capacity'];
-        foreach ((array) $meeting['program'] as $item) {
-            if (empty($item['key']) || empty($data['program'][$item['key']]) || empty($item['capacity'])) {
-                continue;
-            }
-            $count = 0;
-            foreach ($active as $registration) {
-                $program = (array) get_post_meta($registration->ID, '_ssf_am_program', true);
-                $count += ! empty($program[$item['key']]) ? 1 : 0;
-            }
-            $full = $full || $count >= (int) $item['capacity'];
-        }
         if (! $full) {
             return self::REGISTERED;
         }

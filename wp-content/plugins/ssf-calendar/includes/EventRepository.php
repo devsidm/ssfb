@@ -113,6 +113,10 @@ final class EventRepository
             if (! trim($post->post_title)) {
                 continue;
             }
+            $modules = get_post_meta($post->ID, '_ssf_am_modules', true);
+            if (is_array($modules) && array_key_exists('calendar', $modules) && empty($modules['calendar'])) {
+                continue;
+            }
             $start_timestamp = (int) get_post_meta($post->ID, '_ssf_am_start_at', true);
             if (! $start_timestamp) {
                 continue;

@@ -11,17 +11,18 @@ final class RegistrationMailer
     public function confirmation(array $meeting, array $registration, string $manage_url, string $calendar_url): bool
     {
         $year = (int) $meeting['year'];
-        $subject = sprintf(__('Anmälan bekräftad – SSF Årsmöte %d', 'ssf-member-portal'), $year);
+        $subject = sprintf(__('Anmälan bekräftad – SSF:s årsmöteshelg %d', 'ssf-member-portal'), $year);
         $lines = array(
             sprintf(__('Hej %s,', 'ssf-member-portal'), $registration['first_name']),
             '',
-            __('Din anmälan till SSF:s årsmöte är registrerad.', 'ssf-member-portal'),
+            __('Din anmälan till årsmöteshelgens middag och aktiviteter är registrerad.', 'ssf-member-portal'),
+            __('Själva årsmötet är öppet för alla medlemmar och kräver ingen anmälan.', 'ssf-member-portal'),
             '',
             sprintf(__('Årsmöte: %s', 'ssf-member-portal'), get_the_title((int) $meeting['id'])),
             sprintf(__('Datum: %s', 'ssf-member-portal'), $this->dates($meeting)),
             sprintf(__('Plats: %s', 'ssf-member-portal'), $meeting['location'] ?: __('Meddelas senare', 'ssf-member-portal')),
             '',
-            __('Du har anmält dig till:', 'ssf-member-portal'),
+            __('Dina val:', 'ssf-member-portal'),
         );
         foreach ((array) $registration['program_labels'] as $item) {
             $lines[] = '• ' . $item;
@@ -51,7 +52,7 @@ final class RegistrationMailer
         if (! $recipient || empty($meeting['notify_each'])) {
             return true;
         }
-        $subject = sprintf(__('Ny anmälan – SSF Årsmöte %d', 'ssf-member-portal'), (int) $meeting['year']);
+        $subject = sprintf(__('Ny aktivitetsanmälan – SSF:s årsmöteshelg %d', 'ssf-member-portal'), (int) $meeting['year']);
         $message = implode("\n", array(
             sprintf('%s %s', $registration['first_name'], $registration['last_name']),
             sprintf(__('E-post: %s', 'ssf-member-portal'), $registration['email']),

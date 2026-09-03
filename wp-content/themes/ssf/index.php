@@ -12,8 +12,10 @@ get_header();
     <?php while (have_posts()) : ?>
         <?php the_post(); ?>
         <?php $is_document_page = is_page('stadgar'); ?>
+        <?php $page_content = (string) get_post_field('post_content', get_the_ID()); ?>
+        <?php $content_has_own_title = has_shortcode($page_content, 'ssf_member_portal_annual_meeting') || has_shortcode($page_content, 'ssf_member_portal_annual_meeting_registration'); ?>
         <article id="post-<?php the_ID(); ?>" <?php post_class($is_document_page ? 'content-page content-page--stadgar' : 'content-page'); ?>>
-            <?php if (! is_page(array('kontakta-oss', 'stadgar'))) : ?><h1><?php the_title(); ?></h1><?php endif; ?>
+            <?php if (! is_page(array('kontakta-oss', 'stadgar')) && ! $content_has_own_title) : ?><h1><?php the_title(); ?></h1><?php endif; ?>
             <div class="entry-content">
                 <?php the_content(); ?>
             </div>

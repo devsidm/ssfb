@@ -11,12 +11,10 @@ final class RegistrationExport
     public function data(array $meeting, array $registrations): array
     {
         $headers = array('Registration ID', 'Status', 'Anmäld datum', 'Senast ändrad', 'Förnamn', 'Efternamn', 'Telefon', 'E-post', 'Medlemstyp', 'Fartygsombud för', 'Anknytning till fartyg', 'Matpreferens', 'Matkommentar');
-        $program = (array) ($meeting['program'] ?? array());
+        $program = $this->registration_choices($meeting);
         $questions = array_filter((array) ($meeting['questions'] ?? array()), static function (array $question): bool { return ! empty($question['visible']) && 'info' !== ($question['type'] ?? ''); });
         foreach ($program as $item) {
-            if (! empty($item['ask'])) {
-                $headers[] = (string) $item['title'];
-            }
+            $headers[] = (string) $item['title'];
         }
         foreach ($questions as $question) {
             $headers[] = (string) $question['title'];
@@ -44,9 +42,7 @@ final class RegistrationExport
                 (string) get_post_meta($id, '_ssf_am_food_note', true),
             );
             foreach ($program as $item) {
-                if (! empty($item['ask'])) {
-                    $row[] = ! empty($program_values[$item['key']]) ? 'Ja' : 'Nej';
-                }
+                $row[] = ! empty($program_values[$item['key']]) ? 'Ja' : 'Nej';
             }
             foreach ($questions as $question) {
                 $answer = $answers[$question['key']] ?? '';
@@ -74,6 +70,22 @@ final class RegistrationExport
     {
         $labels = array('representative' => 'Fartygsombud', 'supporter' => 'Stödmedlem', 'guest' => 'Annan/inbjuden deltagare');
         return $labels[$value] ?? $value;
+    }
+
+    private function registration_choices(array $meeting): array
+    {
+        $choices = array();
+        if (! empty($meeting['modules']['dinner']) && ! empty($meeting['dinner']['start_at'])) {
+            $choices[] = array('key' => 'dinner', 'title' => (string) ($meeting['dinner']['title'] ?: 'Middag'));
+        }
+        if (! empty($meeting['modules']['day2'])) {
+            foreach ((array) ($meeting['program'] ?? array()) as $item) {
+                if (! empty($item['visible']) && ! empty($item['requires_registration'])) {
+                    $choices[] = $item;
+                }
+            }
+        }
+        return $choices;
     }
 
     private function date(int $timestamp): string

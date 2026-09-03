@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSF - frågor till fartygsombudet</title>
+  <style>
+    :root {
+      --ink: #173247;
+      --muted: #587080;
+      --page: #edf2f3;
+      --paper: #ffffff;
+      --teal: #13746d;
+      --teal-soft: #e7f5f2;
+      --blue: #285e91;
+      --blue-soft: #eaf2f9;
+      --gold: #a76516;
+      --gold-soft: #fff4e1;
+      --plum: #783f70;
+      --plum-soft: #f6ebf3;
+      --green: #2b734f;
+      --green-soft: #eaf6ef;
+      --line: #8da0aa;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .sheet {
+      width: min(1500px, calc(100% - 32px));
+      margin: 24px auto;
+      background: var(--paper);
+      box-shadow: 0 8px 30px rgba(23, 50, 71, 0.12);
+    }
+
+    header {
+      padding: 42px 54px 30px;
+      border-bottom: 1px solid #dbe4e8;
+    }
+
+    .kicker {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.12;
+    }
+
+    .intro {
+      max-width: 1050px;
+      margin: 13px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.5;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 22px;
+      margin-top: 20px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .legend strong { color: #a33f31; }
+
+    .flow {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 86px 1fr;
+      padding: 52px 54px 60px;
+    }
+
+    .flow::before {
+      content: "";
+      position: absolute;
+      top: 65px;
+      bottom: 100px;
+      left: 50%;
+      width: 4px;
+      transform: translateX(-2px);
+      background: var(--line);
+    }
+
+    .start,
+    .finish {
+      position: relative;
+      z-index: 2;
+      grid-column: 1 / -1;
+      justify-self: center;
+      width: 360px;
+      padding: 16px 20px;
+      background: var(--green-soft);
+      border: 2px solid var(--green);
+      text-align: center;
+      font-size: 19px;
+      font-weight: 700;
+    }
+
+    .start { margin-bottom: 34px; }
+    .finish { margin-top: 34px; }
+
+    .step {
+      display: contents;
+    }
+
+    .step-card {
+      position: relative;
+      align-self: center;
+      margin: 16px 0;
+      padding: 21px 24px;
+      border: 2px solid;
+      background: #fff;
+      box-shadow: 0 3px 9px rgba(23, 50, 71, 0.08);
+    }
+
+    .step-card::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 43px;
+      height: 3px;
+      background: var(--line);
+    }
+
+    .step--left .step-card { grid-column: 1; }
+    .step--left .step-card::after { right: -45px; }
+    .step--right .step-card { grid-column: 3; }
+    .step--right .step-card::after { left: -45px; }
+
+    .step-number {
+      position: relative;
+      z-index: 3;
+      grid-column: 2;
+      align-self: center;
+      justify-self: center;
+      display: grid;
+      place-items: center;
+      width: 54px;
+      height: 54px;
+      border: 4px solid #fff;
+      border-radius: 50%;
+      background: var(--ink);
+      color: #fff;
+      font-size: 21px;
+      font-weight: 700;
+    }
+
+    .step--left .step-number,
+    .step--right .step-number { grid-row: auto; }
+
+    .placeholder { min-height: 1px; }
+    .step--left .placeholder { grid-column: 3; }
+    .step--right .placeholder { grid-column: 1; }
+
+    .step-card h2 {
+      margin: 0;
+      font-size: 23px;
+      line-height: 1.2;
+    }
+
+    .step-card .question {
+      margin: 13px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid rgba(23, 50, 71, 0.14);
+    }
+
+    .step-card .question:first-of-type { margin-top: 15px; }
+    .step-card .question strong { color: #a33f31; }
+    .step-card p { margin: 5px 0 0; color: #435d6e; font-size: 15px; line-height: 1.42; }
+
+    .answers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .answer {
+      display: inline-block;
+      padding: 5px 9px;
+      border: 1px solid currentColor;
+      background: rgba(255, 255, 255, 0.72);
+      color: #435d6e;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .step-card ul {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px 18px;
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .step-card li {
+      position: relative;
+      padding-left: 17px;
+      color: #435d6e;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .step-card li::before {
+      content: "";
+      position: absolute;
+      top: 6px;
+      left: 0;
+      width: 7px;
+      height: 7px;
+      border: 2px solid currentColor;
+    }
+
+    .required { color: #a33f31; font-weight: 700; }
+    .optional { color: var(--muted); font-weight: 400; }
+
+    .tone-teal { border-color: var(--teal); background: var(--teal-soft); }
+    .tone-blue { border-color: var(--blue); background: var(--blue-soft); }
+    .tone-gold { border-color: var(--gold); background: var(--gold-soft); }
+    .tone-plum { border-color: var(--plum); background: var(--plum-soft); }
+
+    footer {
+      padding: 18px 54px 30px;
+      border-top: 1px solid #dbe4e8;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 850px) {
+      .sheet { width: 100%; margin: 0; box-shadow: none; }
+      header { padding: 28px 22px; }
+      h1 { font-size: 32px; }
+      .flow { display: block; padding: 30px 22px; }
+      .flow::before, .step-card::after, .step-number { display: none; }
+      .step-card { margin: 18px 0; }
+      .step-card ul { grid-template-columns: 1fr; }
+      .start, .finish { width: 100%; }
+      footer { padding: 18px 22px 28px; }
+    }
+
+    @media print {
+      @page { size: A3 portrait; margin: 9mm; }
+      body { background: #fff; }
+      .sheet { width: 100%; margin: 0; box-shadow: none; }
+      header { padding: 20px 32px 14px; }
+      h1 { font-size: 34px; }
+      .flow { padding: 24px 32px 30px; }
+      .step-card { margin: 8px 0; padding: 14px 17px; }
+      .step-card h2 { font-size: 19px; }
+      .step-card p, .step-card li { font-size: 12px; }
+      footer { padding: 12px 32px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <header>
+      <p class="kicker">SSF ansökan</p>
+      <h1>Frågor som fartygsombudet ska svara på</h1>
+      <p class="intro">Frågorna visas i denna ordning i det digitala ansökningsformuläret. Endast sökandens formulärflöde ingår i schemat.</p>
+      <div class="legend"><span><strong>*</strong> Obligatorisk uppgift</span><span><span class="optional">Valfri</span> uppgift</span></div>
+    </header>
+
+    <section class="flow" aria-label="Frågeflöde i tio steg">
+      <div class="start">Starta fartygsansökan</div>
+
+      <div class="step step--left">
+        <article class="step-card tone-teal">
+          <h2>Välj ansökningsväg</h2>
+          <div class="question"><p><strong>*</strong> Vilket alternativ beskriver fartyget?</p>
+            <div class="answers"><span class="answer">Uppfyller måttkraven</span><span class="answer">Uppfyller inte måttkraven</span></div>
+          </div>
+          <p>Angivet måttkrav: över 12 meter i huvuddäck och minst 4 meter brett. Det andra alternativet avser särskild prövning.</p>
+        </article>
+        <div class="step-number">1</div><div class="placeholder"></div>
+      </div>
+
+      <div class="step step--right">
+        <div class="placeholder"></div><div class="step-number">2</div>
+        <article class="step-card tone-blue">
+          <h2>Segelfartyg</h2>
+          <div class="question"><p><strong>*</strong> Är fartyget ett segelfartyg eller segelfartyg med hjälpmotor?</p>
+            <div class="answers"><span class="answer">Ja</span><span class="answer">Nej</span></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="step step--left">
+        <article class="step-card tone-gold">
+          <h2>Yrkesfartyg och nybyggnation</h2>
+          <div class="question"><p><strong>*</strong> Har fartyget använts eller används det som seglande yrkesfartyg?</p>
+            <div class="answers"><span class="answer">Ja</span><span class="answer">Nej</span></div>
+          </div>
+          <div class="question"><p><strong>*</strong> Är fartyget nybyggt i traditionell stil?</p>
+            <div class="answers"><span class="answer">Ja</span><span class="answer">Nej</span></div>
+          </div>
+        </article>
+        <div class="step-number">3</div><div class="placeholder"></div>
+      </div>
+
+      <div class="step step--right">
+        <div class="placeholder"></div><div class="step-number">4</div>
+        <article class="step-card tone-plum">
+          <h2>Fartygets mått</h2>
+          <ul>
+            <li><span><span class="required">*</span> Längd i huvuddäck, meter</span></li>
+            <li><span><span class="required">*</span> Bredd, meter</span></li>
+            <li><span>Djupgående, meter <span class="optional">(valfri)</span></span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="step step--left">
+        <article class="step-card tone-teal">
+          <h2>Registrering</h2>
+          <div class="question"><p><strong>*</strong> Är fartyget registrerat i svenskt skeppsregister?</p>
+            <div class="answers"><span class="answer">Ja</span><span class="answer">Nej</span></div>
+          </div>
+          <div class="question"><p>Registreringsnummer <span class="optional">(valfritt)</span></p></div>
+        </article>
+        <div class="step-number">5</div><div class="placeholder"></div>
+      </div>
+
+      <div class="step step--right">
+        <div class="placeholder"></div><div class="step-number">6</div>
+        <article class="step-card tone-blue">
+          <h2>Uppgifter om fartyget</h2>
+          <ul>
+            <li><span><span class="required">*</span> Fartygets namn</span></li>
+            <li><span><span class="required">*</span> Fartygstyp</span></li>
+            <li><span>Rigtyp <span class="optional">(valfri)</span></span></li>
+            <li><span>Byggår <span class="optional">(valfritt)</span></span></li>
+            <li><span>Byggplats eller varv <span class="optional">(valfri)</span></span></li>
+            <li><span>Hemmahamn <span class="optional">(valfri)</span></span></li>
+            <li><span>Är fartyget under restaurering? <span class="optional">(valfri)</span></span></li>
+            <li><span><span class="required">*</span> Kort beskrivning</span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="step step--left">
+        <article class="step-card tone-gold">
+          <h2>Historia och användning</h2>
+          <ul>
+            <li><span><span class="required">*</span> Beskriv fartygets historia</span></li>
+            <li><span><span class="required">*</span> Vad används fartyget till i dag?</span></li>
+            <li><span>Fördjupad beskrivning <span class="optional">(valfri)</span></span></li>
+          </ul>
+        </article>
+        <div class="step-number">7</div><div class="placeholder"></div>
+      </div>
+
+      <div class="step step--right">
+        <div class="placeholder"></div><div class="step-number">8</div>
+        <article class="step-card tone-plum">
+          <h2>Fartygsombud</h2>
+          <ul>
+            <li><span><span class="required">*</span> Namn</span></li>
+            <li><span><span class="required">*</span> E-post</span></li>
+            <li><span><span class="required">*</span> Telefon</span></li>
+            <li><span>Organisation, förening eller rederi <span class="optional">(valfri)</span></span></li>
+            <li><span>Adress <span class="optional">(valfri)</span></span></li>
+            <li><span>Webbplats <span class="optional">(valfri)</span></span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="step step--left">
+        <article class="step-card tone-teal">
+          <h2>Bilagor och bilder</h2>
+          <div class="question"><p>Vill du bifoga bilder eller relevanta dokument? <span class="optional">(valfritt)</span></p></div>
+          <p>Tillåtna format: JPG, JPEG, PNG, WEBP och PDF.</p>
+        </article>
+        <div class="step-number">9</div><div class="placeholder"></div>
+      </div>
+
+      <div class="step step--right">
+        <div class="placeholder"></div><div class="step-number">10</div>
+        <article class="step-card tone-blue">
+          <h2>Förhandsgranska och bekräfta</h2>
+          <ul>
+            <li><span><span class="required">*</span> Jag intygar att uppgifterna är korrekta</span></li>
+            <li><span><span class="required">*</span> Jag godkänner att SSF behandlar uppgifterna för att hantera ansökan</span></li>
+            <li><span><span class="required">*</span> Jag intygar att jag har rätt att ladda upp bilder och bilagor</span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="finish">Skicka ansökan</div>
+    </section>
+
+    <footer>Underlag: formuläret i SSF Medlemsprocess 0.2.5, granskat 2026-08-30.</footer>
+  </main>
+</body>
+</html>
