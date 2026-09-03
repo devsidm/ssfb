@@ -5,6 +5,7 @@
 /** @var array $choice_states */
 /** @var string $calendar_url */
 /** @var bool $has_available_choice */
+/** @var bool $show_registration_link */
 /** @var SSF\MemberPortal\Modules\AnnualMeetings\Frontend $this */
 $invitation = (array) $meeting['invitation'];
 $invitation_is_published = empty($invitation['publish_at']) || time() >= (int) $invitation['publish_at'];
@@ -77,6 +78,7 @@ $format_time = static function (int $timestamp): string {
         <div class="ssf-am-section-heading"><div><p class="ssf-am-kicker"><?php esc_html_e('Öppet för alla medlemmar', 'ssf-member-portal'); ?></p><h2><?php esc_html_e('Själva årsmötet', 'ssf-member-portal'); ?></h2></div><span class="ssf-am-badge ssf-am-badge--open"><?php esc_html_e('Ingen anmälan', 'ssf-member-portal'); ?></span></div>
         <?php if ($meeting['meeting_start_at']) : ?><p class="ssf-am-meta"><strong><?php echo esc_html($format_time((int) $meeting['meeting_start_at'])); ?><?php if ($meeting['meeting_end_at']) : ?>–<?php echo esc_html(wp_date('H:i', (int) $meeting['meeting_end_at'], wp_timezone())); ?><?php endif; ?></strong><?php if ($meeting['location']) : ?> · <?php echo esc_html($meeting['location']); ?><?php endif; ?></p><?php endif; ?>
         <p><?php esc_html_e('Kom till årsmötet och delta utan att fylla i något formulär. Formuläret längre ner används bara för praktiska arrangemang.', 'ssf-member-portal'); ?></p>
+        <?php if ($show_registration_link) : ?><p><a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Anmäl till middag och aktiviteter', 'ssf-member-portal'); ?></a></p><?php endif; ?>
     </section>
 
     <?php if ($show_dinner) : $dinner = $meeting['dinner']; $state = $dinner_choice ? ($choice_states[$dinner_choice['key']] ?? array()) : array(); ?>

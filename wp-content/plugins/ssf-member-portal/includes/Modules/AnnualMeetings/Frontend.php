@@ -47,7 +47,8 @@ final class Frontend
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
         $registration_enabled = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->feature_enabled('annual_meeting_registration');
-        $can_register = $registration_enabled && $this->meetings->is_registration_open($meeting);
+        $show_registration_link = $registration_enabled && $this->meetings->is_registration_open($meeting);
+        $can_register = $show_registration_link;
         $choices = $this->meetings->registration_choices($meeting);
         $choice_states = array();
         foreach ($choices as $choice) {
