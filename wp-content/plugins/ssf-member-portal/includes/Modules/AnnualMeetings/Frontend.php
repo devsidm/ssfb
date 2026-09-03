@@ -47,6 +47,11 @@ final class Frontend
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
         $registration_state = $this->registrations->registration_state($meeting, $meeting_post);
+        $page_title = $this->meeting_title($meeting, $meeting_post);
+        $location_summary = $this->location_summary($meeting);
+        $location_address = $this->location_address($meeting, $location_summary);
+        $maps_url = $this->maps_url($meeting);
+        $contact_url = $this->contact_url($meeting);
         $choices = (array) $registration_state['choices'];
         $choice_states = (array) $registration_state['choice_states'];
         $calendar_url = $this->meetings->calendar_url((int) $meeting['id']);
@@ -220,6 +225,60 @@ final class Frontend
         header('Content-Disposition: attachment; filename="ssf-arsmoteshelg-' . (int) $meeting['year'] . '.ics"');
         echo $this->registrations->calendar_for_meeting($meeting_id); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         exit;
+    }
+
+    public function meeting_title(array $meeting, ?\WP_Post $post = null): string
+    {
+        if (! empty($meeting['year'])) {
+            return sprintf(__('Årsmöte %d', 'ssf-member-portal'), (int) $meeting['year']);
+        }
+        $title = $post ? (string) get_the_title($post) : '';
+        $title = preg_replace('/^\s*SSF\s+/i', '', $title) ?: $title;
+        $title = str_replace(array('Årsömte', 'årsömte'), array('Årsmöte', 'årsmöte'), $title);
+        return trim($title) ?: __('Årsmöte', 'ssf-member-portal');
+    }
+
+    public function location_summary(array $meeting): string
+    {
+        $location = trim((string) ($meeting['location'] ?? ''));
+        $city = trim((string) ($meeting['city'] ?? ''));
+        if ($location && $city && false === stripos($location, $city)) {
+            return $location . ', ' . $city;
+        }
+        return $location ?: $city;
+    }
+
+    public function location_address(array $meeting, string $summary = ''): string
+    {
+        $address = trim(preg_replace('/\s+/', ' ', (string) ($meeting['address'] ?? '')) ?: '');
+        $postal_city = trim(implode(' ', array_filter(array(
+            trim((string) ($meeting['postal_code'] ?? '')),
+            trim((string) ($meeting['city'] ?? '')),
+        ))));
+        $full = trim(implode(', ', array_filter(array($address, $postal_city))));
+        return $full && strtolower($full) !== strtolower(trim($summary)) ? $full : '';
+    }
+
+    public function maps_url(array $meeting): string
+    {
+        $explicit = esc_url_raw((string) ($meeting['maps_url'] ?? ''));
+        if ($explicit) {
+            return $explicit;
+        }
+        $query = trim(implode(', ', array_filter(array(
+            trim((string) ($meeting['location'] ?? '')),
+            trim((string) ($meeting['address'] ?? '')),
+            trim(implode(' ', array_filter(array(
+                trim((string) ($meeting['postal_code'] ?? '')),
+                trim((string) ($meeting['city'] ?? '')),
+            )))),
+        ))));
+        return $query ? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($query) : '';
+    }
+
+    public function contact_url(array $meeting): string
+    {
+        return add_query_arg('annual_meeting_id', (int) ($meeting['id'] ?? 0), home_url('/kontakta-oss/'));
     }
 
     public function date_range(array $meeting): string

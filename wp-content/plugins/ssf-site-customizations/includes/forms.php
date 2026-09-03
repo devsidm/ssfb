@@ -181,19 +181,118 @@ function ssf_site_format_application_body(array $data, array $result): string
     return implode("\n", $lines);
 }
 
+function ssf_site_annual_meeting_contact_context(int $meeting_id = 0): array
+{
+    if (! $meeting_id && isset($_REQUEST['annual_meeting_id']) && is_scalar($_REQUEST['annual_meeting_id'])) {
+        $meeting_id = absint(wp_unslash($_REQUEST['annual_meeting_id']));
+    }
+
+    if (! $meeting_id) {
+        return array();
+    }
+
+    $post = get_post($meeting_id);
+    if (! $post || 'ssf_annual_meeting' !== $post->post_type) {
+        return array();
+    }
+
+    if ('publish' !== $post->post_status && ! current_user_can('edit_post', $meeting_id)) {
+        return array();
+    }
+
+    $year = (int) get_post_meta($meeting_id, '_ssf_am_year', true);
+    if (! $year) {
+        $year = (int) get_post_meta($meeting_id, '_ssf_mp_meeting_year', true);
+    }
+
+    $title = $year ? sprintf('Årsmöte %d', $year) : (string) get_the_title($post);
+    $title = preg_replace('/^\s*SSF\s+/i', '', $title) ?: $title;
+    $title = str_replace(array('Årsömte', 'årsömte'), array('Årsmöte', 'årsmöte'), $title);
+    $title = trim($title) ?: 'Årsmöte';
+
+    return array(
+        'annual_meeting_id' => $meeting_id,
+        'title'             => $title,
+        'year'              => $year,
+        'url'               => add_query_arg('meeting', $meeting_id, home_url('/arsmote/')),
+        'subject'           => sprintf('Fråga om %s', $title),
+    );
+}
+
+function ssf_site_contact_recipient(array $context = array()): string
+{
+    $recipient = $context ? 'styrelsen@ssfb.se' : 'info@ssfb.se';
+    return (string) apply_filters('ssf_site_contact_recipient', $recipient, $context);
+}
+
+function ssf_site_contact_redirect(array $context = array()): string
+{
+    $referer = wp_get_referer();
+    if ($referer) {
+        return remove_query_arg('ssf_status', $referer);
+    }
+
+    if (! empty($context['annual_meeting_id'])) {
+        return add_query_arg('annual_meeting_id', (int) $context['annual_meeting_id'], home_url('/kontakta-oss/'));
+    }
+
+    return home_url('/kontakta-oss/');
+}
+
 function ssf_site_handle_contact(): void
 {
+    $context = ssf_site_annual_meeting_contact_context();
+    $redirect = ssf_site_contact_redirect($context);
+
     if (! isset($_POST['ssf_contact_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_contact_nonce'])), 'ssf_contact')) {
-        wp_safe_redirect(add_query_arg('ssf_status', 'invalid', wp_get_referer() ?: home_url('/kontakta-oss/')));
+        wp_safe_redirect(add_query_arg('ssf_status', 'invalid', $redirect));
         exit;
     }
+
+    if (! empty($_POST['website'])) {
+        wp_safe_redirect(add_query_arg('ssf_status', $context ? 'annual_meeting_contact_sent' : 'contact_sent', $redirect));
+        exit;
+    }
+
+    $ip = sanitize_text_field((string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+    $limit_key = 'ssf_contact_rate_' . md5($ip);
+    $attempts = (int) get_transient($limit_key);
+    if ($attempts >= 8) {
+        wp_safe_redirect(add_query_arg('ssf_status', 'rate_limited', $redirect));
+        exit;
+    }
+    set_transient($limit_key, $attempts + 1, 10 * MINUTE_IN_SECONDS);
 
     $name = ssf_site_clean_field('namn');
     $email = sanitize_email(ssf_site_clean_field('epost'));
     $phone = ssf_site_clean_field('telefon');
-    $subject = ssf_site_clean_field('amne') ?: 'Kontakt från ssfb.se';
+    $subject = ssf_site_clean_field('amne') ?: (string) ($context['subject'] ?? 'Kontakt från ssfb.se');
     $message = ssf_site_clean_textarea('meddelande');
-    $body = "Namn: $name\nE-post: $email\nTelefon: $phone\nÄmne: $subject\n\nMeddelande:\n$message";
+
+    if (! $name || ! is_email($email) || ! $subject || ! $message) {
+        wp_safe_redirect(add_query_arg('ssf_status', 'contact_required', $redirect));
+        exit;
+    }
+
+    $context_lines = array();
+    if ($context) {
+        $context_lines = array(
+            '',
+            'Årsmöteskontext',
+            'Årsmöte: ' . $context['title'],
+            'År: ' . ($context['year'] ?: ''),
+            'Sida: ' . $context['url'],
+        );
+    }
+
+    $body = implode("\n", array_merge(array(
+        "Namn: $name",
+        "E-post: $email",
+        "Telefon: $phone",
+        "Ämne: $subject",
+        '',
+        "Meddelande:\n$message",
+    ), $context_lines));
 
     $post_id = wp_insert_post(
         array(
@@ -209,6 +308,12 @@ function ssf_site_handle_contact(): void
         update_post_meta($post_id, 'epost', $email);
         update_post_meta($post_id, 'telefon', $phone);
         update_post_meta($post_id, 'amne', $subject);
+        if ($context) {
+            update_post_meta($post_id, 'annual_meeting_id', (int) $context['annual_meeting_id']);
+            update_post_meta($post_id, 'annual_meeting_title', (string) $context['title']);
+            update_post_meta($post_id, 'annual_meeting_year', (int) $context['year']);
+            update_post_meta($post_id, 'annual_meeting_url', (string) $context['url']);
+        }
     }
 
     $headers = array('Content-Type: text/plain; charset=UTF-8');
@@ -216,9 +321,10 @@ function ssf_site_handle_contact(): void
         $headers[] = 'Reply-To: ' . $name . ' <' . $email . '>';
     }
 
-    wp_mail('info@ssfb.se', 'Kontaktformulär: ' . $subject, $body, $headers);
+    wp_mail(ssf_site_contact_recipient($context), 'Kontaktformulär: ' . $subject, $body, $headers);
 
-    wp_safe_redirect(add_query_arg('ssf_status', 'contact_sent', wp_get_referer() ?: home_url('/kontakta-oss/')));
+    delete_transient($limit_key);
+    wp_safe_redirect(add_query_arg('ssf_status', $context ? 'annual_meeting_contact_sent' : 'contact_sent', $redirect));
     exit;
 }
 add_action('admin_post_nopriv_ssf_contact', 'ssf_site_handle_contact');

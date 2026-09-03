@@ -256,22 +256,39 @@ function ssf_site_yes_no(string $name): string
     return ssf_site_radio_card($name, 'ja', 'Ja', '') . ssf_site_radio_card($name, 'nej', 'Nej', '');
 }
 
-function ssf_site_contact_form_shortcode(): string
+function ssf_site_contact_form_markup(string $heading = ''): string
 {
+    $context = function_exists('ssf_site_annual_meeting_contact_context') ? ssf_site_annual_meeting_contact_context() : array();
+    $subject = (string) ($context['subject'] ?? '');
     ob_start();
-    ssf_site_status_notice();
     ?>
     <form class="ssf-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <?php if ($heading) : ?><h2><?php echo esc_html($heading); ?></h2><?php endif; ?>
         <input type="hidden" name="action" value="ssf_contact">
         <?php wp_nonce_field('ssf_contact', 'ssf_contact_nonce'); ?>
+        <?php if ($context) : ?>
+            <input type="hidden" name="annual_meeting_id" value="<?php echo esc_attr((string) $context['annual_meeting_id']); ?>">
+            <input type="hidden" name="annual_meeting_title" value="<?php echo esc_attr((string) $context['title']); ?>">
+            <input type="hidden" name="annual_meeting_year" value="<?php echo esc_attr((string) $context['year']); ?>">
+            <input type="hidden" name="annual_meeting_url" value="<?php echo esc_url((string) $context['url']); ?>">
+        <?php endif; ?>
+        <p class="ssf-honeypot" aria-hidden="true"><label>Webbplats<input type="text" name="website" tabindex="-1" autocomplete="off"></label></p>
         <label>Namn<input name="namn" required></label>
         <label>E-post<input type="email" name="epost" required></label>
         <label>Telefon<input name="telefon"></label>
-        <label>Ämne<input name="amne" required></label>
+        <label>Ämne<input name="amne" value="<?php echo esc_attr($subject); ?>" required></label>
         <label>Meddelande<textarea name="meddelande" rows="6" required></textarea></label>
         <button class="ssf-button" type="submit">Skicka</button>
     </form>
     <?php
+    return ob_get_clean();
+}
+
+function ssf_site_contact_form_shortcode(): string
+{
+    ob_start();
+    ssf_site_status_notice();
+    echo ssf_site_contact_form_markup(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     return ob_get_clean();
 }
 add_shortcode('ssf_contact_form', 'ssf_site_contact_form_shortcode');
@@ -293,9 +310,17 @@ function ssf_site_status_notice(): void
         'application_sent' => 'Tack. Din ansökan har skickats till SSF.',
         'application_closed' => 'Den digitala ansökningsfunktionen är tillfälligt stängd.',
         'contact_sent' => 'Tack. Ditt meddelande har skickats.',
+        'contact_required' => 'Fyll i namn, e-post, ämne och meddelande.',
+        'rate_limited' => 'För många försök. Vänta några minuter och försök igen.',
         'invalid' => 'Formuläret kunde inte verifieras. Försök igen.',
         'consent' => 'Du behöver godkänna intygande och behandling av uppgifter för att skicka formuläret.',
     );
+    if ('annual_meeting_contact_sent' === $status) {
+        $context = function_exists('ssf_site_annual_meeting_contact_context') ? ssf_site_annual_meeting_contact_context() : array();
+        $messages[$status] = $context
+            ? sprintf('Tack. Ditt meddelande om %s har skickats till styrelsen.', $context['title'])
+            : 'Tack. Ditt meddelande om årsmötet har skickats till styrelsen.';
+    }
     if (isset($messages[$status])) {
         echo '<div class="ssf-notice">' . esc_html($messages[$status]) . '</div>';
     }

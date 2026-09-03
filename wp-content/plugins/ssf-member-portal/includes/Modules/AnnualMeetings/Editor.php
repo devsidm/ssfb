@@ -81,8 +81,11 @@ final class Editor
                 <div class="ssf-am-admin-grid">
                     <label>Start<input name="ssf_meeting_start_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['start_at'])); ?>"></label>
                     <label>Slut<input name="ssf_meeting_end_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['end_at'])); ?>"></label>
-                    <label>Plats<input name="ssf_meeting_location" value="<?php echo esc_attr($data['location']); ?>"></label>
+                    <label>Platsnamn<input name="ssf_meeting_location" value="<?php echo esc_attr($data['location']); ?>"></label>
+                    <label>Ort<input name="ssf_meeting_city" value="<?php echo esc_attr($data['city']); ?>"></label>
                     <label>Adress<textarea rows="3" name="ssf_meeting_address"><?php echo esc_textarea($data['address']); ?></textarea></label>
+                    <label>Postnummer<input name="ssf_meeting_postal_code" value="<?php echo esc_attr($data['postal_code']); ?>"></label>
+                    <label>Google Maps-länk<input type="url" name="ssf_meeting_maps_url" value="<?php echo esc_attr($data['maps_url']); ?>"><small>Valfri. Tomt bygger en söklänk från plats och adress.</small></label>
                 </div>
                 <h3>Själva årsmötet</h3>
                 <div class="ssf-am-admin-grid">

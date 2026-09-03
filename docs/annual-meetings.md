@@ -11,6 +11,7 @@ Modulerna lagras i `_ssf_am_modules` med nycklarna `invitation`, `meeting`, `din
 - Dag 2: `_ssf_am_program`. En programpunkt blir en aktivitet när `requires_registration` är satt. Samma post innehåller deadline, kapacitet och manuell status.
 - Handlingar: `_ssf_am_documents`, en ordnad lista med attachment-ID, titel, dokumenttyp och synlighet.
 - Program-PDF: `_ssf_am_program_pdf_id`.
+- Plats: `_ssf_am_location`, `_ssf_am_address`, `_ssf_am_postal_code`, `_ssf_am_city` och valfri `_ssf_am_maps_url`. Saknas explicit kartlänk byggs en Google Maps-sökning från sparad plats och adress.
 
 Ingen separat CPT eller kalenderpost skapas för modulerna.
 
@@ -66,6 +67,10 @@ Sid-ID:n och fallback-URL:erna är oförändrade:
 - `/lamna-motion/` - befintligt motionsformulär
 
 Äldre länkar fortsätter därför att fungera. Frontend visar bara aktiva moduler med innehåll och staplas till en kolumn på mobil.
+
+Årsmötessidan visar en enda H1-rubrik, normalt `Årsmöte {år}`. Den lokala ankarmenyn ligger direkt under rubriken och använder ankare för översikt, program, anmälan och motioner. Äldre ankare som `#ssf-am-meeting` och `#ssf-am-day2` finns kvar som kompatibilitetspunkter.
+
+Publik kontakt sker via `/kontakta-oss/?annual_meeting_id={ID}` och knappen heter `Kontakta styrelsen`. Inga mottagaradresser eller mailto-länkar skrivs ut på årsmötessidan. Kontaktformuläret skickar endast möteskontext, medan mottagare väljs server-side och mailet skickas via befintlig `wp_mail`-arkitektur.
 
 ## Migration och avgränsningar
 

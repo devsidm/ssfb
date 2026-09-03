@@ -328,6 +328,14 @@ h3, h4, .site-title {
   resize: vertical;
 }
 
+.ssf-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 .ssf-form-step {
   display: none;
   margin: 0;
