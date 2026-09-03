@@ -2,6 +2,7 @@
 
 namespace SSF\MemberPortal\Modules\AnnualMeetings;
 
+use SSF\MemberPortal\Core\Logger;
 use SSF\MemberPortal\Integrations\Microsoft365\SharePoint;
 
 if (! defined('ABSPATH')) {
@@ -13,6 +14,13 @@ final class RegistrationService
     public const REGISTERED = 'registered';
     public const CANCELLED = 'cancelled';
     public const WAITLIST = 'waitlist';
+    public const AVAILABILITY_DISABLED = 'disabled';
+    public const AVAILABILITY_NO_CHOICES = 'no_choices';
+    public const AVAILABILITY_NOT_STARTED = 'not_started';
+    public const AVAILABILITY_OPEN = 'open';
+    public const AVAILABILITY_CLOSED = 'closed';
+    public const AVAILABILITY_MEETING_PASSED = 'meeting_passed';
+    public const AVAILABILITY_SOLD_OUT = 'sold_out';
 
     private Module $meetings;
     private RegistrationMailer $mailer;
@@ -43,55 +51,67 @@ final class RegistrationService
         if ($existing && (int) $existing->post_parent !== (int) $meeting['id']) {
             return new \WP_Error('annual_meeting_token', __('Den personliga länken hör inte till detta årsmöte.', 'ssf-member-portal'));
         }
-        if (! $existing && ! $this->meetings->is_registration_open($meeting)) {
-            return new \WP_Error('annual_meeting_closed', __('Anmälan är stängd.', 'ssf-member-portal'));
-        }
-        if ($existing && (! $meeting['allow_edits'] || ! $this->meets_deadline($meeting))) {
-            return new \WP_Error('annual_meeting_edits_closed', __('Ändring och avbokning är stängd för denna anmälan.', 'ssf-member-portal'));
+
+        $exclude_id = $existing ? (int) $existing->ID : 0;
+        $lock = $this->acquire_registration_lock((int) $meeting['id']);
+        if (is_wp_error($lock)) {
+            return $lock;
         }
 
-        $data = $this->validate($meeting, $input, $existing ? (int) $existing->ID : 0);
-        if (is_wp_error($data)) {
-            return $data;
-        }
+        try {
+            $availability = $this->registration_state($meeting, $meeting_post, $exclude_id);
+            if (! $existing && empty($availability['can_register'])) {
+                return $this->availability_error($availability, (int) $meeting['id']);
+            }
+            if ($existing && (empty($meeting['allow_edits']) || empty($availability['can_register']))) {
+                return new \WP_Error('annual_meeting_edits_closed', __('Ändring och avbokning är stängd för denna anmälan.', 'ssf-member-portal'));
+            }
 
-        $status = $this->registration_status($meeting, $data, $existing ? (int) $existing->ID : 0);
-        if (is_wp_error($status)) {
-            return $status;
-        }
+            $data = $this->validate($meeting, $input, $exclude_id);
+            if (is_wp_error($data)) {
+                return $data;
+            }
 
-        $now = time();
-        $post_data = array(
-            'post_type' => RegistrationPostType::POST_TYPE,
-            'post_status' => 'private',
-            'post_parent' => (int) $meeting['id'],
-            'post_title' => trim($data['first_name'] . ' ' . $data['last_name']),
-        );
-        if ($existing) {
-            $post_data['ID'] = $existing->ID;
-            $post_id = wp_update_post($post_data, true);
-        } else {
-            $post_id = wp_insert_post($post_data, true);
-        }
-        if (is_wp_error($post_id) || ! $post_id) {
-            return is_wp_error($post_id) ? $post_id : new \WP_Error('annual_meeting_save', __('Anmälan kunde inte sparas.', 'ssf-member-portal'));
-        }
+            $status = $this->registration_status($meeting, $data, $exclude_id);
+            if (is_wp_error($status)) {
+                return $status;
+            }
 
-        $is_new = ! $existing;
-        if ($is_new) {
-            $token = $this->token();
-            update_post_meta($post_id, '_ssf_am_token_hash', hash('sha256', $token));
-            update_post_meta($post_id, '_ssf_am_registration_id', $this->registration_id($meeting, (int) $post_id));
-            update_post_meta($post_id, '_ssf_am_submitted_at', $now);
+            $now = $this->now();
+            $post_data = array(
+                'post_type' => RegistrationPostType::POST_TYPE,
+                'post_status' => 'private',
+                'post_parent' => (int) $meeting['id'],
+                'post_title' => trim($data['first_name'] . ' ' . $data['last_name']),
+            );
+            if ($existing) {
+                $post_data['ID'] = $existing->ID;
+                $post_id = wp_update_post($post_data, true);
+            } else {
+                $post_id = wp_insert_post($post_data, true);
+            }
+            if (is_wp_error($post_id) || ! $post_id) {
+                return is_wp_error($post_id) ? $post_id : new \WP_Error('annual_meeting_save', __('Anmälan kunde inte sparas.', 'ssf-member-portal'));
+            }
+
+            $is_new = ! $existing;
+            if ($is_new) {
+                $token = $this->token();
+                update_post_meta($post_id, '_ssf_am_token_hash', hash('sha256', $token));
+                update_post_meta($post_id, '_ssf_am_registration_id', $this->registration_id($meeting, (int) $post_id));
+                update_post_meta($post_id, '_ssf_am_submitted_at', $now);
+            }
+            foreach ($data as $key => $value) {
+                update_post_meta($post_id, '_ssf_am_' . $key, $value);
+            }
+            update_post_meta($post_id, '_ssf_am_annual_meeting_id', (int) $meeting['id']);
+            update_post_meta($post_id, '_ssf_am_status', $status);
+            update_post_meta($post_id, '_ssf_am_updated_at', $now);
+            update_post_meta($post_id, '_ssf_am_sharepoint_sync_status', 'pending');
+            delete_post_meta($post_id, '_ssf_am_sharepoint_last_error');
+        } finally {
+            $this->release_registration_lock((int) $meeting['id'], (string) $lock);
         }
-        foreach ($data as $key => $value) {
-            update_post_meta($post_id, '_ssf_am_' . $key, $value);
-        }
-        update_post_meta($post_id, '_ssf_am_annual_meeting_id', (int) $meeting['id']);
-        update_post_meta($post_id, '_ssf_am_status', $status);
-        update_post_meta($post_id, '_ssf_am_updated_at', $now);
-        update_post_meta($post_id, '_ssf_am_sharepoint_sync_status', 'pending');
-        delete_post_meta($post_id, '_ssf_am_sharepoint_last_error');
 
         $registration = $this->details((int) $post_id, $meeting);
         $manage_url = $this->meetings->registration_url(array('token' => rawurlencode((string) $token)));
@@ -186,12 +206,16 @@ final class RegistrationService
 
     public function cancel(\WP_Post $registration, string $token)
     {
+        $meeting_post = get_post((int) $registration->post_parent);
+        if (! $meeting_post || Module::POST_TYPE !== $meeting_post->post_type) {
+            return new \WP_Error('annual_meeting_cancel', __('Den här anmälan kan inte längre avbokas.', 'ssf-member-portal'));
+        }
         $meeting = $this->meetings->data((int) $registration->post_parent);
-        if (! $this->meets_deadline($meeting) || empty($meeting['allow_edits']) || ! hash_equals((string) get_post_meta($registration->ID, '_ssf_am_token_hash', true), hash('sha256', $token))) {
+        if (empty($this->registration_state($meeting, $meeting_post, (int) $registration->ID)['can_register']) || empty($meeting['allow_edits']) || ! hash_equals((string) get_post_meta($registration->ID, '_ssf_am_token_hash', true), hash('sha256', $token))) {
             return new \WP_Error('annual_meeting_cancel', __('Den här anmälan kan inte längre avbokas.', 'ssf-member-portal'));
         }
         update_post_meta($registration->ID, '_ssf_am_status', self::CANCELLED);
-        update_post_meta($registration->ID, '_ssf_am_updated_at', time());
+        update_post_meta($registration->ID, '_ssf_am_updated_at', $this->now());
         update_post_meta($registration->ID, '_ssf_am_sharepoint_sync_status', 'pending');
         $this->queue_sync((int) $meeting['id']);
         return true;
@@ -231,29 +255,122 @@ final class RegistrationService
         return $counts;
     }
 
+    public function registration_state(array $meeting, ?\WP_Post $meeting_post = null, int $exclude_id = 0): array
+    {
+        $now = $this->now();
+        $choices = $this->meetings->registration_choices($meeting);
+        $choice_states = array();
+        foreach ($choices as $choice) {
+            $choice_key = (string) ($choice['key'] ?? '');
+            if (! $choice_key) {
+                continue;
+            }
+            $choice_states[$choice_key] = $this->choice_state($meeting, $choice, $exclude_id);
+        }
+        $available = array_filter($choice_states, static function (array $state): bool {
+            return ! empty($state['available']);
+        });
+        $meeting_end = $this->meeting_end_at($meeting);
+        $open_at = (int) ($meeting['registration_opens_at'] ?? 0);
+        $close_at = (int) ($meeting['registration_closes_at'] ?? 0);
+
+        $status = self::AVAILABILITY_OPEN;
+        if ($meeting_post && 'publish' !== $meeting_post->post_status) {
+            $status = self::AVAILABILITY_DISABLED;
+        } elseif ($meeting_post && (int) $meeting_post->ID !== (int) get_option('ssf_member_portal_active_meeting_id', 0)) {
+            $status = self::AVAILABILITY_DISABLED;
+        } elseif (! $this->feature_enabled('annual_meetings') || ! $this->feature_enabled('annual_meeting_registration') || empty($meeting['registration_open'])) {
+            $status = self::AVAILABILITY_DISABLED;
+        } elseif (! $choices) {
+            $status = self::AVAILABILITY_NO_CHOICES;
+        } elseif ($meeting_end && $now > $meeting_end) {
+            $status = self::AVAILABILITY_MEETING_PASSED;
+        } elseif ($available) {
+            $close_times = array_filter(array_map(static function (array $state): int {
+                return ! empty($state['available']) ? (int) ($state['closes_at'] ?? 0) : 0;
+            }, $choice_states));
+            $close_at = $close_times ? min($close_times) : 0;
+        } else {
+            $statuses = array_values(array_unique(array_map(static function (array $state): string {
+                return (string) ($state['status'] ?? '');
+            }, $choice_states)));
+            if (in_array(self::AVAILABILITY_NOT_STARTED, $statuses, true)) {
+                $status = self::AVAILABILITY_NOT_STARTED;
+                $open_times = array_filter(array_map(static function (array $state): int {
+                    return (int) ($state['opens_at'] ?? 0);
+                }, $choice_states));
+                $open_at = $open_times ? min($open_times) : $open_at;
+            } elseif ($statuses && count(array_diff($statuses, array(self::AVAILABILITY_SOLD_OUT))) === 0) {
+                $status = self::AVAILABILITY_SOLD_OUT;
+            } else {
+                $status = self::AVAILABILITY_CLOSED;
+                $close_times = array_filter(array_map(static function (array $state): int {
+                    return (int) ($state['closes_at'] ?? 0);
+                }, $choice_states));
+                $close_at = $close_times ? max($close_times) : $close_at;
+            }
+        }
+
+        return array(
+            'status' => $status,
+            'label' => $this->availability_label($status),
+            'message' => $this->availability_message($status, $open_at, $close_at, $meeting_end),
+            'can_register' => self::AVAILABILITY_OPEN === $status,
+            'opens_at' => $open_at,
+            'closes_at' => $close_at,
+            'meeting_end_at' => $meeting_end,
+            'choices' => $choices,
+            'choice_states' => $choice_states,
+            'available_choices' => $available,
+        );
+    }
+
     public function choice_state(array $meeting, array $choice, int $exclude_id = 0): array
     {
         $counts = $this->selection_counts((int) $meeting['id'], $exclude_id);
         $capacity = max(0, (int) ($choice['capacity'] ?? 0));
         $count = (int) ($counts[(string) ($choice['key'] ?? '')] ?? 0);
-        $deadline = (int) ($choice['deadline'] ?? 0);
-        $closed = ! empty($choice['closed']) || (empty($choice['manual_open']) && $deadline && time() > $deadline);
-        $registration_open = $this->meetings->is_registration_open($meeting);
+        $now = $this->now();
+        $open_at = $this->choice_open_at($meeting, $choice);
+        $close_at = $this->choice_close_at($meeting, $choice);
+        $meeting_end = $this->meeting_end_at($meeting);
+        $full = $capacity > 0 && $count >= $capacity;
+        $status = self::AVAILABILITY_OPEN;
+
+        if (empty($meeting['registration_open'])) {
+            $status = self::AVAILABILITY_DISABLED;
+        } elseif ($meeting_end && $now > $meeting_end) {
+            $status = self::AVAILABILITY_MEETING_PASSED;
+        } elseif ($open_at && $now < $open_at) {
+            $status = self::AVAILABILITY_NOT_STARTED;
+        } elseif (! empty($choice['closed'])) {
+            $status = self::AVAILABILITY_CLOSED;
+        } elseif ($close_at && $now > $close_at) {
+            $status = self::AVAILABILITY_CLOSED;
+        } elseif ($full) {
+            $status = self::AVAILABILITY_SOLD_OUT;
+        }
+
         return array(
             'count' => $count,
             'capacity' => $capacity,
             'remaining' => $capacity ? max(0, $capacity - $count) : null,
-            'full' => $capacity > 0 && $count >= $capacity,
-            'closed' => $closed,
-            'registration_open' => $registration_open,
-            'available' => $registration_open && ! $closed && (! $capacity || $count < $capacity),
+            'full' => $full,
+            'closed' => in_array($status, array(self::AVAILABILITY_CLOSED, self::AVAILABILITY_MEETING_PASSED), true),
+            'registration_open' => self::AVAILABILITY_OPEN === $status,
+            'available' => self::AVAILABILITY_OPEN === $status,
+            'status' => $status,
+            'label' => $this->availability_label($status),
+            'message' => $this->availability_message($status, $open_at, $close_at, $meeting_end),
+            'opens_at' => $open_at,
+            'closes_at' => $close_at,
         );
     }
 
     public function queue_sync(int $meeting_id, int $attempt = 0): void
     {
         if (! wp_next_scheduled('ssf_member_portal_sync_meeting_registrations', array($meeting_id, $attempt))) {
-            wp_schedule_single_event(time() + 15, 'ssf_member_portal_sync_meeting_registrations', array($meeting_id, $attempt));
+            wp_schedule_single_event($this->now() + 15, 'ssf_member_portal_sync_meeting_registrations', array($meeting_id, $attempt));
         }
     }
 
@@ -337,7 +454,7 @@ final class RegistrationService
                 continue;
             }
             $cutoff = strtotime('+' . max(1, (int) $meeting['retention_months']) . ' months', $reference);
-            if ($cutoff > time()) {
+            if ($cutoff > $this->now()) {
                 continue;
             }
             foreach ($this->registrations($post->ID) as $registration) {
@@ -381,8 +498,8 @@ final class RegistrationService
             'food_note' => sanitize_textarea_field((string) ($input['food_note'] ?? '')),
             'answers' => array(),
         );
-        if (! $data['first_name'] || ! $data['last_name'] || ! is_email($data['email']) || ! $data['phone']) {
-            return new \WP_Error('annual_meeting_required', __('Fyll i förnamn, efternamn, en giltig e-postadress och telefonnummer.', 'ssf-member-portal'));
+        if (! $data['first_name'] || ! $data['last_name'] || ! is_email($data['email'])) {
+            return new \WP_Error('annual_meeting_required', __('Fyll i förnamn, efternamn och en giltig e-postadress.', 'ssf-member-portal'));
         }
         $valid_relationships = array('representative', 'supporter');
         if (! empty($meeting['allow_guest'])) {
@@ -419,14 +536,14 @@ final class RegistrationService
             $selected = ! empty($submitted_program[$item['key']]);
             $was_selected = ! empty($existing_program[$item['key']]);
             $state = $this->choice_state($meeting, $item, $exclude_id);
-            if ($state['closed'] || ($state['full'] && ! $was_selected)) {
+            if (empty($state['available']) && ! $was_selected) {
                 if ($was_selected) {
                     $data['program'][$item['key']] = 1;
                 }
-                if ($selected && ! $was_selected) {
+                if ($selected) {
                     return new \WP_Error(
-                        $state['full'] ? 'annual_meeting_choice_full' : 'annual_meeting_choice_closed',
-                        sprintf($state['full'] ? __('Tyvärr är %s fullbokad.', 'ssf-member-portal') : __('Anmälan till %s är stängd.', 'ssf-member-portal'), $item['title'])
+                        ! empty($state['full']) ? 'annual_meeting_choice_full' : 'annual_meeting_choice_closed',
+                        $this->choice_error_message($state, (string) $item['title'])
                     );
                 }
                 continue;
@@ -441,11 +558,15 @@ final class RegistrationService
         if (! $data['program']) {
             return new \WP_Error('annual_meeting_choice_required', __('Välj minst en middag eller aktivitet.', 'ssf-member-portal'));
         }
-        $selected_food = (array) ($input['food'] ?? array());
-        foreach ((array) $meeting['food_options'] as $option) {
-            if (! empty($selected_food[$option]) || in_array($option, $selected_food, true)) {
-                $data['food'][] = $option;
+        if ($this->selection_uses_food($meeting, $data['program'])) {
+            $selected_food = (array) ($input['food'] ?? array());
+            foreach ((array) $meeting['food_options'] as $option) {
+                if (! empty($selected_food[$option]) || in_array($option, $selected_food, true)) {
+                    $data['food'][] = $option;
+                }
             }
+        } else {
+            $data['food_note'] = '';
         }
         foreach ((array) $meeting['questions'] as $question) {
             if (empty($question['visible']) || 'info' === $question['type'] || empty($question['key'])) {
@@ -510,9 +631,132 @@ final class RegistrationService
         }
     }
 
-    private function meets_deadline(array $meeting): bool
+    private function choice_open_at(array $meeting, array $choice): int
     {
-        return ! $meeting['registration_closes_at'] || time() <= (int) $meeting['registration_closes_at'];
+        return (int) (($choice['opens_at'] ?? 0) ?: ($meeting['registration_opens_at'] ?? 0));
+    }
+
+    private function choice_close_at(array $meeting, array $choice): int
+    {
+        if (empty($choice['manual_open']) && ! empty($choice['deadline'])) {
+            return (int) $choice['deadline'];
+        }
+        return (int) (($meeting['registration_closes_at'] ?? 0) ?: ($choice['starts_at'] ?? 0) ?: $this->meeting_end_at($meeting));
+    }
+
+    private function meeting_end_at(array $meeting): int
+    {
+        return (int) (($meeting['end_at'] ?? 0) ?: ($meeting['meeting_end_at'] ?? 0) ?: ($meeting['meeting_start_at'] ?? 0) ?: ($meeting['start_at'] ?? 0));
+    }
+
+    private function availability_label(string $status): string
+    {
+        $labels = array(
+            self::AVAILABILITY_DISABLED => __('Avstängd', 'ssf-member-portal'),
+            self::AVAILABILITY_NO_CHOICES => __('Ingen anmälan krävs', 'ssf-member-portal'),
+            self::AVAILABILITY_NOT_STARTED => __('Inte öppnad', 'ssf-member-portal'),
+            self::AVAILABILITY_OPEN => __('Öppen', 'ssf-member-portal'),
+            self::AVAILABILITY_CLOSED => __('Stängd', 'ssf-member-portal'),
+            self::AVAILABILITY_MEETING_PASSED => __('Årsmötet har passerat', 'ssf-member-portal'),
+            self::AVAILABILITY_SOLD_OUT => __('Fullbokad', 'ssf-member-portal'),
+        );
+        return $labels[$status] ?? $status;
+    }
+
+    private function availability_message(string $status, int $opens_at = 0, int $closes_at = 0, int $meeting_end = 0): string
+    {
+        switch ($status) {
+            case self::AVAILABILITY_NO_CHOICES:
+                return __('Ingen anmälan krävs till årsmötet.', 'ssf-member-portal');
+            case self::AVAILABILITY_NOT_STARTED:
+                return $opens_at ? sprintf(__('Anmälan öppnar %s.', 'ssf-member-portal'), $this->date_text($opens_at)) : __('Anmälan är inte öppen ännu.', 'ssf-member-portal');
+            case self::AVAILABILITY_OPEN:
+                return $closes_at ? sprintf(__('Anmälan är öppen till %s.', 'ssf-member-portal'), $this->date_text($closes_at)) : __('Anmälan är öppen.', 'ssf-member-portal');
+            case self::AVAILABILITY_CLOSED:
+                return $closes_at ? sprintf(__('Anmälan stängde %s.', 'ssf-member-portal'), $this->date_text($closes_at)) : __('Anmälan är stängd.', 'ssf-member-portal');
+            case self::AVAILABILITY_MEETING_PASSED:
+                return $meeting_end ? sprintf(__('Årsmöteshelgen passerade %s.', 'ssf-member-portal'), $this->date_text($meeting_end)) : __('Årsmöteshelgen har passerat.', 'ssf-member-portal');
+            case self::AVAILABILITY_SOLD_OUT:
+                return __('Middag och aktiviteter är fullbokade.', 'ssf-member-portal');
+            case self::AVAILABILITY_DISABLED:
+            default:
+                return __('Anmälan är inte aktiverad just nu.', 'ssf-member-portal');
+        }
+    }
+
+    private function availability_error(array $availability, int $meeting_id): \WP_Error
+    {
+        $status = (string) ($availability['status'] ?? self::AVAILABILITY_DISABLED);
+        Logger::add('annual_meeting_registration_rejected', array('annual_meeting' => $meeting_id, 'status' => $status));
+        return new \WP_Error('annual_meeting_' . $status, (string) ($availability['message'] ?? __('Anmälan är inte öppen just nu.', 'ssf-member-portal')));
+    }
+
+    private function choice_error_message(array $state, string $title): string
+    {
+        switch ((string) ($state['status'] ?? '')) {
+            case self::AVAILABILITY_SOLD_OUT:
+                return sprintf(__('Tyvärr blev %s fullbokad precis innan din anmälan registrerades.', 'ssf-member-portal'), $title);
+            case self::AVAILABILITY_NOT_STARTED:
+                return sprintf(__('Anmälan till %s är inte öppen ännu.', 'ssf-member-portal'), $title);
+            case self::AVAILABILITY_MEETING_PASSED:
+                return __('Årsmöteshelgen har passerat och ny anmälan kan inte göras.', 'ssf-member-portal');
+            default:
+                return sprintf(__('Anmälan till %s är stängd.', 'ssf-member-portal'), $title);
+        }
+    }
+
+    private function selection_uses_food(array $meeting, array $program): bool
+    {
+        foreach ($this->meetings->registration_choices($meeting) as $choice) {
+            $choice_key = (string) ($choice['key'] ?? '');
+            if ($choice_key && ! empty($program[$choice_key]) && ! empty($choice['food'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function date_text(int $timestamp): string
+    {
+        return wp_date('j F Y H:i', $timestamp, wp_timezone());
+    }
+
+    private function feature_enabled(string $feature): bool
+    {
+        return ! class_exists('SSF_Feature_Manager') || \SSF_Feature_Manager::can_access($feature);
+    }
+
+    private function now(): int
+    {
+        return current_datetime()->getTimestamp();
+    }
+
+    private function acquire_registration_lock(int $meeting_id)
+    {
+        $key = 'ssf_am_registration_lock_' . $meeting_id;
+        $token = wp_generate_uuid4();
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $expires = $this->now() + 15;
+            if (add_option($key, array('token' => $token, 'expires' => $expires), '', 'no')) {
+                return $token;
+            }
+            $lock = (array) get_option($key, array());
+            if (! empty($lock['expires']) && (int) $lock['expires'] < $this->now()) {
+                delete_option($key);
+                continue;
+            }
+            usleep(200000);
+        }
+        return new \WP_Error('annual_meeting_registration_busy', __('Anmälan behandlas just nu. Försök igen om en liten stund.', 'ssf-member-portal'));
+    }
+
+    private function release_registration_lock(int $meeting_id, string $token): void
+    {
+        $key = 'ssf_am_registration_lock_' . $meeting_id;
+        $lock = (array) get_option($key, array());
+        if (! empty($lock['token']) && hash_equals((string) $lock['token'], $token)) {
+            delete_option($key);
+        }
     }
 
     private function relationship_label(string $relationship): string
@@ -541,7 +785,7 @@ final class RegistrationService
             return;
         }
         $delays = array(300, 1800, 7200, DAY_IN_SECONDS);
-        wp_schedule_single_event(time() + $delays[$attempt], 'ssf_member_portal_sync_meeting_registrations', array($meeting_id, $attempt + 1));
+        wp_schedule_single_event($this->now() + $delays[$attempt], 'ssf_member_portal_sync_meeting_registrations', array($meeting_id, $attempt + 1));
     }
 
     private function ics(string $value): string

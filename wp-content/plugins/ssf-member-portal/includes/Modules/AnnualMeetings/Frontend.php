@@ -46,15 +46,9 @@ final class Frontend
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
-        $registration_enabled = $meeting_post->ID === (int) get_option('ssf_member_portal_active_meeting_id', 0) && $this->feature_enabled('annual_meeting_registration');
-        $show_registration_link = $registration_enabled && $this->meetings->is_registration_open($meeting);
-        $can_register = $show_registration_link;
-        $choices = $this->meetings->registration_choices($meeting);
-        $choice_states = array();
-        foreach ($choices as $choice) {
-            $choice_states[$choice['key']] = $this->registrations->choice_state($meeting, $choice);
-        }
-        $has_available_choice = (bool) array_filter($choice_states, static function (array $state): bool { return ! empty($state['available']); });
+        $registration_state = $this->registrations->registration_state($meeting, $meeting_post);
+        $choices = (array) $registration_state['choices'];
+        $choice_states = (array) $registration_state['choice_states'];
         $calendar_url = $this->meetings->calendar_url((int) $meeting['id']);
         $motion = $this->motions->state($meeting);
         ob_start();
@@ -69,7 +63,7 @@ final class Frontend
         }
         $upcoming = array();
         $past = array();
-        $now = time();
+        $now = current_datetime()->getTimestamp();
         $posts = get_posts(array('post_type' => Module::POST_TYPE, 'post_status' => 'publish', 'posts_per_page' => -1, 'meta_key' => '_ssf_am_start_at', 'orderby' => 'meta_value_num', 'order' => 'ASC'));
         foreach ($posts as $post) {
             $meeting = $this->meetings->data((int) $post->ID);
@@ -124,11 +118,9 @@ final class Frontend
             $token = '';
         }
         $registration = $registration_post ? $this->registrations->details($registration_post->ID, $meeting) : array();
-        $choices = $this->meetings->registration_choices($meeting);
-        $choice_states = array();
-        foreach ($choices as $choice) {
-            $choice_states[$choice['key']] = $this->registrations->choice_state($meeting, $choice, $registration_post ? (int) $registration_post->ID : 0);
-        }
+        $registration_state = $this->registrations->registration_state($meeting, $meeting_post, $registration_post ? (int) $registration_post->ID : 0);
+        $choices = (array) $registration_state['choices'];
+        $choice_states = (array) $registration_state['choice_states'];
         if ($registration_post && isset($_GET['ssf_am_confirmation'])) {
             ob_start();
             include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/confirmation.php';

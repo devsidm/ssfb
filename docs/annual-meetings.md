@@ -28,6 +28,14 @@ Middag och varje aktivitet räknas separat. Avbokade och reservlistade poster ta
 
 Deadline stänger respektive val automatiskt. Admin kan hålla ett val öppet efter deadline. Den äldre gemensamma kapaciteten och reservlistan finns kvar enbart för bakåtkompatibilitet.
 
+## Statuslogik för anmälan
+
+Anmälningsstatus beräknas centralt i `RegistrationService::registration_state()` och används av CTA-knappar, anmälningsformulär, servervalidering och adminstatus. Statusarna är `not_started`, `open`, `closed`, `meeting_passed`, `sold_out`, `disabled` och `no_choices`.
+
+All tidslogik använder WordPress tidszon via `current_datetime()` och `wp_timezone()`. Exakt öppningstid är öppen, exakt stängningstid är fortfarande öppen och först efter stängningstid räknas anmälan som stängd. Årsmötets sluttid är en yttre spärr: när årsmöteshelgen har passerat stoppas anmälan även om en generell deadline råkar ligga senare.
+
+Middag och aktiviteter kan ha egna öppnings- och stängningstider samt egen kapacitet. Saknas en egen öppning används årsmötets gemensamma öppning. Saknas en egen deadline används årsmötets gemensamma deadline, därefter aktivitetens starttid och sist årsmötets sluttid som fallback.
+
 ## iCal och SSF-kalendern
 
 Den publika iCal-filen genereras från årsmötesobjektet via `admin-post.php?action=ssf_member_portal_annual_meeting_calendar_public&meeting={ID}`. Den innehåller hela helgens tider, plats, beskrivning och publik URL. UID är stabilt: `annual-meeting-{ID}@ssfb.se`. Ingen token eller persondata ingår.

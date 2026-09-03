@@ -14,11 +14,36 @@
     }
   }
 
+  function refreshFood(form) {
+    var section = form.querySelector('[data-ssf-food-section]');
+    if (!section) {
+      return;
+    }
+    var hasFoodChoice = !!form.querySelector('[data-ssf-food-choice="1"]:checked');
+    section.hidden = !hasFoodChoice;
+    if (!hasFoodChoice) {
+      section.querySelectorAll('input[type="checkbox"]').forEach(function (input) {
+        input.checked = false;
+      });
+      section.querySelectorAll('textarea').forEach(function (textarea) {
+        textarea.value = '';
+      });
+    }
+  }
+
+  document.querySelectorAll('[data-ssf-error-message]').forEach(function (message) {
+    message.focus();
+  });
+
   document.querySelectorAll('.ssf-am-form').forEach(function (form) {
     refreshRelations(form);
+    refreshFood(form);
     form.addEventListener('change', function (event) {
       if (event.target.matches('[name="relationship"], [data-ssf-associated-toggle]')) {
         refreshRelations(form);
+      }
+      if (event.target.matches('[data-ssf-food-choice]')) {
+        refreshFood(form);
       }
     });
     form.addEventListener('click', function (event) {
