@@ -14,5 +14,9 @@ The protection has no effect unless `wp_get_environment_type()` returns
 
 `robots.txt` is only a crawler instruction, not access control. The production
 domain's robots file must contain `Disallow: /dev/` while preserving its other
-rules. Direct static upload files may bypass WordPress, so their response
-headers must be verified at the web-server layer.
+rules. It is managed outside the development installation and must be updated
+through the production hosting workflow.
+
+Direct static upload files bypass WordPress. The development root `.htaccess`
+therefore sets the same `X-Robots-Tag` header through `mod_headers`; this must
+be re-verified after hosting configuration changes.
