@@ -62,7 +62,8 @@
 .ssf-am-documents a:hover strong { text-decoration: underline; text-underline-offset: .18em; }
 .ssf-am-documents span { color: #536677; font-size: .9rem; text-align: right; }
 .ssf-am-document-link { font-weight: 700; }
-.ssf-am-contact { margin: 1.8rem 0; }
+.ssf-am-contact { margin: 2.4rem 0 1.8rem; padding-top: 1.2rem; border-top: 1px solid #c9d7df; }
+.ssf-am-contact .ssf-am-button { margin-top: .65rem; }
 .ssf-am-message { margin: 1.25rem 0; padding: .9rem 1rem; border: 1px solid #c9d7df; background: #f7fbfc; }
 .ssf-am-message--error { border-color: #b44c43; background: #fff5f3; color: #6e251f; }
 .ssf-am-message--success { border-color: #267466; background: #f0fbf8; color: #124f46; }

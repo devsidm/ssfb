@@ -65,7 +65,6 @@ $format_time = static function (int $timestamp): string {
                 </details>
             <?php endif; ?>
             <?php if ($show_invitation && ! empty($invitation['pdf_id'])) : ?><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url(wp_get_attachment_url((int) $invitation['pdf_id'])); ?>"><?php esc_html_e('Läs kallelsen', 'ssf-member-portal'); ?></a><?php elseif ($show_invitation) : ?><a class="ssf-am-button ssf-am-button--secondary" href="#ssf-am-invitation"><?php esc_html_e('Läs kallelsen', 'ssf-member-portal'); ?></a><?php endif; ?>
-            <a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($contact_url); ?>"><?php esc_html_e('Kontakt', 'ssf-member-portal'); ?></a>
         </div>
     </header>
 
@@ -133,4 +132,5 @@ $format_time = static function (int $timestamp): string {
 
     <?php if ($show_documents) : ?><section id="ssf-am-documents" class="ssf-am-section"><h2><?php esc_html_e('Handlingar', 'ssf-member-portal'); ?></h2><ul class="ssf-am-documents"><?php foreach ($documents as $document) : $file = get_attached_file((int) $document['attachment_id']); $size = $file && file_exists($file) ? size_format(filesize($file)) : ''; ?><li><a href="<?php echo esc_url(wp_get_attachment_url((int) $document['attachment_id'])); ?>"><strong><?php echo esc_html($document['title'] ?: get_the_title((int) $document['attachment_id'])); ?></strong><span><?php echo esc_html($document_types[$document['type']] ?? $document_types['other']); ?><?php if ($size) : ?> · <?php echo esc_html($size); ?><?php endif; ?></span></a></li><?php endforeach; ?></ul></section><?php endif; ?>
 
+    <p class="ssf-am-contact"><strong><?php esc_html_e('Har du frågor om årsmötet?', 'ssf-member-portal'); ?></strong><br><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($contact_url); ?>"><?php esc_html_e('Kontakta styrelsen', 'ssf-member-portal'); ?></a></p>
 </section>
