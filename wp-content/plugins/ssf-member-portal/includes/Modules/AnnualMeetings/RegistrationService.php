@@ -117,8 +117,13 @@ final class RegistrationService
 
         $registration = $this->details((int) $post_id, $meeting);
         $manage_url = $this->meetings->registration_url(array('token' => rawurlencode((string) $token)));
-        $calendar_url = $this->meetings->calendar_url((int) $meeting['id']);
-        $this->mailer->confirmation($meeting, $registration, $manage_url, $calendar_url);
+        $this->mailer->confirmation(
+            $meeting,
+            $registration,
+            $manage_url,
+            $this->calendar->urls($meeting),
+            $this->meetings->meeting_url(array('meeting' => (int) $meeting['id']))
+        );
         if ($is_new) {
             $this->mailer->notification($meeting, $registration);
         }
@@ -237,7 +242,8 @@ final class RegistrationService
             $meeting,
             $registration,
             $this->meetings->registration_url(array('token' => rawurlencode($token))),
-            $this->meetings->calendar_url((int) $meeting['id'])
+            $this->calendar->urls($meeting),
+            $this->meetings->meeting_url(array('meeting' => (int) $meeting['id']))
         );
     }
 
