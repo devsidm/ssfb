@@ -49,6 +49,34 @@
   margin: 18px 0;
   padding: 18px;
   border: 1px solid #d9e3f0;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #fff;
+}
+
+.ssf-owner-form .ssf-vessel-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ssf-owner-form .ssf-vessel-field:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+.ssf-owner-form .ssf-vessel-section-heading p,
+.ssf-owner-form .ssf-vessel-field small {
+  color: #646970;
+}
+
+.ssf-owner-form .ssf-vessel-field em {
+  color: #646970;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@media (max-width: 782px) {
+  .ssf-owner-form .ssf-vessel-fields {
+    grid-template-columns: 1fr;
+  }
 }

@@ -45,12 +45,15 @@ class SSF_Medlemsprocess_Admin
         $data = SSF_Medlemsprocess_Application::data($post->ID);
         $status = SSF_Medlemsprocess_Application::status($post->ID);
         $assigned = (int) get_post_meta($post->ID, '_ssf_assigned_user', true);
+        $route = (string) get_post_meta($post->ID, '_ssf_application_route', true);
+        $linked_ship = (int) get_post_meta($post->ID, '_ssf_linked_ship_id', true);
         wp_nonce_field('ssf_save_application_' . $post->ID, 'ssf_application_admin_nonce');
         ?>
         <div class="ssf-process-admin-overview">
             <div><span class="ssf-process-admin-label">Ärendenummer</span><strong><?php echo esc_html(get_post_meta($post->ID, '_ssf_application_number', true)); ?></strong></div>
             <div><span class="ssf-process-admin-label">Fartyg</span><strong><?php echo esc_html($data['ship_name'] ?? ''); ?></strong></div>
             <div><span class="ssf-process-admin-label">Sökande</span><strong><?php echo esc_html($data['applicant_name'] ?? ''); ?></strong><a href="mailto:<?php echo esc_attr($data['applicant_email'] ?? ''); ?>"><?php echo esc_html($data['applicant_email'] ?? ''); ?></a></div>
+            <div><span class="ssf-process-admin-label">Ansökningsväg</span><strong><?php echo esc_html(class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route); ?></strong><?php if ($linked_ship) : ?><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Visa fartygsuppgifter</a><?php endif; ?></div>
         </div>
         <div class="ssf-process-admin-grid">
             <label>Status<select name="ssf_process_status"><?php foreach (SSF_Medlemsprocess_Application::statuses() as $key => $item) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>><?php echo esc_html($item['label']); ?></option><?php endforeach; ?></select></label>
@@ -131,7 +134,7 @@ class SSF_Medlemsprocess_Admin
     {
         $decision = (array) get_post_meta($post->ID, '_ssf_decision', true);
         $linked_ship = (int) get_post_meta($post->ID, '_ssf_linked_ship_id', true);
-        ?><label>Beslut<select name="ssf_decision[status]"><option value="">Inget beslut ännu</option><option value="approved" <?php selected($decision['status'] ?? '', 'approved'); ?>>Godkänd</option><option value="approved_aspirant" <?php selected($decision['status'] ?? '', 'approved_aspirant'); ?>>Godkänd som aspirant</option><option value="rejected" <?php selected($decision['status'] ?? '', 'rejected'); ?>>Avslagen</option><option value="paused" <?php selected($decision['status'] ?? '', 'paused'); ?>>Vilande</option></select></label><label>Intern motivering<textarea name="ssf_decision[internal_reason]" rows="3"><?php echo esc_textarea($decision['internal_reason'] ?? ''); ?></textarea></label><label>Motivering till sökanden<textarea name="ssf_decision[public_reason]" rows="3"><?php echo esc_textarea($decision['public_reason'] ?? ''); ?></textarea></label><label class="ssf-process-check"><input type="checkbox" name="ssf_create_ship" value="1" <?php checked($linked_ship > 0); ?> <?php disabled($linked_ship > 0); ?>> Skapa medlemsfartygsprofil automatiskt</label><?php if ($linked_ship) : ?><p><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Öppna kopplat medlemsfartyg</a></p><?php endif; ?><label>Memlist-status<select name="ssf_memlist_status"><?php foreach (array('not_ready' => 'Ej överförd', 'ready' => 'Redo för överföring', 'transferred' => 'Överförd') as $key => $label) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected(get_post_meta($post->ID, '_ssf_memlist_status', true), $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label><label>Memlist-ID<input type="text" name="ssf_memlist_id" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_memlist_id', true)); ?>"></label><?php
+        ?><label>Beslut<select name="ssf_decision[status]"><option value="">Inget beslut ännu</option><option value="approved" <?php selected($decision['status'] ?? '', 'approved'); ?>>Godkänd</option><option value="approved_aspirant" <?php selected($decision['status'] ?? '', 'approved_aspirant'); ?>>Godkänd som aspirant</option><option value="rejected" <?php selected($decision['status'] ?? '', 'rejected'); ?>>Avslagen</option><option value="paused" <?php selected($decision['status'] ?? '', 'paused'); ?>>Vilande</option></select></label><label>Intern motivering<textarea name="ssf_decision[internal_reason]" rows="3"><?php echo esc_textarea($decision['internal_reason'] ?? ''); ?></textarea></label><label>Motivering till sökanden<textarea name="ssf_decision[public_reason]" rows="3"><?php echo esc_textarea($decision['public_reason'] ?? ''); ?></textarea></label><label class="ssf-process-check"><input type="checkbox" name="ssf_create_ship" value="1" <?php checked($linked_ship > 0); ?> <?php disabled($linked_ship > 0); ?>> <?php echo esc_html($linked_ship ? 'Fartygsprofil kopplad till ansökan' : 'Skapa fartygsprofil vid godkännande'); ?></label><?php if ($linked_ship) : ?><p><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Öppna kopplat medlemsfartyg</a></p><?php endif; ?><label>Memlist-status<select name="ssf_memlist_status"><?php foreach (array('not_ready' => 'Ej överförd', 'ready' => 'Redo för överföring', 'transferred' => 'Överförd') as $key => $label) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected(get_post_meta($post->ID, '_ssf_memlist_status', true), $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label><label>Memlist-ID<input type="text" name="ssf_memlist_id" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_memlist_id', true)); ?>"></label><?php
     }
 
     public function render_notes(WP_Post $post): void
@@ -171,7 +174,7 @@ class SSF_Medlemsprocess_Admin
             update_post_meta($post_id, '_ssf_decision', $decision);
             update_post_meta($post_id, '_ssf_decision_public_reason', $decision['public_reason']);
             $status = $decision['status'];
-            if (! empty($_POST['ssf_create_ship']) && in_array($status, array('approved', 'approved_aspirant'), true)) { SSF_Medlemsprocess_Application::create_member_ship($post_id); }
+            if (in_array($status, array('approved', 'approved_aspirant'), true) && (! empty($_POST['ssf_create_ship']) || get_post_meta($post_id, '_ssf_linked_ship_id', true))) { SSF_Medlemsprocess_Application::create_member_ship($post_id); }
         }
         SSF_Medlemsprocess_Application::transition($post_id, $status, sanitize_textarea_field(wp_unslash($_POST['ssf_status_message'] ?? '')));
     }

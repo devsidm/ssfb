@@ -61,6 +61,7 @@ final class SSF_Medlemsfartyg_Plugin
     {
         $files = array(
             'includes/class-ssf-medlemsfartyg-cpt.php',
+            'includes/class-ssf-medlemsfartyg-profile.php',
             'includes/class-ssf-medlemsfartyg-meta.php',
             'includes/class-ssf-medlemsfartyg-roles.php',
             'includes/class-ssf-medlemsfartyg-admin.php',
@@ -181,7 +182,7 @@ final class SSF_Medlemsfartyg_Plugin
     public function enqueue_admin_assets(string $hook): void
     {
         $screen = get_current_screen();
-        if (! $screen || (! in_array($screen->post_type, array('medlemsfartyg', 'ssf_ship_submission'), true) && false === strpos($hook, 'ssf-medlemsfartyg'))) {
+        if (! $screen || (! in_array($screen->post_type, array('medlemsfartyg', 'ssf_ship_submission'), true) && false === strpos($hook, 'ssf-medlemsfartyg') && false === strpos($hook, 'ssf-mina-fartyg'))) {
             return;
         }
 

@@ -84,16 +84,13 @@ class SSF_Medlemsfartyg_Owner_Dashboard
             wp_die(esc_html__('Du kan inte redigera det här fartyget.', 'ssf-medlemsfartyg'));
         }
 
-        wp_update_post(
-            array(
-                'ID' => $ship_id,
-                'post_title' => sanitize_text_field(wp_unslash($_POST['post_title'] ?? '')),
-                'post_excerpt' => sanitize_textarea_field(wp_unslash($_POST['post_excerpt'] ?? '')),
-                'post_content' => wp_kses_post(wp_unslash($_POST['post_content'] ?? '')),
-            )
-        );
-
-        SSF_Medlemsfartyg_Meta::save_fields_from_request($ship_id, $_POST);
+        $route = (string) get_post_meta($ship_id, '_ssf_application_route', true);
+        $data = SSF_Medlemsfartyg_Profile::collect($_POST, $route, SSF_Medlemsfartyg_Profile::MODE_PORTAL);
+        $errors = SSF_Medlemsfartyg_Profile::validate($data, $route, SSF_Medlemsfartyg_Profile::MODE_PORTAL);
+        if ($errors->has_errors()) {
+            wp_die(esc_html(implode(' ', $errors->get_error_messages())));
+        }
+        SSF_Medlemsfartyg_Profile::save($ship_id, $data, 'portal');
 
         $settings = SSF_Medlemsfartyg_Plugin::settings();
         if (! current_user_can('manage_options') && 'yes' === $settings['require_review']) {

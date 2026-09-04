@@ -272,7 +272,7 @@
   margin: 48px auto;
   padding: 28px;
   border: 1px solid var(--ssf-border);
-  border-radius: var(--ssf-radius);
+  border-radius: 8px;
   background: var(--ssf-white);
   box-shadow: var(--ssf-shadow);
 }
@@ -280,6 +280,57 @@
 .ssf-collection-form h1,
 .ssf-collection-form h2 {
   color: var(--ssf-blue-deep);
+}
+
+.ssf-collection-step-count {
+  margin: -16px 0 22px;
+  color: var(--ssf-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ssf-vessel-section-heading {
+  margin-bottom: 20px;
+}
+
+.ssf-vessel-section-heading h3 {
+  margin: 0 0 6px;
+  color: var(--ssf-blue-deep);
+  font-size: 1.45rem;
+  letter-spacing: 0;
+}
+
+.ssf-vessel-section-heading p {
+  margin: 0;
+  color: var(--ssf-muted);
+}
+
+.ssf-vessel-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+}
+
+.ssf-vessel-field:has(textarea),
+.ssf-vessel-fields .ssf-help {
+  grid-column: 1 / -1;
+}
+
+.ssf-vessel-field > span,
+.ssf-vessel-field small {
+  display: block;
+}
+
+.ssf-vessel-field em {
+  color: var(--ssf-muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.ssf-vessel-field small {
+  color: var(--ssf-muted);
+  font-weight: 400;
 }
 
 .ssf-collection-form h2 {
@@ -304,6 +355,12 @@
   border: 1px solid var(--ssf-border);
   border-radius: 8px;
   font: inherit;
+}
+
+.ssf-collection-form input[type="checkbox"],
+.ssf-collection-form input[type="radio"] {
+  width: auto;
+  min-height: auto;
 }
 
 .ssf-collection-form textarea {
@@ -393,7 +450,8 @@
 @media (max-width: 640px) {
   .ssf-ship-filters,
   .ssf-ships-grid,
-  .ssf-ship-gallery {
+  .ssf-ship-gallery,
+  .ssf-vessel-fields {
     grid-template-columns: 1fr;
   }
 

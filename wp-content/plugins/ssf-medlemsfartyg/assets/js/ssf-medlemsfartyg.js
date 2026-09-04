@@ -6,6 +6,7 @@
     var submit = form.querySelector('[data-collection-submit]');
     var progress = form.querySelector('.ssf-collection-progress span');
     var summary = form.querySelector('.ssf-collection-summary');
+    var count = form.querySelector('[data-collection-count]');
     var current = 0;
 
     if (!steps.length || !prev || !next || !submit || !progress) {
@@ -21,13 +22,26 @@
       if (!summary) {
         return;
       }
-      summary.innerHTML = [
-        '<h3>' + (fieldValue('post_title') || 'Fartyg') + '</h3>',
-        '<p><strong>Kort presentation:</strong> ' + (fieldValue('post_excerpt') || '') + '</p>',
-        '<p><strong>Hemmahamn:</strong> ' + (fieldValue('_ssf_home_port') || '') + '</p>',
-        '<p><strong>Ombud:</strong> ' + (fieldValue('_ssf_contact_name') || '') + '</p>',
-        '<p><strong>Webbplats:</strong> ' + (fieldValue('_ssf_website') || '') + '</p>'
-      ].join('');
+      summary.innerHTML = '';
+      var heading = document.createElement('h3');
+      heading.textContent = fieldValue('post_title') || 'Fartyg';
+      summary.appendChild(heading);
+      [
+        ['Kort presentation', fieldValue('post_excerpt')],
+        ['Hemmahamn', fieldValue('_ssf_home_port')],
+        ['Längd i huvuddäck', fieldValue('_ssf_main_deck_length')],
+        ['Bredd', fieldValue('_ssf_beam')],
+        ['Ombud', fieldValue('_ssf_contact_name')],
+        ['Webbplats', fieldValue('_ssf_website')]
+      ].forEach(function (item) {
+        if (!item[1]) return;
+        var paragraph = document.createElement('p');
+        var label = document.createElement('strong');
+        label.textContent = item[0] + ': ';
+        paragraph.appendChild(label);
+        paragraph.appendChild(document.createTextNode(item[1]));
+        summary.appendChild(paragraph);
+      });
     }
 
     function show(index) {
@@ -39,6 +53,7 @@
       next.style.display = current === steps.length - 1 ? 'none' : '';
       submit.style.display = current === steps.length - 1 ? '' : 'none';
       progress.style.width = (((current + 1) / steps.length) * 100) + '%';
+      if (count) count.textContent = 'Avsnitt ' + (current + 1) + ' av ' + steps.length;
       if (current === steps.length - 1) {
         updateSummary();
       }
@@ -69,6 +84,7 @@
     }
 
     input.addEventListener('change', function () {
+      form.querySelectorAll('[data-ssf-existing-featured]').forEach(function (radio) { radio.checked = false; });
       preview.innerHTML = '';
       Array.prototype.slice.call(input.files || []).forEach(function (file, index) {
         if (!file.type.startsWith('image/')) {
@@ -83,6 +99,7 @@
         radio.checked = index === 0;
         radio.addEventListener('change', function () {
           featured.value = radio.value;
+          form.querySelectorAll('[data-ssf-existing-featured]').forEach(function (existing) { existing.checked = false; });
         });
         var img = document.createElement('img');
         img.alt = file.name;
@@ -95,6 +112,10 @@
         preview.appendChild(card);
       });
       featured.value = '0';
+    });
+
+    form.querySelectorAll('[data-ssf-existing-featured]').forEach(function (radio) {
+      radio.addEventListener('change', function () { featured.value = '-1'; });
     });
   }
 

@@ -16,10 +16,14 @@ $status = SSF_Medlemsfartyg_Shortcodes::terms_label($id, 'fartygsstatus');
 $type = SSF_Medlemsfartyg_Shortcodes::terms_label($id, 'fartygstyp');
 $region = SSF_Medlemsfartyg_Shortcodes::terms_label($id, 'fartygsregion');
 $show_contact = '1' === SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_public_contact');
+$show_email = '1' === SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_public_email');
+$show_phone = '1' === SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_public_phone');
+$show_website = '1' === SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_public_website');
 $facts = array(
     'Byggår' => '_ssf_build_year',
     'Byggplats / varv' => '_ssf_shipyard',
-    'Längd' => '_ssf_length',
+    'Längd i huvuddäck' => '_ssf_main_deck_length',
+    'Total längd' => '_ssf_length',
     'Bredd' => '_ssf_beam',
     'Djupgående' => '_ssf_draft',
     'Rigtyp' => '_ssf_rig',
@@ -66,13 +70,13 @@ $facts = array(
             <section class="ssf-ship-contact"><h2><?php esc_html_e('Fartygsombud', 'ssf-medlemsfartyg'); ?></h2>
                 <?php if ($show_contact) : ?>
                     <p><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_contact_name')); ?><br><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_organization')); ?></p>
-                    <?php if (SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_email')) : ?><p><a href="mailto:<?php echo esc_attr(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_email')); ?>"><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_email')); ?></a></p><?php endif; ?>
-                    <?php if (SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_phone')) : ?><p><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_phone')); ?></p><?php endif; ?>
+                    <?php if ($show_email && SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_email')) : ?><p><a href="mailto:<?php echo esc_attr(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_email')); ?>"><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_email')); ?></a></p><?php endif; ?>
+                    <?php if ($show_phone && SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_phone')) : ?><p><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_phone')); ?></p><?php endif; ?>
                 <?php else : ?>
                     <p><?php echo esc_html(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_organization')); ?></p>
                     <a class="ssf-ship-button" href="<?php echo esc_url(home_url('/kontakta-oss/')); ?>"><?php esc_html_e('Kontakta SSF om fartyget', 'ssf-medlemsfartyg'); ?></a>
                 <?php endif; ?>
-                <?php if (SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_website')) : ?><a class="ssf-ship-button ssf-ship-button--ghost" href="<?php echo esc_url(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_website')); ?>"><?php esc_html_e('Besök hemsida', 'ssf-medlemsfartyg'); ?></a><?php endif; ?>
+                <?php if ($show_website && SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_website')) : ?><a class="ssf-ship-button ssf-ship-button--ghost" href="<?php echo esc_url(SSF_Medlemsfartyg_Shortcodes::field($id, '_ssf_website')); ?>"><?php esc_html_e('Besök hemsida', 'ssf-medlemsfartyg'); ?></a><?php endif; ?>
             </section>
         </aside>
     </div>

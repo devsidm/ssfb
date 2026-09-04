@@ -59,10 +59,22 @@ class SSF_Medlemsfartyg_Public_Form
         }
 
         $ship_id = (int) $token->ship_id;
-        $data = $this->collect_data();
+        $route = (string) get_post_meta($ship_id, '_ssf_application_route', true);
+        $data = $this->collect_data($route);
+        $errors = SSF_Medlemsfartyg_Profile::validate($data, $route, SSF_Medlemsfartyg_Profile::MODE_UPDATE);
+        if ($errors->has_errors()) {
+            wp_die(esc_html(implode(' ', $errors->get_error_messages())));
+        }
         $image_ids = $this->handle_uploads($ship_id);
         $featured_index = max(0, (int) ($_POST['featured_image_index'] ?? 0));
-        $featured_id = $image_ids[$featured_index] ?? ($image_ids[0] ?? 0);
+        $existing_featured = (int) ($_POST['existing_featured_image'] ?? 0);
+        $allowed_existing = array_filter(array_map('intval', array_merge(
+            array((int) get_post_thumbnail_id($ship_id)),
+            explode(',', (string) get_post_meta($ship_id, '_ssf_gallery_ids', true))
+        )));
+        $featured_id = $existing_featured > 0 && in_array($existing_featured, $allowed_existing, true)
+            ? $existing_featured
+            : ($image_ids[$featured_index] ?? ($image_ids[0] ?? 0));
 
         $submission_id = SSF_Medlemsfartyg_Submissions::create($ship_id, (int) $token->id, $data, $image_ids, $featured_id);
         SSF_Medlemsfartyg_Tokens::update_status((int) $token->id, 'submitted');
@@ -88,53 +100,9 @@ class SSF_Medlemsfartyg_Public_Form
         exit;
     }
 
-    private function collect_data(): array
+    private function collect_data(string $route): array
     {
-        $text_fields = array(
-            'post_title',
-            'post_excerpt',
-            '_ssf_short_name',
-            '_ssf_home_port',
-            '_ssf_registry_number',
-            '_ssf_call_sign',
-            '_ssf_mmsi',
-            '_ssf_build_year',
-            '_ssf_shipyard',
-            '_ssf_length',
-            '_ssf_beam',
-            '_ssf_draft',
-            '_ssf_rig',
-            '_ssf_material',
-            '_ssf_engine',
-            '_ssf_sail_area',
-            '_ssf_passengers',
-            '_ssf_contact_name',
-            '_ssf_organization',
-            '_ssf_phone',
-            '_ssf_contact_button_text',
-        );
-        $url_fields = array('_ssf_website', '_ssf_facebook', '_ssf_instagram', '_ssf_booking_link', '_ssf_other_link');
-        $long_fields = array('post_content', '_ssf_short_presentation', '_ssf_today', '_ssf_activity', '_ssf_future', '_ssf_other_info', '_ssf_history', '_ssf_previous_use', '_ssf_restorations', '_ssf_cultural_value');
-
-        $data = array();
-        foreach ($text_fields as $field) {
-            $data[$field] = sanitize_text_field(wp_unslash($_POST[$field] ?? ''));
-        }
-        foreach ($url_fields as $field) {
-            $data[$field] = esc_url_raw(wp_unslash($_POST[$field] ?? ''));
-        }
-        foreach ($long_fields as $field) {
-            $data[$field] = wp_kses_post(wp_unslash($_POST[$field] ?? ''));
-        }
-        $data['_ssf_email'] = sanitize_email(wp_unslash($_POST['_ssf_email'] ?? ''));
-        foreach (array('_ssf_public_contact', '_ssf_public_website', '_ssf_public_phone', '_ssf_public_email') as $field) {
-            $data[$field] = ! empty($_POST[$field]) ? '1' : '0';
-        }
-        foreach (array('fartygstyp', 'fartygsstatus', 'fartygsregion', 'fartygsanvandning') as $taxonomy) {
-            $data['tax_' . $taxonomy] = array_filter(array_map('sanitize_text_field', (array) wp_unslash($_POST['tax_' . $taxonomy] ?? array())));
-        }
-
-        return $data;
+        return SSF_Medlemsfartyg_Profile::collect($_POST, $route, SSF_Medlemsfartyg_Profile::MODE_UPDATE);
     }
 
     private function handle_uploads(int $ship_id): array

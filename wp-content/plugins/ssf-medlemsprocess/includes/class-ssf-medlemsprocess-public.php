@@ -87,15 +87,28 @@ class SSF_Medlemsprocess_Public
         }
 
         $data = $this->collect_application_data();
-        if (! $data['ship_name'] || ! is_email($data['applicant_email']) || ! $data['applicant_name']) {
+        if (! is_email($data['applicant_email']) || ! $data['applicant_name']) {
             wp_die('Fyll i fartygsnamn, namn och en giltig e-postadress.');
+        }
+        if (class_exists('SSF_Medlemsfartyg_Profile')) {
+            $errors = SSF_Medlemsfartyg_Profile::validate((array) $data['vessel_profile'], (string) $data['application_route'], SSF_Medlemsfartyg_Profile::MODE_APPLICATION);
+            if ($errors->has_errors()) {
+                wp_die(esc_html(implode(' ', $errors->get_error_messages())));
+            }
         }
         $created = SSF_Medlemsprocess_Application::create($data);
         if (! $created['id']) {
             wp_die('Ansökan kunde inte sparas. Försök igen eller kontakta SSF.');
         }
-        $files = $this->handle_uploads($created['id'], 'ssf_application_files');
+        $main_images = $this->handle_uploads($created['id'], 'ssf_application_main_image');
+        $gallery = $this->handle_uploads($created['id'], 'ssf_application_gallery');
+        $documents = $this->handle_uploads($created['id'], 'ssf_application_documents');
+        $files = array_merge($main_images, $gallery, $documents);
         update_post_meta($created['id'], '_ssf_application_files', $files);
+        $ship_id = (int) get_post_meta($created['id'], '_ssf_linked_ship_id', true);
+        if ($ship_id && class_exists('SSF_Medlemsfartyg_Profile')) {
+            SSF_Medlemsfartyg_Profile::attach_application_files($ship_id, $files, (int) ($main_images[0] ?? 0));
+        }
         set_transient($this->rate_key(), 1, MINUTE_IN_SECONDS * 2);
         $mail_sent = SSF_Medlemsprocess_Plugin::instance()->emails->send_received($created['id'], $created['token']);
         wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('ansokan', array('ssf_application_sent' => '1', 'token' => rawurlencode($created['token']), 'ssf_mail' => $mail_sent ? 'sent' : 'failed')));
@@ -126,18 +139,18 @@ class SSF_Medlemsprocess_Public
 
     private function collect_application_data(): array
     {
-        $fields = array(
-            'application_path', 'ship_is_sailing', 'ship_professional_use', 'ship_traditional_newbuild',
-            'ship_length', 'ship_beam', 'ship_draft', 'ship_register', 'ship_registry_number', 'ship_name',
-            'ship_type', 'ship_rig', 'ship_build_year', 'ship_shipyard', 'ship_home_port', 'ship_restoration',
-            'ship_short_description', 'ship_history', 'ship_current_use', 'applicant_name', 'applicant_phone',
-            'ship_description', 'applicant_organization', 'applicant_address', 'applicant_website',
-        );
+        $fields = array('applicant_name', 'applicant_phone', 'applicant_organization', 'applicant_address', 'applicant_website');
         $data = array();
         foreach ($fields as $field) {
             $data[$field] = sanitize_textarea_field(wp_unslash($_POST[$field] ?? ''));
         }
         $data['applicant_email'] = sanitize_email(wp_unslash($_POST['applicant_email'] ?? ''));
+        $data['application_route'] = sanitize_key(wp_unslash($_POST['application_route'] ?? ''));
+        if (class_exists('SSF_Medlemsfartyg_Profile')) {
+            $data['vessel_profile'] = SSF_Medlemsfartyg_Profile::collect($_POST, $data['application_route'], SSF_Medlemsfartyg_Profile::MODE_APPLICATION);
+        } else {
+            $data['vessel_profile'] = array('post_title' => sanitize_text_field(wp_unslash($_POST['post_title'] ?? '')));
+        }
         $data['confirm_accuracy'] = '1';
         $data['privacy_consent'] = '1';
         $data['upload_rights'] = '1';
@@ -146,7 +159,7 @@ class SSF_Medlemsprocess_Public
 
     private function handle_uploads(int $application_id, string $field): array
     {
-        if (empty($_FILES[$field]['name'][0])) {
+        if (empty($_FILES[$field]['name'])) {
             return array();
         }
         require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -154,6 +167,11 @@ class SSF_Medlemsprocess_Public
         require_once ABSPATH . 'wp-admin/includes/media.php';
         $settings = SSF_Medlemsprocess_Plugin::settings();
         $files = $_FILES[$field];
+        if (! is_array($files['name'])) {
+            foreach (array('name', 'type', 'tmp_name', 'error', 'size') as $part) {
+                $files[$part] = array($files[$part]);
+            }
+        }
         $attachments = array();
         foreach ((array) $files['name'] as $index => $name) {
             if (UPLOAD_ERR_OK !== (int) $files['error'][$index]) {

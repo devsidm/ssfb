@@ -70,7 +70,17 @@ class SSF_Medlemsprocess_Application
 
     public static function data(int $application_id): array
     {
-        return (array) get_post_meta($application_id, '_ssf_application_data', true);
+        $data = (array) get_post_meta($application_id, '_ssf_application_data', true);
+        $ship_id = (int) get_post_meta($application_id, '_ssf_linked_ship_id', true);
+        if ($ship_id && class_exists('SSF_Medlemsfartyg_Profile')) {
+            $data = array_merge(SSF_Medlemsfartyg_Profile::legacy_application_data($ship_id), $data);
+        }
+        $route = (string) get_post_meta($application_id, '_ssf_application_route', true);
+        if ($route) {
+            $data['application_route'] = $route;
+            $data['application_path'] = class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route;
+        }
+        return $data;
     }
 
     public static function application_number(): string
@@ -83,7 +93,12 @@ class SSF_Medlemsprocess_Application
     public static function create(array $data, array $attachments = array()): array
     {
         $number = self::application_number();
-        $ship_name = sanitize_text_field($data['ship_name'] ?? 'Namnlöst fartyg');
+        $profile_data = (array) ($data['vessel_profile'] ?? array());
+        unset($data['vessel_profile']);
+        $route = sanitize_key((string) ($data['application_route'] ?? ''));
+        $ship_name = sanitize_text_field($profile_data['post_title'] ?? $data['ship_name'] ?? 'Namnlöst fartyg');
+        $data['ship_name'] = $ship_name;
+        $data['application_path'] = class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route;
         $application_id = wp_insert_post(array(
             'post_type' => self::POST_TYPE,
             'post_status' => 'private',
@@ -96,9 +111,17 @@ class SSF_Medlemsprocess_Application
 
         update_post_meta($application_id, '_ssf_application_number', $number);
         update_post_meta($application_id, '_ssf_application_data', $data);
+        update_post_meta($application_id, '_ssf_application_route', $route);
+        update_post_meta($application_id, '_ssf_application_vessel_snapshot', $profile_data);
         update_post_meta($application_id, '_ssf_application_files', array_map('intval', $attachments));
         update_post_meta($application_id, '_ssf_process_status', 'submitted');
         update_post_meta($application_id, '_ssf_submitted_at', current_time('mysql'));
+        if ($profile_data && class_exists('SSF_Medlemsfartyg_Profile')) {
+            $ship_id = SSF_Medlemsfartyg_Profile::create_for_application((int) $application_id, $route, $profile_data, $data);
+            if ($ship_id) {
+                self::add_history((int) $application_id, 'ship_created', 'Fartygsprofil skapades som utkast och kopplades till ansökan.', false, array('ship_id' => $ship_id));
+            }
+        }
         self::add_history($application_id, 'submitted', 'Ansökan skickades in.', true);
         return array('id' => (int) $application_id, 'token' => self::issue_token((int) $application_id));
     }
@@ -182,6 +205,8 @@ class SSF_Medlemsprocess_Application
     {
         $existing = (int) get_post_meta($application_id, '_ssf_linked_ship_id', true);
         if ($existing && get_post($existing)) {
+            update_post_meta($existing, '_ssf_public_visibility', 'review');
+            update_post_meta($existing, '_ssf_review_status', 'Medlemskap godkänt - publicering återstår');
             return $existing;
         }
         if (! post_type_exists('medlemsfartyg')) {
@@ -190,7 +215,7 @@ class SSF_Medlemsprocess_Application
         $data = self::data($application_id);
         $ship_id = wp_insert_post(array(
             'post_type' => 'medlemsfartyg',
-            'post_status' => 'publish',
+            'post_status' => 'draft',
             'post_title' => sanitize_text_field($data['ship_name'] ?? get_the_title($application_id)),
             'post_content' => wp_kses_post($data['ship_description'] ?? ''),
             'post_excerpt' => sanitize_textarea_field($data['ship_short_description'] ?? ''),
@@ -210,6 +235,10 @@ class SSF_Medlemsprocess_Application
         foreach ($map as $meta_key => $data_key) {
             update_post_meta($ship_id, $meta_key, null === $data_key ? '1' : (string) ($data[$data_key] ?? ''));
         }
+        update_post_meta($ship_id, '_ssf_public_visibility', 'review');
+        update_post_meta($ship_id, '_ssf_review_status', 'Medlemskap godkänt - publicering återstår');
+        update_post_meta($ship_id, '_ssf_source_application_id', $application_id);
+        update_post_meta($ship_id, '_ssf_application_route', (string) get_post_meta($application_id, '_ssf_application_route', true));
         if (! empty($data['ship_type'])) {
             wp_set_object_terms($ship_id, sanitize_text_field($data['ship_type']), 'fartygstyp');
         }

@@ -36,6 +36,15 @@ class SSF_Medlemsfartyg_Templates
         }
 
         if (is_singular('medlemsfartyg')) {
+            $ship_id = get_queried_object_id();
+            if (! SSF_Medlemsfartyg_Profile::is_public($ship_id) && ! current_user_can('edit_post', $ship_id)) {
+                global $wp_query;
+                $wp_query->set_404();
+                status_header(404);
+                nocache_headers();
+                $not_found = get_404_template();
+                return $not_found ?: $template;
+            }
             return self::locate('single-medlemsfartyg.php');
         }
 

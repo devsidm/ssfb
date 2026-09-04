@@ -39,7 +39,7 @@ class SSF_Medlemsfartyg_Shortcodes
         }
         $atts = shortcode_atts(array('id' => 0), $atts);
         $post = get_post((int) $atts['id']);
-        if (! $post || 'medlemsfartyg' !== $post->post_type) {
+        if (! $post || 'medlemsfartyg' !== $post->post_type || ! SSF_Medlemsfartyg_Profile::is_public($post->ID)) {
             return '';
         }
 
@@ -62,6 +62,7 @@ class SSF_Medlemsfartyg_Shortcodes
             'posts_per_page' => (int) $atts['antal'],
             'meta_key' => '_ssf_sort_order',
             'orderby' => array('meta_value_num' => 'ASC', 'title' => 'ASC'),
+            'meta_query' => self::public_visibility_query(),
         );
 
         if ($atts['status']) {
@@ -128,16 +129,13 @@ class SSF_Medlemsfartyg_Shortcodes
             'orderby' => $orderby,
             'order' => $order,
             'meta_query' => array(
-                'relation' => 'OR',
+                'relation' => 'AND',
                 array(
-                    'key' => '_ssf_show_in_archive',
-                    'compare' => 'NOT EXISTS',
+                    'relation' => 'OR',
+                    array('key' => '_ssf_show_in_archive', 'compare' => 'NOT EXISTS'),
+                    array('key' => '_ssf_show_in_archive', 'value' => '0', 'compare' => '!='),
                 ),
-                array(
-                    'key' => '_ssf_show_in_archive',
-                    'value' => '0',
-                    'compare' => '!=',
-                ),
+                self::public_visibility_query(),
             ),
         );
 
@@ -163,7 +161,16 @@ class SSF_Medlemsfartyg_Shortcodes
 
     public static function field(int $post_id, string $key): string
     {
-        return (string) get_post_meta($post_id, $key, true);
+        return SSF_Medlemsfartyg_Profile::value($post_id, $key);
+    }
+
+    private static function public_visibility_query(): array
+    {
+        return array(
+            'relation' => 'OR',
+            array('key' => '_ssf_public_visibility', 'compare' => 'NOT EXISTS'),
+            array('key' => '_ssf_public_visibility', 'value' => 'public', 'compare' => '='),
+        );
     }
 
     private function can_display(): bool
