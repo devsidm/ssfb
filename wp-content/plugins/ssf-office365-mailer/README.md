@@ -16,7 +16,9 @@ This plugin sends WordPress email through Microsoft Graph using OAuth 2.0. It us
 1. Go to `Settings > SSF Microsoft 365 Mailer`.
 2. Save the Application Client ID, Tenant ID, and Client Secret Value.
 3. Click `Anslut Microsoft 365` and sign in with the mailbox that should send SSF email.
-4. Use the email test in the WordPress admin or send a collection link from a member vessel.
-5. After testing, deactivate FluentSMTP to leave a single active mailer configuration.
+4. Click `Testa token`. This forces a refresh-token exchange and verifies that Microsoft Graph can read the connected mailbox profile.
+5. Enter an address you can check and click `Skicka testmejl`. Confirm delivery in both the inbox and spam folder.
+6. If WordPress reports `AADSTS50173`, click `Återanslut Microsoft 365` and sign in again before repeating both tests.
+7. After testing, deactivate FluentSMTP to leave a single active mailer configuration.
 
 The Client Secret and OAuth tokens are encrypted at rest with WordPress salts before they are stored in the WordPress database.

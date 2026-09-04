@@ -3,7 +3,7 @@
  * Plugin Name: SSF Microsoft 365 Mailer
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Skickar WordPress e-post via Microsoft 365 och Microsoft Graph med OAuth 2.0.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Author: SIDM
  * Text Domain: ssf-office365-mailer
  * Requires at least: 5.8
@@ -44,6 +44,8 @@ final class SSF_Office365_Mailer
         add_action('rest_api_init', array($this, 'register_diagnostic_route'));
         add_action('admin_post_ssf_office365_connect', array($this, 'start_oauth'));
         add_action('admin_post_ssf_office365_disconnect', array($this, 'disconnect'));
+        add_action('admin_post_ssf_office365_test_token', array($this, 'test_token'));
+        add_action('admin_post_ssf_office365_send_test', array($this, 'send_test'));
         add_filter('pre_wp_mail', array($this, 'send_mail'), 1, 2);
     }
 
@@ -159,6 +161,7 @@ final class SSF_Office365_Mailer
         $has_secret = ! empty($settings['client_secret']);
         $can_connect = $settings['client_id'] && $has_secret;
         $last_result = (array) get_option('ssf_office365_mailer_last_result', array());
+        $test_recipient = sanitize_email((string) wp_get_current_user()->user_email);
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'); ?></h1>
@@ -194,7 +197,7 @@ final class SSF_Office365_Mailer
 
             <hr>
             <h2><?php esc_html_e('Microsoft 365-anslutning', 'ssf-office365-mailer'); ?></h2>
-            <?php if ('error' === ($last_result['status'] ?? '')) : ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('Senaste e-postförsöket misslyckades.', 'ssf-office365-mailer'); ?></strong> <?php echo esc_html((string) ($last_result['message'] ?? '')); ?></p></div><?php elseif ('sent' === ($last_result['status'] ?? '')) : ?><div class="notice notice-success inline"><p><?php esc_html_e('Senaste e-postförsöket accepterades av Microsoft 365.', 'ssf-office365-mailer'); ?></p></div><?php endif; ?>
+            <?php if ('error' === ($last_result['status'] ?? '')) : ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('Senaste anslutnings- eller e-postförsöket misslyckades.', 'ssf-office365-mailer'); ?></strong> <?php echo esc_html((string) ($last_result['message'] ?? '')); ?></p></div><?php elseif ('sent' === ($last_result['status'] ?? '')) : ?><div class="notice notice-success inline"><p><?php esc_html_e('Senaste e-postförsöket accepterades av Microsoft 365.', 'ssf-office365-mailer'); ?></p></div><?php elseif ('token_ok' === ($last_result['status'] ?? '')) : ?><div class="notice notice-success inline"><p><?php esc_html_e('Tokenförnyelsen och åtkomsten till Microsoft 365 är verifierad.', 'ssf-office365-mailer'); ?></p></div><?php endif; ?>
             <?php if (! empty($tokens['email'])) : ?>
                 <p><strong><?php esc_html_e('Ansluten som:', 'ssf-office365-mailer'); ?></strong> <?php echo esc_html($tokens['email']); ?></p>
                 <?php if ($can_connect) : ?><p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_office365_connect'), 'ssf_office365_connect')); ?>"><?php esc_html_e('Återanslut Microsoft 365', 'ssf-office365-mailer'); ?></a></p><?php endif; ?>
@@ -207,6 +210,26 @@ final class SSF_Office365_Mailer
                 <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_office365_connect'), 'ssf_office365_connect')); ?>"><?php esc_html_e('Anslut Microsoft 365', 'ssf-office365-mailer'); ?></a></p>
             <?php else : ?>
                 <p><?php esc_html_e('Spara Azure Application Client ID och Client Secret innan du ansluter Microsoft 365.', 'ssf-office365-mailer'); ?></p>
+            <?php endif; ?>
+
+            <?php if ($this->is_ready()) : ?>
+                <h3><?php esc_html_e('Testa token och e-post', 'ssf-office365-mailer'); ?></h3>
+                <ol>
+                    <li><?php esc_html_e('Klicka Testa token. Testet tvingar fram en tokenförnyelse och verifierar åtkomst till den anslutna postlådan.', 'ssf-office365-mailer'); ?></li>
+                    <li><?php esc_html_e('När tokentestet är godkänt skickar du ett testmejl till en adress du kan kontrollera.', 'ssf-office365-mailer'); ?></li>
+                    <li><?php esc_html_e('Kontrollera både inkorgen och skräpposten. Ett godkänt test visar att Microsoft 365 har accepterat meddelandet.', 'ssf-office365-mailer'); ?></li>
+                </ol>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <input type="hidden" name="action" value="ssf_office365_test_token">
+                    <?php wp_nonce_field('ssf_office365_test_token'); ?>
+                    <?php submit_button(__('Testa token', 'ssf-office365-mailer'), 'secondary', 'submit', false); ?>
+                </form>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <input type="hidden" name="action" value="ssf_office365_send_test">
+                    <?php wp_nonce_field('ssf_office365_send_test'); ?>
+                    <p><label for="ssf-office365-test-email"><strong><?php esc_html_e('Mottagare för testmejl', 'ssf-office365-mailer'); ?></strong></label><br><input class="regular-text" id="ssf-office365-test-email" type="email" name="test_email" value="<?php echo esc_attr($test_recipient); ?>" required></p>
+                    <?php submit_button(__('Skicka testmejl', 'ssf-office365-mailer'), 'secondary', 'submit', false); ?>
+                </form>
             <?php endif; ?>
 
             <h2><?php esc_html_e('Azure App registration', 'ssf-office365-mailer'); ?></h2>
@@ -323,6 +346,70 @@ final class SSF_Office365_Mailer
         $this->redirect_to_settings();
     }
 
+    public function test_token(): void
+    {
+        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_office365_test_token')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'ssf-office365-mailer'));
+        }
+        if (! $this->is_ready()) {
+            $message = __('Microsoft 365 är inte fullständigt konfigurerat eller anslutet.', 'ssf-office365-mailer');
+            $this->record_result('error', $message);
+            $this->set_notice(get_current_user_id(), 'error', $message);
+            $this->redirect_to_settings();
+        }
+
+        $access_token = $this->refresh_access_token();
+        if (is_wp_error($access_token)) {
+            $this->record_result('error', $access_token->get_error_message());
+            $this->set_notice(get_current_user_id(), 'error', $access_token->get_error_message());
+            $this->redirect_to_settings();
+        }
+        $profile = $this->request_profile($access_token);
+        if (is_wp_error($profile)) {
+            $this->record_result('error', $profile->get_error_message());
+            $this->set_notice(get_current_user_id(), 'error', $profile->get_error_message());
+            $this->redirect_to_settings();
+        }
+
+        $message = __('Tokenförnyelsen lyckades och Microsoft 365-postlådan kunde läsas.', 'ssf-office365-mailer');
+        $this->record_result('token_ok', $message);
+        $tokens = $this->tokens();
+        do_action('ssf_office365_mailer_connected', (string) $tokens['email']);
+        $this->set_notice(get_current_user_id(), 'success', $message);
+        $this->redirect_to_settings();
+    }
+
+    public function send_test(): void
+    {
+        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_office365_send_test')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'ssf-office365-mailer'));
+        }
+        $recipient = isset($_POST['test_email']) && is_scalar($_POST['test_email']) ? sanitize_email(wp_unslash($_POST['test_email'])) : '';
+        if (! is_email($recipient)) {
+            $this->set_notice(get_current_user_id(), 'error', __('Ange en giltig mottagaradress för testmejlet.', 'ssf-office365-mailer'));
+            $this->redirect_to_settings();
+        }
+        if (! $this->is_ready()) {
+            $this->set_notice(get_current_user_id(), 'error', __('Microsoft 365 är inte fullständigt konfigurerat eller anslutet.', 'ssf-office365-mailer'));
+            $this->redirect_to_settings();
+        }
+
+        $subject = sprintf(__('Testmejl från %s', 'ssf-office365-mailer'), wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES));
+        $message = implode("\n", array(
+            __('Detta är ett test av webbplatsens Microsoft 365-anslutning.', 'ssf-office365-mailer'),
+            __('Om du har fått meddelandet fungerar både tokenförnyelsen och e-postleveransen.', 'ssf-office365-mailer'),
+            '',
+            home_url('/'),
+        ));
+        if (wp_mail($recipient, $subject, $message, array('Content-Type: text/plain; charset=UTF-8'))) {
+            $this->set_notice(get_current_user_id(), 'success', sprintf(__('Microsoft 365 accepterade testmejlet till %s. Kontrollera inkorg och skräppost.', 'ssf-office365-mailer'), $recipient));
+        } else {
+            $last_result = (array) get_option('ssf_office365_mailer_last_result', array());
+            $this->set_notice(get_current_user_id(), 'error', (string) ($last_result['message'] ?? __('Testmejlet kunde inte skickas.', 'ssf-office365-mailer')));
+        }
+        $this->redirect_to_settings();
+    }
+
     public function send_mail($pre_wp_mail, array $args)
     {
         if (null !== $pre_wp_mail || ! $this->is_ready()) {
@@ -388,7 +475,7 @@ final class SSF_Office365_Mailer
             return false;
         }
 
-        update_option('ssf_office365_mailer_last_result', array('status' => 'sent', 'at' => time()), false);
+        $this->record_result('sent');
         do_action('wp_mail_succeeded', $args);
         return true;
     }
@@ -505,6 +592,13 @@ final class SSF_Office365_Mailer
             return $access_token;
         }
 
+        return $this->refresh_access_token();
+    }
+
+    private function refresh_access_token()
+    {
+        $tokens = $this->tokens();
+
         $refresh_token = $this->decrypt($tokens['refresh_token']);
         if (! $refresh_token) {
             return new WP_Error('ssf_office365_reconnect', __('Microsoft 365-anslutningen har gått ut. Anslut kontot igen under Inställningar > SSF Microsoft 365 Mailer.', 'ssf-office365-mailer'));
@@ -519,7 +613,9 @@ final class SSF_Office365_Mailer
             return $response;
         }
 
-        $this->save_tokens($response, $tokens['email'], $refresh_token);
+        if (! $this->save_tokens($response, $tokens['email'], $refresh_token)) {
+            return new WP_Error('ssf_office365_token_save', __('Den förnyade Microsoft 365-tokenen kunde inte sparas säkert.', 'ssf-office365-mailer'));
+        }
         return $response['access_token'];
     }
 
@@ -616,8 +712,17 @@ final class SSF_Office365_Mailer
 
     private function mail_failed(array $args, WP_Error $error): void
     {
-        update_option('ssf_office365_mailer_last_result', array('status' => 'error', 'message' => $error->get_error_message(), 'at' => time()), false);
+        $this->record_result('error', $error->get_error_message());
         do_action('wp_mail_failed', $error);
+    }
+
+    private function record_result(string $status, string $message = ''): void
+    {
+        update_option('ssf_office365_mailer_last_result', array(
+            'status' => sanitize_key($status),
+            'message' => sanitize_text_field($message),
+            'at' => time(),
+        ), false);
     }
 
     private function encrypt(string $value): string
