@@ -8,6 +8,8 @@ if (! defined('ABSPATH')) {
 
 final class RegistrationMailer
 {
+    private string $last_error = '';
+
     public function confirmation(array $meeting, array $registration, string $manage_url, array $calendar, string $meeting_url): bool
     {
         $data = $this->confirmation_data($meeting, $registration, $manage_url, $calendar, $meeting_url);
@@ -28,6 +30,11 @@ final class RegistrationMailer
             sprintf(__('Status: %s', 'ssf-member-portal'), $registration['status_label']),
         ));
         return wp_mail($recipient, $subject, $message);
+    }
+
+    public function last_error(): string
+    {
+        return $this->last_error;
     }
 
     private function confirmation_data(array $meeting, array $registration, string $manage_url, array $calendar, string $meeting_url): array
@@ -132,6 +139,12 @@ final class RegistrationMailer
 
     private function send_confirmation(string $recipient, string $subject, string $html, string $text): bool
     {
+        $this->last_error = '';
+        $recipient = sanitize_email($recipient);
+        if (! is_email($recipient)) {
+            $this->last_error = __('Anmälan saknar en giltig e-postadress.', 'ssf-member-portal');
+            return false;
+        }
         $from = static function (string $value): string {
             return 'system@ssfb.se';
         };
@@ -143,15 +156,26 @@ final class RegistrationMailer
             $phpmailer->CharSet = 'UTF-8';
             $phpmailer->AltBody = $text;
         };
+        $failure = function ($error): void {
+            if ($error instanceof \WP_Error) {
+                $this->last_error = $error->get_error_message();
+            }
+        };
         add_filter('wp_mail_from', $from);
         add_filter('wp_mail_from_name', $from_name);
         add_action('phpmailer_init', $alternative);
+        add_action('wp_mail_failed', $failure);
         try {
-            return wp_mail(sanitize_email($recipient), $subject, $html, array('Content-Type: text/html; charset=UTF-8'));
+            $sent = wp_mail($recipient, $subject, $html, array('Content-Type: text/html; charset=UTF-8'));
+            if (! $sent && ! $this->last_error) {
+                $this->last_error = __('WordPress mailtransport avvisade meddelandet.', 'ssf-member-portal');
+            }
+            return $sent;
         } finally {
             remove_filter('wp_mail_from', $from);
             remove_filter('wp_mail_from_name', $from_name);
             remove_action('phpmailer_init', $alternative);
+            remove_action('wp_mail_failed', $failure);
         }
     }
 

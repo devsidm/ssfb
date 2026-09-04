@@ -22,6 +22,8 @@ final class RegistrationService
     public const AVAILABILITY_MEETING_PASSED = 'meeting_passed';
     public const AVAILABILITY_SOLD_OUT = 'sold_out';
 
+    private const CONFIRMATION_RETRY_HOOK = 'ssf_member_portal_retry_meeting_confirmation';
+
     private Module $meetings;
     private CalendarService $calendar;
     private RegistrationMailer $mailer;
@@ -36,6 +38,8 @@ final class RegistrationService
         $this->export = $export;
         $this->sharepoint = $sharepoint;
         add_action('ssf_member_portal_sync_meeting_registrations', array($this, 'sync_meeting'), 10, 2);
+        add_action(self::CONFIRMATION_RETRY_HOOK, array($this, 'retry_confirmation'));
+        add_action('ssf_office365_mailer_connected', array($this, 'retry_failed_confirmations'));
         add_action('ssf_member_portal_annual_meeting_retention', array($this, 'run_retention'));
     }
 
@@ -117,19 +121,19 @@ final class RegistrationService
 
         $registration = $this->details((int) $post_id, $meeting);
         $manage_url = $this->meetings->registration_url(array('token' => rawurlencode((string) $token)));
-        $this->mailer->confirmation(
+        $confirmation_sent = $this->send_confirmation(
+            (int) $post_id,
             $meeting,
             $registration,
             $manage_url,
-            $this->calendar->urls($meeting),
-            $this->meetings->meeting_url(array('meeting' => (int) $meeting['id']))
+            true
         );
         if ($is_new) {
             $this->mailer->notification($meeting, $registration);
         }
         $this->queue_sync((int) $meeting['id']);
 
-        return array('registration' => $registration, 'token' => $token, 'meeting' => $meeting);
+        return array('registration' => $registration, 'token' => $token, 'meeting' => $meeting, 'confirmation_sent' => $confirmation_sent);
     }
 
     public function find_by_token(string $token): ?\WP_Post
@@ -185,6 +189,11 @@ final class RegistrationService
             'status_label' => $this->status_label((string) $get('status', self::REGISTERED)),
             'submitted_at' => (int) $get('submitted_at', 0),
             'updated_at' => (int) $get('updated_at', 0),
+            'confirmation_status' => (string) $get('confirmation_status', 'unknown'),
+            'confirmation_attempted_at' => (int) $get('confirmation_attempted_at', 0),
+            'confirmation_sent_at' => (int) $get('confirmation_sent_at', 0),
+            'confirmation_last_error' => (string) $get('confirmation_last_error'),
+            'confirmation_attempts' => (int) $get('confirmation_attempts', 0),
             'sharepoint_sync_status' => (string) $get('sharepoint_sync_status', 'pending'),
             'sharepoint_last_sync' => (string) $get('sharepoint_last_sync'),
             'sharepoint_last_error' => (string) $get('sharepoint_last_error'),
@@ -238,13 +247,49 @@ final class RegistrationService
         $token = $this->token();
         update_post_meta($post->ID, '_ssf_am_token_hash', hash('sha256', $token));
         $registration = $this->details($post->ID, $meeting);
-        return $this->mailer->confirmation(
+        return $this->send_confirmation(
+            (int) $post->ID,
             $meeting,
             $registration,
             $this->meetings->registration_url(array('token' => rawurlencode($token))),
-            $this->calendar->urls($meeting),
-            $this->meetings->meeting_url(array('meeting' => (int) $meeting['id']))
+            true
         );
+    }
+
+    public function retry_confirmation(int $registration_id): void
+    {
+        $post = get_post($registration_id);
+        if (! $post || RegistrationPostType::POST_TYPE !== $post->post_type || 'failed' !== get_post_meta($registration_id, '_ssf_am_confirmation_status', true)) {
+            return;
+        }
+
+        $meeting = $this->meetings->data((int) $post->post_parent);
+        $registration = $this->details($registration_id, $meeting);
+        if (self::CANCELLED === $registration['status']) {
+            return;
+        }
+
+        $this->send_confirmation($registration_id, $meeting, $registration, '', true);
+    }
+
+    public function retry_failed_confirmations(string $connected_email = ''): void
+    {
+        $registration_ids = get_posts(array(
+            'post_type' => RegistrationPostType::POST_TYPE,
+            'post_status' => 'private',
+            'posts_per_page' => 100,
+            'fields' => 'ids',
+            'orderby' => 'ID',
+            'order' => 'ASC',
+            'meta_key' => '_ssf_am_confirmation_status',
+            'meta_value' => 'failed',
+        ));
+        foreach ($registration_ids as $index => $registration_id) {
+            $registration_id = (int) $registration_id;
+            update_post_meta($registration_id, '_ssf_am_confirmation_attempts', 0);
+            wp_clear_scheduled_hook(self::CONFIRMATION_RETRY_HOOK, array($registration_id));
+            wp_schedule_single_event($this->now() + 10 + ($index * 5), self::CONFIRMATION_RETRY_HOOK, array($registration_id));
+        }
     }
 
     public function selection_counts(int $meeting_id, int $exclude_id = 0): array
@@ -373,6 +418,58 @@ final class RegistrationService
             'opens_at' => $open_at,
             'closes_at' => $close_at,
         );
+    }
+
+    private function send_confirmation(int $registration_id, array $meeting, array $registration, string $manage_url, bool $queue_on_failure): bool
+    {
+        $sent = $this->mailer->confirmation(
+            $meeting,
+            $registration,
+            $manage_url,
+            $this->calendar->urls($meeting),
+            $this->meetings->meeting_url(array('meeting' => (int) $meeting['id']))
+        );
+        $now = $this->now();
+        $attempts = (int) get_post_meta($registration_id, '_ssf_am_confirmation_attempts', true) + 1;
+        update_post_meta($registration_id, '_ssf_am_confirmation_attempted_at', $now);
+        update_post_meta($registration_id, '_ssf_am_confirmation_attempts', $attempts);
+
+        if ($sent) {
+            update_post_meta($registration_id, '_ssf_am_confirmation_status', 'sent');
+            update_post_meta($registration_id, '_ssf_am_confirmation_sent_at', $now);
+            delete_post_meta($registration_id, '_ssf_am_confirmation_last_error');
+            wp_clear_scheduled_hook(self::CONFIRMATION_RETRY_HOOK, array($registration_id));
+            return true;
+        }
+
+        $error = sanitize_text_field(wp_strip_all_tags($this->mailer->last_error()));
+        if (! $error) {
+            $error = __('Bekräftelsemejlet kunde inte lämnas till e-posttransporten.', 'ssf-member-portal');
+        }
+        update_post_meta($registration_id, '_ssf_am_confirmation_status', 'failed');
+        update_post_meta($registration_id, '_ssf_am_confirmation_last_error', $error);
+        Logger::add('annual_meeting_confirmation_failed', array(
+            'annual_meeting' => (int) $meeting['id'],
+            'registration' => $registration_id,
+            'attempt' => $attempts,
+            'error' => $error,
+        ));
+        if ($queue_on_failure) {
+            $this->queue_confirmation_retry($registration_id, $attempts);
+        }
+        return false;
+    }
+
+    private function queue_confirmation_retry(int $registration_id, int $attempts): void
+    {
+        $delays = array(15 * MINUTE_IN_SECONDS, HOUR_IN_SECONDS, 6 * HOUR_IN_SECONDS, DAY_IN_SECONDS, 3 * DAY_IN_SECONDS, 7 * DAY_IN_SECONDS);
+        if ($attempts < 1 || $attempts > count($delays)) {
+            return;
+        }
+        $args = array($registration_id);
+        if (! wp_next_scheduled(self::CONFIRMATION_RETRY_HOOK, $args)) {
+            wp_schedule_single_event($this->now() + $delays[$attempts - 1], self::CONFIRMATION_RETRY_HOOK, $args);
+        }
     }
 
     public function queue_sync(int $meeting_id, int $attempt = 0): void

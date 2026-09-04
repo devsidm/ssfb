@@ -3,7 +3,7 @@
  * Plugin Name: SSF Microsoft 365 Mailer
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Skickar WordPress e-post via Microsoft 365 och Microsoft Graph med OAuth 2.0.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Author: SIDM
  * Text Domain: ssf-office365-mailer
  * Requires at least: 5.8
@@ -158,6 +158,7 @@ final class SSF_Office365_Mailer
         $callback_url = $this->callback_url();
         $has_secret = ! empty($settings['client_secret']);
         $can_connect = $settings['client_id'] && $has_secret;
+        $last_result = (array) get_option('ssf_office365_mailer_last_result', array());
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'); ?></h1>
@@ -193,8 +194,10 @@ final class SSF_Office365_Mailer
 
             <hr>
             <h2><?php esc_html_e('Microsoft 365-anslutning', 'ssf-office365-mailer'); ?></h2>
+            <?php if ('error' === ($last_result['status'] ?? '')) : ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('Senaste e-postförsöket misslyckades.', 'ssf-office365-mailer'); ?></strong> <?php echo esc_html((string) ($last_result['message'] ?? '')); ?></p></div><?php elseif ('sent' === ($last_result['status'] ?? '')) : ?><div class="notice notice-success inline"><p><?php esc_html_e('Senaste e-postförsöket accepterades av Microsoft 365.', 'ssf-office365-mailer'); ?></p></div><?php endif; ?>
             <?php if (! empty($tokens['email'])) : ?>
                 <p><strong><?php esc_html_e('Ansluten som:', 'ssf-office365-mailer'); ?></strong> <?php echo esc_html($tokens['email']); ?></p>
+                <?php if ($can_connect) : ?><p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_office365_connect'), 'ssf_office365_connect')); ?>"><?php esc_html_e('Återanslut Microsoft 365', 'ssf-office365-mailer'); ?></a></p><?php endif; ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="ssf_office365_disconnect">
                     <?php wp_nonce_field('ssf_office365_disconnect'); ?>
@@ -304,6 +307,7 @@ final class SSF_Office365_Mailer
         $settings = $this->settings();
         $settings['enabled'] = 'yes';
         update_option(self::OPTION_SETTINGS, $settings, false);
+        do_action('ssf_office365_mailer_connected', $email);
         $this->set_notice($user_id, 'success', sprintf(__('Microsoft 365 är ansluten som %s.', 'ssf-office365-mailer'), $email));
         $this->redirect_to_settings();
     }
@@ -328,7 +332,7 @@ final class SSF_Office365_Mailer
         $access_token = $this->access_token();
         if (is_wp_error($access_token)) {
             $this->mail_failed($args, $access_token);
-            return null;
+            return false;
         }
 
         $recipients = $this->recipient_list($args['to'] ?? array());
@@ -373,7 +377,7 @@ final class SSF_Office365_Mailer
             $details = $response->get_error_message();
             $error = new WP_Error('ssf_office365_send_failed', sprintf(__('Microsoft 365 kunde inte skicka e-post (%s).', 'ssf-office365-mailer'), $details));
             $this->mail_failed($args, $error);
-            return null;
+            return false;
         }
 
         $status_code = wp_remote_retrieve_response_code($response);
@@ -381,7 +385,7 @@ final class SSF_Office365_Mailer
             $details = $this->graph_error_message(wp_remote_retrieve_body($response));
             $error = new WP_Error('ssf_office365_send_failed', sprintf(__('Microsoft 365 kunde inte skicka e-post (%s).', 'ssf-office365-mailer'), $details));
             $this->mail_failed($args, $error);
-            return null;
+            return false;
         }
 
         update_option('ssf_office365_mailer_last_result', array('status' => 'sent', 'at' => time()), false);

@@ -15,6 +15,12 @@ $logo_url = get_template_directory_uri() . '/assets/images/ssf-logo.svg';
         <p class="ssf-am-dates"><?php echo esc_html(get_the_title((int) $meeting['id'])); ?> · <?php echo esc_html($this->date_range($meeting)); ?></p>
     </header>
 
+    <?php if (! $cancelled && 'sent' === $registration['confirmation_status']) : ?>
+        <p class="ssf-am-message ssf-am-message--success" role="status"><?php esc_html_e('Ett bekräftelsemejl har skickats till den e-postadress du angav.', 'ssf-member-portal'); ?></p>
+    <?php elseif (! $cancelled && 'failed' === $registration['confirmation_status']) : ?>
+        <p class="ssf-am-message" role="status"><strong><?php esc_html_e('Din anmälan är sparad.', 'ssf-member-portal'); ?></strong> <?php esc_html_e('Bekräftelsemejlet kunde inte skickas just nu. Systemet försöker automatiskt igen.', 'ssf-member-portal'); ?></p>
+    <?php endif; ?>
+
     <section class="ssf-am-confirmation__receipt" aria-labelledby="ssf-am-confirmation-summary">
         <div class="ssf-am-confirmation__receipt-heading"><div><p class="ssf-am-kicker"><?php esc_html_e('Din bekräftelse', 'ssf-member-portal'); ?></p><h2 id="ssf-am-confirmation-summary"><?php echo esc_html($registration['status_label']); ?></h2></div><span class="ssf-am-badge <?php echo $cancelled ? '' : 'ssf-am-badge--open'; ?>"><?php echo $cancelled ? esc_html__('Avbokad', 'ssf-member-portal') : esc_html__('Registrerad', 'ssf-member-portal'); ?></span></div>
         <dl class="ssf-am-summary"><div><dt><?php esc_html_e('Namn', 'ssf-member-portal'); ?></dt><dd><?php echo esc_html($registration['first_name'] . ' ' . $registration['last_name']); ?></dd></div><div><dt><?php esc_html_e('Valda arrangemang', 'ssf-member-portal'); ?></dt><dd><?php echo $registration['program_labels'] ? esc_html(implode(', ', $registration['program_labels'])) : esc_html__('Inga valda arrangemang', 'ssf-member-portal'); ?></dd></div><?php if ($registration['food']) : ?><div><dt><?php esc_html_e('Mat', 'ssf-member-portal'); ?></dt><dd><?php echo esc_html(implode(', ', $registration['food'])); ?></dd></div><?php endif; ?></dl>

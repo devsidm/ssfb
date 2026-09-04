@@ -95,6 +95,7 @@ final class Admin
             'ssf_am_relationship' => __('Medlemstyp', 'ssf-member-portal'),
             'ssf_am_vessels' => __('Fartyg', 'ssf-member-portal'),
             'ssf_am_contact' => __('Kontakt', 'ssf-member-portal'),
+            'ssf_am_confirmation' => __('Bekräftelsemejl', 'ssf-member-portal'),
             'ssf_am_status' => __('Status', 'ssf-member-portal'),
             'ssf_am_program' => __('Middag och aktiviteter', 'ssf-member-portal'),
             'ssf_am_food' => __('Mat', 'ssf-member-portal'),
@@ -113,6 +114,7 @@ final class Admin
             case 'ssf_am_relationship': echo esc_html($registration['relationship_label']); break;
             case 'ssf_am_vessels': echo esc_html(implode(', ', array_merge($registration['represented_vessels'], $registration['associated_vessels']))); break;
             case 'ssf_am_contact': echo esc_html($registration['email']); ?><br><?php echo esc_html($registration['phone']); break;
+            case 'ssf_am_confirmation': $this->confirmation_status($registration); break;
             case 'ssf_am_status': echo esc_html($registration['status_label']); break;
             case 'ssf_am_program': echo esc_html(implode(', ', $registration['program_labels'])); break;
             case 'ssf_am_food': echo esc_html(implode(', ', $registration['food'])); break;
@@ -187,7 +189,7 @@ final class Admin
         $meeting = $this->meetings->data((int) $post->post_parent);
         $registration = $this->registrations->details($post->ID, $meeting);
         ?>
-        <table class="widefat striped"><tbody><tr><th><?php esc_html_e('Registrerings-ID', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['registration_id']); ?></td></tr><tr><th><?php esc_html_e('Kontakt', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['email']); ?><br><?php echo esc_html($registration['phone']); ?></td></tr><tr><th><?php esc_html_e('Relation', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['relationship_label']); ?></td></tr><tr><th><?php esc_html_e('Fartyg', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', array_merge($registration['represented_vessels'], $registration['associated_vessels']))); ?></td></tr><tr><th><?php esc_html_e('Middag och aktiviteter', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', $registration['program_labels'])); ?></td></tr><tr><th><?php esc_html_e('Mat', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', $registration['food'])); ?><?php if ($registration['food_note']) : ?><br><?php echo esc_html($registration['food_note']); ?><?php endif; ?></td></tr><tr><th><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['sharepoint_sync_status']); ?><?php if ($registration['sharepoint_last_error']) : ?><br><span class="description"><?php echo esc_html($registration['sharepoint_last_error']); ?></span><?php endif; ?></td></tr></tbody></table>
+        <table class="widefat striped"><tbody><tr><th><?php esc_html_e('Registrerings-ID', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['registration_id']); ?></td></tr><tr><th><?php esc_html_e('Kontakt', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['email']); ?><br><?php echo esc_html($registration['phone']); ?></td></tr><tr><th><?php esc_html_e('Relation', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['relationship_label']); ?></td></tr><tr><th><?php esc_html_e('Fartyg', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', array_merge($registration['represented_vessels'], $registration['associated_vessels']))); ?></td></tr><tr><th><?php esc_html_e('Middag och aktiviteter', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', $registration['program_labels'])); ?></td></tr><tr><th><?php esc_html_e('Mat', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', $registration['food'])); ?><?php if ($registration['food_note']) : ?><br><?php echo esc_html($registration['food_note']); ?><?php endif; ?></td></tr><tr><th><?php esc_html_e('Bekräftelsemejl', 'ssf-member-portal'); ?></th><td><?php $this->confirmation_status($registration); ?></td></tr><tr><th><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['sharepoint_sync_status']); ?><?php if ($registration['sharepoint_last_error']) : ?><br><span class="description"><?php echo esc_html($registration['sharepoint_last_error']); ?></span><?php endif; ?></td></tr></tbody></table>
         <?php if ($registration['answers']) : ?><h3><?php esc_html_e('Övriga svar', 'ssf-member-portal'); ?></h3><ul><?php foreach ($registration['answers'] as $key => $answer) : ?><li><strong><?php echo esc_html($key); ?>:</strong> <?php echo esc_html(is_array($answer) ? implode(', ', $answer) : $answer); ?></li><?php endforeach; ?></ul><?php endif; ?>
         <?php $this->resend_link($post->ID); ?>
         <?php
@@ -310,6 +312,23 @@ final class Admin
     {
         $url = wp_nonce_url(add_query_arg(array('action' => 'ssf_member_portal_retry_meeting_sync', 'meeting_id' => $meeting_id), admin_url('admin-post.php')), 'ssf_member_portal_retry_meeting_sync');
         printf('<a class="button" href="%s">%s</a>', esc_url($url), esc_html__('Synkronisera igen', 'ssf-member-portal'));
+    }
+
+    private function confirmation_status(array $registration): void
+    {
+        $labels = array(
+            'sent' => __('Skickat', 'ssf-member-portal'),
+            'failed' => __('Misslyckat', 'ssf-member-portal'),
+            'unknown' => __('Ingen leveransstatus', 'ssf-member-portal'),
+        );
+        $status = (string) ($registration['confirmation_status'] ?? 'unknown');
+        echo '<strong>' . esc_html($labels[$status] ?? $labels['unknown']) . '</strong>';
+        if (! empty($registration['confirmation_attempted_at'])) {
+            echo '<br><span class="description">' . esc_html(wp_date('j F Y, H:i', (int) $registration['confirmation_attempted_at'], wp_timezone())) . '</span>';
+        }
+        if ('failed' === $status && ! empty($registration['confirmation_last_error'])) {
+            echo '<br><span class="description">' . esc_html((string) $registration['confirmation_last_error']) . '</span>';
+        }
     }
 
     private function resend_link(int $registration_id, bool $echo = true): string
