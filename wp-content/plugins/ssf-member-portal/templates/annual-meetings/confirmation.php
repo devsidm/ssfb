@@ -5,11 +5,9 @@
 /** @var string $token */
 /** @var SSF\MemberPortal\Modules\AnnualMeetings\Frontend $this */
 $cancelled = 'cancelled' === $registration['status'];
-$logo_url = get_template_directory_uri() . '/assets/images/ssf-logo.svg';
 ?>
 <section class="ssf-am-page ssf-am-confirmation" aria-labelledby="ssf-am-confirmation-heading">
     <header class="ssf-am-confirmation__header">
-        <div class="ssf-am-confirmation__brand"><img src="<?php echo esc_url($logo_url); ?>" alt="<?php esc_attr_e('Sveriges Segelfartygsförbund', 'ssf-member-portal'); ?>"><span><?php esc_html_e('Sveriges Segelfartygsförbund', 'ssf-member-portal'); ?></span></div>
         <p class="ssf-am-eyebrow"><?php esc_html_e('Årsmöteshelg', 'ssf-member-portal'); ?></p>
         <h1 id="ssf-am-confirmation-heading"><?php echo $cancelled ? esc_html__('Anmälan är avbokad', 'ssf-member-portal') : esc_html__('Tack, dina val är registrerade.', 'ssf-member-portal'); ?></h1>
         <p class="ssf-am-dates"><?php echo esc_html(get_the_title((int) $meeting['id'])); ?> · <?php echo esc_html($this->date_range($meeting)); ?></p>
