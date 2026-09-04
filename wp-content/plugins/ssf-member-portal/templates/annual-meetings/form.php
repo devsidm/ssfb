@@ -18,17 +18,17 @@ $food_selected = (bool) array_filter($choices, static function (array $choice) u
 <section class="ssf-am-page" aria-labelledby="ssf-am-registration-heading">
     <header class="ssf-am-intro">
         <p class="ssf-am-eyebrow"><?php echo esc_html(get_the_title((int) $meeting['id'])); ?></p>
-        <h1 id="ssf-am-registration-heading"><?php echo $editing ? esc_html__('Ändra val för middag och aktiviteter', 'ssf-member-portal') : esc_html__('Anmälan till middag och aktiviteter', 'ssf-member-portal'); ?></h1>
+        <h1 id="ssf-am-registration-heading"><?php echo $editing ? esc_html__('Ändra din anmälan', 'ssf-member-portal') : esc_html__('Anmälan till årsmöteshelgen', 'ssf-member-portal'); ?></h1>
         <p class="ssf-am-dates"><?php echo esc_html($this->date_range($meeting)); ?><?php if ($meeting['location']) : ?> · <?php echo esc_html($meeting['location']); ?><?php endif; ?></p>
     </header>
-    <div class="ssf-am-callout"><strong><?php esc_html_e('Du behöver inte anmäla dig till själva årsmötet.', 'ssf-member-portal'); ?></strong><span><?php esc_html_e('Formuläret gäller endast de praktiska arrangemang du väljer nedan.', 'ssf-member-portal'); ?></span></div>
+    <div class="ssf-am-callout"><strong><?php esc_html_e('Anmäl gärna att du kommer.', 'ssf-member-portal'); ?></strong><span><?php esc_html_e('Det är inte ett krav för att delta i själva årsmötet, men det hjälper oss att planera helgen.', 'ssf-member-portal'); ?></span></div>
     <?php if ($error) : ?><p class="ssf-am-message ssf-am-message--error" role="alert" tabindex="-1" data-ssf-error-message><?php echo esc_html($error); ?></p><?php endif; ?>
     <?php if (isset($_GET['ssf_am_cancelled'])) : ?><p class="ssf-am-message ssf-am-message--success" role="status"><?php esc_html_e('Din anmälan är avbokad.', 'ssf-member-portal'); ?></p><?php endif; ?>
 
     <?php if (! $choices) : ?>
-        <p class="ssf-am-message"><?php esc_html_e('Det finns ännu ingen middag eller aktivitet att anmäla sig till.', 'ssf-member-portal'); ?></p>
+        <p class="ssf-am-message"><?php esc_html_e('Det finns ännu inget deltagande att anmäla.', 'ssf-member-portal'); ?></p>
     <?php elseif (empty($registration_state['can_register'])) : ?>
-        <p class="ssf-am-message"><?php echo esc_html((string) ($registration_state['message'] ?? __('Anmälan till middag och aktiviteter är stängd.', 'ssf-member-portal'))); ?></p>
+        <p class="ssf-am-message"><?php echo esc_html((string) ($registration_state['message'] ?? __('Anmälan till årsmöteshelgen är stängd.', 'ssf-member-portal'))); ?></p>
     <?php else : ?>
         <form class="ssf-am-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
             <input type="hidden" name="action" value="ssf_member_portal_submit_meeting_registration">
@@ -55,10 +55,11 @@ $food_selected = (bool) array_filter($choices, static function (array $choice) u
                 <div class="ssf-am-conditional" data-ssf-relationship="supporter"><label class="ssf-am-option"><input type="checkbox" name="has_associated_vessels" value="1" data-ssf-associated-toggle <?php checked($value('has_associated_vessels')); ?>> <?php esc_html_e('Jag har anknytning till något av SSF:s fartyg', 'ssf-member-portal'); ?></label><p data-ssf-associated-vessels><label><?php esc_html_e('Vilket eller vilka fartyg?', 'ssf-member-portal'); ?></label><span data-ssf-vessels><?php foreach ((array) $value('associated_vessels', array('')) as $vessel) : ?><span class="ssf-am-vessel"><input name="associated_vessels[]" value="<?php echo esc_attr($vessel); ?>" placeholder="<?php esc_attr_e('Fartygsnamn', 'ssf-member-portal'); ?>"><button type="button" class="ssf-am-icon-button" data-ssf-remove-vessel aria-label="<?php esc_attr_e('Ta bort fartyg', 'ssf-member-portal'); ?>">×</button></span><?php endforeach; ?></span><button class="ssf-am-text-button" type="button" data-ssf-add-vessel><?php esc_html_e('Lägg till fartyg', 'ssf-member-portal'); ?></button></p></div>
             </fieldset>
 
-            <fieldset><legend><?php esc_html_e('3. Välj middag och aktiviteter', 'ssf-member-portal'); ?></legend>
-                <p class="ssf-am-help"><?php esc_html_e('Du kan göra flera val i samma anmälan.', 'ssf-member-portal'); ?></p>
+            <fieldset><legend><?php esc_html_e('3. Välj vad du deltar i', 'ssf-member-portal'); ?></legend>
+                <p class="ssf-am-help"><?php esc_html_e('Själva årsmötet är frivilligt att anmäla. Middag och vissa aktiviteter behöver bokas.', 'ssf-member-portal'); ?></p>
                 <?php foreach ($choices as $choice) :
                     $choice_key = (string) ($choice['key'] ?? '');
+                    $is_annual_meeting = 'annual_meeting' === ($choice['source'] ?? '');
                     $selected = ! empty($selected_program[$choice_key]);
                     $state = $choice_states[$choice_key] ?? array();
                     $unavailable = empty($state['available']) && ! $selected;
@@ -76,10 +77,11 @@ $food_selected = (bool) array_filter($choices, static function (array $choice) u
                         $choice_meta[] = (string) $state['message'];
                     }
                     ?>
-                    <label class="ssf-am-program-option <?php echo $unavailable ? 'is-closed' : ''; ?>">
+                    <label class="ssf-am-program-option <?php echo $is_annual_meeting ? 'ssf-am-program-option--meeting ' : ''; ?><?php echo $unavailable ? 'is-closed' : ''; ?>">
                         <?php if ($selected && ! empty($state['closed'])) : ?><input type="hidden" name="program[<?php echo esc_attr($choice_key); ?>]" value="1"><?php endif; ?>
                         <input type="checkbox" name="program[<?php echo esc_attr($choice_key); ?>]" value="1" <?php checked($selected); ?> <?php disabled($unavailable || ($selected && ! empty($state['closed']))); ?> <?php echo ! empty($choice['food']) ? 'data-ssf-food-choice="1"' : ''; ?>>
                         <span><strong><?php echo esc_html($choice['title']); ?></strong><?php if ($choice_meta) : ?><small><?php echo esc_html(implode(' · ', $choice_meta)); ?></small><?php endif; ?></span>
+                        <?php if ($is_annual_meeting) : ?><span class="ssf-am-choice-note"><?php esc_html_e('Anmäl gärna', 'ssf-member-portal'); ?></span><?php endif; ?>
                     </label>
                 <?php endforeach; ?>
             </fieldset>
@@ -89,6 +91,6 @@ $food_selected = (bool) array_filter($choices, static function (array $choice) u
             <?php if ($meeting['questions']) : ?><fieldset><legend><?php esc_html_e('5. Övriga frågor', 'ssf-member-portal'); ?></legend><?php foreach ($meeting['questions'] as $question) : if (! empty($question['visible'])) { $this->render_question($question, (array) $value('answers', array())); } endforeach; ?></fieldset><?php endif; ?>
             <fieldset class="ssf-am-submit"><legend><?php esc_html_e('Kontrollera och skicka', 'ssf-member-portal'); ?></legend><p><?php esc_html_e('Uppgifterna används för att administrera de praktiska arrangemangen kring SSF:s årsmöteshelg.', 'ssf-member-portal'); ?></p><button class="ssf-am-button" type="submit"><?php echo $editing ? esc_html__('Spara ändringar', 'ssf-member-portal') : esc_html__('Skicka anmälan', 'ssf-member-portal'); ?></button></fieldset>
         </form>
-        <?php if ($editing && 'cancelled' !== $value('status')) : ?><form class="ssf-am-cancel" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_cancel_meeting_registration"><input type="hidden" name="token" value="<?php echo esc_attr($token); ?>"><?php wp_nonce_field('ssf_member_portal_cancel_meeting_registration', 'ssf_member_portal_meeting_cancel_nonce'); ?><button type="submit" class="ssf-am-text-button"><?php esc_html_e('Avboka anmälan till middag och aktiviteter', 'ssf-member-portal'); ?></button></form><?php endif; ?>
+        <?php if ($editing && 'cancelled' !== $value('status')) : ?><form class="ssf-am-cancel" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_cancel_meeting_registration"><input type="hidden" name="token" value="<?php echo esc_attr($token); ?>"><?php wp_nonce_field('ssf_member_portal_cancel_meeting_registration', 'ssf_member_portal_meeting_cancel_nonce'); ?><button type="submit" class="ssf-am-text-button"><?php esc_html_e('Avboka anmälan', 'ssf-member-portal'); ?></button></form><?php endif; ?>
     <?php endif; ?>
 </section>

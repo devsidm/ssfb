@@ -149,12 +149,12 @@ $resources = array_values(array_filter($resources, static function (array $resou
         <section id="ssf-am-program" class="ssf-am-program ssf-am-program--classic" aria-labelledby="ssf-am-program-heading">
             <h2 id="ssf-am-program-heading"><?php esc_html_e('Program', 'ssf-member-portal'); ?></h2>
             <?php if ($program) : ?><div class="ssf-am-activity-list">
-                <?php $program_day = ''; foreach ($program as $item) : $day_key = (string) ($item['day'] ?? 1) . '|' . (string) ($item['date'] ?? ''); $requires_registration = ! empty($item['requires_registration']); $state = $requires_registration ? ($choice_states[$item['key']] ?? array()) : array(); ?>
+                <?php $program_day = ''; foreach ($program as $item) : $day_key = (string) ($item['day'] ?? 1) . '|' . (string) ($item['date'] ?? ''); $requires_registration = ! empty($item['requires_registration']); $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? ''); $state = ($requires_registration || $is_annual_meeting) ? ($choice_states[$item['key']] ?? array()) : array(); ?>
                     <?php if ($program_day !== $day_key) : $program_day = $day_key; ?><h3 class="ssf-am-program-day"><?php echo esc_html(sprintf(__('Dag %1$d%2$s', 'ssf-member-portal'), (int) ($item['day'] ?? 1), ! empty($item['date']) ? ' · ' . wp_date('j F', strtotime($item['date'] . ' 12:00:00')) : '')); ?></h3><?php endif; ?>
                     <article class="ssf-am-activity">
                         <div class="ssf-am-activity__time"><?php if (! empty($item['start'])) : ?><time><?php echo esc_html($item['start']); ?><?php if (! empty($item['end'])) : ?>–<?php echo esc_html($item['end']); ?><?php endif; ?></time><?php endif; ?></div>
                         <div class="ssf-am-activity__main">
-                            <div class="ssf-am-activity__title"><h4><?php echo esc_html($item['title']); ?></h4><?php if ($requires_registration) : ?><span class="ssf-am-badge"><?php esc_html_e('Anmälan krävs', 'ssf-member-portal'); ?></span><?php endif; ?></div>
+                            <div class="ssf-am-activity__title"><h4><?php echo esc_html($item['title']); ?></h4><?php if ($requires_registration) : ?><span class="ssf-am-badge"><?php esc_html_e('Anmälan krävs', 'ssf-member-portal'); ?></span><?php elseif ($is_annual_meeting) : ?><span class="ssf-am-badge ssf-am-badge--open"><?php esc_html_e('Anmäl gärna', 'ssf-member-portal'); ?></span><?php endif; ?></div>
                             <?php if (! empty($item['description'])) : ?><p><?php echo esc_html($item['description']); ?></p><?php endif; ?>
                             <?php $meta = array_filter(array((string) ($item['location'] ?? ''), (string) ($item['price'] ?? ''))); if ($meta) : ?><p class="ssf-am-activity__details"><?php echo esc_html(implode(' · ', $meta)); ?></p><?php endif; ?>
                             <?php if ($requires_registration && ! empty($state['full'])) : ?><p class="ssf-am-activity__status"><?php esc_html_e('Fullbokad', 'ssf-member-portal'); ?></p><?php elseif ($requires_registration && empty($state['registration_open']) && ! empty($state['message'])) : ?><p class="ssf-am-activity__status"><?php echo esc_html((string) $state['message']); ?></p><?php elseif ($requires_registration && ! empty($state['capacity'])) : ?><p class="ssf-am-activity__status"><?php echo esc_html(sprintf(__('%1$d av %2$d platser bokade', 'ssf-member-portal'), (int) $state['count'], (int) $state['capacity'])); ?></p><?php endif; ?>
@@ -166,7 +166,7 @@ $resources = array_values(array_filter($resources, static function (array $resou
     <?php endif; ?>
 
     <section id="ssf-am-registration" class="ssf-am-registration-cta" aria-label="<?php esc_attr_e('Anmälan', 'ssf-member-portal'); ?>">
-        <div><strong><?php esc_html_e('Anmälan till middag och aktiviteter', 'ssf-member-portal'); ?></strong><p><?php esc_html_e('Du behöver inte anmäla dig till själva årsmötet. Anmälan gäller endast middag och valfria aktiviteter.', 'ssf-member-portal'); ?></p></div>
+        <div><strong><?php esc_html_e('Anmäl gärna att du kommer', 'ssf-member-portal'); ?></strong><p><?php esc_html_e('Anmälan till själva årsmötet är frivillig men hjälper oss att planera. I samma formulär väljer du middag och aktiviteter.', 'ssf-member-portal'); ?></p></div>
         <?php if (! empty($registration_state['can_register'])) : ?>
             <a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Gå till anmälan', 'ssf-member-portal'); ?></a>
         <?php else : ?>

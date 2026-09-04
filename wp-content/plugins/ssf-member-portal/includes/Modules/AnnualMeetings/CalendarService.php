@@ -33,8 +33,8 @@ final class CalendarService
         $description = trim((string) ($meeting['calendar_description'] ?? ''));
         if (! $description) {
             $description = sprintf(__('SSF:s årsmöteshelg %d.', 'ssf-member-portal'), $year) . "\n"
-                . __('Själva årsmötet kräver ingen anmälan.', 'ssf-member-portal') . "\n"
-                . __('Anmälan gäller middag och valfria aktiviteter.', 'ssf-member-portal');
+                . __('Anmäl gärna om du deltar i själva årsmötet, även om det inte är ett krav.', 'ssf-member-portal') . "\n"
+                . __('Middag och vissa aktiviteter behöver bokas.', 'ssf-member-portal');
         }
 
         $start_date = (new \DateTimeImmutable('@' . $start))->setTimezone(wp_timezone())->setTime(0, 0);

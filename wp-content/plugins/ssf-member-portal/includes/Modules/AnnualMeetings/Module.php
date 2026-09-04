@@ -77,7 +77,7 @@ final class Module
             'post_status' => 'publish',
             'post_parent' => $meeting_id,
             'post_name' => 'anmalan',
-            'post_title' => 'Anmälan till middag och aktiviteter',
+            'post_title' => 'Anmälan till årsmöteshelgen',
             'post_content' => '[ssf_member_portal_annual_meeting_registration]',
         ));
         update_option('ssf_member_portal_annual_meeting_registration_page_id', $registration_id, false);
@@ -444,7 +444,8 @@ final class Module
         $has_program_dinner = false;
         if ($this->module_enabled($meeting, 'day2')) {
             foreach ((array) $meeting['program'] as $item) {
-                if (empty($item['visible']) || empty($item['requires_registration'])) {
+                $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
+                if (empty($item['visible']) || (empty($item['requires_registration']) && ! $is_annual_meeting)) {
                     continue;
                 }
                 if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
@@ -452,7 +453,13 @@ final class Module
                 }
                 $starts_at = ! empty($item['date']) && ! empty($item['start']) ? $this->timestamp($item['date'] . 'T' . $item['start']) : 0;
                 $ends_at = ! empty($item['date']) && ! empty($item['end']) ? $this->timestamp($item['date'] . 'T' . $item['end']) : 0;
-                $choices[] = array_merge($item, array('source' => 'activity', 'starts_at' => $starts_at, 'ends_at' => $ends_at));
+                $choices[] = array_merge($item, array(
+                    'source' => $is_annual_meeting ? 'annual_meeting' : 'activity',
+                    'title' => $is_annual_meeting ? __('Själva årsmötet', 'ssf-member-portal') : (string) $item['title'],
+                    'starts_at' => $starts_at,
+                    'ends_at' => $ends_at,
+                    'optional' => $is_annual_meeting ? 1 : ($item['optional'] ?? 1),
+                ));
             }
         }
         if ($this->module_enabled($meeting, 'dinner') && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {

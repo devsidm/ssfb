@@ -108,15 +108,15 @@ final class Frontend
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
         if (! $this->feature_enabled('annual_meeting_registration')) {
-            return $this->message(__('Anmälan till middag och aktiviteter är inte öppen just nu.', 'ssf-member-portal'));
+            return $this->message(__('Anmälan till årsmöteshelgen är inte öppen just nu.', 'ssf-member-portal'));
         }
         $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
-            return $this->message(__('Det finns ingen middag eller aktivitet att anmäla sig till just nu.', 'ssf-member-portal'));
+            return $this->message(__('Det finns inget aktuellt årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
         }
         $meeting = $this->meetings->data($meeting_post->ID);
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
-            return $this->message(__('Det finns ingen middag eller aktivitet att anmäla sig till just nu.', 'ssf-member-portal'));
+            return $this->message(__('Det finns inget aktuellt årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
         }
         $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
         $registration_post = $token ? $this->registrations->find_by_token($token) : null;
@@ -144,7 +144,7 @@ final class Frontend
     {
         $redirect = $this->meetings->registration_url();
         if (! $this->feature_enabled('annual_meetings') || ! $this->feature_enabled('annual_meeting_registration')) {
-            $this->redirect_error($redirect, __('Anmälan till middag och aktiviteter är inte öppen just nu.', 'ssf-member-portal'));
+            $this->redirect_error($redirect, __('Anmälan till årsmöteshelgen är inte öppen just nu.', 'ssf-member-portal'));
         }
         if (! isset($_POST['ssf_member_portal_meeting_registration_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_registration_nonce'])), 'ssf_member_portal_submit_meeting_registration') || ! empty($_POST['website'])) {
             $this->redirect_error($redirect, __('Formuläret kunde inte verifieras. Försök igen.', 'ssf-member-portal'));
@@ -171,7 +171,7 @@ final class Frontend
     public function cancel(): void
     {
         if (! $this->feature_enabled('annual_meeting_registration')) {
-            $this->redirect_error($this->meetings->registration_url(), __('Anmälan till middag och aktiviteter är inte öppen just nu.', 'ssf-member-portal'));
+            $this->redirect_error($this->meetings->registration_url(), __('Anmälan till årsmöteshelgen är inte öppen just nu.', 'ssf-member-portal'));
         }
         $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '';
         $registration = $this->registrations->find_by_token($token);

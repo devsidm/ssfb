@@ -75,15 +75,23 @@ final class RegistrationExport
     private function registration_choices(array $meeting): array
     {
         $choices = array();
-        if (! empty($meeting['modules']['dinner']) && ! empty($meeting['dinner']['start_at'])) {
-            $choices[] = array('key' => 'dinner', 'title' => (string) ($meeting['dinner']['title'] ?: 'Middag'));
-        }
+        $has_program_dinner = false;
         if (! empty($meeting['modules']['day2'])) {
             foreach ((array) ($meeting['program'] ?? array()) as $item) {
-                if (! empty($item['visible']) && ! empty($item['requires_registration'])) {
+                $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
+                if (! empty($item['visible']) && (! empty($item['requires_registration']) || $is_annual_meeting)) {
+                    if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
+                        $has_program_dinner = true;
+                    }
+                    if ($is_annual_meeting) {
+                        $item['title'] = __('Själva årsmötet', 'ssf-member-portal');
+                    }
                     $choices[] = $item;
                 }
             }
+        }
+        if (! empty($meeting['modules']['dinner']) && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
+            $choices[] = array('key' => 'dinner', 'title' => (string) ($meeting['dinner']['title'] ?: 'Middag'));
         }
         return $choices;
     }

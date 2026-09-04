@@ -52,7 +52,7 @@ final class RegistrationMailer
         $this->add_row($registration_rows, __('Relation till SSF', 'ssf-member-portal'), (string) ($registration['relationship_label'] ?? ''));
         $this->add_row($registration_rows, __('Fartygsombud för', 'ssf-member-portal'), implode(', ', (array) ($registration['represented_vessels'] ?? array())));
         $this->add_row($registration_rows, __('Kopplade fartyg', 'ssf-member-portal'), implode(', ', (array) ($registration['associated_vessels'] ?? array())));
-        $this->add_row($registration_rows, __('Valda arrangemang', 'ssf-member-portal'), implode(', ', (array) ($registration['program_labels'] ?? array())));
+        $this->add_row($registration_rows, __('Deltagande', 'ssf-member-portal'), implode(', ', (array) ($registration['program_labels'] ?? array())));
         $this->add_row($registration_rows, __('Matpreferenser', 'ssf-member-portal'), implode(', ', (array) ($registration['food'] ?? array())));
         $this->add_row($registration_rows, __('Information till köket', 'ssf-member-portal'), (string) ($registration['food_note'] ?? ''));
 

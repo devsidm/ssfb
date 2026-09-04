@@ -50,7 +50,7 @@ final class RegistrationService
     {
         $meeting_post = $this->meetings->active();
         if (! $meeting_post || 'publish' !== $meeting_post->post_status) {
-            return new \WP_Error('annual_meeting_missing', __('Det finns ingen aktiv middag eller aktivitet att anmäla sig till.', 'ssf-member-portal'));
+            return new \WP_Error('annual_meeting_missing', __('Det finns inget aktivt årsmöte att anmäla sig till.', 'ssf-member-portal'));
         }
         $meeting = $this->meetings->data($meeting_post->ID);
         $existing = $token ? $this->find_by_token($token) : null;
@@ -652,7 +652,7 @@ final class RegistrationService
             }
         }
         if (! $data['program']) {
-            return new \WP_Error('annual_meeting_choice_required', __('Välj minst en middag eller aktivitet.', 'ssf-member-portal'));
+            return new \WP_Error('annual_meeting_choice_required', __('Välj minst ett alternativ för ditt deltagande.', 'ssf-member-portal'));
         }
         if ($this->selection_uses_food($meeting, $data['program'])) {
             $selected_food = (array) ($input['food'] ?? array());
