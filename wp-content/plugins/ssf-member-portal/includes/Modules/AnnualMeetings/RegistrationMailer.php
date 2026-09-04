@@ -132,38 +132,26 @@ final class RegistrationMailer
 
     private function send_confirmation(string $recipient, string $subject, string $html, string $text): bool
     {
-        $boundary = '=_ssf_annual_meeting_' . wp_generate_password(24, false, false);
-        $message = implode("\r\n", array(
-            '--' . $boundary,
-            'Content-Type: text/plain; charset=UTF-8',
-            'Content-Transfer-Encoding: 8bit',
-            '',
-            $text,
-            '--' . $boundary,
-            'Content-Type: text/html; charset=UTF-8',
-            'Content-Transfer-Encoding: 8bit',
-            '',
-            $html,
-            '--' . $boundary . '--',
-            '',
-        ));
-        $headers = array(
-            'MIME-Version: 1.0',
-            'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
-        );
         $from = static function (string $value): string {
             return 'system@ssfb.se';
         };
         $from_name = static function (string $value): string {
             return 'Sveriges Segelfartygsförbund';
         };
+        $alternative = static function ($phpmailer) use ($text): void {
+            $phpmailer->isHTML(true);
+            $phpmailer->CharSet = 'UTF-8';
+            $phpmailer->AltBody = $text;
+        };
         add_filter('wp_mail_from', $from);
         add_filter('wp_mail_from_name', $from_name);
+        add_action('phpmailer_init', $alternative);
         try {
-            return wp_mail(sanitize_email($recipient), $subject, $message, $headers);
+            return wp_mail(sanitize_email($recipient), $subject, $html, array('Content-Type: text/html; charset=UTF-8'));
         } finally {
             remove_filter('wp_mail_from', $from);
             remove_filter('wp_mail_from_name', $from_name);
+            remove_action('phpmailer_init', $alternative);
         }
     }
 
