@@ -259,7 +259,8 @@ final class RegistrationService
     public function retry_confirmation(int $registration_id): void
     {
         $post = get_post($registration_id);
-        if (! $post || RegistrationPostType::POST_TYPE !== $post->post_type || 'failed' !== get_post_meta($registration_id, '_ssf_am_confirmation_status', true)) {
+        $confirmation_status = (string) get_post_meta($registration_id, '_ssf_am_confirmation_status', true);
+        if (! $post || RegistrationPostType::POST_TYPE !== $post->post_type || ! in_array($confirmation_status, array('', 'failed'), true)) {
             return;
         }
 
@@ -284,6 +285,23 @@ final class RegistrationService
             'meta_key' => '_ssf_am_confirmation_status',
             'meta_value' => 'failed',
         ));
+        $active_meeting = $this->meetings->active();
+        if ($active_meeting) {
+            $untracked_ids = get_posts(array(
+                'post_type' => RegistrationPostType::POST_TYPE,
+                'post_status' => 'private',
+                'post_parent' => (int) $active_meeting->ID,
+                'posts_per_page' => 100,
+                'fields' => 'ids',
+                'orderby' => 'ID',
+                'order' => 'ASC',
+                'meta_query' => array(array(
+                    'key' => '_ssf_am_confirmation_status',
+                    'compare' => 'NOT EXISTS',
+                )),
+            ));
+            $registration_ids = array_values(array_unique(array_merge($registration_ids, $untracked_ids)));
+        }
         foreach ($registration_ids as $index => $registration_id) {
             $registration_id = (int) $registration_id;
             update_post_meta($registration_id, '_ssf_am_confirmation_attempts', 0);

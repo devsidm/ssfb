@@ -22,7 +22,7 @@ Anmälningar använder befintlig CPT `ssf_meeting_registration` och har årsmöt
 
 Själva årsmötet kräver aldrig anmälan. Formuläret gäller endast middag och aktiviteter. E-postadressen är unik per årsmöte; en befintlig aktiv anmälan ändras via dess personliga tokenlänk. Avbokning, e-postbekräftelse, Office 365-flöde, Excel-export och SharePoint-synk använder den befintliga arkitekturen.
 
-Varje bekräftelseförsök sparar status, tidpunkt och eventuell felorsak på anmälan. Ett transportfel påverkar inte den sparade anmälan, men visas för deltagaren och administratören. Misslyckade bekräftelser försöks automatiskt igen med ökande intervall. När Microsoft 365 återansluts läggs alla spårade misslyckade bekräftelser omedelbart tillbaka i kön. Administratören kan även använda **Skicka bekräftelse igen** på deltagarposten.
+Varje bekräftelseförsök sparar status, tidpunkt och eventuell felorsak på anmälan. Ett transportfel påverkar inte den sparade anmälan, men visas för deltagaren och administratören. Misslyckade bekräftelser försöks automatiskt igen med ökande intervall. När Microsoft 365 återansluts läggs alla spårade misslyckade bekräftelser samt äldre ospårade anmälningar till det aktiva mötet omedelbart tillbaka i kön. Administratören kan även använda **Skicka bekräftelse igen** på deltagarposten.
 
 Motioner behåller `_ssf_mp_annual_meeting_id` och befintlig motions-, behörighets- och SharePoint-logik.
 
