@@ -31,10 +31,9 @@ final class MotionMailer
         if ($email) {
             wp_mail($email, $subject, $body, $headers);
         }
-        $recipient = sanitize_email((string) Settings::all()['notification_email']);
-        if ($recipient) {
-            wp_mail($recipient, sprintf(__('Ny motion %s', 'ssf-member-portal'), $number), sprintf('<p>En ny motion har inkommit: <strong>%s</strong>.</p><p><a href="%s">Öppna statuslänken</a></p>', esc_html($number), esc_url($status_url)), $headers);
-        }
+        $internal_subject = sprintf(__('Ny motion %s', 'ssf-member-portal'), $number);
+        $internal_body = sprintf('<p>En ny motion har inkommit: <strong>%s</strong>.</p><p><a href="%s">Öppna statuslänken</a></p>', esc_html($number), esc_url($status_url));
+        \SSF_Email_Router::send_to_function('annual_meeting_motion', $internal_subject, $internal_body, $headers);
     }
 
     /**

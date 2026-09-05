@@ -3,7 +3,7 @@
  * Plugin Name: SSF Site Customizations
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Content types, shortcodes, forms, and styling for Sveriges Segelfartygsförbund.
- * Version: 0.2.4
+ * Version: 0.2.5
  * Author: SIDM
  * Text Domain: ssf-site
  *
@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_SITE_VERSION', '0.2.4');
+define('SSF_SITE_VERSION', '0.2.5');
 define('SSF_SITE_PATH', plugin_dir_path(__FILE__));
 define('SSF_SITE_URL', plugin_dir_url(__FILE__));
 

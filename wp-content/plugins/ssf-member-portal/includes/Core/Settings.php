@@ -15,7 +15,7 @@ final class Settings
         return wp_parse_args(
             (array) get_option(self::OPTION, array()),
             array(
-                'notification_email' => 'medlem@ssfb.se',
+                'notification_email' => '',
                 'max_upload_mb' => 10,
                 'motion_status_messages' => array(),
             )

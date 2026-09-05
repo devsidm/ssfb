@@ -141,7 +141,7 @@ final class SSF_Medlemsprocess_Plugin
     {
         $defaults = array(
             'admin_email' => get_option('admin_email'),
-            'application_notification_email' => 'medlem@ssfb.se',
+            'application_notification_email' => '',
             'token_days' => 365,
             'max_image_mb' => 8,
             'max_file_mb' => 10,

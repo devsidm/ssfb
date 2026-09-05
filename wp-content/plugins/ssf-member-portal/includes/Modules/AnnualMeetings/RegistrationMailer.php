@@ -18,8 +18,7 @@ final class RegistrationMailer
 
     public function notification(array $meeting, array $registration): bool
     {
-        $recipient = sanitize_email((string) $meeting['notification_email']);
-        if (! $recipient || empty($meeting['notify_each'])) {
+        if (empty($meeting['notify_each'])) {
             return true;
         }
         $subject = sprintf(__('Ny aktivitetsanmälan – SSF:s årsmöteshelg %d', 'ssf-member-portal'), (int) $meeting['year']);
@@ -29,7 +28,7 @@ final class RegistrationMailer
             sprintf(__('Medlemsrelation: %s', 'ssf-member-portal'), $registration['relationship_label']),
             sprintf(__('Status: %s', 'ssf-member-portal'), $registration['status_label']),
         ));
-        return wp_mail($recipient, $subject, $message);
+        return \SSF_Email_Router::send_to_function('annual_meeting_registration', $subject, $message);
     }
 
     public function last_error(): string

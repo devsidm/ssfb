@@ -150,7 +150,7 @@ final class Controller
                     <?php endforeach; ?></select>
                 </td></tr>
                 <tr><th><?php esc_html_e('Sen inlämning', 'ssf-member-portal'); ?></th><td><?php esc_html_e('Konfigureras på respektive årsmöte under Motionsperiod.', 'ssf-member-portal'); ?></td></tr>
-                <tr><th><label for="ssf-notification-email"><?php esc_html_e('Mottagare av ny motion', 'ssf-member-portal'); ?></label></th><td><input id="ssf-notification-email" class="regular-text" type="email" name="notification_email" value="<?php echo esc_attr($settings['notification_email']); ?>"></td></tr>
+                <tr><th><?php esc_html_e('Mottagare av ny motion', 'ssf-member-portal'); ?></th><td><p class="description"><?php esc_html_e('Styrs centralt under SSF → System → Microsoft 365.', 'ssf-member-portal'); ?></p></td></tr>
                 <tr><th><label for="ssf-upload-size"><?php esc_html_e('Max filstorlek', 'ssf-member-portal'); ?></label></th><td><input id="ssf-upload-size" class="small-text" type="number" min="1" max="25" name="max_upload_mb" value="<?php echo esc_attr($settings['max_upload_mb']); ?>"> MB</td></tr>
                 <tr><th><?php esc_html_e('Kompletterande statusmeddelanden', 'ssf-member-portal'); ?></th><td>
                     <p class="description"><?php esc_html_e('Visas i e-post när SharePoint eller Power Automate ändrar status. Lämna tomt för att använda standardmeddelandet.', 'ssf-member-portal'); ?></p>
@@ -191,10 +191,15 @@ final class Controller
         $next_poll = wp_next_scheduled('ssf_motion_sharepoint_status_poll');
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e('Motioner – Microsoft 365', 'ssf-member-portal'); ?></h1>
+            <h1><?php esc_html_e('Microsoft 365', 'ssf-member-portal'); ?></h1>
             <?php if (class_exists('SSF_Admin_Navigation')) { \SSF_Admin_Navigation::render_system_tabs('ssf-member-portal-microsoft365'); } ?>
-            <p><?php esc_html_e('Motionen sparas alltid först i WordPress. SharePoint är ett asynkront dokumentarkiv och kan inte blockera en inskickad motion.', 'ssf-member-portal'); ?></p>
+            <p><?php esc_html_e('Central konfiguration för interna e-postmottagare och SharePoint-integrationen för motioner.', 'ssf-member-portal'); ?></p>
             <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr($notice['type']); ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?></p></div><?php endif; ?>
+
+            <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
+
+            <h2><?php esc_html_e('SharePoint för motioner', 'ssf-member-portal'); ?></h2>
+            <p><?php esc_html_e('Motionen sparas alltid först i WordPress. SharePoint är ett asynkront dokumentarkiv och kan inte blockera en inskickad motion.', 'ssf-member-portal'); ?></p>
 
             <div class="postbox" style="max-width:980px;padding:20px">
                 <h2><?php esc_html_e('Konfigurationsstatus', 'ssf-member-portal'); ?></h2>

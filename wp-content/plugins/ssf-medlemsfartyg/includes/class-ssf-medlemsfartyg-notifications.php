@@ -13,7 +13,6 @@ class SSF_Medlemsfartyg_Notifications
 {
     public function send_owner_update_notice(int $ship_id, int $user_id): void
     {
-        $settings = SSF_Medlemsfartyg_Plugin::settings();
         $user = get_userdata($user_id);
         $body = sprintf(
             "Fartyg: %s\nAnvändare: %s\nTidpunkt: %s\nAdmin: %s\nPublik sida: %s",
@@ -24,11 +23,8 @@ class SSF_Medlemsfartyg_Notifications
             get_permalink($ship_id)
         );
 
-        wp_mail(
-            $settings['admin_email'],
-            'Fartygssida uppdaterad - ' . get_the_title($ship_id),
-            $body,
-            array('Content-Type: text/plain; charset=UTF-8')
-        );
+        $subject = 'Fartygssida uppdaterad - ' . get_the_title($ship_id);
+        $headers = array('Content-Type: text/plain; charset=UTF-8');
+        SSF_Email_Router::send_to_function('vessel_update', $subject, $body, $headers);
     }
 }

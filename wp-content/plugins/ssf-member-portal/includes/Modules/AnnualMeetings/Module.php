@@ -291,7 +291,7 @@ final class Module
             'food_options' => $this->lines(sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_food_options'] ?? ''))),
             'questions' => $this->sanitize_questions((array) wp_unslash($_POST['ssf_meeting_questions'] ?? array())),
             'sharepoint_year' => $year,
-            'notification_email' => sanitize_email(wp_unslash($_POST['ssf_meeting_notification_email'] ?? '')),
+            'notification_email' => (string) $current['notification_email'],
             'notify_each' => ! empty($_POST['ssf_meeting_notify_each']) ? 1 : 0,
             'retention_months' => min(60, max(1, absint($_POST['ssf_meeting_retention_months'] ?? 12))),
         );
@@ -378,7 +378,7 @@ final class Module
             'food_options' => (array) $meta('food_options', array('Vegetariskt', 'Veganskt', 'Glutenfritt', 'Laktosfritt')),
             'questions' => (array) $meta('questions', array()),
             'sharepoint_year' => (int) $meta('sharepoint_year', $legacy_year),
-            'notification_email' => (string) $meta('notification_email', 'styrelsen@ssfb.se'),
+            'notification_email' => (string) $meta('notification_email', ''),
             'notify_each' => (bool) $meta('notify_each', 0),
             'retention_months' => (int) $meta('retention_months', 12),
         );

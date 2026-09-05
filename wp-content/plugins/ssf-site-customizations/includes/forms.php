@@ -132,7 +132,8 @@ function ssf_site_handle_application(): void
         $headers[] = 'Reply-To: ' . $data['ombud_namn'] . ' <' . $data['ombud_epost'] . '>';
     }
 
-    wp_mail('medlemskap@ssfb.se', 'Ny ansökan som fartygsombud - ' . ($data['fartygsnamn'] ?: 'utan fartygsnamn'), $content, $headers);
+    $internal_subject = 'Ny ansökan som fartygsombud - ' . ($data['fartygsnamn'] ?: 'utan fartygsnamn');
+    SSF_Email_Router::send_to_function('membership_application', $internal_subject, $content, $headers);
 
     if (is_email($data['ombud_epost'])) {
         wp_mail(
@@ -221,7 +222,8 @@ function ssf_site_annual_meeting_contact_context(int $meeting_id = 0): array
 
 function ssf_site_contact_recipient(array $context = array()): string
 {
-    $recipient = $context ? 'styrelsen@ssfb.se' : 'info@ssfb.se';
+    $key = $context ? 'contact_board' : 'contact_form';
+    $recipient = SSF_Email_Router::get_recipient($key);
     return (string) apply_filters('ssf_site_contact_recipient', $recipient, $context);
 }
 
@@ -321,7 +323,8 @@ function ssf_site_handle_contact(): void
         $headers[] = 'Reply-To: ' . $name . ' <' . $email . '>';
     }
 
-    wp_mail(ssf_site_contact_recipient($context), 'Kontaktformulär: ' . $subject, $body, $headers);
+    $mail_subject = 'Kontaktformulär: ' . $subject;
+    SSF_Email_Router::send_to_function($context ? 'contact_board' : 'contact_form', $mail_subject, $body, $headers);
 
     delete_transient($limit_key);
     wp_safe_redirect(add_query_arg('ssf_status', $context ? 'annual_meeting_contact_sent' : 'contact_sent', $redirect));

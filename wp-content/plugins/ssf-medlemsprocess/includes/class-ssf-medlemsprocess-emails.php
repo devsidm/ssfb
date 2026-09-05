@@ -30,9 +30,7 @@ class SSF_Medlemsprocess_Emails
     public function send_received(int $application_id, string $token): bool
     {
         $applicant_sent = $this->send_template('received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($token)));
-        $settings = SSF_Medlemsprocess_Plugin::settings();
-        $recipient = is_email($settings['application_notification_email'] ?? '') ? (string) $settings['application_notification_email'] : (string) $settings['admin_email'];
-        $this->send_template('admin_notice', $application_id, array(), false, $recipient);
+        $this->send_template('admin_notice', $application_id, array(), true);
         return $applicant_sent;
     }
 
@@ -79,16 +77,12 @@ class SSF_Medlemsprocess_Emails
 
     public function send_inspection_complete(int $application_id): bool
     {
-        $settings = SSF_Medlemsprocess_Plugin::settings();
-        $recipient = (string) ($settings['admin_email'] ?? '');
-        if (! is_email($recipient)) {
-            return false;
-        }
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $number = (string) get_post_meta($application_id, '_ssf_application_number', true);
         $edit_url = get_edit_post_link($application_id, '');
         $body = "Inspektionsrapporterna för ärendet är klara.\n\nÄrende: " . $number . "\nFartyg: " . ($data['ship_name'] ?? get_the_title($application_id)) . "\n\nÖppna ärendet i WordPress:\n" . $edit_url;
-        $sent = wp_mail($recipient, 'Inspektionsrapport klar: ' . ($data['ship_name'] ?? get_the_title($application_id)), $body, array('Content-Type: text/plain; charset=UTF-8'));
+        $subject = 'Inspektionsrapport klar: ' . ($data['ship_name'] ?? get_the_title($application_id));
+        $sent = SSF_Email_Router::send_to_function('inspection_complete', $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
         SSF_Medlemsprocess_Application::add_history($application_id, 'email', 'E-post om färdig inspektionsrapport ' . ($sent ? 'skickades till handläggare.' : 'kunde inte skickas.'), false);
         return $sent;
     }
@@ -122,11 +116,18 @@ class SSF_Medlemsprocess_Emails
         foreach ($variables as $name => $value) {
             $replace['{' . $name . '}'] = (string) $value;
         }
-        $recipient = $recipient_override ?: ($admin_recipient ? $settings['admin_email'] : ($data['applicant_email'] ?? ''));
+        $subject = strtr($template['subject'], $replace);
+        $body = strtr($template['body'], $replace);
+        if ($admin_recipient) {
+            $sent = SSF_Email_Router::send_to_function('membership_application', $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+            SSF_Medlemsprocess_Application::add_history($application_id, 'email', sprintf('E-postmall "%s" %s.', $template['label'], $sent ? 'skickad' : 'kunde inte skickas'), false);
+            return $sent;
+        }
+        $recipient = $recipient_override ?: ($admin_recipient ? ($settings['application_notification_email'] ?: $settings['admin_email']) : ($data['applicant_email'] ?? ''));
         if (! is_email($recipient)) {
             return false;
         }
-        $sent = wp_mail($recipient, strtr($template['subject'], $replace), strtr($template['body'], $replace), array('Content-Type: text/plain; charset=UTF-8'));
+        $sent = wp_mail($recipient, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
         SSF_Medlemsprocess_Application::add_history($application_id, 'email', sprintf('E-postmall "%s" %s.', $template['label'], $sent ? 'skickad' : 'kunde inte skickas'), false);
         return $sent;
     }

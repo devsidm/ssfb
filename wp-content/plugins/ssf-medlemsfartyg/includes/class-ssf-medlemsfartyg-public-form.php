@@ -79,13 +79,10 @@ class SSF_Medlemsfartyg_Public_Form
         $submission_id = SSF_Medlemsfartyg_Submissions::create($ship_id, (int) $token->id, $data, $image_ids, $featured_id);
         SSF_Medlemsfartyg_Tokens::update_status((int) $token->id, 'submitted');
 
-        $settings = SSF_Medlemsfartyg_Plugin::settings();
-        wp_mail(
-            $settings['admin_email'],
-            'Nya fartygsuppgifter inskickade - ' . get_the_title($ship_id),
-            'Nya uppgifter har skickats in för ' . get_the_title($ship_id) . ". Granska uppgifterna i WordPress:\n" . get_edit_post_link($submission_id, ''),
-            array('Content-Type: text/plain; charset=UTF-8')
-        );
+        $internal_subject = 'Nya fartygsuppgifter inskickade - ' . get_the_title($ship_id);
+        $internal_body = 'Nya uppgifter har skickats in för ' . get_the_title($ship_id) . ". Granska uppgifterna i WordPress:\n" . get_edit_post_link($submission_id, '');
+        $internal_headers = array('Content-Type: text/plain; charset=UTF-8');
+        SSF_Email_Router::send_to_function('vessel_update', $internal_subject, $internal_body, $internal_headers);
 
         if (is_email($data['_ssf_email'] ?? '')) {
             wp_mail(

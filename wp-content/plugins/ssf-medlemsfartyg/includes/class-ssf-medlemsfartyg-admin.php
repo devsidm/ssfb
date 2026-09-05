@@ -48,8 +48,9 @@ class SSF_Medlemsfartyg_Admin
 
     public function sanitize_settings(array $input): array
     {
+        $current = SSF_Medlemsfartyg_Plugin::settings();
         return array(
-            'admin_email' => sanitize_email($input['admin_email'] ?? get_option('admin_email')),
+            'admin_email' => sanitize_email($input['admin_email'] ?? $current['admin_email']),
             'require_review' => ! empty($input['require_review']) ? 'yes' : 'no',
             'default_status' => in_array($input['default_status'] ?? 'draft', array('draft', 'publish', 'pending'), true) ? $input['default_status'] : 'draft',
             'per_page' => max(1, min(60, (int) ($input['per_page'] ?? 12))),
@@ -77,7 +78,7 @@ class SSF_Medlemsfartyg_Admin
             <form method="post" action="options.php">
                 <?php settings_fields('ssf_medlemsfartyg_settings'); ?>
                 <table class="form-table" role="presentation">
-                    <tr><th><label for="admin_email"><?php esc_html_e('E-post för ändringsnotiser', 'ssf-medlemsfartyg'); ?></label></th><td><input class="regular-text" id="admin_email" type="email" name="ssf_medlemsfartyg_settings[admin_email]" value="<?php echo esc_attr($settings['admin_email']); ?>"></td></tr>
+                    <tr><th><?php esc_html_e('E-post för ändringsnotiser', 'ssf-medlemsfartyg'); ?></th><td><p class="description"><?php esc_html_e('Styrs centralt under SSF → System → Microsoft 365.', 'ssf-medlemsfartyg'); ?></p></td></tr>
                     <tr><th><?php esc_html_e('Granskning', 'ssf-medlemsfartyg'); ?></th><td><label><input type="checkbox" name="ssf_medlemsfartyg_settings[require_review]" value="1" <?php checked('yes', $settings['require_review']); ?>> <?php esc_html_e('Ändringar från fartygsombud kräver granskning', 'ssf-medlemsfartyg'); ?></label></td></tr>
                     <tr><th><?php esc_html_e('Standardstatus för nya fartyg', 'ssf-medlemsfartyg'); ?></th><td><select name="ssf_medlemsfartyg_settings[default_status]"><option value="draft" <?php selected('draft', $settings['default_status']); ?>>Utkast</option><option value="pending" <?php selected('pending', $settings['default_status']); ?>>Väntar på granskning</option><option value="publish" <?php selected('publish', $settings['default_status']); ?>>Publicerad</option></select></td></tr>
                     <tr><th><?php esc_html_e('Antal fartyg per sida', 'ssf-medlemsfartyg'); ?></th><td><input type="number" min="1" max="60" name="ssf_medlemsfartyg_settings[per_page]" value="<?php echo esc_attr((string) $settings['per_page']); ?>"></td></tr>
