@@ -1,0 +1,18 @@
+{
+    "schema_version":  1,
+    "release_name":  "SSF Web",
+    "version":  "",
+    "build":  "20260905.2",
+    "built_at":  "2026-09-05T14:59:13.5029580Z",
+    "source":  "codex",
+    "source_revision":  "2e50e8e1217bf6a3d44fad8c2b7ec52f3fcbd853",
+    "description":  "Central automatiserad release-, build- och deploymenthantering",
+    "notes":  "",
+    "components":  [
+                       "documentation",
+                       "release-tooling",
+                       "ssf-release-controls"
+                   ],
+    "status":  "development",
+    "prepared_at":  ""
+}
