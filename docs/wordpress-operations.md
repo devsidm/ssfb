@@ -19,14 +19,9 @@ Then run:
 
 ## Deployment outline
 
-1. Back up WordPress before large changes.
-2. Upload or deploy:
-   - `wp-content/themes/ssf`
-   - `wp-content/plugins/ssf-site-customizations`
-3. Activate the `SSF` theme.
-4. Activate the `SSF Site Customizations` plugin.
-5. Run `scripts/wp-rest-create-pages.ps1` or create the pages manually with the listed shortcodes.
-6. Configure SMTP before relying on form email delivery.
+Use the controlled build and deployment flow in [release-controls.md](release-controls.md). The deploy script transfers only Git-tracked files in `wp-content`, verifies the environment and build, runs smoke tests, and records the result in WordPress.
+
+For a new WordPress installation, activate the `SSF` theme and `SSF Site Customizations` plugin, create the pages with the listed shortcodes, and configure SMTP before relying on form email delivery.
 
 ## Live dev update notes
 
@@ -69,7 +64,7 @@ Verified public pages:
 - `/nyheter/`
 - `/kontakta-oss/`
 
-Forms are rendered by the project plugin. Application submissions are saved as private `ssf_ansokan` posts and emailed to `medlemskap@ssfb.se`. Contact messages are saved as private `ssf_kontakt` posts and emailed to `info@ssfb.se`.
+Forms are rendered by the project plugin. Application submissions are saved as private `ssf_ansokan` posts and contact messages as private `ssf_kontakt` posts. Their recipients are configured centrally under **SSF > Inställningar > E-postmottagare** and can differ between DEV and production.
 
 ## Shortcodes
 

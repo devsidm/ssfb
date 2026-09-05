@@ -31,11 +31,13 @@ Appearance > Themes > SSF
 1. Make changes in a feature branch.
 2. Test locally in WordPress.
 3. Commit and push changes to GitHub.
-4. Deploy through the hosting workflow once confirmed.
+4. Register a unique build with `scripts/ssf-release-build.ps1`.
+5. Commit the release manifest and deploy with `scripts/ssf-release-deploy.ps1`.
+6. Confirm the verified build under **SSF > Release**.
 
 ## Releases
 
-Environment configuration, feature flags, and the production smoke-test checklist are documented in [docs/release-controls.md](docs/release-controls.md).
+The complete DEV and production workflow, environment configuration, build IDs, version preparation, feature flags, and recovery steps are documented in [docs/release-controls.md](docs/release-controls.md).
 
 ## Notes for Codex
 
