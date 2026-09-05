@@ -2,14 +2,13 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "",
-    "build":  "20260905.3",
-    "built_at":  "2026-09-05T17:53:04.0524558Z",
+    "build":  "20260905.4",
+    "built_at":  "2026-09-05T18:20:14.3754807Z",
     "source":  "codex",
-    "source_revision":  "38f27c846a69a4dbb5fbdeef446b720856f29be1",
-    "description":  "Fix SharePoint motion attachments and simplify motion page headings",
+    "source_revision":  "f8add97d7c6bb358e353b3699eafd68a78af700e",
+    "description":  "Require a short motion description and attached PDF or Word document",
     "notes":  "",
     "components":  [
-                       "ssf",
                        "ssf-member-portal"
                    ],
     "status":  "development",
