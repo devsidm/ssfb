@@ -560,7 +560,7 @@ final class Controller
         $sharepoint_items = (array) get_post_meta($post->ID, '_ssf_mp_sharepoint_items', true);
         $sharepoint_status = (string) get_post_meta($post->ID, '_ssf_mp_sharepoint_last_status', true);
         $sharepoint_checked_at = (string) get_post_meta($post->ID, '_ssf_mp_sharepoint_last_checked_at', true);
-        $sharepoint_warning = (string) get_post_meta($post->ID, '_ssf_mp_sharepoint_status_warning', true);
+        $sharepoint_warning = (string) (get_post_meta($post->ID, '_ssf_mp_sharepoint_schema_warning', true) ?: get_post_meta($post->ID, '_ssf_mp_sharepoint_status_warning', true));
         $sharepoint_poll_error = (string) get_post_meta($post->ID, '_ssf_mp_sharepoint_status_poll_error', true);
         $status_email_error = (string) get_post_meta($post->ID, '_ssf_mp_status_email_error', true);
         $status_email_history = (array) get_post_meta($post->ID, '_ssf_mp_status_email_history', true);

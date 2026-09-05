@@ -151,15 +151,17 @@ final class SharePoint
             return $item;
         }
 
+        $warnings = array();
         $schema = $this->status_context(true);
         if (is_wp_error($schema)) {
-            return $schema;
-        }
-        $status = $this->update_drive_item_fields((string) ($item['id'] ?? ''), array(
-            (string) $schema['status_field'] => MotionStatus::label(MotionStatus::INKOMMEN),
-        ));
-        if (is_wp_error($status)) {
-            return $status;
+            $warnings[] = $schema->get_error_message();
+        } else {
+            $status = $this->update_drive_item_fields((string) ($item['id'] ?? ''), array(
+                (string) $schema['status_field'] => MotionStatus::label(MotionStatus::INKOMMEN),
+            ));
+            if (is_wp_error($status)) {
+                $warnings[] = $status->get_error_message();
+            }
         }
 
         $test_file = array(
@@ -170,6 +172,7 @@ final class SharePoint
             'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
             'uploaded_at' => gmdate('c'),
             'status' => MotionStatus::label(MotionStatus::INKOMMEN),
+            'schema_warning' => implode(' ', array_unique($warnings)),
         );
         update_option(self::TEST_FILE_OPTION, $test_file, false);
 
@@ -215,11 +218,6 @@ final class SharePoint
             return $folders;
         }
 
-        $schema = $this->status_context(true);
-        if (is_wp_error($schema)) {
-            return $schema;
-        }
-
         $extension = strtolower((string) pathinfo($file, PATHINFO_EXTENSION));
         $base = sanitize_file_name($motion_number . '-' . sanitize_title($motion_title));
         $filename = $base . ($extension ? '.' . $extension : '');
@@ -229,29 +227,37 @@ final class SharePoint
             return $item;
         }
 
-        // Set the required initial workflow state before optional metadata.
-        $initial_status = $this->update_drive_item_fields((string) ($item['id'] ?? ''), array(
-            (string) $schema['status_field'] => MotionStatus::label(MotionStatus::INKOMMEN),
-        ));
-        if (is_wp_error($initial_status)) {
-            return $initial_status;
-        }
+        $warnings = array();
+        $schema = $this->status_context(true);
+        $list_item = null;
+        if (is_wp_error($schema)) {
+            $warnings[] = $schema->get_error_message();
+        } else {
+            $initial_status = $this->update_drive_item_fields((string) ($item['id'] ?? ''), array(
+                (string) $schema['status_field'] => MotionStatus::label(MotionStatus::INKOMMEN),
+            ));
+            if (is_wp_error($initial_status)) {
+                $warnings[] = $initial_status->get_error_message();
+            }
 
-        $list_item = $this->list_item_for_drive_item((string) ($item['id'] ?? ''));
-        if (is_wp_error($list_item) && ! $this->is_access_denied($list_item)) {
-            return $list_item;
-        }
+            $list_item_result = $this->list_item_for_drive_item((string) ($item['id'] ?? ''));
+            if (is_wp_error($list_item_result)) {
+                $warnings[] = $list_item_result->get_error_message();
+            } else {
+                $list_item = $list_item_result;
+            }
 
-        $metadata = $this->update_motion_metadata(
-            (string) $schema['list_id'],
-            (string) (is_array($list_item) ? ($list_item['id'] ?? '') : ''),
-            (string) $schema['status_field'],
-            (string) ($item['id'] ?? ''),
-            $motion_id,
-            $motion_number
-        );
-        if (is_wp_error($metadata)) {
-            return $metadata;
+            $metadata = $this->update_motion_metadata(
+                (string) $schema['list_id'],
+                (string) (is_array($list_item) ? ($list_item['id'] ?? '') : ''),
+                (string) $schema['status_field'],
+                (string) ($item['id'] ?? ''),
+                $motion_id,
+                $motion_number
+            );
+            if (is_wp_error($metadata)) {
+                $warnings[] = $metadata->get_error_message();
+            }
         }
 
         return array(
@@ -265,7 +271,10 @@ final class SharePoint
             'uploaded_at' => gmdate('c'),
             'last_modified' => sanitize_text_field((string) ($item['lastModifiedDateTime'] ?? '')),
             'etag' => sanitize_text_field((string) ($item['eTag'] ?? '')),
-            'schema_warning' => sanitize_text_field((string) ($schema['schema_warning'] ?? '')),
+            'schema_warning' => sanitize_text_field(implode(' ', array_unique(array_filter(array_merge(
+                $warnings,
+                array(is_array($schema) ? (string) ($schema['schema_warning'] ?? '') : '')
+            ))))),
         );
     }
 

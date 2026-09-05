@@ -34,6 +34,10 @@ final class MotionSchema
             return $list_id;
         }
 
+        // Keep the discovered library ID even when Sites.Selected permits file
+        // writes but does not allow the broader columns endpoint.
+        Configuration::save_discovered_document_library_list_id($list_id);
+
         $columns = $this->get_columns($list_id);
         if (is_wp_error($columns)) {
             return $columns;
@@ -73,7 +77,6 @@ final class MotionSchema
         }
 
         update_option(self::OPTION, $context, false);
-        Configuration::save_discovered_document_library_list_id($list_id);
         return $context;
     }
 
