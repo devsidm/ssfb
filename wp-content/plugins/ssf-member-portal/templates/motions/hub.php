@@ -13,7 +13,7 @@
 
     <?php if (! empty($period['meeting']['year'])) : ?>
         <div class="ssf-motion-message">
-            <h2><?php echo esc_html(sprintf(__('Motioner till SSF:s årsmöte %d', 'ssf-member-portal'), (int) $period['meeting']['year'])); ?></h2>
+            <p><strong><?php echo esc_html(sprintf(__('SSF:s årsmöte %d', 'ssf-member-portal'), (int) $period['meeting']['year'])); ?></strong></p>
             <?php if ($period['closes_at']) : ?><p><?php esc_html_e('Motionstiden är öppen till:', 'ssf-member-portal'); ?> <strong><?php echo esc_html($deadline->format((int) $period['closes_at'])); ?></strong></p><?php endif; ?>
             <?php if (in_array($period['state'], array('open', 'late'), true)) : ?>
                 <p><a class="ssf-motion-button" href="<?php echo esc_url($form_url); ?>"><?php esc_html_e('Skicka in motion', 'ssf-member-portal'); ?></a></p>
