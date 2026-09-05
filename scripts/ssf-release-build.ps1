@@ -65,6 +65,7 @@ try {
 
     $revision = (git -C $repo rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { $revision = '' }
+    $Components = @($Components | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     if ($Components.Count -eq 0) {
         $previousRevision = if ($current) { [string]$current.source_revision } else { '' }
         $Components = @(Get-ChangedComponents -PreviousRevision $previousRevision)

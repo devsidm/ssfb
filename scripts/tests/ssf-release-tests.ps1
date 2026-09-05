@@ -48,8 +48,10 @@ try {
     git -C $testRoot add .
     git -C $testRoot commit --quiet -m 'Test fixture'
 
-    & (Join-Path $testRoot 'scripts\ssf-release-build.ps1') -Description 'Första testbuild' | Out-Null
-    $firstBuild = (Get-Content -Raw -LiteralPath (Join-Path $testRoot 'wp-content\mu-plugins\ssf-release-manifest.json') | ConvertFrom-Json).build
+    & (Join-Path $testRoot 'scripts\ssf-release-build.ps1') -Description 'Första testbuild' -Components 'komponent-a,komponent-b' | Out-Null
+    $firstManifest = Get-Content -Raw -LiteralPath (Join-Path $testRoot 'wp-content\mu-plugins\ssf-release-manifest.json') | ConvertFrom-Json
+    $firstBuild = $firstManifest.build
+    Assert-Equal 'Komponentlista delas upp' 2 $firstManifest.components.Count
     & (Join-Path $testRoot 'scripts\ssf-release-build.ps1') -Description 'Andra testbuild' | Out-Null
     $secondBuild = (Get-Content -Raw -LiteralPath (Join-Path $testRoot 'wp-content\mu-plugins\ssf-release-manifest.json') | ConvertFrom-Json).build
     Assert-Equal 'Två builds får olika ID' $false ($firstBuild -eq $secondBuild)
