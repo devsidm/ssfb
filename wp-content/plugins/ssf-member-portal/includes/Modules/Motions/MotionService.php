@@ -10,6 +10,8 @@ if (! defined('ABSPATH')) {
 
 final class MotionService
 {
+    public const DESCRIPTION_MAX_LENGTH = 1000;
+
     private MotionDeadline $deadline;
     private MotionNumber $numbers;
     private MotionFiles $files;
@@ -39,9 +41,13 @@ final class MotionService
         $email = sanitize_email($input['email'] ?? '');
         $phone = sanitize_text_field($input['phone'] ?? '');
         $title = sanitize_text_field($input['title'] ?? '');
-        $content = wp_kses_post($input['content'] ?? '');
+        $content = sanitize_textarea_field($input['content'] ?? '');
         if (! $name || ! $email || ! $title || ! trim(wp_strip_all_tags($content))) {
-            return new \WP_Error('motion_required', __('Fyll i namn, e-postadress, rubrik och motionstext.', 'ssf-member-portal'));
+            return new \WP_Error('motion_required', __('Fyll i namn, e-postadress, rubrik och en kort beskrivning.', 'ssf-member-portal'));
+        }
+        $description_length = function_exists('mb_strlen') ? mb_strlen($content, 'UTF-8') : strlen($content);
+        if ($description_length > self::DESCRIPTION_MAX_LENGTH) {
+            return new \WP_Error('motion_description_length', sprintf(__('Den korta beskrivningen får vara högst %d tecken.', 'ssf-member-portal'), self::DESCRIPTION_MAX_LENGTH));
         }
         $upload_error = $this->files->validate($files);
         if ($upload_error) {
@@ -68,7 +74,11 @@ final class MotionService
         update_post_meta($motion_id, '_ssf_mp_submitter_phone', $phone);
         update_post_meta($motion_id, '_ssf_mp_access_token_hash', hash('sha256', $token));
         update_post_meta($motion_id, '_ssf_mp_member_user_id', get_current_user_id());
-        $this->files->attach($files, $motion_id);
+        $attachment_ids = $this->files->attach($files, $motion_id);
+        if (is_wp_error($attachment_ids)) {
+            wp_delete_post($motion_id, true);
+            return $attachment_ids;
+        }
 
         $status_url = $this->status_url($number, $token, (int) $snapshot['meeting_id']);
         update_post_meta($motion_id, '_ssf_mp_status_url', esc_url_raw($status_url));
