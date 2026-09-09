@@ -2,14 +2,19 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "",
-    "build":  "20260905.4",
-    "built_at":  "2026-09-05T18:20:14.3754807Z",
+    "build":  "20260909.1",
+    "built_at":  "2026-09-09T18:06:53.7026249Z",
     "source":  "codex",
-    "source_revision":  "f8add97d7c6bb358e353b3699eafd68a78af700e",
-    "description":  "Require a short motion description and attached PDF or Word document",
+    "source_revision":  "64f1b3dba91b69787522713245b6de834a035311",
+    "description":  "Add centralized Cloudflare Turnstile protection for SSF forms",
     "notes":  "",
     "components":  [
-                       "ssf-member-portal"
+                       "ssf-admin-navigation",
+                       "ssf-antispam",
+                       "ssf-medlemsfartyg",
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal",
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
