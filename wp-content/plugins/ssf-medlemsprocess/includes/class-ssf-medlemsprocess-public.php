@@ -76,6 +76,9 @@ class SSF_Medlemsprocess_Public
             exit;
         }
         $this->assert_nonce('ssf_application_submit');
+        if (class_exists('SSF_Antispam') && ! SSF_Antispam::validate('membership_application')) {
+            wp_die(esc_html(SSF_Antispam::error_message()));
+        }
         if (! empty($_POST['website'])) {
             wp_die('Formuläret kunde inte skickas.');
         }
@@ -121,6 +124,9 @@ class SSF_Medlemsprocess_Public
         $application_id = SSF_Medlemsprocess_Application::find_by_token($token);
         if (! $application_id || ! isset($_POST['_wpnonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ssf_application_completion_' . $application_id)) {
             wp_die('Länken är ogiltig eller har gått ut.');
+        }
+        if (class_exists('SSF_Antispam') && ! SSF_Antispam::validate('application_completion')) {
+            wp_die(esc_html(SSF_Antispam::error_message()));
         }
         $message = sanitize_textarea_field(wp_unslash($_POST['completion_message'] ?? ''));
         if (! $message && empty($_FILES['ssf_completion_files']['name'][0])) {

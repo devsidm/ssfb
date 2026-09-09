@@ -79,6 +79,10 @@ function ssf_site_handle_application(): void
         wp_safe_redirect(add_query_arg('ssf_status', 'invalid', wp_get_referer() ?: home_url('/ansokan/')));
         exit;
     }
+    if (class_exists('SSF_Antispam') && ! SSF_Antispam::validate('legacy_vessel_application')) {
+        wp_safe_redirect(add_query_arg('ssf_status', 'invalid', wp_get_referer() ?: home_url('/ansokan/')));
+        exit;
+    }
 
     $data = array(
         'ansokningsvag' => ssf_site_clean_field('ansokningsvag'),
@@ -248,6 +252,12 @@ function ssf_site_handle_contact(): void
 
     if (! isset($_POST['ssf_contact_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_contact_nonce'])), 'ssf_contact')) {
         wp_safe_redirect(add_query_arg('ssf_status', 'invalid', $redirect));
+        exit;
+    }
+
+    if (class_exists('SSF_Antispam') && ! SSF_Antispam::validate('contact')) {
+        $status = 'rate_limit' === SSF_Antispam::last_reason() ? 'rate_limited' : 'invalid';
+        wp_safe_redirect(add_query_arg('ssf_status', $status, $redirect));
         exit;
     }
 

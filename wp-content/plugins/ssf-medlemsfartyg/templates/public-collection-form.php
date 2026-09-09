@@ -54,6 +54,7 @@ $existing_images = array_values(array_unique(array_filter(array_merge(array((int
         <div class="ssf-collection-summary" aria-live="polite"></div>
         <p><?php echo esc_html($settings['privacy_text']); ?></p>
         <label><input type="checkbox" name="_ssf_gdpr_consent" value="1" required> <?php esc_html_e('Jag godkänner att SSF behandlar uppgifterna för att administrera och presentera medlemsfartyget.', 'ssf-medlemsfartyg'); ?></label>
+        <?php if (class_exists('SSF_Antispam')) { SSF_Antispam::render('vessel_update'); } ?>
     </fieldset>
 
     <div class="ssf-collection-nav">

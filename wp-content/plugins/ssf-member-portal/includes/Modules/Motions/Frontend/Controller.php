@@ -96,6 +96,10 @@ final class Controller
             wp_safe_redirect(add_query_arg('ssf_motion_error', rawurlencode(__('Formuläret kunde inte verifieras.', 'ssf-member-portal')), $form_url));
             exit;
         }
+        if (class_exists('SSF_Antispam') && ! \SSF_Antispam::validate('motion')) {
+            wp_safe_redirect(add_query_arg('ssf_motion_error', rawurlencode(\SSF_Antispam::error_message()), $form_url));
+            exit;
+        }
         $result = $this->service->submit(wp_unslash($_POST), $_FILES);
         if (is_wp_error($result)) {
             wp_safe_redirect(add_query_arg('ssf_motion_error', rawurlencode($result->get_error_message()), $form_url));

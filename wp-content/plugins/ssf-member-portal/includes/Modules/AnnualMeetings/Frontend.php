@@ -149,6 +149,9 @@ final class Frontend
         if (! isset($_POST['ssf_member_portal_meeting_registration_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_member_portal_meeting_registration_nonce'])), 'ssf_member_portal_submit_meeting_registration') || ! empty($_POST['website'])) {
             $this->redirect_error($redirect, __('Formuläret kunde inte verifieras. Försök igen.', 'ssf-member-portal'));
         }
+        if (class_exists('SSF_Antispam') && ! \SSF_Antispam::validate('annual_meeting_registration')) {
+            $this->redirect_error($redirect, \SSF_Antispam::error_message());
+        }
         $ip = sanitize_text_field((string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
         $limit_key = 'ssf_am_rate_' . md5($ip);
         $attempts = (int) get_transient($limit_key);

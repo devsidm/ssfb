@@ -83,6 +83,7 @@ $routes = class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile:
                     <label class="ssf-process-choice"><input type="checkbox" name="confirm_accuracy" value="1" required> Jag intygar att uppgifterna är korrekta.</label>
                     <label class="ssf-process-choice"><input type="checkbox" name="privacy_consent" value="1" required> Jag godkänner att SSF behandlar uppgifterna för att hantera ansökan.</label>
                     <label class="ssf-process-choice"><input type="checkbox" name="upload_rights" value="1" required> Jag intygar att jag har rätt att ladda upp bilder och bilagor.</label>
+                    <?php if (class_exists('SSF_Antispam')) { SSF_Antispam::render('membership_application'); } ?>
                 </section>
             </div>
         </fieldset>

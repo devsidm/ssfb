@@ -24,6 +24,7 @@ final class SSF_Admin_Navigation
         'ssf-features' => array('label' => 'Funktioner', 'capability' => 'manage_ssf_features'),
         'ssf-member-portal-microsoft365' => array('label' => 'Microsoft 365', 'capability' => 'ssf_manage_motions'),
         'ssf-office365-mailer' => array('label' => 'E-post', 'capability' => 'manage_options'),
+        'ssf-antispam' => array('label' => 'Antispam', 'capability' => 'manage_options'),
         'ssf-release' => array('label' => 'Release', 'capability' => 'manage_ssf_releases'),
         'ssf-member-portal-status' => array('label' => 'Systemstatus', 'capability' => 'ssf_manage_member_portal'),
     );
@@ -500,6 +501,7 @@ final class SSF_Admin_Navigation
             'ssf-features' => 'Styr vilka publika funktioner som är aktiva.',
             'ssf-member-portal-microsoft365' => 'E-postmottagare samt Graph- och SharePointanslutning för motioner.',
             'ssf-office365-mailer' => 'Microsoft 365-transport för webbplatsens e-post.',
+            'ssf-antispam' => 'Turnstile, honeypot och begränsning av formulärinlämningar.',
             'ssf-release' => 'Version, releasedatum, miljö och releasehistorik.',
             'ssf-member-portal-status' => 'Samlad miljö-, integrations- och diagnostikstatus.',
         );

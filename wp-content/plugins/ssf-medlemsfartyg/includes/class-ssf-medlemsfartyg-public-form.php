@@ -50,6 +50,10 @@ class SSF_Medlemsfartyg_Public_Form
             wp_die(esc_html__('Länken är ogiltig eller har gått ut. Kontakta SSF för en ny länk.', 'ssf-medlemsfartyg'));
         }
 
+        if (class_exists('SSF_Antispam') && ! SSF_Antispam::validate('vessel_update')) {
+            wp_die(esc_html(SSF_Antispam::error_message()));
+        }
+
         if (! empty($_POST['website'])) {
             wp_die(esc_html__('Formuläret kunde inte skickas.', 'ssf-medlemsfartyg'));
         }
