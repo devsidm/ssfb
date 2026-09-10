@@ -21,6 +21,7 @@ $pdf = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-me
 $sharepoint = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-sharepoint.php')
 $configuration = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\Configuration.php')
 $emails = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-emails.php')
+$organization = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-organization-info.php')
 $statusPage = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\templates\status-page.php')
 $styles = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\css\ssf-medlemsprocess.css')
 $formScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')
@@ -34,10 +35,11 @@ Assert-Contains 'Obligatorisk fartygskategori' $profile "'_ssf_vessel_operation'
 Assert-Contains 'Fritidsfartyg kan väljas' $profile "'leisure' => 'Fritidsfartyg'"
 Assert-Contains 'Handelsfartyg kan väljas' $profile "'commercial' => 'Handelsfartyg'"
 Assert-Contains 'Manipulerad fartygskategori avvisas' $profile "'select' === `$field['type'] && `$value && ! array_key_exists"
-Assert-Contains 'Fritidsfartygets årsavgift' $emails "'500 kr/år per fartyg'"
-Assert-Contains 'Handelsfartygets årsavgift' $emails "'1 500 kr/år per fartyg'"
-Assert-Contains 'Betalningens bankgiro' $emails "'332-1908'"
-Assert-Contains 'Betalningens Swishnummer' $emails "'1236400279'"
+Assert-Contains 'Fritidsfartygets årsavgift' $organization "'500 kr/år per fartyg'"
+Assert-Contains 'Handelsfartygets årsavgift' $organization "'1 500 kr/år per fartyg'"
+Assert-Contains 'Betalningens bankgiro' $organization "'332-1908'"
+Assert-Contains 'Betalningens Swishnummer' $organization "'1236400279'"
+Assert-Contains 'Ansökningsmejl använder centrala avgifter' $emails 'SSF_Organization_Info::membership_fees()'
 Assert-Contains 'Ansökningsnummer anges vid betalning' $emails 'som meddelande i betalningen.'
 Assert-Contains 'Kontaktperson som rubrik' $form '<legend>Kontaktperson</legend>'
 Assert-Contains 'Postadress i formuläret' $form '<span>Postadress</span>'

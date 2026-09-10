@@ -144,9 +144,11 @@ function ssf_site_handle_application(): void
     SSF_Email_Router::send_to_function('membership_application', $internal_subject, $content, $headers);
 
     if (is_email($data['ombud_epost'])) {
+        $organization = SSF_Organization_Info::get();
+        $membership_fees = SSF_Organization_Info::membership_fees();
         $legacy_fees = array(
-            'fritidsfartyg' => '500 kr/år per fartyg',
-            'handelsfartyg' => '1 500 kr/år per fartyg',
+            'fritidsfartyg' => $membership_fees['leisure']['amount'],
+            'handelsfartyg' => $membership_fees['commercial']['amount'],
         );
         $fee = $legacy_fees[strtolower($data['fartygstyp'])] ?? '';
         SSF_Email_Template::send(
@@ -158,7 +160,7 @@ function ssf_site_handle_application(): void
                 'body' => array('Tack för din ansökan som fartygsombud för ' . $data['fartygsnamn'] . '. För att vi ska börja behandla ansökan behöver medlemsavgiften betalas in.'),
                 'sections' => array(
                     array('title' => 'Ansökan', 'rows' => array('Fartyg' => $data['fartygsnamn'], 'Fartygskategori' => ucfirst($data['fartygstyp']), 'Status' => 'Inkommen')),
-                    array('title' => 'Betalning', 'rows' => array('Årsavgift' => $fee, 'Bankgiro' => '332-1908', 'Swish' => '1236400279')),
+                    array('title' => 'Betalning', 'rows' => array('Årsavgift' => $fee, 'Bankgiro' => $organization['bankgiro'], 'Swish' => $organization['swish'])),
                 ),
                 'notice_title' => 'Viktigt om betalningen',
                 'notice' => 'Betala in årsavgiften och ange fartygets namn som meddelande i betalningen.',

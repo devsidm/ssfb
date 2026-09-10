@@ -198,17 +198,15 @@ class SSF_Medlemsprocess_Emails
         $sections[] = array('title' => 'Ansökan', 'rows' => array_filter($rows));
         if ('received' === $key) {
             $operation = sanitize_key((string) ($variables['vessel_operation'] ?? ''));
-            $fees = array(
-                'leisure' => array('label' => 'Fritidsfartyg', 'fee' => '500 kr/år per fartyg'),
-                'commercial' => array('label' => 'Handelsfartyg', 'fee' => '1 500 kr/år per fartyg'),
-            );
+            $organization = SSF_Organization_Info::get();
+            $fees = SSF_Organization_Info::membership_fees();
             if (isset($fees[$operation])) {
                 $body .= ' För att vi ska börja behandla ansökan behöver medlemsavgiften betalas in.';
                 $sections[] = array('title' => 'Betalning', 'rows' => array(
                     'Fartygskategori' => $fees[$operation]['label'],
-                    'Årsavgift' => $fees[$operation]['fee'],
-                    'Bankgiro' => '332-1908',
-                    'Swish' => '1236400279',
+                    'Årsavgift' => $fees[$operation]['amount'],
+                    'Bankgiro' => $organization['bankgiro'],
+                    'Swish' => $organization['swish'],
                 ));
                 $notice_title = 'Viktigt om betalningen';
                 $notice = 'Betala in årsavgiften och ange ansökningsnummer ' . $application_number . ' som meddelande i betalningen.';

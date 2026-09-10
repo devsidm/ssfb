@@ -401,6 +401,82 @@ h3, h4, .site-title {
   margin: 0 0 44px;
 }
 
+.ssf-fee-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.ssf-fee-item {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--ssf-border);
+  border-radius: 8px;
+  background: var(--ssf-white);
+}
+
+.ssf-fee-item h3,
+.ssf-payment-info h3,
+.ssf-organization-info h3 {
+  margin: 0 0 8px;
+  font-size: 1.08rem;
+}
+
+.ssf-fee-item p {
+  margin: 8px 0 0;
+}
+
+.ssf-fee-item__amount {
+  color: var(--ssf-blue-deep) !important;
+  font-size: 1.35rem !important;
+  font-weight: 800;
+}
+
+.ssf-payment-info {
+  padding: 22px;
+  border-left: 4px solid var(--ssf-gold-dark);
+  background: var(--ssf-blue-light);
+}
+
+.ssf-payment-info dl,
+.ssf-organization-info dl {
+  margin: 16px 0;
+}
+
+.ssf-payment-info dl > div,
+.ssf-organization-info dl > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ssf-border);
+}
+
+.ssf-payment-info dt,
+.ssf-organization-info dt {
+  font-weight: 700;
+}
+
+.ssf-payment-info dd,
+.ssf-organization-info dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ssf-organization-info__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 32px;
+  margin-top: 22px;
+}
+
+.ssf-organization-info address {
+  color: var(--ssf-text);
+  font-style: normal;
+}
+
 .ssf-page-section.ssf-section--blue {
   width: calc(100% + 64px);
   margin-left: -32px;
@@ -617,6 +693,17 @@ h3, h4, .site-title {
   .ssf-news-grid,
   .ssf-steps {
     grid-template-columns: 1fr;
+  }
+
+  .ssf-fee-grid,
+  .ssf-organization-info__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ssf-payment-info dl > div,
+  .ssf-organization-info dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 
   .ssf-split {

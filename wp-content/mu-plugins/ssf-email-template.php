@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SSF Email Template
  * Description: Central presentation layer for SSF transactional email.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: SIDM
  */
 
@@ -45,6 +45,7 @@ final class SSF_Email_Template
     public static function brand(): array
     {
         $saved = (array) get_option(self::OPTION, array());
+        $organization = SSF_Organization_Info::get();
         $logo_id = absint($saved['logo_id'] ?? 0);
         $logo_url = $logo_id ? (string) wp_get_attachment_image_url($logo_id, 'medium') : '';
         if (! $logo_url) {
@@ -52,11 +53,13 @@ final class SSF_Email_Template
         }
 
         return array(
-            'name' => sanitize_text_field((string) ($saved['name'] ?? 'Sveriges Segelfartygsförbund')),
-            'website_url' => esc_url_raw((string) ($saved['website_url'] ?? 'https://ssfb.se')),
-            'website_label' => sanitize_text_field((string) ($saved['website_label'] ?? 'ssfb.se')),
-            'address_line_1' => sanitize_text_field((string) ($saved['address_line_1'] ?? 'HSX 031W BILLO')),
-            'address_line_2' => sanitize_text_field((string) ($saved['address_line_2'] ?? '106 46 Stockholm')),
+            'name' => $organization['organization_name'],
+            'website_url' => $organization['website_url'],
+            'website_label' => $organization['website_label'],
+            'address_lines' => SSF_Organization_Info::address_lines(),
+            'organization_number' => $organization['organization_number'],
+            'bankgiro' => $organization['bankgiro'],
+            'swish' => $organization['swish'],
             'logo_id' => $logo_id,
             'logo_url' => set_url_scheme($logo_url, 'https'),
             'primary_color' => '#12324a',
@@ -109,7 +112,7 @@ final class SSF_Email_Template
 <?php if ($button_label && $button_url) : ?><tr><td align="center" style="padding:28px 32px 0;"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="<?php echo esc_attr($brand['accent_color']); ?>" style="background-color:<?php echo esc_attr($brand['accent_color']); ?>;"><a href="<?php echo esc_url($button_url); ?>" style="display:inline-block;padding:14px 24px;color:#ffffff;font-size:16px;font-weight:bold;line-height:20px;text-align:center;text-decoration:none;"><?php echo esc_html($button_label); ?></a></td></tr></table><p style="margin:12px 0 0;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:12px;line-height:18px;overflow-wrap:anywhere;">Om knappen inte fungerar: <a href="<?php echo esc_url($button_url); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($button_url); ?></a></p></td></tr><?php endif; ?>
 <?php if ($secondary_links) : ?><tr><td style="padding:22px 32px 0;text-align:center;"><?php foreach ($secondary_links as $index => $link) : ?><?php if ($index) : ?><span style="color:#9aa8b3;"> &nbsp;|&nbsp; </span><?php endif; ?><a href="<?php echo esc_url($link['url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;font-size:14px;line-height:22px;text-decoration:underline;"><?php echo esc_html($link['label']); ?></a><?php endforeach; ?></td></tr><?php endif; ?>
 <tr><td style="padding:30px 32px 8px;color:#243b4d;font-size:16px;line-height:24px;">Vänliga hälsningar<br><strong><?php echo esc_html($brand['name']); ?></strong></td></tr>
-<tr><td style="padding:22px 32px 30px;border-top:1px solid #d8e1e7;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:13px;line-height:20px;"><strong style="color:<?php echo esc_attr($brand['primary_color']); ?>;"><?php echo esc_html($brand['name']); ?></strong><br><a href="<?php echo esc_url($brand['website_url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($brand['website_label']); ?></a><br><br>Postadress:<br><?php echo esc_html($brand['address_line_1']); ?><br><?php echo esc_html($brand['address_line_2']); ?></td></tr>
+<tr><td style="padding:22px 32px 30px;border-top:1px solid #d8e1e7;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:13px;line-height:20px;"><strong style="color:<?php echo esc_attr($brand['primary_color']); ?>;"><?php echo esc_html($brand['name']); ?></strong><br><a href="<?php echo esc_url($brand['website_url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($brand['website_label']); ?></a><br><br>Postadress:<br><?php foreach ($brand['address_lines'] as $line) : ?><?php echo esc_html($line); ?><br><?php endforeach; ?></td></tr>
 </table></td></tr></table></body></html>
         <?php
         return (string) ob_get_clean();
@@ -152,7 +155,7 @@ final class SSF_Email_Template
         foreach (self::links($data['secondary_links'] ?? array()) as $link) {
             $lines[] = $link['label'] . ': ' . $link['url'];
         }
-        return implode("\n", array_merge($lines, array('', 'Vänliga hälsningar', $brand['name'], '', $brand['website_url'], '', 'Postadress:', $brand['address_line_1'], $brand['address_line_2'])));
+        return implode("\n", array_merge($lines, array('', 'Vänliga hälsningar', $brand['name'], '', $brand['website_url'], '', 'Postadress:'), $brand['address_lines']));
     }
 
     public static function send(string $recipient, string $subject, string $template, array $data = array(), $headers = array(), array $attachments = array()): bool
@@ -197,20 +200,23 @@ final class SSF_Email_Template
             return;
         }
         $brand = self::brand();
+        $organization = SSF_Organization_Info::get();
         $preview_base = admin_url('admin-post.php?action=ssf_email_template_preview');
         ?>
         <div id="ssf-email-design" class="postbox" style="max-width:1180px;padding:20px">
-            <h2>E-postdesign</h2>
-            <p>Gemensam avsändaridentitet och layout för externa användarmejl.</p>
+            <h2>Organisationsuppgifter och e-postdesign</h2>
+            <p>Gemensam organisationsinformation för webbplatsens sidfot, medlemssidor och externa användarmejl.</p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_email_template_save"><?php wp_nonce_field('ssf_email_template_save'); ?>
                 <table class="form-table" role="presentation"><tbody>
                     <tr><th><label for="ssf-email-brand-name">Avsändaridentitet</label></th><td><input id="ssf-email-brand-name" class="regular-text" name="brand[name]" value="<?php echo esc_attr($brand['name']); ?>" required></td></tr>
                     <tr><th>E-postlogotyp</th><td><img data-ssf-email-logo-preview src="<?php echo esc_url($brand['logo_url']); ?>" alt="Förhandsvisning av e-postlogotyp" style="display:block;max-width:180px;max-height:90px;margin-bottom:10px;background:#12324a;padding:10px;"><input data-ssf-email-logo-id type="hidden" name="brand[logo_id]" value="<?php echo esc_attr((string) $brand['logo_id']); ?>"><button data-ssf-email-logo-select type="button" class="button">Byt logotyp</button> <button data-ssf-email-logo-clear type="button" class="button">Använd standardlogotyp</button></td></tr>
                     <tr><th><label for="ssf-email-website-url">Webbplats</label></th><td><input id="ssf-email-website-url" class="regular-text code" type="url" name="brand[website_url]" value="<?php echo esc_attr($brand['website_url']); ?>" required> <input class="regular-text" name="brand[website_label]" value="<?php echo esc_attr($brand['website_label']); ?>" aria-label="Webbplatsens länktext" required></td></tr>
-                    <tr><th>Postadress</th><td><input class="regular-text" name="brand[address_line_1]" value="<?php echo esc_attr($brand['address_line_1']); ?>" required><br><input class="regular-text" name="brand[address_line_2]" value="<?php echo esc_attr($brand['address_line_2']); ?>" required></td></tr>
+                    <tr><th>Postadress</th><td><input class="regular-text" name="brand[address_line_1]" value="<?php echo esc_attr($organization['address_line_1']); ?>" required><br><input class="regular-text" name="brand[address_line_2]" value="<?php echo esc_attr($organization['address_line_2']); ?>" required><br><input class="small-text" name="brand[postal_code]" value="<?php echo esc_attr($organization['postal_code']); ?>" inputmode="numeric" required> <input class="regular-text" name="brand[city]" value="<?php echo esc_attr($organization['city']); ?>" required></td></tr>
+                    <tr><th><label for="ssf-organization-number">Organisationsnummer</label></th><td><input id="ssf-organization-number" class="regular-text" name="brand[organization_number]" value="<?php echo esc_attr($brand['organization_number']); ?>" inputmode="numeric" required></td></tr>
+                    <tr><th>Betalning</th><td><label>Bankgiro <input class="regular-text" name="brand[bankgiro]" value="<?php echo esc_attr($brand['bankgiro']); ?>" required></label><br><label>Swishnummer <input class="regular-text" name="brand[swish]" value="<?php echo esc_attr($brand['swish']); ?>" inputmode="numeric" required></label></td></tr>
                 </tbody></table>
-                <?php submit_button('Spara e-postdesign'); ?>
+                <?php submit_button('Spara organisationsuppgifter och e-postdesign'); ?>
             </form>
             <h3>Mallar</h3>
             <table class="widefat striped"><thead><tr><th>Malltyp</th><th>Standardrubrik</th><th>Förhandsvisning</th></tr></thead><tbody>
@@ -242,17 +248,20 @@ final class SSF_Email_Template
     {
         self::guard('ssf_email_template_save');
         $input = isset($_POST['brand']) && is_array($_POST['brand']) ? wp_unslash($_POST['brand']) : array();
-        $website_url = esc_url_raw((string) ($input['website_url'] ?? ''));
-        $settings = array(
-            'name' => sanitize_text_field((string) ($input['name'] ?? '')) ?: 'Sveriges Segelfartygsförbund',
-            'website_url' => 0 === stripos($website_url, 'https://') ? $website_url : 'https://ssfb.se',
-            'website_label' => sanitize_text_field((string) ($input['website_label'] ?? '')) ?: 'ssfb.se',
-            'address_line_1' => sanitize_text_field((string) ($input['address_line_1'] ?? '')) ?: 'HSX 031W BILLO',
-            'address_line_2' => sanitize_text_field((string) ($input['address_line_2'] ?? '')) ?: '106 46 Stockholm',
-            'logo_id' => absint($input['logo_id'] ?? 0),
-        );
-        update_option(self::OPTION, $settings, false);
-        self::notice('success', 'E-postdesignen har sparats.');
+        SSF_Organization_Info::save(array(
+            'organization_name' => $input['name'] ?? '',
+            'website_url' => $input['website_url'] ?? '',
+            'website_label' => $input['website_label'] ?? '',
+            'address_line_1' => $input['address_line_1'] ?? '',
+            'address_line_2' => $input['address_line_2'] ?? '',
+            'postal_code' => $input['postal_code'] ?? '',
+            'city' => $input['city'] ?? '',
+            'organization_number' => $input['organization_number'] ?? '',
+            'bankgiro' => $input['bankgiro'] ?? '',
+            'swish' => $input['swish'] ?? '',
+        ));
+        update_option(self::OPTION, array('logo_id' => absint($input['logo_id'] ?? 0)), false);
+        self::notice('success', 'Organisationsuppgifterna och e-postdesignen har sparats.');
         self::redirect();
     }
 
@@ -298,6 +307,8 @@ final class SSF_Email_Template
 
     private static function sample_data(string $template): array
     {
+        $organization = SSF_Organization_Info::get();
+        $fees = SSF_Organization_Info::membership_fees();
         $data = array(
             'recipient_name' => 'Anna Andersson',
             'body' => array('Det här är en förhandsvisning av ett automatiskt meddelande från Sveriges Segelfartygsförbund.'),
@@ -315,7 +326,7 @@ final class SSF_Email_Template
             $data['body'] = array('Tack för din ansökan om medlemskap för Exempelskutan. För att vi ska börja behandla ansökan behöver medlemsavgiften betalas in.');
             $data['sections'] = array(
                 array('title' => 'Ansökan', 'rows' => array('Fartyg' => 'Exempelskutan', 'Ansökningsnummer' => 'SSF-2026-0004', 'Status' => 'Inkommen')),
-                array('title' => 'Betalning', 'rows' => array('Fartygskategori' => 'Fritidsfartyg', 'Årsavgift' => '500 kr/år per fartyg', 'Bankgiro' => '332-1908', 'Swish' => '1236400279')),
+                array('title' => 'Betalning', 'rows' => array('Fartygskategori' => $fees['leisure']['label'], 'Årsavgift' => $fees['leisure']['amount'], 'Bankgiro' => $organization['bankgiro'], 'Swish' => $organization['swish'])),
             );
             $data['notice_title'] = 'Viktigt om betalningen';
             $data['notice'] = 'Betala in årsavgiften och ange ansökningsnummer SSF-2026-0004 som meddelande i betalningen.';

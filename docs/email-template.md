@@ -39,10 +39,13 @@ ersatts av den centrala renderern.
 
 ## Administration
 
-Under `SSF -> System -> Microsoft 365 -> E-postdesign` kan administratören
-välja logotyp från mediabiblioteket, kontrollera organisationsuppgifter,
+Under `SSF -> System -> Microsoft 365 -> Organisationsuppgifter och e-postdesign`
+kan administratören välja logotyp från mediabiblioteket, kontrollera de centrala organisationsuppgifterna,
 förhandsvisa samtliga malltyper och skicka testmejl genom aktiv transport.
 Förhandsvisningen använder samma `render()` som riktiga utskick.
+
+Namn, webbplats och postadress hämtas från `SSF_Organization_Info`, samma källa
+som webbplatsens sidfot och informationssidor.
 
 I development läggs `[DEV]` till i externa ämnesrader. Produktion får inget
 prefix. När PHPMailer är aktiv sätts även `AltBody`; Microsoft 365-pluginets

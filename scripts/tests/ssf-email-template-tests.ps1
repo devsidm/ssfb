@@ -11,6 +11,7 @@ function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected
 function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { $failures.Add($Name) } }
 
 $template = Read-RepoFile 'wp-content\mu-plugins\ssf-email-template.php'
+$organization = Read-RepoFile 'wp-content\mu-plugins\ssf-organization-info.php'
 $controller = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\Admin\Controller.php'
 $annual = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\AnnualMeetings\RegistrationMailer.php'
 $motions = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\MotionMailer.php'
@@ -22,12 +23,13 @@ $vesselTokens = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\cla
 foreach ($type in @('motion_received','motion_status','application_received','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
     Assert-Contains "Malltyp $type" $template "'$type' =>"
 }
-foreach ($value in @('Sveriges Segelfartygsförbund','https://ssfb.se','HSX 031W BILLO','106 46 Stockholm','role="presentation"','AltBody','[DEV] ','wp_enqueue_media','ssf_email_template_preview','ssf_email_template_test')) {
+foreach ($value in @('Sveriges Segelfartygsförbund','role="presentation"','AltBody','[DEV] ','wp_enqueue_media','ssf_email_template_preview','ssf_email_template_test','SSF_Organization_Info::get()','SSF_Organization_Info::address_lines()')) {
     Assert-Contains "Central renderer $value" $template $value
 }
-foreach ($paymentValue in @('500 kr/år per fartyg','332-1908','1236400279','Viktigt om betalningen')) {
-    Assert-Contains "Ansökningsmejlets betalningsuppgift $paymentValue" $template $paymentValue
+foreach ($paymentValue in @('500 kr/år per fartyg','332-1908','1236400279')) {
+    Assert-Contains "Central betalningsuppgift $paymentValue" $organization $paymentValue
 }
+Assert-Contains 'Ansökningsmejlets betalningsrubrik' $template 'Viktigt om betalningen'
 Assert-Contains 'Central HTML-escaping' $template 'nl2br(esc_html($paragraph))'
 Assert-Contains 'Central URL-escaping' $template 'esc_url($button_url)'
 Assert-NotContains 'Ingen generell dynamisk kommentar' $applications "variables['comment']"
