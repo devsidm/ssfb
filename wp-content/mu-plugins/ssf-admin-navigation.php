@@ -499,7 +499,7 @@ final class SSF_Admin_Navigation
     {
         $descriptions = array(
             'ssf-features' => 'Styr vilka publika funktioner som är aktiva.',
-            'ssf-member-portal-microsoft365' => 'E-postmottagare samt Graph- och SharePointanslutning för motioner.',
+            'ssf-member-portal-microsoft365' => 'E-postmottagare samt miljöseparerade SharePoint-destinationer för årsmöten och medlemsansökningar.',
             'ssf-office365-mailer' => 'Microsoft 365-transport för webbplatsens e-post.',
             'ssf-antispam' => 'Turnstile, honeypot och begränsning av formulärinlämningar.',
             'ssf-release' => 'Version, releasedatum, miljö och releasehistorik.',

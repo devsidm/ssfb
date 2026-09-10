@@ -121,6 +121,20 @@ final class Configuration
             return '';
         }
 
+        $destination = SharePointDestinations::legacy_mapping($key);
+        if ($destination) {
+            return SharePointDestinations::value($destination[0], $destination[1]);
+        }
+
+        return self::legacy_value($key);
+    }
+
+    public static function legacy_value(string $key): string
+    {
+        if (! isset(self::KEYS[$key])) {
+            return '';
+        }
+
         $server_value = self::server_value($key);
         if ('' !== $server_value) {
             return $server_value;
@@ -143,6 +157,11 @@ final class Configuration
         }
 
         return $values;
+    }
+
+    public static function destination(string $destination): array
+    {
+        return SharePointDestinations::get($destination);
     }
 
     /**
@@ -209,11 +228,7 @@ final class Configuration
             return;
         }
 
-        $settings = self::stored();
-        if (($settings['document_library_list_id'] ?? '') !== $list_id) {
-            $settings['document_library_list_id'] = $list_id;
-            update_option(self::OPTION, $settings, false);
-        }
+        SharePointDestinations::save_field('annual_meetings', 'list_id', $list_id);
     }
 
     public static function save_discovered_application_list_id(string $list_id): void
@@ -222,11 +237,7 @@ final class Configuration
         if (! $list_id || self::server_value('application_list_id')) {
             return;
         }
-        $settings = self::stored();
-        if (($settings['application_list_id'] ?? '') !== $list_id) {
-            $settings['application_list_id'] = $list_id;
-            update_option(self::OPTION, $settings, false);
-        }
+        SharePointDestinations::save_field('membership_applications', 'list_id', $list_id);
     }
 
     public static function missing(): array
@@ -251,7 +262,19 @@ final class Configuration
 
     public static function complete(): bool
     {
-        return ! self::missing();
+        return ! self::missing() && SharePointDestinations::write_allowed('annual_meetings');
+    }
+
+    public static function credential_missing(): array
+    {
+        $labels = array('tenant_id' => 'Tenant ID', 'client_id' => 'Client ID', 'client_secret' => 'Client secret');
+        $missing = array();
+        foreach ($labels as $key => $label) {
+            if (! self::legacy_value($key)) {
+                $missing[] = $label;
+            }
+        }
+        return $missing;
     }
 
     public static function public_status(): array
@@ -326,7 +349,7 @@ final class Configuration
         return (array) get_option(self::OPTION, array());
     }
 
-    private static function server_value(string $key): string
+    public static function server_value(string $key): string
     {
         $constant = self::KEYS[$key];
         $value = defined($constant) ? constant($constant) : getenv($constant);

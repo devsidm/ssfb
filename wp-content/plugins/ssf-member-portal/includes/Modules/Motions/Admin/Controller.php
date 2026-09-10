@@ -4,7 +4,10 @@ namespace SSF\MemberPortal\Modules\Motions\Admin;
 
 use SSF\MemberPortal\Core\Capabilities;
 use SSF\MemberPortal\Core\Settings;
+use SSF\MemberPortal\Integrations\Microsoft365\Authentication;
 use SSF\MemberPortal\Integrations\Microsoft365\Configuration;
+use SSF\MemberPortal\Integrations\Microsoft365\GraphClient;
+use SSF\MemberPortal\Integrations\Microsoft365\SharePointAdmin;
 use SSF\MemberPortal\Modules\AnnualMeetings\Module as AnnualMeetings;
 use SSF\MemberPortal\Modules\Motions\MotionDeadline;
 use SSF\MemberPortal\Modules\Motions\MotionPermissions;
@@ -21,12 +24,14 @@ final class Controller
     private AnnualMeetings $meetings;
     private MotionDeadline $deadline;
     private MotionService $service;
+    private SharePointAdmin $sharepoint_admin;
 
     public function __construct(AnnualMeetings $meetings, MotionDeadline $deadline, MotionService $service)
     {
         $this->meetings = $meetings;
         $this->deadline = $deadline;
         $this->service = $service;
+        $this->sharepoint_admin = new SharePointAdmin(new GraphClient(new Authentication()));
 
         add_action('admin_post_ssf_member_portal_save_motion_settings', array($this, 'save_settings'));
         add_action('admin_post_ssf_member_portal_save_microsoft365_configuration', array($this, 'save_microsoft365_configuration'));
@@ -184,8 +189,6 @@ final class Controller
         if ($notice) {
             delete_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
         }
-        $diagnostics = (array) get_option('ssf_member_portal_graph_diagnostics', array());
-        $test_file = (array) get_option('ssf_member_portal_graph_test_file', array());
         $schema = (array) get_option('ssf_member_portal_graph_motion_schema', array());
         $poll = $this->service->sharepoint_status_poll_diagnostics();
         $next_poll = wp_next_scheduled('ssf_motion_sharepoint_status_poll');
@@ -198,77 +201,34 @@ final class Controller
 
             <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
 
-            <h2><?php esc_html_e('SharePoint för motioner', 'ssf-member-portal'); ?></h2>
-            <p><?php esc_html_e('Motionen sparas alltid först i WordPress. SharePoint är ett asynkront dokumentarkiv och kan inte blockera en inskickad motion.', 'ssf-member-portal'); ?></p>
-
             <div class="postbox" style="max-width:980px;padding:20px">
-                <h2><?php esc_html_e('Konfigurationsstatus', 'ssf-member-portal'); ?></h2>
+                <h2><?php esc_html_e('Microsoft Entra-anslutning', 'ssf-member-portal'); ?></h2>
                 <table class="widefat striped"><tbody>
-                <?php foreach (array('tenant_id' => 'Tenant ID', 'client_id' => 'Client ID', 'client_secret' => 'Client secret', 'site_id' => 'Site ID', 'drive_id' => 'Drive ID', 'document_library_list_id' => 'Document library / List ID', 'annual_meeting_folder_id' => 'Årsmöten-mappens ID', 'annual_meeting_folder_name' => 'Årsmöten-mappens namn') as $key => $label) : ?>
+                <?php foreach (array('tenant_id' => 'Tenant ID', 'client_id' => 'Client ID', 'client_secret' => 'Client secret') as $key => $label) : ?>
                     <tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html($config[$key]['configured'] ? __('Konfigurerad', 'ssf-member-portal') : __('Saknas', 'ssf-member-portal')); ?><?php if ($config[$key]['configured']) : ?> <span class="description">(<?php echo esc_html('server' === $config[$key]['source'] ? __('server', 'ssf-member-portal') : ('default' === $config[$key]['source'] ? __('SSF-standard', 'ssf-member-portal') : __('admin', 'ssf-member-portal'))); ?>)</span><?php endif; ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
-                <h3><?php esc_html_e('Medlemsansökningar', 'ssf-member-portal'); ?></h3>
-                <table class="widefat striped"><tbody>
-                <?php foreach (array('application_site_id' => 'Site ID', 'application_drive_id' => 'Drive ID', 'application_list_id' => 'List ID', 'application_root_folder_id' => 'Rotmappens ID', 'application_root_folder_name' => 'Rotmappens namn') as $key => $label) : ?>
-                    <tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html($config[$key]['configured'] ? __('Konfigurerad', 'ssf-member-portal') : __('Saknas', 'ssf-member-portal')); ?><?php if ($config[$key]['configured']) : ?> <span class="description">(<?php echo esc_html('server' === $config[$key]['source'] ? __('server', 'ssf-member-portal') : ('default' === $config[$key]['source'] ? __('SSF-standard', 'ssf-member-portal') : __('admin', 'ssf-member-portal'))); ?>)</span><?php endif; ?></td></tr>
-                <?php endforeach; ?>
-                </tbody></table>
-                <p class="description"><?php esc_html_e('Serverkonfiguration prioriteras före värden som sparats här. Client secret visas aldrig igen.', 'ssf-member-portal'); ?></p>
+                <p class="description"><?php esc_html_e('Client secret visas aldrig igen och skickas aldrig till webbläsarens discovery-funktioner.', 'ssf-member-portal'); ?></p>
             </div>
 
             <?php if (current_user_can(Capabilities::MANAGE)) : ?>
                 <div class="postbox" style="max-width:980px;padding:20px">
-                    <h2><?php esc_html_e('Konfigurera anslutning', 'ssf-member-portal'); ?></h2>
+                    <h2><?php esc_html_e('Konfigurera Microsoft Entra', 'ssf-member-portal'); ?></h2>
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                         <input type="hidden" name="action" value="ssf_member_portal_save_microsoft365_configuration">
                         <?php wp_nonce_field('ssf_member_portal_save_microsoft365_configuration'); ?>
-                        <h3><?php esc_html_e('Microsoft Entra', 'ssf-member-portal'); ?></h3>
                         <table class="form-table" role="presentation"><tbody>
                         <tr><th><label for="ssf-graph-tenant-id"><?php esc_html_e('Tenant ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-tenant-id" class="regular-text code" name="graph[tenant_id]" value="<?php echo esc_attr($values['tenant_id']); ?>"></td></tr>
                         <tr><th><label for="ssf-graph-client-id"><?php esc_html_e('Application (client) ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-id" class="regular-text code" name="graph[client_id]" value="<?php echo esc_attr($values['client_id']); ?>"></td></tr>
                         <tr><th><label for="ssf-graph-client-secret"><?php esc_html_e('Client secret value', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-secret" class="regular-text" type="password" name="graph[client_secret]" value="" autocomplete="new-password"><p class="description"><?php esc_html_e('Lämna tomt för att behålla ett sparat secret. Secret ID fungerar inte här.', 'ssf-member-portal'); ?></p><label><input type="checkbox" name="graph[clear_client_secret]" value="1"> <?php esc_html_e('Ta bort sparat client secret', 'ssf-member-portal'); ?></label></td></tr>
                         </tbody></table>
-                        <h3><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?></h3>
-                        <table class="form-table" role="presentation"><tbody>
-                        <tr><th><label for="ssf-graph-site-id"><?php esc_html_e('SharePoint Site ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-site-id" class="large-text code" name="graph[site_id]" value="<?php echo esc_attr($values['site_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-drive-id"><?php esc_html_e('Document library / Drive ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-drive-id" class="large-text code" name="graph[drive_id]" value="<?php echo esc_attr($values['drive_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-list-id"><?php esc_html_e('Document library / List ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-list-id" class="large-text code" name="graph[document_library_list_id]" value="<?php echo esc_attr($values['document_library_list_id']); ?>"><p class="description"><?php esc_html_e('Kan lämnas tomt. Pluginet identifierar och sparar automatiskt list-ID:t för dokumentbiblioteket.', 'ssf-member-portal'); ?></p></td></tr>
-                        <tr><th><label for="ssf-graph-library-name"><?php esc_html_e('Document library-namn', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-library-name" class="regular-text" name="graph[document_library_name]" value="<?php echo esc_attr($values['document_library_name']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-root-id"><?php esc_html_e('Årsmöten-mappens ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-root-id" class="large-text code" name="graph[annual_meeting_folder_id]" value="<?php echo esc_attr($values['annual_meeting_folder_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-root-name"><?php esc_html_e('Årsmöten-mappens namn', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-root-name" class="regular-text" name="graph[annual_meeting_folder_name]" value="<?php echo esc_attr($values['annual_meeting_folder_name']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-hostname"><?php esc_html_e('SharePoint hostname', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-hostname" class="regular-text code" name="graph[site_hostname]" value="<?php echo esc_attr($values['site_hostname']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-path"><?php esc_html_e('SharePoint site path', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-path" class="regular-text code" name="graph[site_path]" value="<?php echo esc_attr($values['site_path']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-wordpress-id-field"><?php esc_html_e('WordPressMotionID-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-wordpress-id-field" class="regular-text code" name="graph[metadata_wordpress_motion_id_field]" value="<?php echo esc_attr($values['metadata_wordpress_motion_id_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-motion-number-field"><?php esc_html_e('Motionnummer-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-motion-number-field" class="regular-text code" name="graph[metadata_motion_number_field]" value="<?php echo esc_attr($values['metadata_motion_number_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-status-field"><?php esc_html_e('Status-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-status-field" class="regular-text code" name="graph[metadata_status_field]" value="<?php echo esc_attr($values['metadata_status_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-vessel-field"><?php esc_html_e('Fartyg-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-vessel-field" class="regular-text code" name="graph[metadata_vessel_field]" value="<?php echo esc_attr($values['metadata_vessel_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-received-date-field"><?php esc_html_e('Inkommen datum-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-received-date-field" class="regular-text code" name="graph[metadata_received_date_field]" value="<?php echo esc_attr($values['metadata_received_date_field']); ?>"><p class="description"><?php esc_html_e('Ange SharePoints interna fältnamn. Standardvärdena matchar de rekommenderade kolumnerna.', 'ssf-member-portal'); ?></p></td></tr>
-                        </tbody></table>
-                        <h3><?php esc_html_e('SharePoint för medlemsansökningar', 'ssf-member-portal'); ?></h3>
-                        <p><?php esc_html_e('Använd medlemsgruppens site och dokumentbibliotek. Lämna List ID tomt för automatisk identifiering.', 'ssf-member-portal'); ?></p>
-                        <table class="form-table" role="presentation"><tbody>
-                        <tr><th><label for="ssf-app-site-id"><?php esc_html_e('Site ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-site-id" class="large-text code" name="graph[application_site_id]" value="<?php echo esc_attr($values['application_site_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-drive-id"><?php esc_html_e('Drive ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-drive-id" class="large-text code" name="graph[application_drive_id]" value="<?php echo esc_attr($values['application_drive_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-list-id"><?php esc_html_e('List ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-list-id" class="large-text code" name="graph[application_list_id]" value="<?php echo esc_attr($values['application_list_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-root-id"><?php esc_html_e('Rotmappens ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-root-id" class="large-text code" name="graph[application_root_folder_id]" value="<?php echo esc_attr($values['application_root_folder_id']); ?>"><p class="description"><?php esc_html_e('Kan lämnas tomt; då skapas eller återanvänds rotmappen med namnet nedan.', 'ssf-member-portal'); ?></p></td></tr>
-                        <tr><th><label for="ssf-app-root-name"><?php esc_html_e('Rotmappens namn', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-root-name" class="regular-text" name="graph[application_root_folder_name]" value="<?php echo esc_attr($values['application_root_folder_name']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-hostname"><?php esc_html_e('Hostname', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-hostname" class="regular-text code" name="graph[application_site_hostname]" value="<?php echo esc_attr($values['application_site_hostname']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-site-path"><?php esc_html_e('Site path', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-site-path" class="regular-text code" name="graph[application_site_path]" value="<?php echo esc_attr($values['application_site_path']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-wp-id-field"><?php esc_html_e('WordPressApplicationID-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-wp-id-field" class="regular-text code" name="graph[metadata_application_wp_id_field]" value="<?php echo esc_attr($values['metadata_application_wp_id_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-number-field"><?php esc_html_e('Ansökningsnummer-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-number-field" class="regular-text code" name="graph[metadata_application_number_field]" value="<?php echo esc_attr($values['metadata_application_number_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-status-field"><?php esc_html_e('Status-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-status-field" class="regular-text code" name="graph[metadata_application_status_field]" value="<?php echo esc_attr($values['metadata_application_status_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-vessel-field"><?php esc_html_e('Fartyg-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-vessel-field" class="regular-text code" name="graph[metadata_application_vessel_field]" value="<?php echo esc_attr($values['metadata_application_vessel_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-representative-field"><?php esc_html_e('Fartygsombud-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-representative-field" class="regular-text code" name="graph[metadata_application_representative_field]" value="<?php echo esc_attr($values['metadata_application_representative_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-received-field"><?php esc_html_e('Inkommen datum-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-received-field" class="regular-text code" name="graph[metadata_application_received_field]" value="<?php echo esc_attr($values['metadata_application_received_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-route-field"><?php esc_html_e('Ansökningsväg-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-route-field" class="regular-text code" name="graph[metadata_application_route_field]" value="<?php echo esc_attr($values['metadata_application_route_field']); ?>"></td></tr>
-                        <tr><th><label for="ssf-app-public-comment-field"><?php esc_html_e('Extern statuskommentar-fält', 'ssf-member-portal'); ?></label></th><td><input id="ssf-app-public-comment-field" class="regular-text code" name="graph[metadata_application_public_comment_field]" value="<?php echo esc_attr($values['metadata_application_public_comment_field']); ?>"><p class="description"><?php esc_html_e('Endast detta kommentarsfält får visas för sökanden. Interna SharePoint-kommentarer läses aldrig.', 'ssf-member-portal'); ?></p></td></tr>
-                        </tbody></table>
-                        <?php submit_button(__('Spara anslutningsinställningar', 'ssf-member-portal')); ?>
+                        <?php submit_button(__('Spara Microsoft Entra', 'ssf-member-portal')); ?>
                     </form>
-                    <?php $this->microsoft365_button('ssf_member_portal_reset_microsoft365_configuration', 'ssf_member_portal_reset_microsoft365_configuration', __('Återställ till SSF-standardvärden', 'ssf-member-portal'), 'secondary'); ?>
+                    <?php $this->microsoft365_button('ssf_member_portal_reset_microsoft365_configuration', 'ssf_member_portal_reset_microsoft365_configuration', __('Återställ Entra-standardvärden', 'ssf-member-portal'), 'secondary'); ?>
                 </div>
             <?php endif; ?>
+
+            <?php if (current_user_can(Capabilities::MANAGE)) { $this->sharepoint_admin->render(); } ?>
 
             <?php $this->render_webhook_section($webhook, $webhook_url, $last_webhook, $generated_secret); ?>
 
@@ -280,7 +240,7 @@ final class Controller
                 <tr><th><?php esc_html_e('Krävda statusar', 'ssf-member-portal'); ?></th><td><?php echo esc_html(sprintf(__('%1$d av %2$d', 'ssf-member-portal'), count((array) ($schema['choices'] ?? array())), count(MotionStatus::all()))); ?></td></tr>
                 <tr><th><?php esc_html_e('Senast verifierad', 'ssf-member-portal'); ?></th><td><?php echo esc_html((string) ($schema['verified_at'] ?? __('Aldrig', 'ssf-member-portal'))); ?></td></tr>
                 </tbody></table>
-                <p><?php $this->microsoft365_button('ssf_member_portal_ensure_sharepoint_motion_schema', 'ssf_member_portal_ensure_sharepoint_motion_schema', __('Kontrollera och reparera statuskolumn', 'ssf-member-portal'), 'secondary'); ?></p>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_ensure_sharepoint_motion_schema"><?php wp_nonce_field('ssf_member_portal_ensure_sharepoint_motion_schema'); ?><label><input type="checkbox" name="confirm_schema" value="1"> <?php esc_html_e('Jag godkänner att en saknad statuskolumn eller saknade statusval skapas.', 'ssf-member-portal'); ?></label><?php submit_button(__('Kontrollera och reparera statuskolumn', 'ssf-member-portal'), 'secondary', 'submit', false); ?></form>
             </div>
 
             <div class="postbox" style="max-width:980px;padding:20px">
@@ -297,27 +257,6 @@ final class Controller
                 <p class="description"><?php esc_html_e('Automatisk kontroll körs ungefär var 30:e minut. WordPress cron är trafikdriven; konfigurera en system-cron för wp-cron.php om sajten har låg trafik.', 'ssf-member-portal'); ?></p>
             </div>
 
-            <div class="postbox" style="max-width:980px;padding:20px">
-                <h2><?php esc_html_e('Diagnostik och test', 'ssf-member-portal'); ?></h2>
-                <p><?php esc_html_e('Anslutningstestet är skrivskyddat. Mappskapande, testfil och borttagning kräver varsin uttrycklig åtgärd.', 'ssf-member-portal'); ?></p>
-                <p>
-                    <?php $this->microsoft365_button('ssf_member_portal_test_sharepoint_authentication', 'ssf_member_portal_test_sharepoint_authentication', __('Testa autentisering', 'ssf-member-portal'), 'secondary'); ?>
-                    <?php $this->microsoft365_button('ssf_member_portal_test_sharepoint', 'ssf_member_portal_test_sharepoint', __('Testa läsåtkomst', 'ssf-member-portal'), 'secondary'); ?>
-                    <?php $this->microsoft365_button('ssf_member_portal_test_sharepoint_temporary_write', 'ssf_member_portal_test_sharepoint_temporary_write', __('Testa skrivåtkomst', 'ssf-member-portal'), 'secondary'); ?>
-                    <?php $this->microsoft365_button('ssf_member_portal_test_sharepoint_write', 'ssf_member_portal_test_sharepoint_write', __('Förbered motionsmapp', 'ssf-member-portal'), 'secondary'); ?>
-                    <?php $this->microsoft365_button('ssf_member_portal_upload_sharepoint_test_file', 'ssf_member_portal_upload_sharepoint_test_file', __('Testa filuppladdning', 'ssf-member-portal'), 'primary'); ?>
-                    <?php if (! empty($test_file['id'])) : ?><?php $this->microsoft365_button('ssf_member_portal_delete_sharepoint_test_file', 'ssf_member_portal_delete_sharepoint_test_file', __('Ta bort testfil', 'ssf-member-portal'), 'secondary'); ?><?php endif; ?>
-                </p>
-                <?php if (! empty($test_file['web_url'])) : ?><p><a href="<?php echo esc_url($test_file['web_url']); ?>" target="_blank" rel="noopener"><?php esc_html_e('Öppna senast uppladdade testfil i SharePoint', 'ssf-member-portal'); ?></a></p><?php endif; ?>
-            </div>
-
-            <?php if ($diagnostics) : ?>
-                <div class="postbox" style="max-width:980px;padding:20px">
-                    <h2><?php esc_html_e('Senaste diagnostik', 'ssf-member-portal'); ?></h2>
-                    <p><?php echo esc_html($diagnostics['ok'] ?? false ? __('Status: OK', 'ssf-member-portal') : __('Status: Fel', 'ssf-member-portal')); ?> · <?php echo esc_html((string) ($diagnostics['timestamp'] ?? '')); ?></p>
-                    <pre style="white-space:pre-wrap;max-height:360px;overflow:auto"><?php echo esc_html(wp_json_encode($diagnostics, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
-                </div>
-            <?php endif; ?>
             <p class="description"><?php esc_html_e('Den här integrationen använder Microsoft Graph Application permission Sites.Selected med en explicit write-grant till styrelsens SharePoint-site. Lägg inte till bredare fil- eller sitebehörigheter när Sites.Selected fungerar.', 'ssf-member-portal'); ?></p>
         </div>
         <?php
@@ -521,6 +460,9 @@ final class Controller
     public function ensure_sharepoint_motion_schema(): void
     {
         $this->guard_microsoft365_action('ssf_member_portal_ensure_sharepoint_motion_schema');
+        if (empty($_POST['confirm_schema'])) {
+            wp_die(esc_html__('Bekräfta att SharePoint-schemat får uppdateras.', 'ssf-member-portal'));
+        }
         $this->complete_microsoft365_action(
             $this->service->ensure_sharepoint_status_schema(),
             __('SharePoints statuskolumn är kontrollerad och klar.', 'ssf-member-portal')

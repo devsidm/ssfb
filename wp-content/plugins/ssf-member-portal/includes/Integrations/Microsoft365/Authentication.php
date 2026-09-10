@@ -22,11 +22,11 @@ final class Authentication
         }
 
         $config = Configuration::all();
-        if (! Configuration::complete()) {
+        if (Configuration::credential_missing()) {
             return new \WP_Error(
                 'microsoft_not_configured',
                 __('Microsoft 365 är inte komplett konfigurerat på servern.', 'ssf-member-portal'),
-                array('http_status' => 0, 'missing' => Configuration::missing())
+                array('http_status' => 0, 'missing' => Configuration::credential_missing())
             );
         }
 

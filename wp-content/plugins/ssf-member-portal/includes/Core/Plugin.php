@@ -115,6 +115,14 @@ final class Plugin
         <?php else : ?>
             <div class="notice notice-warning inline"><p><?php esc_html_e('SSF Release Controls är inte laddat. Kontrollera att MU-pluginet är deployat.', 'ssf-member-portal'); ?></p></div>
         <?php endif; ?>
+        <?php if (class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')) : ?>
+            <h2><?php esc_html_e('Microsoft 365 och SharePoint', 'ssf-member-portal'); ?></h2>
+            <table class="widefat striped" style="max-width:900px"><thead><tr><th>Destination</th><th>Miljö</th><th>Site</th><th>Konfiguration</th><th>Senaste test</th></tr></thead><tbody>
+            <?php foreach (\SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::definitions() as $destination => $definition) : $profile = \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::get($destination); $missing = \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::missing($destination); $destination_health = \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::health($destination); ?>
+                <tr><th><?php echo esc_html($definition['label']); ?></th><td><?php echo esc_html(strtoupper($profile['environment'])); ?></td><td><?php echo esc_html($profile['site_name'] ?: ($profile['site_url'] ?: 'Saknas')); ?></td><td><?php echo esc_html($missing ? 'Saknas: ' . implode(', ', $missing) : ($profile['write_blocked'] ? 'Skrivning blockerad' : 'OK')); ?></td><td><?php echo esc_html(! $destination_health ? 'Inte testad' : (! empty($destination_health['ok']) ? 'OK' : 'Fel')); ?><?php if (! empty($destination_health['timestamp'])) : ?><br><span class="description"><?php echo esc_html($destination_health['timestamp']); ?></span><?php endif; ?></td></tr>
+            <?php endforeach; ?>
+            </tbody></table>
+        <?php endif; ?>
         <p><?php esc_html_e('Senaste händelser för Medlemsportalen.', 'ssf-member-portal'); ?></p>
         <table class="widefat striped"><thead><tr><th><?php esc_html_e('Tid', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Händelse', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Information', 'ssf-member-portal'); ?></th></tr></thead><tbody>
         <?php foreach ($logs as $log) : ?><tr><td><?php echo esc_html(wp_date('Y-m-d H:i', (int) $log['at'])); ?></td><td><?php echo esc_html($log['event']); ?></td><td><?php echo esc_html(wp_json_encode($log['context'])); ?></td></tr><?php endforeach; ?>

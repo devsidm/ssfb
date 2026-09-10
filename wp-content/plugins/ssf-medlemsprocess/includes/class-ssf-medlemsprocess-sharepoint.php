@@ -51,7 +51,9 @@ class SSF_Medlemsprocess_SharePoint
     public function enabled(): bool
     {
         $this->ensure_graph();
-        return $this->graph && $this->config('application_site_id') && $this->config('application_drive_id') && ($this->config('application_root_folder_id') || $this->config('application_root_folder_name'));
+        $writes_allowed = ! class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')
+            || \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::write_allowed('membership_applications');
+        return $writes_allowed && $this->graph && $this->config('application_site_id') && $this->config('application_drive_id') && ($this->config('application_root_folder_id') || $this->config('application_root_folder_name'));
     }
 
     public function queue(int $application_id, int $delay = 15): void
