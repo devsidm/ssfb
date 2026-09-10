@@ -1,16 +1,15 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "",
-    "build":  "20260910.4",
-    "built_at":  "2026-09-10T13:02:39.6471722Z",
+    "version":  "0.10.1",
+    "build":  "20260910.5",
+    "built_at":  "2026-09-10T14:13:08.5185824Z",
     "source":  "codex",
-    "source_revision":  "2224125ff238ee2f164d6de95322835590980711",
-    "description":  "Central miljöseparerad SharePoint-konfiguration med Graph discovery",
+    "source_revision":  "9529c5df9862cedbed7f2c07e8e7cbca79831e93",
+    "description":  "Oanvänd Power Automate-statuswebhook borttagen; SharePoint-pollning behålls",
     "notes":  "",
     "components":  [
-                       "ssf-admin-navigation",
-                       "ssf-medlemsprocess",
+                       "documentation",
                        "ssf-member-portal"
                    ],
     "status":  "development",
