@@ -140,11 +140,17 @@ function ssf_site_handle_application(): void
     SSF_Email_Router::send_to_function('membership_application', $internal_subject, $content, $headers);
 
     if (is_email($data['ombud_epost'])) {
-        wp_mail(
+        SSF_Email_Template::send(
             $data['ombud_epost'],
-            'Tack för din ansökan till SSF',
-            "Tack för din ansökan som fartygsombud. SSF återkommer när ansökan har granskats.\n\n" . $result['title'] . "\n" . $result['text'],
-            array('Content-Type: text/plain; charset=UTF-8')
+            'Vi har tagit emot din ansökan',
+            'application_received',
+            array(
+                'recipient_name' => $data['ombud_namn'],
+                'body' => array('Tack för din ansökan som fartygsombud för ' . $data['fartygsnamn'] . '. SSF återkommer när ansökan har granskats.'),
+                'sections' => array(array('title' => 'Ansökan', 'rows' => array('Fartyg' => $data['fartygsnamn'], 'Status' => 'Inkommen'))),
+                'notice_title' => $result['title'],
+                'notice' => $result['text'],
+            )
         );
     }
 
@@ -335,6 +341,12 @@ function ssf_site_handle_contact(): void
 
     $mail_subject = 'Kontaktformulär: ' . $subject;
     SSF_Email_Router::send_to_function($context ? 'contact_board' : 'contact_form', $mail_subject, $body, $headers);
+
+    SSF_Email_Template::send($email, 'Vi har tagit emot ditt meddelande', 'contact_confirmation', array(
+        'recipient_name' => $name,
+        'body' => array('Tack för att du kontaktat Sveriges Segelfartygsförbund. Vi har tagit emot ditt meddelande.'),
+        'sections' => array(array('title' => 'Ditt meddelande', 'rows' => array('Ämne' => $subject))),
+    ));
 
     delete_transient($limit_key);
     wp_safe_redirect(add_query_arg('ssf_status', $context ? 'annual_meeting_contact_sent' : 'contact_sent', $redirect));

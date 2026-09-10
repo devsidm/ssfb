@@ -316,7 +316,7 @@ class SSF_Medlemsprocess_Inspector
         if ($send_email) {
             $token = SSF_Medlemsprocess_Application::issue_token($application_id);
             $template = $requires_completion ? 'completion_required' : 'reminder';
-            SSF_Medlemsprocess_Plugin::instance()->emails->send_template($template, $application_id, array('admin_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
+            SSF_Medlemsprocess_Plugin::instance()->emails->send_template($template, $application_id, array('public_status_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
         }
         wp_safe_redirect(add_query_arg('ssf_inspector_saved', 'message', $this->case_url($application_id)));
         exit;

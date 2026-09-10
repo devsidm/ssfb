@@ -236,14 +236,14 @@ class SSF_Medlemsfartyg_Tokens
         } elseif (! get_post_meta($ship_id, '_ssf_last_collection_url', true)) {
             $notice = 'missing_url';
         } else {
-            $settings = SSF_Medlemsfartyg_Plugin::settings();
             $url = get_post_meta($ship_id, '_ssf_last_collection_url', true);
-            $message = str_replace(
-                array('[NAMN]', '[FARTYGSNAMN]', '[LÄNK]', '[DATUM]'),
-                array($token->recipient_name, get_the_title($ship_id), $url, get_date_from_gmt($token->expires_at, 'Y-m-d')),
-                $settings['invitation_text']
-            );
-            $sent = wp_mail($token->recipient_email, 'Uppdatera uppgifter om ' . get_the_title($ship_id) . ' till SSF', $message, array('Content-Type: text/plain; charset=UTF-8'));
+            $sent = SSF_Email_Template::send($token->recipient_email, 'Uppdatera uppgifter om ' . get_the_title($ship_id), 'vessel_update_invitation', array(
+                'recipient_name' => $token->recipient_name,
+                'body' => array('SSF behöver aktuella uppgifter och bilder för ' . get_the_title($ship_id) . '.'),
+                'sections' => array(array('title' => 'Fartyg', 'rows' => array('Fartyg' => get_the_title($ship_id), 'Svara senast' => get_date_from_gmt($token->expires_at, 'j F Y')))),
+                'button_label' => 'Uppdatera fartygsuppgifter',
+                'button_url' => $url,
+            ));
             if ($sent) {
                 self::update_status($token_id, 'sent');
                 $notice = 'sent';

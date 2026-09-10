@@ -43,14 +43,14 @@ class SSF_Medlemsprocess_Emails
             'approved_aspirant' => 'approved_aspirant', 'rejected' => 'rejected',
         );
         $token = SSF_Medlemsprocess_Application::issue_token($application_id);
-        $this->send_template($map[$status] ?? 'status_updated', $application_id, array('admin_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
+        $this->send_template($map[$status] ?? 'status_updated', $application_id, array('public_status_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
     }
 
     public function send_booking(int $application_id, array $booking): void
     {
         $time = trim(($booking['date'] ?? '') . ' ' . ($booking['start'] ?? '') . (! empty($booking['end']) ? ' - ' . $booking['end'] : ''));
         $token = SSF_Medlemsprocess_Application::issue_token($application_id);
-        $this->send_template('booking', $application_id, array('booking_time' => $time, 'booking_location' => $booking['location'] ?? '', 'admin_comment' => $booking['comment'] ?? '', 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
+        $this->send_template('booking', $application_id, array('booking_time' => $time, 'booking_location' => $booking['location'] ?? '', 'public_status_comment' => $booking['comment'] ?? '', 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
     }
 
     public function send_inspector_assignment(int $application_id, WP_User $inspector): bool
@@ -61,15 +61,19 @@ class SSF_Medlemsprocess_Emails
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $deadline = (string) get_post_meta($application_id, '_ssf_inspector_deadline', true);
         $task = (string) get_post_meta($application_id, '_ssf_inspector_task', true);
-        $body = "Hej " . $inspector->display_name . ",\n\nDu har tilldelats en inspektion för " . ($data['ship_name'] ?? get_the_title($application_id)) . ".\n\n";
-        if ($deadline) {
-            $body .= "Önskat klart-datum: " . $deadline . "\n";
-        }
-        if ($task) {
-            $body .= "Uppdrag:\n" . $task . "\n";
-        }
-        $body .= "\nÖppna ärendet här:\n" . SSF_Medlemsprocess_Plugin::instance()->inspector->case_url($application_id) . "\n\nVänliga hälsningar\nSveriges Segelfartygsförbund";
-        $sent = wp_mail($inspector->user_email, 'Ny inspektion tilldelad: ' . ($data['ship_name'] ?? get_the_title($application_id)), $body, array('Content-Type: text/plain; charset=UTF-8'));
+        $ship_name = (string) ($data['ship_name'] ?? get_the_title($application_id));
+        $sent = SSF_Email_Template::send($inspector->user_email, 'Ny inspektion tilldelad: ' . $ship_name, 'inspector_assignment', array(
+            'recipient_name' => $inspector->display_name,
+            'body' => array('Du har tilldelats en inspektion för ' . $ship_name . '.'),
+            'sections' => array(array('title' => 'Inspektionsuppdrag', 'rows' => array_filter(array(
+                'Fartyg' => $ship_name,
+                'Önskat klart-datum' => $deadline,
+            )))),
+            'notice_title' => $task ? 'Uppdrag' : '',
+            'notice' => $task,
+            'button_label' => 'Öppna ärendet',
+            'button_url' => SSF_Medlemsprocess_Plugin::instance()->inspector->case_url($application_id),
+        ));
         SSF_Medlemsprocess_Application::add_history($application_id, 'email', 'E-post om inspektörstilldelning ' . ($sent ? 'skickades.' : 'kunde inte skickas.'), false);
         return $sent;
     }
@@ -102,8 +106,10 @@ class SSF_Medlemsprocess_Emails
             'ship_name' => $data['ship_name'] ?? get_the_title($application_id),
             'application_id' => get_post_meta($application_id, '_ssf_application_number', true),
             'application_status' => SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($application_id)),
+            'received_date' => get_the_date('j F Y, H:i', $application_id),
             'status_link' => '',
             'admin_comment' => '',
+            'public_status_comment' => '',
             'next_step' => get_post_meta($application_id, '_ssf_next_action', true),
             'booking_time' => '',
             'booking_location' => '',
@@ -126,8 +132,74 @@ class SSF_Medlemsprocess_Emails
         if (! is_email($recipient)) {
             return false;
         }
-        $sent = wp_mail($recipient, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+        $sent = SSF_Email_Template::send($recipient, $subject, $this->central_template($key), $this->central_message($key, $variables));
         SSF_Medlemsprocess_Application::add_history($application_id, 'email', sprintf('E-postmall "%s" %s.', $template['label'], $sent ? 'skickad' : 'kunde inte skickas'), false);
         return $sent;
+    }
+
+    private function central_template(string $key): string
+    {
+        if ('received' === $key) {
+            return 'application_received';
+        }
+        return 'completion_required' === $key ? 'application_completion' : 'application_status';
+    }
+
+    private function central_message(string $key, array $variables): array
+    {
+        $ship_name = sanitize_text_field((string) ($variables['ship_name'] ?? ''));
+        $application_number = sanitize_text_field((string) ($variables['application_id'] ?? ''));
+        $status = sanitize_text_field((string) ($variables['application_status'] ?? ''));
+        $comment = sanitize_textarea_field((string) ($variables['public_status_comment'] ?? ''));
+        $body = 'Det finns en uppdatering i ärendet för ' . $ship_name . '.';
+        $title = '';
+        $button_label = 'Följ din ansökan';
+        $extra_rows = array();
+
+        if ('received' === $key) {
+            $body = 'Tack för din ansökan om medlemskap för ' . $ship_name . '. Ansökan har registrerats och kommer att behandlas av Sveriges Segelfartygsförbund.';
+            $status = 'Inkommen';
+        } elseif ('completion_required' === $key) {
+            $body = 'Vi behöver ytterligare information för att kunna fortsätta behandlingen av ansökan för ' . $ship_name . '.';
+            $button_label = 'Komplettera din ansökan';
+        } elseif ('completion_received' === $key) {
+            $title = 'Vi har tagit emot din komplettering';
+            $body = 'Tack, din komplettering för ' . $ship_name . ' är mottagen och granskas av SSF.';
+        } elseif ('booking' === $key) {
+            $title = 'Tid bokad för din ansökan';
+            $body = 'SSF har bokat en tid för din ansökan.';
+            $extra_rows = array('Tid' => (string) ($variables['booking_time'] ?? ''), 'Plats eller form' => (string) ($variables['booking_location'] ?? ''));
+        } elseif ('inspection_completed' === $key) {
+            $title = 'Inspektionen är genomförd';
+            $body = 'Inspektionsunderlaget för ' . $ship_name . ' är klart. SSF återkommer när nästa steg är beslutat.';
+        } elseif ('approved' === $key) {
+            $title = 'Din ansökan är godkänd';
+            $body = 'Vi är glada att meddela att ansökan för ' . $ship_name . ' har godkänts av Sveriges Segelfartygsförbund.';
+        } elseif ('approved_aspirant' === $key) {
+            $title = 'Din ansökan är godkänd som aspirant';
+            $body = 'Ansökan för ' . $ship_name . ' har godkänts som aspirant.';
+        } elseif ('rejected' === $key) {
+            $title = 'Beslut om din ansökan';
+            $body = 'SSF har fattat beslut om ansökan för ' . $ship_name . '.';
+        } elseif ('reminder' === $key) {
+            $title = 'Meddelande om din ansökan';
+        }
+
+        $rows = array_merge(array(
+            'Fartyg' => $ship_name,
+            'Ansökningsnummer' => $application_number,
+            'Inkommen' => 'received' === $key ? (string) ($variables['received_date'] ?? '') : '',
+            'Status' => $status,
+        ), $extra_rows);
+        return array(
+            'title' => $title,
+            'recipient_name' => (string) ($variables['applicant_name'] ?? ''),
+            'body' => array($body),
+            'sections' => array(array('title' => 'Ansökan', 'rows' => array_filter($rows))),
+            'notice_title' => $comment ? 'Meddelande från SSF' : '',
+            'notice' => $comment,
+            'button_label' => $button_label,
+            'button_url' => esc_url_raw((string) ($variables['status_link'] ?? '')),
+        );
     }
 }

@@ -89,11 +89,15 @@ class SSF_Medlemsfartyg_Public_Form
         SSF_Email_Router::send_to_function('vessel_update', $internal_subject, $internal_body, $internal_headers);
 
         if (is_email($data['_ssf_email'] ?? '')) {
-            wp_mail(
+            SSF_Email_Template::send(
                 $data['_ssf_email'],
-                'Tack - uppgifter om ' . get_the_title($ship_id) . ' har skickats till SSF',
-                'Tack för att du skickat in uppgifter och bilder. SSF granskar materialet innan publicering.',
-                array('Content-Type: text/plain; charset=UTF-8')
+                'Vi har tagit emot dina fartygsuppgifter',
+                'vessel_update_received',
+                array(
+                    'recipient_name' => (string) ($data['_ssf_contact_name'] ?? ''),
+                    'body' => array('Tack för att du skickat in uppgifter och bilder. SSF granskar materialet innan publicering.'),
+                    'sections' => array(array('title' => 'Fartyg', 'rows' => array('Fartyg' => get_the_title($ship_id), 'Status' => 'Under granskning'))),
+                )
             );
         }
 

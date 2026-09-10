@@ -192,6 +192,8 @@ final class Controller
 
             <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
 
+            <?php if (class_exists('SSF_Email_Template')) { \SSF_Email_Template::render_admin_section(); } ?>
+
             <div class="postbox" style="max-width:980px;padding:20px">
                 <h2><?php esc_html_e('Microsoft Entra-anslutning', 'ssf-member-portal'); ?></h2>
                 <table class="widefat striped"><tbody>

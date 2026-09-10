@@ -13,7 +13,22 @@ final class RegistrationMailer
     public function confirmation(array $meeting, array $registration, string $manage_url, array $calendar, string $meeting_url): bool
     {
         $data = $this->confirmation_data($meeting, $registration, $manage_url, $calendar, $meeting_url);
-        return $this->send_confirmation((string) $registration['email'], (string) $data['subject'], $this->render_confirmation_html($data), $this->render_confirmation_text($data));
+        $failure = function ($error): void {
+            if ($error instanceof \WP_Error) {
+                $this->last_error = $error->get_error_message();
+            }
+        };
+        $this->last_error = '';
+        add_action('wp_mail_failed', $failure);
+        try {
+            $sent = \SSF_Email_Template::send((string) $registration['email'], (string) $data['subject'], (string) $data['template'], $data);
+            if (! $sent && ! $this->last_error) {
+                $this->last_error = __('WordPress mailtransport avvisade meddelandet.', 'ssf-member-portal');
+            }
+            return $sent;
+        } finally {
+            remove_action('wp_mail_failed', $failure);
+        }
     }
 
     public function notification(array $meeting, array $registration): bool
@@ -63,119 +78,30 @@ final class RegistrationMailer
             $this->add_row($registration_rows, (string) $question['title'], $this->answer_value($question, $answer));
         }
 
+        $updated = ! empty($registration['submitted_at']) && (int) ($registration['updated_at'] ?? 0) > (int) $registration['submitted_at'];
+        $secondary_links = array();
+        if (! empty($calendar['ics'])) {
+            $secondary_links[] = array('label' => __('Lägg till i kalender', 'ssf-member-portal'), 'url' => (string) $calendar['ics']);
+        }
+        if ($meeting_url) {
+            $secondary_links[] = array('label' => __('Visa information om årsmötet', 'ssf-member-portal'), 'url' => $meeting_url);
+        }
+        $practical_information = $this->practical_information((string) ($meeting['intro'] ?? ''));
         return array(
-            'subject' => sprintf(__('Anmälan bekräftad – SSF:s årsmöteshelg %d', 'ssf-member-portal'), $year),
-            'year' => $year,
-            'greeting' => trim((string) ($registration['first_name'] ?? '')),
-            'meeting_rows' => $meeting_rows,
-            'registration_rows' => $registration_rows,
-            'calendar_url' => (string) ($calendar['ics'] ?? ''),
-            'meeting_url' => $meeting_url,
-            'manage_url' => $manage_url,
-            'practical_information' => $this->practical_information((string) ($meeting['intro'] ?? '')),
-            'logo_url' => get_template_directory_uri() . '/assets/images/ssf-logo.svg',
-            'site_url' => home_url('/'),
+            'template' => $updated ? 'annual_meeting_registration_updated' : 'annual_meeting_registration',
+            'subject' => $updated ? __('Din anmälan har uppdaterats', 'ssf-member-portal') : __('Din anmälan är bekräftad', 'ssf-member-portal'),
+            'recipient_name' => trim((string) ($registration['first_name'] ?? '') . ' ' . (string) ($registration['last_name'] ?? '')),
+            'body' => array($updated ? __('Här är dina aktuella val för SSF:s årsmöteshelg.', 'ssf-member-portal') : __('Tack för din anmälan till aktiviteter under SSF:s årsmöteshelg. Vi ser fram emot att träffa dig!', 'ssf-member-portal')),
+            'sections' => array(
+                array('title' => __('Årsmöteshelg', 'ssf-member-portal'), 'rows' => $meeting_rows),
+                array('title' => __('Dina val', 'ssf-member-portal'), 'rows' => $registration_rows),
+            ),
+            'notice_title' => $practical_information ? __('Praktisk information', 'ssf-member-portal') : '',
+            'notice' => $practical_information,
+            'button_label' => $manage_url ? __('Visa eller ändra min anmälan', 'ssf-member-portal') : '',
+            'button_url' => $manage_url,
+            'secondary_links' => $secondary_links,
         );
-    }
-
-    private function render_confirmation_html(array $data): string
-    {
-        ob_start();
-        include SSF_MEMBER_PORTAL_PATH . 'templates/emails/annual-meeting-confirmation.php';
-        return (string) ob_get_clean();
-    }
-
-    private function render_confirmation_text(array $data): string
-    {
-        $lines = array(
-            __('Din anmälan är bekräftad', 'ssf-member-portal'),
-            sprintf(__('SSF:s årsmöteshelg %d', 'ssf-member-portal'), (int) $data['year']),
-            '',
-            $data['greeting'] ? sprintf(__('Hej %s!', 'ssf-member-portal'), $data['greeting']) : __('Hej!', 'ssf-member-portal'),
-            __('Tack för din anmälan till Sveriges Segelfartygsförbunds årsmöteshelg.', 'ssf-member-portal'),
-            __('Vi ser fram emot att träffa dig!', 'ssf-member-portal'),
-            '',
-            __('ÅRSMÖTESHELGEN', 'ssf-member-portal'),
-        );
-        foreach ($data['meeting_rows'] as $row) {
-            $lines[] = $row['label'] . ': ' . $row['value'];
-        }
-        if ($data['registration_rows']) {
-            $lines[] = '';
-            $lines[] = __('DIN ANMÄLAN', 'ssf-member-portal');
-            foreach ($data['registration_rows'] as $row) {
-                $lines[] = $row['label'] . ': ' . $row['value'];
-            }
-        }
-        if ($data['calendar_url']) {
-            $lines[] = '';
-            $lines[] = __('Lägg till i kalender:', 'ssf-member-portal');
-            $lines[] = $data['calendar_url'];
-        }
-        if ($data['meeting_url']) {
-            $lines[] = '';
-            $lines[] = __('Visa information om årsmötet:', 'ssf-member-portal');
-            $lines[] = $data['meeting_url'];
-        }
-        if ($data['practical_information']) {
-            $lines[] = '';
-            $lines[] = __('PRAKTISK INFORMATION', 'ssf-member-portal');
-            $lines[] = $data['practical_information'];
-        }
-        if ($data['manage_url']) {
-            $lines[] = '';
-            $lines[] = __('Visa eller ändra min anmälan:', 'ssf-member-portal');
-            $lines[] = $data['manage_url'];
-        }
-        $lines = array_merge($lines, array(
-            '',
-            __('Sveriges Segelfartygsförbund', 'ssf-member-portal'),
-            $data['site_url'],
-            __('Detta är ett automatiskt meddelande från system@ssfb.se.', 'ssf-member-portal'),
-        ));
-        return implode("\n", $lines);
-    }
-
-    private function send_confirmation(string $recipient, string $subject, string $html, string $text): bool
-    {
-        $this->last_error = '';
-        $recipient = sanitize_email($recipient);
-        if (! is_email($recipient)) {
-            $this->last_error = __('Anmälan saknar en giltig e-postadress.', 'ssf-member-portal');
-            return false;
-        }
-        $from = static function (string $value): string {
-            return 'system@ssfb.se';
-        };
-        $from_name = static function (string $value): string {
-            return 'Sveriges Segelfartygsförbund';
-        };
-        $alternative = static function ($phpmailer) use ($text): void {
-            $phpmailer->isHTML(true);
-            $phpmailer->CharSet = 'UTF-8';
-            $phpmailer->AltBody = $text;
-        };
-        $failure = function ($error): void {
-            if ($error instanceof \WP_Error) {
-                $this->last_error = $error->get_error_message();
-            }
-        };
-        add_filter('wp_mail_from', $from);
-        add_filter('wp_mail_from_name', $from_name);
-        add_action('phpmailer_init', $alternative);
-        add_action('wp_mail_failed', $failure);
-        try {
-            $sent = wp_mail($recipient, $subject, $html, array('Content-Type: text/html; charset=UTF-8'));
-            if (! $sent && ! $this->last_error) {
-                $this->last_error = __('WordPress mailtransport avvisade meddelandet.', 'ssf-member-portal');
-            }
-            return $sent;
-        } finally {
-            remove_filter('wp_mail_from', $from);
-            remove_filter('wp_mail_from_name', $from_name);
-            remove_action('phpmailer_init', $alternative);
-            remove_action('wp_mail_failed', $failure);
-        }
     }
 
     private function add_row(array &$rows, string $label, string $value): void

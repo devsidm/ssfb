@@ -25,11 +25,22 @@ final class MotionMailer
         $name = (string) get_post_meta($motion_id, '_ssf_mp_submitter_name', true);
         $email = sanitize_email((string) get_post_meta($motion_id, '_ssf_mp_submitter_email', true));
         $late = (bool) get_post_meta($motion_id, '_ssf_mp_submitted_after_deadline', true);
-        $subject = sprintf(__('SSF: bekräftelse på motion %s', 'ssf-member-portal'), $number);
-        $body = sprintf('<p>Hej %s,</p><p>Vi har tagit emot din motion <strong>%s</strong>%s.</p><p>Du kan följa motionen här: <a href="%s">%s</a></p>', esc_html($name), esc_html($number), $late ? ' <strong>' . esc_html__('efter motionsfrist', 'ssf-member-portal') . '</strong>' : '', esc_url($status_url), esc_html($status_url));
         $headers = array('Content-Type: text/html; charset=UTF-8');
         if ($email) {
-            wp_mail($email, $subject, $body, $headers);
+            $submitted_at = (int) get_post_meta($motion_id, '_ssf_mp_submitted_at', true);
+            \SSF_Email_Template::send($email, __('Din motion har tagits emot', 'ssf-member-portal'), 'motion_received', array(
+                'recipient_name' => $name,
+                'body' => array(__('Tack för din motion till Sveriges Segelfartygsförbund. Vi har registrerat motionen och du kan följa handläggningen via länken nedan.', 'ssf-member-portal')),
+                'sections' => array(array('title' => __('Motion', 'ssf-member-portal'), 'rows' => array(
+                    __('Motion', 'ssf-member-portal') => $number,
+                    __('Inkommen', 'ssf-member-portal') => $submitted_at ? wp_date('j F Y, H:i', $submitted_at, wp_timezone()) : wp_date('j F Y', null, wp_timezone()),
+                    __('Status', 'ssf-member-portal') => MotionStatus::label(MotionStatus::INKOMMEN),
+                ))),
+                'notice_title' => $late ? __('Observera', 'ssf-member-portal') : '',
+                'notice' => $late ? __('Motionen registrerades efter ordinarie motionsfrist.', 'ssf-member-portal') : '',
+                'button_label' => __('Följ din motion', 'ssf-member-portal'),
+                'button_url' => $status_url,
+            ));
         }
         $internal_subject = sprintf(__('Ny motion %s', 'ssf-member-portal'), $number);
         $internal_body = sprintf('<p>En ny motion har inkommit: <strong>%s</strong>.</p><p><a href="%s">Öppna statuslänken</a></p>', esc_html($number), esc_url($status_url));
@@ -48,21 +59,21 @@ final class MotionMailer
         $post = get_post($motion_id);
         $title = $post ? preg_replace('/^Motion\\s+[^:]+:\\s*/u', '', (string) $post->post_title) : '';
         $status_url = esc_url_raw((string) get_post_meta($motion_id, '_ssf_mp_status_url', true));
-        $first_name = trim((string) preg_split('/\\s+/u', $name)[0]);
-        $subject = sprintf(__('Din motion har fått ny status – %s', 'ssf-member-portal'), $number);
         $extra = $this->status_message($new_status);
-        $body = sprintf(
-            '<p>Hej %s,</p><p>Statusen för din motion har uppdaterats.</p><p><strong>Motion:</strong><br>%s – %s</p><p><strong>Tidigare status:</strong> %s<br><strong>Ny status:</strong> %s</p>%s%s<p>Med vänlig hälsning<br>Sveriges Segelfartygsförbund</p>',
-            esc_html($first_name ?: $name ?: __('medlem', 'ssf-member-portal')),
-            esc_html($number),
-            esc_html($title),
-            esc_html(MotionStatus::label($old_status)),
-            esc_html(MotionStatus::label($new_status)),
-            $extra ? '<p>' . nl2br(esc_html($extra)) . '</p>' : '',
-            $status_url ? '<p>Du kan följa din motion här:<br><a href="' . esc_url($status_url) . '">' . esc_html($status_url) . '</a></p>' : ''
-        );
-
-        $sent = $email && wp_mail($email, $subject, $body, array('Content-Type: text/html; charset=UTF-8'));
+        $motion_reference = trim($number . ($title ? ' – ' . $title : ''));
+        $sent = $email && \SSF_Email_Template::send($email, __('Din motion har uppdaterats', 'ssf-member-portal'), 'motion_status', array(
+            'recipient_name' => $name,
+            'body' => array(__('Statusen för din motion har ändrats.', 'ssf-member-portal')),
+            'sections' => array(array('title' => __('Motion', 'ssf-member-portal'), 'rows' => array(
+                __('Motion', 'ssf-member-portal') => $motion_reference,
+                __('Tidigare status', 'ssf-member-portal') => MotionStatus::label($old_status),
+                __('Ny status', 'ssf-member-portal') => MotionStatus::label($new_status),
+            ))),
+            'notice_title' => $extra ? __('Meddelande från SSF', 'ssf-member-portal') : '',
+            'notice' => $extra,
+            'button_label' => $status_url ? __('Följ din motion', 'ssf-member-portal') : '',
+            'button_url' => $status_url,
+        ));
         $this->record_status_email($motion_id, $old_status, $new_status, $email, $sent ? 'sent' : 'failed');
         if ($sent) {
             update_post_meta($motion_id, '_ssf_mp_last_notified_status', $new_status);
