@@ -4,6 +4,7 @@
 .ssf-process-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
 .ssf-process-admin-grid > label, .postbox .inside > label, .ssf-process-note-form > label { display: grid; gap: 6px; margin: 12px 0; font-weight: 600; }
 .ssf-process-admin-grid input, .ssf-process-admin-grid select, .ssf-process-admin-grid textarea, .postbox .inside > label input, .postbox .inside > label select, .postbox .inside > label textarea { width: 100%; }
+.ssf-process-readonly-status { display: block; padding: 10px 12px; border: 1px solid #c3c4c7; border-radius: 4px; background: #f6f7f7; }
 .ssf-process-check { display: flex !important; align-items: center; gap: 8px; }
 .ssf-process-checklist { margin: 18px 0; padding: 14px; border: 1px solid #d9e3f0; background: #fff; }
 .ssf-process-checklist h3 { margin: 0 0 10px; color: #0b2d5c; }

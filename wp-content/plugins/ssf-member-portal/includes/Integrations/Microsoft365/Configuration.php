@@ -32,6 +32,21 @@ final class Configuration
         'metadata_status_field' => 'SSF_GRAPH_STATUS_FIELD',
         'metadata_vessel_field' => 'SSF_GRAPH_VESSEL_FIELD',
         'metadata_received_date_field' => 'SSF_GRAPH_RECEIVED_DATE_FIELD',
+        'application_site_id' => 'SSF_GRAPH_APPLICATION_SITE_ID',
+        'application_drive_id' => 'SSF_GRAPH_APPLICATION_DRIVE_ID',
+        'application_list_id' => 'SSF_GRAPH_APPLICATION_LIST_ID',
+        'application_root_folder_id' => 'SSF_GRAPH_APPLICATION_ROOT_FOLDER_ID',
+        'application_root_folder_name' => 'SSF_GRAPH_APPLICATION_ROOT_FOLDER_NAME',
+        'application_site_hostname' => 'SSF_GRAPH_APPLICATION_SITE_HOSTNAME',
+        'application_site_path' => 'SSF_GRAPH_APPLICATION_SITE_PATH',
+        'metadata_application_wp_id_field' => 'SSF_GRAPH_APPLICATION_WP_ID_FIELD',
+        'metadata_application_number_field' => 'SSF_GRAPH_APPLICATION_NUMBER_FIELD',
+        'metadata_application_status_field' => 'SSF_GRAPH_APPLICATION_STATUS_FIELD',
+        'metadata_application_vessel_field' => 'SSF_GRAPH_APPLICATION_VESSEL_FIELD',
+        'metadata_application_representative_field' => 'SSF_GRAPH_APPLICATION_REPRESENTATIVE_FIELD',
+        'metadata_application_received_field' => 'SSF_GRAPH_APPLICATION_RECEIVED_FIELD',
+        'metadata_application_route_field' => 'SSF_GRAPH_APPLICATION_ROUTE_FIELD',
+        'metadata_application_public_comment_field' => 'SSF_GRAPH_APPLICATION_PUBLIC_COMMENT_FIELD',
     );
 
     private const TEXT_KEYS = array(
@@ -50,6 +65,21 @@ final class Configuration
         'metadata_status_field',
         'metadata_vessel_field',
         'metadata_received_date_field',
+        'application_site_id',
+        'application_drive_id',
+        'application_list_id',
+        'application_root_folder_id',
+        'application_root_folder_name',
+        'application_site_hostname',
+        'application_site_path',
+        'metadata_application_wp_id_field',
+        'metadata_application_number_field',
+        'metadata_application_status_field',
+        'metadata_application_vessel_field',
+        'metadata_application_representative_field',
+        'metadata_application_received_field',
+        'metadata_application_route_field',
+        'metadata_application_public_comment_field',
     );
 
     private const DEFAULTS = array(
@@ -68,6 +98,21 @@ final class Configuration
         'metadata_status_field' => 'Status',
         'metadata_vessel_field' => 'Fartyg',
         'metadata_received_date_field' => 'InkommenDatum',
+        'application_site_id' => '',
+        'application_drive_id' => '',
+        'application_list_id' => '',
+        'application_root_folder_id' => '',
+        'application_root_folder_name' => 'Medlemsansökningar',
+        'application_site_hostname' => '',
+        'application_site_path' => '',
+        'metadata_application_wp_id_field' => 'WordPressApplicationID',
+        'metadata_application_number_field' => 'Ansokningsnummer',
+        'metadata_application_status_field' => 'Status',
+        'metadata_application_vessel_field' => 'Fartyg',
+        'metadata_application_representative_field' => 'Fartygsombud',
+        'metadata_application_received_field' => 'InkommenDatum',
+        'metadata_application_route_field' => 'Ansokningsvag',
+        'metadata_application_public_comment_field' => 'ExternStatuskommentar',
     );
 
     public static function value(string $key): string
@@ -136,6 +181,7 @@ final class Configuration
         update_option(self::OPTION, $settings, false);
         delete_transient('ssf_member_portal_graph_token');
         delete_option('ssf_member_portal_graph_motion_schema');
+        delete_option('ssf_medlemsprocess_graph_schema');
 
         return true;
     }
@@ -149,6 +195,7 @@ final class Configuration
         update_option(self::OPTION, $settings, false);
         delete_transient('ssf_member_portal_graph_token');
         delete_option('ssf_member_portal_graph_motion_schema');
+        delete_option('ssf_medlemsprocess_graph_schema');
     }
 
     /**
@@ -165,6 +212,19 @@ final class Configuration
         $settings = self::stored();
         if (($settings['document_library_list_id'] ?? '') !== $list_id) {
             $settings['document_library_list_id'] = $list_id;
+            update_option(self::OPTION, $settings, false);
+        }
+    }
+
+    public static function save_discovered_application_list_id(string $list_id): void
+    {
+        $list_id = sanitize_text_field($list_id);
+        if (! $list_id || self::server_value('application_list_id')) {
+            return;
+        }
+        $settings = self::stored();
+        if (($settings['application_list_id'] ?? '') !== $list_id) {
+            $settings['application_list_id'] = $list_id;
             update_option(self::OPTION, $settings, false);
         }
     }
@@ -282,8 +342,9 @@ final class Configuration
 
     private static function sanitize(string $key, string $value): string
     {
-        if ('site_path' === $key) {
-            return '/' . ltrim(sanitize_text_field($value), '/');
+        if (in_array($key, array('site_path', 'application_site_path'), true)) {
+            $value = trim(sanitize_text_field($value));
+            return '' === $value ? '' : '/' . ltrim($value, '/');
         }
 
         return sanitize_text_field($value);

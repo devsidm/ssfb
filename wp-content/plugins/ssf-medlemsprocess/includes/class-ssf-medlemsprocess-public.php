@@ -32,12 +32,15 @@ class SSF_Medlemsprocess_Public
             return '<section class="ssf-process-shell"><p class="ssf-process-eyebrow">Medlemskap</p><h2>Ansökan är tillfälligt stängd</h2><p>Den digitala ansökningsfunktionen är tillfälligt stängd medan vi färdigställer den nya medlemsprocessen.</p><p>För frågor om medlemskap, <a href="' . esc_url(home_url('/kontakta-oss/')) . '">kontakta SSF</a>.</p></section>';
         }
         if (! empty($_GET['ssf_application_sent']) && ! empty($_GET['token'])) {
-            $status_link = SSF_Medlemsprocess_Application::status_link(sanitize_text_field(wp_unslash($_GET['token'])));
+            $confirmation_token = sanitize_text_field(wp_unslash($_GET['token']));
+            $status_link = SSF_Medlemsprocess_Application::status_link($confirmation_token);
+            $confirmation_id = SSF_Medlemsprocess_Application::find_by_token($confirmation_token);
+            $confirmation_number = $confirmation_id ? (string) get_post_meta($confirmation_id, '_ssf_application_number', true) : '';
             $mail_sent = 'sent' === sanitize_key(wp_unslash($_GET['ssf_mail'] ?? ''));
             $message = $mail_sent
                 ? 'Vi har skickat en bekräftelse till din e-postadress. Du kan följa ärendet med den personliga statuslänken.'
                 : 'Ansökan är registrerad, men vi kunde inte bekräfta e-postleveransen. Spara den personliga statuslänken och kontakta SSF om du behöver hjälp.';
-            return '<section class="ssf-process-shell ssf-process-confirmation"><p class="ssf-process-eyebrow">Ansökan mottagen</p><h1>Tack för din ansökan</h1><p>' . esc_html($message) . '</p><p><a class="ssf-process-button" href="' . esc_url($status_link) . '">Följ ansökan</a></p></section>';
+            return '<section class="ssf-process-shell ssf-process-confirmation"><p class="ssf-process-eyebrow">Ansökan mottagen</p><h1>Tack för din ansökan</h1>' . ($confirmation_number ? '<p>Ansökningsnummer: <strong>' . esc_html($confirmation_number) . '</strong></p>' : '') . '<p>' . esc_html($message) . '</p><p><a class="ssf-process-button" href="' . esc_url($status_link) . '">Följ ansökan</a></p></section>';
         }
 
         $settings = SSF_Medlemsprocess_Plugin::settings();
@@ -85,6 +88,18 @@ class SSF_Medlemsprocess_Public
         if (! empty(get_transient($this->rate_key()))) {
             wp_die('För många försök. Vänta en stund och försök igen.');
         }
+        $submission_key = sanitize_text_field(wp_unslash($_POST['submission_key'] ?? ''));
+        if (! wp_is_uuid($submission_key)) {
+            wp_die('Formuläret saknar ett giltigt inskicknings-ID. Ladda om sidan och försök igen.');
+        }
+        $submission_cache_key = 'ssf_application_submit_' . md5($submission_key);
+        $previous_submission = get_transient($submission_cache_key);
+        if (is_array($previous_submission) && ! empty($previous_submission['token'])) {
+            $this->redirect_to_confirmation((string) $previous_submission['token'], ! empty($previous_submission['mail_sent']));
+        }
+        if ('processing' === $previous_submission) {
+            wp_die('Ansökan behandlas redan. Vänta en kort stund innan du försöker igen.');
+        }
         if (empty($_POST['confirm_accuracy']) || empty($_POST['privacy_consent']) || empty($_POST['upload_rights'])) {
             wp_die('Du behöver bekräfta uppgifterna och samtycket innan ansökan kan skickas.');
         }
@@ -99,8 +114,14 @@ class SSF_Medlemsprocess_Public
                 wp_die(esc_html(implode(' ', $errors->get_error_messages())));
             }
         }
+        $upload_errors = $this->validate_uploads();
+        if ($upload_errors->has_errors()) {
+            wp_die(esc_html(implode(' ', $upload_errors->get_error_messages())));
+        }
+        set_transient($submission_cache_key, 'processing', 10 * MINUTE_IN_SECONDS);
         $created = SSF_Medlemsprocess_Application::create($data);
         if (! $created['id']) {
+            delete_transient($submission_cache_key);
             wp_die('Ansökan kunde inte sparas. Försök igen eller kontakta SSF.');
         }
         $main_images = $this->handle_uploads($created['id'], 'ssf_application_main_image');
@@ -108,14 +129,22 @@ class SSF_Medlemsprocess_Public
         $documents = $this->handle_uploads($created['id'], 'ssf_application_documents');
         $files = array_merge($main_images, $gallery, $documents);
         update_post_meta($created['id'], '_ssf_application_files', $files);
+        update_post_meta($created['id'], '_ssf_application_main_image_id', (int) ($main_images[0] ?? 0));
+        update_post_meta($created['id'], '_ssf_application_gallery_ids', array_map('intval', $gallery));
+        update_post_meta($created['id'], '_ssf_application_document_ids', array_map('intval', $documents));
         $ship_id = (int) get_post_meta($created['id'], '_ssf_linked_ship_id', true);
         if ($ship_id && class_exists('SSF_Medlemsfartyg_Profile')) {
             SSF_Medlemsfartyg_Profile::attach_application_files($ship_id, $files, (int) ($main_images[0] ?? 0));
         }
+        $pdf_id = SSF_Medlemsprocess_Plugin::instance()->pdf->create_attachment($created['id']);
+        if ($pdf_id) {
+            update_post_meta($created['id'], '_ssf_application_pdf_id', $pdf_id);
+        }
+        SSF_Medlemsprocess_Plugin::instance()->sharepoint->queue($created['id']);
         set_transient($this->rate_key(), 1, MINUTE_IN_SECONDS * 2);
         $mail_sent = SSF_Medlemsprocess_Plugin::instance()->emails->send_received($created['id'], $created['token']);
-        wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('ansokan', array('ssf_application_sent' => '1', 'token' => rawurlencode($created['token']), 'ssf_mail' => $mail_sent ? 'sent' : 'failed')));
-        exit;
+        set_transient($submission_cache_key, array('id' => $created['id'], 'token' => $created['token'], 'mail_sent' => $mail_sent), 30 * MINUTE_IN_SECONDS);
+        $this->redirect_to_confirmation($created['token'], $mail_sent);
     }
 
     public function submit_completion(): void
@@ -139,18 +168,20 @@ class SSF_Medlemsprocess_Public
         SSF_Medlemsprocess_Application::transition($application_id, 'completion_submitted', '', false);
         $new_token = SSF_Medlemsprocess_Application::issue_token($application_id);
         SSF_Medlemsprocess_Plugin::instance()->emails->send_template('completion_received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($new_token)));
+        SSF_Medlemsprocess_Plugin::instance()->sharepoint->queue($application_id);
         wp_safe_redirect(SSF_Medlemsprocess_Application::status_link($new_token));
         exit;
     }
 
     private function collect_application_data(): array
     {
-        $fields = array('applicant_name', 'applicant_phone', 'applicant_organization', 'applicant_address', 'applicant_website');
+        $fields = array('applicant_name', 'applicant_phone', 'applicant_organization', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_website');
         $data = array();
         foreach ($fields as $field) {
             $data[$field] = sanitize_textarea_field(wp_unslash($_POST[$field] ?? ''));
         }
         $data['applicant_email'] = sanitize_email(wp_unslash($_POST['applicant_email'] ?? ''));
+        $data['applicant_address'] = trim(implode(', ', array_filter(array($data['applicant_street'], trim($data['applicant_postal_code'] . ' ' . $data['applicant_city'])))));
         $data['application_route'] = sanitize_key(wp_unslash($_POST['application_route'] ?? ''));
         if (class_exists('SSF_Medlemsfartyg_Profile')) {
             $data['vessel_profile'] = SSF_Medlemsfartyg_Profile::collect($_POST, $data['application_route'], SSF_Medlemsfartyg_Profile::MODE_APPLICATION);
@@ -184,10 +215,10 @@ class SSF_Medlemsprocess_Public
                 continue;
             }
             $extension = strtolower(pathinfo((string) $name, PATHINFO_EXTENSION));
-            if (! in_array($extension, array('jpg', 'jpeg', 'png', 'webp', 'pdf'), true)) {
+            if (! in_array($extension, array('jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'), true)) {
                 continue;
             }
-            $max_bytes = ('pdf' === $extension ? (int) $settings['max_file_mb'] : (int) $settings['max_image_mb']) * MB_IN_BYTES;
+            $max_bytes = (in_array($extension, array('pdf', 'doc', 'docx'), true) ? (int) $settings['max_file_mb'] : (int) $settings['max_image_mb']) * MB_IN_BYTES;
             if ((int) $files['size'][$index] > $max_bytes) {
                 continue;
             }
@@ -196,7 +227,7 @@ class SSF_Medlemsprocess_Public
                 'tmp_name' => (string) $files['tmp_name'][$index], 'error' => (int) $files['error'][$index], 'size' => (int) $files['size'][$index],
             );
             $checked = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
-            if (empty($checked['ext']) || ! in_array(strtolower($checked['ext']), array('jpg', 'jpeg', 'png', 'webp', 'pdf'), true)) {
+            if (empty($checked['ext']) || ! in_array(strtolower($checked['ext']), array('jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'), true)) {
                 continue;
             }
             $upload = wp_handle_upload($file, array('test_form' => false));
@@ -214,6 +245,66 @@ class SSF_Medlemsprocess_Public
             }
         }
         return $attachments;
+    }
+
+    private function validate_uploads(): WP_Error
+    {
+        $errors = new WP_Error();
+        $settings = SSF_Medlemsprocess_Plugin::settings();
+        $fields = array(
+            'ssf_application_main_image' => array('jpg', 'jpeg', 'png', 'webp'),
+            'ssf_application_gallery' => array('jpg', 'jpeg', 'png', 'webp'),
+            'ssf_application_documents' => array('jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'),
+        );
+        foreach ($fields as $field => $allowed) {
+            if (empty($_FILES[$field]['name'])) {
+                continue;
+            }
+            $files = $_FILES[$field];
+            if (! is_array($files['name'])) {
+                foreach (array('name', 'type', 'tmp_name', 'error', 'size') as $part) {
+                    $files[$part] = array($files[$part]);
+                }
+            }
+            if ('ssf_application_gallery' === $field && count(array_filter((array) $files['name'])) > 10) {
+                $errors->add('too_many_images', 'Du kan ladda upp högst 10 övriga bilder.');
+            }
+            foreach ((array) $files['name'] as $index => $name) {
+                if (UPLOAD_ERR_NO_FILE === (int) $files['error'][$index]) {
+                    continue;
+                }
+                if (UPLOAD_ERR_OK !== (int) $files['error'][$index]) {
+                    $errors->add('upload_error', sprintf('Filen %s kunde inte tas emot.', sanitize_file_name((string) $name)));
+                    continue;
+                }
+                $extension = strtolower(pathinfo((string) $name, PATHINFO_EXTENSION));
+                if (! in_array($extension, $allowed, true)) {
+                    $errors->add('file_type', sprintf('Filtypen för %s är inte tillåten.', sanitize_file_name((string) $name)));
+                    continue;
+                }
+                $is_document = in_array($extension, array('pdf', 'doc', 'docx'), true);
+                $max_bytes = (int) ($is_document ? $settings['max_file_mb'] : $settings['max_image_mb']) * MB_IN_BYTES;
+                if ((int) $files['size'][$index] > $max_bytes) {
+                    $errors->add('file_size', sprintf('Filen %s är för stor.', sanitize_file_name((string) $name)));
+                    continue;
+                }
+                $checked = wp_check_filetype_and_ext((string) $files['tmp_name'][$index], sanitize_file_name((string) $name));
+                if (empty($checked['ext']) || ! in_array(strtolower((string) $checked['ext']), $allowed, true)) {
+                    $errors->add('file_content', sprintf('Innehållet i %s stämmer inte med en tillåten filtyp.', sanitize_file_name((string) $name)));
+                }
+            }
+        }
+        return $errors;
+    }
+
+    private function redirect_to_confirmation(string $token, bool $mail_sent): void
+    {
+        wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('ansokan', array(
+            'ssf_application_sent' => '1',
+            'token' => rawurlencode($token),
+            'ssf_mail' => $mail_sent ? 'sent' : 'failed',
+        )));
+        exit;
     }
 
     private function assert_nonce(string $action): void

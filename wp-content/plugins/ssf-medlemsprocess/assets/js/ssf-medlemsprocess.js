@@ -2,31 +2,24 @@
   var form = document.querySelector('[data-ssf-application-form]');
   if (!form) return;
 
-  var primarySteps = Array.prototype.slice.call(form.querySelectorAll('.ssf-process-step'));
-  var indicators = Array.prototype.slice.call(form.querySelectorAll('[data-primary-indicator]'));
+  var steps = Array.prototype.slice.call(form.querySelectorAll('[data-application-step]'));
+  var indicators = Array.prototype.slice.call(form.querySelectorAll('[data-step-indicator]'));
   var previous = form.querySelector('[data-ssf-prev]');
   var next = form.querySelector('[data-ssf-next]');
   var submit = form.querySelector('[data-ssf-submit]');
   var count = form.querySelector('[data-ssf-step-count]');
   var progress = form.querySelector('[data-ssf-progress]');
-  var sectionTitle = form.querySelector('[data-vessel-section-title]');
-  var sectionCount = form.querySelector('[data-vessel-section-count]');
   var routeContext = form.querySelector('[data-route-context]');
   var review = form.querySelector('[data-ssf-review]');
-  var primaryIndex = 0;
-  var sectionIndex = 0;
+  var index = 0;
 
   function selectedRoute() {
     var selected = form.querySelector('[name="application_route"]:checked');
     return selected ? selected.value : '';
   }
 
-  function routesFor(element) {
-    return (element.getAttribute('data-routes') || '').split(',').filter(Boolean);
-  }
-
   function routeMatches(element) {
-    var routes = routesFor(element);
+    var routes = (element.getAttribute('data-routes') || '').split(',').filter(Boolean);
     return !routes.length || routes.indexOf(selectedRoute()) !== -1;
   }
 
@@ -34,7 +27,7 @@
     form.querySelectorAll('.ssf-vessel-profile-section[data-routes]').forEach(function (section) {
       section.hidden = !routeMatches(section);
     });
-    form.querySelectorAll('.ssf-vessel-field').forEach(function (field) {
+    form.querySelectorAll('.ssf-vessel-field[data-routes]').forEach(function (field) {
       var visible = routeMatches(field);
       field.hidden = !visible;
       field.querySelectorAll('input, textarea, select').forEach(function (control) {
@@ -46,10 +39,8 @@
       var radio = card.querySelector('input[type="radio"]');
       card.classList.toggle('is-selected', !!radio && radio.checked);
     });
-  }
-
-  function visibleSections() {
-    return Array.prototype.slice.call(form.querySelectorAll('.ssf-vessel-profile-section')).filter(routeMatches);
+    var selectedCard = form.querySelector('.ssf-route-card.is-selected strong');
+    if (routeContext) routeContext.textContent = selectedCard ? 'Vald medlemsväg: ' + selectedCard.textContent : '';
   }
 
   function validate(container) {
@@ -72,108 +63,118 @@
     return field.value;
   }
 
-  function addReviewRow(list, label, value) {
-    if (!value) return;
-    var row = document.createElement('div');
-    var term = document.createElement('dt');
-    var description = document.createElement('dd');
-    term.textContent = label;
-    description.textContent = value;
-    row.appendChild(term);
-    row.appendChild(description);
-    list.appendChild(row);
+  function addReviewSection(title, rows) {
+    var section = document.createElement('section');
+    var heading = document.createElement('h4');
+    var list = document.createElement('dl');
+    heading.textContent = title;
+    rows.forEach(function (row) {
+      if (!row[1]) return;
+      var wrapper = document.createElement('div');
+      var term = document.createElement('dt');
+      var description = document.createElement('dd');
+      term.textContent = row[0];
+      description.textContent = row[1];
+      wrapper.appendChild(term);
+      wrapper.appendChild(description);
+      list.appendChild(wrapper);
+    });
+    section.appendChild(heading);
+    section.appendChild(list);
+    review.appendChild(section);
+  }
+
+  function filenames(name) {
+    var input = form.querySelector('[name="' + name + '"]');
+    return input && input.files.length ? Array.prototype.map.call(input.files, function (file) { return file.name; }).join(', ') : 'Inga valda';
   }
 
   function updateReview() {
     if (!review) return;
     review.innerHTML = '';
-    var heading = document.createElement('h4');
-    heading.textContent = textValue('post_title') || 'Fartyget';
-    var list = document.createElement('dl');
     var routeHeading = form.querySelector('.ssf-route-card.is-selected strong');
-    addReviewRow(list, 'Ansökningsväg', routeHeading ? routeHeading.textContent : '');
-    addReviewRow(list, 'Fartygstyp', textValue('tax_fartygstyp'));
-    addReviewRow(list, 'Längd i huvuddäck', textValue('_ssf_main_deck_length'));
-    addReviewRow(list, 'Bredd', textValue('_ssf_beam'));
-    addReviewRow(list, 'Hemmahamn', textValue('_ssf_home_port'));
-    addReviewRow(list, 'Kort presentation', textValue('post_excerpt'));
-    addReviewRow(list, 'Historik', textValue('_ssf_history'));
-    if (selectedRoute() === 'small_registered') addReviewRow(list, 'Registreringsnummer', textValue('_ssf_registry_number'));
-    if (selectedRoute() === 'restoration') addReviewRow(list, 'Restaureringens mål', textValue('_ssf_restoration_goal'));
-    if (selectedRoute() === 'new_traditional') addReviewRow(list, 'Historisk fartygstyp', textValue('_ssf_traditional_archetype'));
-    var mainImage = form.querySelector('[name="ssf_application_main_image"]');
-    var gallery = form.querySelector('[name="ssf_application_gallery[]"]');
-    var documents = form.querySelector('[name="ssf_application_documents[]"]');
-    addReviewRow(list, 'Huvudbild', mainImage && mainImage.files[0] ? mainImage.files[0].name : 'Ingen vald');
-    addReviewRow(list, 'Fler bilder', gallery && gallery.files.length ? gallery.files.length + ' valda' : 'Inga valda');
-    addReviewRow(list, 'Dokument', documents && documents.files.length ? documents.files.length + ' valda' : 'Inga valda');
-    addReviewRow(list, 'Fartygsombud', textValue('applicant_name'));
-    addReviewRow(list, 'E-post', textValue('applicant_email'));
-    review.appendChild(heading);
-    review.appendChild(list);
+    addReviewSection('Ansökningsväg', [['Vald väg', routeHeading ? routeHeading.textContent : '']]);
+    addReviewSection('Fartygsombud', [
+      ['Namn', textValue('applicant_name')], ['Adress', [textValue('applicant_street'), textValue('applicant_postal_code'), textValue('applicant_city')].filter(Boolean).join(', ')],
+      ['Telefon', textValue('applicant_phone')], ['E-post', textValue('applicant_email')], ['Hemsida', textValue('applicant_website')]
+    ]);
+    addReviewSection('Fartyget', [
+      ['Namn', textValue('post_title')], ['Fartygstyp', textValue('tax_fartygstyp')], ['Hemmahamn', textValue('_ssf_home_port')],
+      ['Byggår', textValue('_ssf_build_year')], ['Längd i huvuddäck', textValue('_ssf_main_deck_length')], ['Bredd', textValue('_ssf_beam')],
+      ['Nuvarande rigg', textValue('_ssf_rig')], ['Historik', textValue('_ssf_history')], ['Användning idag', textValue('_ssf_today')]
+    ]);
+    var special = [];
+    if (selectedRoute() === 'small_registered') special.push(['Registreringsnummer', textValue('_ssf_registry_number')]);
+    if (selectedRoute() === 'restoration') special.push(['Restaureringens mål', textValue('_ssf_restoration_goal')]);
+    if (selectedRoute() === 'new_traditional') special.push(['Historisk förebild', textValue('_ssf_traditional_reference')]);
+    if (special.length) addReviewSection('Särskilda uppgifter', special);
+    addReviewSection('Bilder och bilagor', [
+      ['Huvudbild', filenames('ssf_application_main_image')], ['Övriga bilder', filenames('ssf_application_gallery[]')], ['Bilagor', filenames('ssf_application_documents[]')]
+    ]);
+  }
+
+  function renderFileList(input) {
+    var old = input.parentNode.querySelector('.ssf-process-file-list');
+    if (old) old.remove();
+    if (!input.files.length) return;
+    var list = document.createElement('ul');
+    list.className = 'ssf-process-file-list';
+    Array.prototype.forEach.call(input.files, function (file, fileIndex) {
+      var item = document.createElement('li');
+      var label = document.createElement('span');
+      var remove = document.createElement('button');
+      label.textContent = file.name + ' (' + Math.max(1, Math.round(file.size / 1024)) + ' kB)';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = 'Ta bort ' + file.name;
+      remove.setAttribute('aria-label', remove.title);
+      remove.addEventListener('click', function () {
+        if (typeof DataTransfer === 'undefined') return;
+        var transfer = new DataTransfer();
+        Array.prototype.forEach.call(input.files, function (candidate, candidateIndex) {
+          if (candidateIndex !== fileIndex) transfer.items.add(candidate);
+        });
+        input.files = transfer.files;
+        renderFileList(input);
+      });
+      item.appendChild(label);
+      item.appendChild(remove);
+      list.appendChild(item);
+    });
+    input.parentNode.appendChild(list);
   }
 
   function show() {
     updateRouteFields();
-    primarySteps.forEach(function (step, position) {
-      step.hidden = position !== primaryIndex;
-      step.classList.toggle('is-active', position === primaryIndex);
+    steps.forEach(function (step, position) {
+      step.hidden = position !== index;
+      step.classList.toggle('is-active', position === index);
     });
     indicators.forEach(function (indicator, position) {
-      indicator.classList.toggle('is-current', position === primaryIndex);
-      indicator.classList.toggle('is-complete', position < primaryIndex);
+      indicator.classList.toggle('is-current', position === index);
+      indicator.classList.toggle('is-complete', position < index);
     });
-    progress.style.width = primaryIndex === 0 ? '50%' : '100%';
-
-    if (primaryIndex === 0) {
-      count.textContent = 'Steg 1 av 2: Välj fartygstyp';
-      previous.hidden = true;
-      next.hidden = false;
-      next.textContent = 'Fortsätt till fartygsuppgifter';
-      submit.hidden = true;
-      return;
-    }
-
-    var sections = visibleSections();
-    sectionIndex = Math.max(0, Math.min(sectionIndex, sections.length - 1));
-    form.querySelectorAll('.ssf-vessel-profile-section').forEach(function (section) { section.hidden = true; });
-    sections.forEach(function (section, position) { section.hidden = position !== sectionIndex; });
-    var active = sections[sectionIndex];
-    var heading = active ? active.querySelector('h3') : null;
-    sectionTitle.textContent = heading ? heading.textContent : 'Fartygsuppgifter';
-    sectionCount.textContent = 'Avsnitt ' + (sectionIndex + 1) + ' av ' + sections.length;
-    count.textContent = 'Steg 2 av 2: Fartygsuppgifter';
-    previous.hidden = false;
-    next.hidden = sectionIndex === sections.length - 1;
-    next.textContent = sectionIndex === sections.length - 2 ? 'Granska ansökan' : 'Nästa avsnitt';
-    submit.hidden = sectionIndex !== sections.length - 1;
-    var selectedCard = form.querySelector('.ssf-route-card.is-selected strong');
-    routeContext.textContent = selectedCard ? 'Vald ansökningsväg: ' + selectedCard.textContent : '';
-    if (active && active.getAttribute('data-vessel-section') === 'review') updateReview();
+    progress.style.width = (((index + 1) / steps.length) * 100) + '%';
+    count.textContent = 'Steg ' + (index + 1) + ' av ' + steps.length + ': ' + steps[index].getAttribute('data-application-step');
+    previous.hidden = index === 0;
+    next.hidden = index === steps.length - 1;
+    next.textContent = index === steps.length - 2 ? 'Granska ansökan' : 'Nästa';
+    submit.hidden = index !== steps.length - 1;
+    if (index === steps.length - 1) updateReview();
   }
 
   next.addEventListener('click', function () {
-    if (primaryIndex === 0) {
-      if (!validate(primarySteps[0])) return;
-      primaryIndex = 1;
-      sectionIndex = 0;
-    } else {
-      var sections = visibleSections();
-      if (!validate(sections[sectionIndex])) return;
-      sectionIndex += 1;
-    }
+    if (!validate(steps[index])) return;
+    index += 1;
     show();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var legend = steps[index].querySelector('legend');
+    if (legend) legend.setAttribute('tabindex', '-1');
+    if (legend) legend.focus();
   });
-
-  previous.addEventListener('click', function () {
-    if (primaryIndex === 1 && sectionIndex > 0) sectionIndex -= 1;
-    else primaryIndex = 0;
-    show();
-  });
-
-  form.querySelectorAll('[name="application_route"]').forEach(function (radio) {
-    radio.addEventListener('change', updateRouteFields);
-  });
+  previous.addEventListener('click', function () { index = Math.max(0, index - 1); show(); });
+  form.querySelectorAll('[name="application_route"]').forEach(function (radio) { radio.addEventListener('change', updateRouteFields); });
+  form.querySelectorAll('[data-file-input]').forEach(function (input) { input.addEventListener('change', function () { renderFileList(input); }); });
+  form.addEventListener('submit', function () { submit.disabled = true; submit.textContent = 'Skickar…'; });
   show();
 }());

@@ -14,7 +14,8 @@ class SSF_Medlemsprocess_Emails
     public static function templates(): array
     {
         return array(
-            'received' => array('label' => 'Bekräftelse på mottagen ansökan', 'subject' => 'Vi har tagit emot din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nTack för din ansökan som fartygsombud för {ship_name}. SSF har tagit emot ansökan.\n\nFölj ärendet här:\n{status_link}\n\nVänliga hälsningar\nSveriges Segelfartygsförbund"),
+            'received' => array('label' => 'Bekräftelse på mottagen ansökan', 'subject' => 'Vi har tagit emot din ansökan {application_id}', 'body' => "Hej {applicant_name},\n\nTack för din ansökan som fartygsombud för {ship_name}.\n\nAnsökningsnummer: {application_id}\nStatus: Inkommen\n\nFölj ansökan här:\n{status_link}\n\nVänliga hälsningar\nSveriges Segelfartygsförbund"),
+            'status_updated' => array('label' => 'Status uppdaterad', 'subject' => 'Din ansökan {application_id} har uppdaterats', 'body' => "Hej {applicant_name},\n\nStatusen för ansökan för {ship_name} har ändrats.\n\nNy status: {application_status}\n\n{admin_comment}\n\nFölj ansökan här:\n{status_link}\n\nVänliga hälsningar\nSveriges Segelfartygsförbund"),
             'completion_required' => array('label' => 'Komplettering krävs', 'subject' => 'Komplettering behövs för din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nSSF behöver en komplettering i ärendet för {ship_name}.\n\n{admin_comment}\n\nSvara och följ ärendet här:\n{status_link}"),
             'completion_received' => array('label' => 'Komplettering mottagen', 'subject' => 'Vi har tagit emot din komplettering', 'body' => "Hej {applicant_name},\n\nTack, din komplettering för {ship_name} är mottagen och granskas av SSF.\n\n{status_link}"),
             'booking' => array('label' => 'Tid bokad', 'subject' => 'Tid bokad för ansökan till SSF - {ship_name}', 'body' => "Hej {applicant_name},\n\nSSF har bokat en tid för din ansökan.\n\nTid: {booking_time}\nPlats/form: {booking_location}\n\n{admin_comment}\n\n{status_link}"),
@@ -41,10 +42,8 @@ class SSF_Medlemsprocess_Emails
             'inspection_completed' => 'inspection_completed', 'approved' => 'approved',
             'approved_aspirant' => 'approved_aspirant', 'rejected' => 'rejected',
         );
-        if (isset($map[$status])) {
-            $token = SSF_Medlemsprocess_Application::issue_token($application_id);
-            $this->send_template($map[$status], $application_id, array('admin_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
-        }
+        $token = SSF_Medlemsprocess_Application::issue_token($application_id);
+        $this->send_template($map[$status] ?? 'status_updated', $application_id, array('admin_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
     }
 
     public function send_booking(int $application_id, array $booking): void

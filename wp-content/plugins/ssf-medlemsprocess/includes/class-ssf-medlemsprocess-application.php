@@ -41,7 +41,7 @@ class SSF_Medlemsprocess_Application
         return array(
             'draft' => array('label' => 'Utkast', 'public' => 'Ansökan har påbörjats.', 'step' => 0),
             'submitted' => array('label' => 'Inskickad', 'public' => 'Din ansökan har skickats in.', 'step' => 1),
-            'received' => array('label' => 'Mottagen', 'public' => 'SSF har tagit emot din ansökan.', 'step' => 1),
+            'received' => array('label' => 'Inkommen', 'public' => 'SSF har tagit emot din ansökan.', 'step' => 1),
             'under_review' => array('label' => 'Under granskning', 'public' => 'SSF går igenom uppgifterna i din ansökan.', 'step' => 2),
             'needs_completion' => array('label' => 'Komplettering krävs', 'public' => 'SSF behöver ytterligare uppgifter från dig.', 'step' => 3),
             'completion_submitted' => array('label' => 'Komplettering inskickad', 'public' => 'Din komplettering har skickats till SSF.', 'step' => 3),
@@ -114,7 +114,7 @@ class SSF_Medlemsprocess_Application
         update_post_meta($application_id, '_ssf_application_route', $route);
         update_post_meta($application_id, '_ssf_application_vessel_snapshot', $profile_data);
         update_post_meta($application_id, '_ssf_application_files', array_map('intval', $attachments));
-        update_post_meta($application_id, '_ssf_process_status', 'submitted');
+        update_post_meta($application_id, '_ssf_process_status', 'received');
         update_post_meta($application_id, '_ssf_submitted_at', current_time('mysql'));
         if ($profile_data && class_exists('SSF_Medlemsfartyg_Profile')) {
             $ship_id = SSF_Medlemsfartyg_Profile::create_for_application((int) $application_id, $route, $profile_data, $data);
@@ -130,6 +130,13 @@ class SSF_Medlemsprocess_Application
     {
         $token = wp_generate_password(48, false, false);
         $settings = SSF_Medlemsprocess_Plugin::settings();
+        $old_hash = (string) get_post_meta($application_id, '_ssf_status_token_hash', true);
+        $old_expires = (int) get_post_meta($application_id, '_ssf_status_token_expires', true);
+        if ($old_hash && $old_expires >= time()) {
+            $history = (array) get_post_meta($application_id, '_ssf_status_token_history', true);
+            $history[] = array('hash' => $old_hash, 'expires' => $old_expires);
+            update_post_meta($application_id, '_ssf_status_token_history', array_slice($history, -10));
+        }
         update_post_meta($application_id, '_ssf_status_token_hash', wp_hash_password($token));
         update_post_meta($application_id, '_ssf_status_token_expires', time() + (DAY_IN_SECONDS * max(1, (int) $settings['token_days'])));
         update_post_meta($application_id, '_ssf_status_token_revoked', '0');
@@ -153,6 +160,13 @@ class SSF_Medlemsprocess_Application
             $expires = (int) get_post_meta($application_id, '_ssf_status_token_expires', true);
             if ('1' !== get_post_meta($application_id, '_ssf_status_token_revoked', true) && $expires >= time() && $hash && wp_check_password($token, $hash, $application_id)) {
                 return (int) $application_id;
+            }
+            if ('1' !== get_post_meta($application_id, '_ssf_status_token_revoked', true)) {
+                foreach ((array) get_post_meta($application_id, '_ssf_status_token_history', true) as $previous) {
+                    if ((int) ($previous['expires'] ?? 0) >= time() && ! empty($previous['hash']) && wp_check_password($token, (string) $previous['hash'], $application_id)) {
+                        return (int) $application_id;
+                    }
+                }
             }
         }
         return 0;

@@ -18,6 +18,8 @@ final class SSF_Medlemsprocess_Plugin
     public SSF_Medlemsprocess_Public $public;
     public SSF_Medlemsprocess_Admin $admin;
     public SSF_Medlemsprocess_Inspector $inspector;
+    public SSF_Medlemsprocess_PDF $pdf;
+    public SSF_Medlemsprocess_SharePoint $sharepoint;
 
     public static function instance(): SSF_Medlemsprocess_Plugin
     {
@@ -30,12 +32,14 @@ final class SSF_Medlemsprocess_Plugin
 
     private function __construct()
     {
-        foreach (array('application', 'emails', 'public', 'admin', 'inspector') as $file) {
+        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'public', 'admin', 'inspector') as $file) {
             require_once SSF_MEDLEMSPROCESS_PATH . 'includes/class-ssf-medlemsprocess-' . $file . '.php';
         }
 
         $this->applications = new SSF_Medlemsprocess_Application();
         $this->emails = new SSF_Medlemsprocess_Emails();
+        $this->pdf = new SSF_Medlemsprocess_PDF();
+        $this->sharepoint = new SSF_Medlemsprocess_SharePoint();
         $this->public = new SSF_Medlemsprocess_Public();
         $this->admin = new SSF_Medlemsprocess_Admin();
         $this->inspector = new SSF_Medlemsprocess_Inspector();
@@ -54,12 +58,14 @@ final class SSF_Medlemsprocess_Plugin
 
     public static function deactivate(): void
     {
+        SSF_Medlemsprocess_SharePoint::unschedule();
         flush_rewrite_rules();
     }
 
     public function register(): void
     {
         $this->applications->register_post_type();
+        $this->sharepoint->register();
         self::register_roles();
         self::install_pages();
     }

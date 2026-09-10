@@ -77,39 +77,52 @@ class SSF_Medlemsfartyg_Profile
             '_ssf_build_year' => self::field('Byggår', 'number', 'basic', false, true, $all, array(), 'Ange årtal med fyra siffror.', array('min' => 1000, 'max' => (int) wp_date('Y') + 2)),
             '_ssf_build_place' => self::field('Byggnadsort', 'text', 'basic', false, true, $all),
             '_ssf_shipyard' => self::field('Varv eller byggare', 'text', 'basic', false, true, $all),
+            '_ssf_owner' => self::field('Ägare', 'text', 'basic', false, false, $all),
+            '_ssf_build_country' => self::field('Byggnadsland', 'text', 'basic', false, true, $all),
             '_ssf_nationality' => self::field('Nationalitet', 'text', 'basic', false, true, $all),
             '_ssf_home_port' => self::field('Hemmahamn', 'text', 'basic', true, true, $all),
+            '_ssf_call_sign' => self::field('Signalbokstäver / anropssignal', 'text', 'basic', false, true, $all),
             'tax_fartygstyp' => self::field('Fartygstyp', 'taxonomy', 'basic', true, true, $all, array(), '', array('taxonomy' => 'fartygstyp')),
-            '_ssf_rig' => self::field('Rigtyp', 'text', 'basic', false, true, $all),
+            '_ssf_rig' => self::field('Nuvarande rigg', 'text', 'basic', false, true, $all),
             '_ssf_hull_type' => self::field('Skrovtyp', 'text', 'basic', false, true, $all),
             '_ssf_material' => self::field('Material', 'text', 'basic', false, true, $all),
 
             '_ssf_main_deck_length' => self::field('Längd i huvuddäck (meter)', 'number', 'dimensions', true, true, $all, array(), 'Måttet används vid bedömning enligt SSF:s stadgar.', array('min' => 0.1, 'step' => '0.01')),
-            '_ssf_length' => self::field('Total längd (meter)', 'number', 'dimensions', false, true, $all, array(), '', array('min' => 0.1, 'step' => '0.01')),
+            '_ssf_length' => self::field('Registrerad längd (meter)', 'number', 'dimensions', false, true, $all, array(), '', array('min' => 0.1, 'step' => '0.01')),
+            '_ssf_length_overall' => self::field('Längd över allt, LOA (meter)', 'number', 'dimensions', false, true, $all, array(), '', array('min' => 0.1, 'step' => '0.01')),
+            '_ssf_total_length_spars' => self::field('Totallängd inklusive bogspröt (meter)', 'number', 'dimensions', false, true, $all, array(), '', array('min' => 0.1, 'step' => '0.01')),
             '_ssf_beam' => self::field('Bredd (meter)', 'number', 'dimensions', true, true, $all, array(), 'Måttet används vid bedömning enligt SSF:s stadgar.', array('min' => 0.1, 'step' => '0.01')),
             '_ssf_draft' => self::field('Djupgående (meter)', 'number', 'dimensions', false, true, $all, array(), '', array('min' => 0, 'step' => '0.01')),
+            '_ssf_gross_tonnage' => self::field('Brutto (GT)', 'number', 'dimensions', false, false, $all, array(), '', array('min' => 0, 'step' => '0.01')),
+            '_ssf_net_tonnage' => self::field('Netto (NT)', 'number', 'dimensions', false, false, $all, array(), '', array('min' => 0, 'step' => '0.01')),
             '_ssf_displacement' => self::field('Deplacement', 'text', 'dimensions', false, true, $all),
 
             '_ssf_previous_use' => self::field('Tidigare användning', 'textarea', 'history', false, true, $all),
-            '_ssf_history' => self::field('Historik', 'textarea', 'history', true, true, $all),
+            '_ssf_history' => self::field('Fartygets historia och nuvarande användning', 'textarea', 'history', true, true, $all, array(), 'Beskriv historik, tidigare användning, större ombyggnader eller restaureringar och hur fartyget används idag.'),
             '_ssf_previous_home_ports' => self::field('Tidigare hemmahamnar', 'textarea', 'history', false, true, $all),
             '_ssf_previous_owners' => self::field('Tidigare ägare', 'textarea', 'history', false, true, $all),
-            '_ssf_professional_use' => self::field('Har fartyget använts som seglande yrkesfartyg?', 'select', 'history', false, false, $all, array(), '', array('options' => array('' => 'Välj', 'yes' => 'Ja', 'no' => 'Nej', 'unknown' => 'Okänt'))),
-            '_ssf_professional_use_description' => self::field('Hur har fartyget använts?', 'textarea', 'history', false, true, $all),
+            '_ssf_professional_use' => self::field('Har fartyget använts som seglande yrkesfartyg?', 'select', 'history', true, false, $all, array('normal'), '', array('options' => array('' => 'Välj', 'yes' => 'Ja', 'no' => 'Nej', 'unknown' => 'Okänt'))),
+            '_ssf_professional_use_description' => self::field('Beskriv den yrkesmässiga användningen', 'textarea', 'history', false, true, $all, array('normal')),
 
             '_ssf_masts' => self::field('Antal master', 'number', 'rig', false, true, $all, array(), '', array('min' => 0, 'max' => 10)),
-            '_ssf_sail_area' => self::field('Segelyta', 'text', 'rig', false, true, $all),
+            '_ssf_original_rig' => self::field('Ursprunglig rigg', 'text', 'rig', false, true, $all),
+            '_ssf_sail_area' => self::field('Segelyta (m²)', 'number', 'rig', false, true, $all, array(), '', array('min' => 0, 'step' => '0.01')),
+            '_ssf_sail_material' => self::field('Segelmaterial', 'text', 'rig', false, true, $all),
             '_ssf_rig_description' => self::field('Beskrivning av riggen', 'textarea', 'rig', false, true, $all),
             '_ssf_rig_period' => self::field('Riggens utförande', 'select', 'rig', false, true, $all, array(), '', array('options' => array('' => 'Välj', 'historical' => 'Historisk rigg', 'current' => 'Nuvarande rigg', 'combined' => 'Historisk och nuvarande'))),
             '_ssf_has_aux_engine' => self::field('Har fartyget hjälpmotor?', 'select', 'rig', false, false, $all, array(), '', array('options' => array('' => 'Välj', 'yes' => 'Ja', 'no' => 'Nej'))),
-            '_ssf_engine' => self::field('Motor', 'text', 'rig', false, true, $all),
+            '_ssf_engine' => self::field('Huvudmaskin, sammanfattning', 'text', 'rig', false, true, $all),
+            '_ssf_engine_make' => self::field('Motorfabrikat', 'text', 'rig', false, true, $all),
+            '_ssf_engine_model' => self::field('Motormodell', 'text', 'rig', false, true, $all),
             '_ssf_engine_power' => self::field('Motoreffekt', 'text', 'rig', false, true, $all),
             '_ssf_engine_year' => self::field('Motorns årsmodell', 'number', 'rig', false, true, $all, array(), '', array('min' => 1900, 'max' => (int) wp_date('Y') + 2)),
 
             '_ssf_registration_type' => self::field('Svenskt register', 'select', 'registration', true, false, $all, array('small_registered'), '', array('options' => array('' => 'Välj register', 'ship' => 'Skeppsregister', 'vessel' => 'Fartygsregister', 'other' => 'Annat relevant register'))),
             '_ssf_registry_number' => self::field('Registreringsnummer', 'text', 'registration', true, false, $all, array('small_registered')),
-            '_ssf_call_sign' => self::field('Signalbokstäver', 'text', 'registration', false, true, $all, array('small_registered')),
+            '_ssf_registration_country' => self::field('Registreringsland', 'text', 'registration', false, false, $all, array('small_registered')),
+            '_ssf_registered_confirmation' => self::field('Jag bekräftar att fartyget är registrerat i relevant svenskt register', 'checkbox', 'registration', true, false, $all, array('small_registered')),
             '_ssf_mmsi' => self::field('MMSI', 'text', 'registration', false, false, $all, array('small_registered')),
+            '_ssf_imo' => self::field('IMO-nummer', 'text', 'registration', false, false, $all, array('small_registered')),
 
             '_ssf_restoration_condition' => self::field('Nuvarande skick', 'textarea', 'restoration', true, false, $all, array('restoration')),
             '_ssf_restoration_remaining' => self::field('Vad återstår?', 'textarea', 'restoration', false, false, $all, array('restoration')),
@@ -216,6 +229,9 @@ class SSF_Medlemsfartyg_Profile
             if (! empty($field['required']) && '' === $value) {
                 $errors->add($key, sprintf('Fyll i fältet %s.', $field['label']));
             }
+            if (! empty($field['required']) && 'checkbox' === $field['type'] && '1' !== $value) {
+                $errors->add($key, sprintf('Bekräfta fältet %s.', $field['label']));
+            }
             if ('email' === $field['type'] && $value && ! is_email($value)) {
                 $errors->add($key, sprintf('%s måste vara en giltig e-postadress.', $field['label']));
             }
@@ -229,6 +245,14 @@ class SSF_Medlemsfartyg_Profile
                 if (isset($field['max']) && $number > (float) $field['max']) {
                     $errors->add($key, sprintf('%s får vara högst %s.', $field['label'], $field['max']));
                 }
+            }
+        }
+        if (self::MODE_APPLICATION === $mode && 'normal' === $route) {
+            if ((float) str_replace(',', '.', (string) ($data['_ssf_main_deck_length'] ?? 0)) <= 12) {
+                $errors->add('_ssf_main_deck_length', 'För denna medlemsväg ska längden i huvuddäck vara över 12 meter. Välj annars vägen för mindre registrerat fartyg.');
+            }
+            if ((float) str_replace(',', '.', (string) ($data['_ssf_beam'] ?? 0)) <= 4) {
+                $errors->add('_ssf_beam', 'För denna medlemsväg ska bredden vara över 4 meter. Välj annars vägen för mindre registrerat fartyg.');
             }
         }
         return $errors;
@@ -379,10 +403,13 @@ class SSF_Medlemsfartyg_Profile
         );
     }
 
-    public static function render(string $mode, string $route = '', array $values = array(), bool $as_steps = false): void
+    public static function render(string $mode, string $route = '', array $values = array(), bool $as_steps = false, array $only_sections = array()): void
     {
         $fields = self::fields_for($route, $mode);
         foreach (self::sections() as $section_key => $section) {
+            if ($only_sections && ! in_array($section_key, $only_sections, true)) {
+                continue;
+            }
             $section_fields = array_filter($fields, static function (array $field) use ($section_key): bool {
                 return $section_key === $field['section'];
             });
@@ -434,7 +461,7 @@ class SSF_Medlemsfartyg_Profile
             }
             echo '</select>';
         } elseif ('checkbox' === $field['type']) {
-            echo '<input type="checkbox" name="' . esc_attr($key) . '" value="1" ' . checked('1', $value, false) . '>';
+            echo '<input type="checkbox" name="' . esc_attr($key) . '" value="1" ' . checked('1', $value, false) . $required . '>';
         } else {
             echo '<input type="' . esc_attr($field['type']) . '" name="' . esc_attr($key) . '" value="' . esc_attr($value) . '"' . $attributes . $required . '>';
         }
