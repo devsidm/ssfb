@@ -1,18 +1,20 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.12.0",
-    "build":  "20260910.7",
-    "built_at":  "2026-09-10T19:34:58.9637697Z",
+    "version":  "0.13.0",
+    "build":  "20260910.8",
+    "built_at":  "2026-09-10T20:19:15.8696274Z",
     "source":  "codex",
-    "source_revision":  "004a96892ac09a62013c2cc4cddd48ed6091e164",
-    "description":  "Fartygskategori och betalningsinstruktion i medlemsansökan",
+    "source_revision":  "027f3ad8bc4efbd76d8f50f4658cce59f4a6f9cd",
+    "description":  "Centrala organisationsuppgifter och medlemsavgifter på webbplatsen",
     "notes":  "",
     "components":  [
+                       "documentation",
                        "ssf-email-template",
-                       "ssf-medlemsfartyg",
                        "ssf-medlemsprocess",
-                       "ssf-site-customizations"
+                       "ssf-organization-info",
+                       "ssf-site-customizations",
+                       "ssf-theme"
                    ],
     "status":  "development",
     "prepared_at":  ""
