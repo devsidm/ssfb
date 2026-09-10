@@ -181,6 +181,15 @@ final class Controller
             delete_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
         }
         $schema = (array) get_option('ssf_member_portal_graph_motion_schema', array());
+        $schema_error = sanitize_text_field((string) ($schema['last_error'] ?? ''));
+        $schema_checked_at = (string) ($schema['last_checked_at'] ?? ($schema['verified_at'] ?? ''));
+        if (! empty($schema['status_column_id'])) {
+            $schema_status = $schema_error
+                ? __('Finns sedan tidigare, senaste kontrollen misslyckades', 'ssf-member-portal')
+                : __('Finns', 'ssf-member-portal');
+        } else {
+            $schema_status = $schema_error ? __('Kontroll misslyckades', 'ssf-member-portal') : __('Inte kontrollerad', 'ssf-member-portal');
+        }
         $poll = $this->service->sharepoint_status_poll_diagnostics();
         $next_poll = wp_next_scheduled('ssf_motion_sharepoint_status_poll');
         ?>
@@ -226,11 +235,23 @@ final class Controller
             <div class="postbox" style="max-width:980px;padding:20px">
                 <h2><?php esc_html_e('SharePoint motionsstatus', 'ssf-member-portal'); ?></h2>
                 <table class="widefat striped"><tbody>
-                <tr><th><?php esc_html_e('Status-kolumn', 'ssf-member-portal'); ?></th><td><?php echo esc_html(! empty($schema['status_column_id']) ? __('Finns', 'ssf-member-portal') : __('Inte kontrollerad', 'ssf-member-portal')); ?></td></tr>
+                <tr><th><?php esc_html_e('Status-kolumn', 'ssf-member-portal'); ?></th><td><?php echo esc_html($schema_status); ?></td></tr>
                 <tr><th><?php esc_html_e('Internfält', 'ssf-member-portal'); ?></th><td><code><?php echo esc_html((string) ($schema['status_field'] ?? '–')); ?></code></td></tr>
                 <tr><th><?php esc_html_e('Krävda statusar', 'ssf-member-portal'); ?></th><td><?php echo esc_html(sprintf(__('%1$d av %2$d', 'ssf-member-portal'), count((array) ($schema['choices'] ?? array())), count(MotionStatus::all()))); ?></td></tr>
-                <tr><th><?php esc_html_e('Senast verifierad', 'ssf-member-portal'); ?></th><td><?php echo esc_html((string) ($schema['verified_at'] ?? __('Aldrig', 'ssf-member-portal'))); ?></td></tr>
+                <tr><th><?php esc_html_e('Senast kontrollerad', 'ssf-member-portal'); ?></th><td><?php echo esc_html($schema_checked_at ? $this->format_timestamp($schema_checked_at) : __('Aldrig', 'ssf-member-portal')); ?></td></tr>
                 </tbody></table>
+                <?php if ($schema_error) : ?>
+                    <div class="notice notice-warning inline">
+                        <p><strong><?php esc_html_e('Statuskolumnen kunde inte kontrolleras.', 'ssf-member-portal'); ?></strong> <?php echo esc_html($schema_error); ?></p>
+                        <p><?php esc_html_e('Automatisk reparation: låt en Microsoft 365-administratör ändra SSF WordPress-appens site-avgränsade Sites.Selected-roll från write till manage för styrelsens SharePoint-site. WordPress-appen kan och ska inte ge sig själv denna behörighet.', 'ssf-member-portal'); ?></p>
+                        <details>
+                            <summary><?php esc_html_e('Alternativ: skapa statuskolumnen manuellt i SharePoint', 'ssf-member-portal'); ?></summary>
+                            <p><?php esc_html_e('Skapa en kolumn av typen Val i dokumentbiblioteket. Döp den till Status, stäng av egna värden och använd listruta med följande val:', 'ssf-member-portal'); ?></p>
+                            <ul><?php foreach (MotionStatus::all() as $status_label) : ?><li><?php echo esc_html($status_label); ?></li><?php endforeach; ?></ul>
+                            <p><?php esc_html_e('Kör sedan kontrollen igen. En redan korrekt kolumn behöver inte repareras.', 'ssf-member-portal'); ?></p>
+                        </details>
+                    </div>
+                <?php endif; ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_ensure_sharepoint_motion_schema"><?php wp_nonce_field('ssf_member_portal_ensure_sharepoint_motion_schema'); ?><label><input type="checkbox" name="confirm_schema" value="1"> <?php esc_html_e('Jag godkänner att en saknad statuskolumn eller saknade statusval skapas.', 'ssf-member-portal'); ?></label><?php submit_button(__('Kontrollera och reparera statuskolumn', 'ssf-member-portal'), 'secondary', 'submit', false); ?></form>
             </div>
 
@@ -248,7 +269,7 @@ final class Controller
                 <p class="description"><?php esc_html_e('Automatisk kontroll körs ungefär var 30:e minut. WordPress cron är trafikdriven; konfigurera en system-cron för wp-cron.php om sajten har låg trafik.', 'ssf-member-portal'); ?></p>
             </div>
 
-            <p class="description"><?php esc_html_e('Den här integrationen använder Microsoft Graph Application permission Sites.Selected med en explicit write-grant till styrelsens SharePoint-site. Lägg inte till bredare fil- eller sitebehörigheter när Sites.Selected fungerar.', 'ssf-member-portal'); ?></p>
+            <p class="description"><?php esc_html_e('Filhanteringen använder Microsoft Graph Application permission Sites.Selected med en explicit write-grant. Automatisk ändring av statuskolumnens schema kräver i stället en manage-grant till just styrelsens SharePoint-site. Lägg inte till tenantomfattande Sites.Manage.All.', 'ssf-member-portal'); ?></p>
         </div>
         <?php
     }

@@ -31,7 +31,7 @@ final class MotionSchema
     {
         $list_id = $this->document_library_list_id();
         if (is_wp_error($list_id)) {
-            return $list_id;
+            return $this->remember_failure($list_id, 'document_library');
         }
 
         // Keep the discovered library ID even when Sites.Selected permits file
@@ -40,40 +40,46 @@ final class MotionSchema
 
         $columns = $this->get_columns($list_id);
         if (is_wp_error($columns)) {
-            return $columns;
+            return $this->remember_failure($columns, 'read_columns', $list_id);
         }
 
         $column = $this->find_status_column($columns);
         if (! $column) {
             $column = $this->create_status_column($list_id);
             if (is_wp_error($column)) {
-                return $column;
+                return $this->remember_failure($column, 'create_column', $list_id);
             }
             Logger::add('motion_sharepoint_status_column_created', array('list_id' => $list_id, 'column_id' => $column['id'] ?? ''));
         }
 
         if (empty($column['choice']) || ! is_array($column['choice'])) {
-            return new \WP_Error(
+            return $this->remember_failure(new \WP_Error(
                 'sharepoint_status_column_invalid',
                 __('SharePoint-kolumnen Status finns, men är inte av typen Choice.', 'ssf-member-portal')
-            );
+            ), 'validate_column', $list_id);
         }
 
         $column = $this->ensure_status_choices($list_id, $column);
         if (is_wp_error($column)) {
-            return $column;
+            return $this->remember_failure($column, 'update_choices', $list_id);
         }
 
+        $verified_at = gmdate('c');
         $context = array(
             'list_id' => $list_id,
             'status_column_id' => sanitize_text_field((string) ($column['id'] ?? '')),
             'status_field' => sanitize_text_field((string) ($column['name'] ?? $column['displayName'] ?? '')),
             'status_display_name' => sanitize_text_field((string) ($column['displayName'] ?? self::STATUS_NAME)),
             'choices' => array_values(array_map('sanitize_text_field', (array) ($column['choice']['choices'] ?? array()))),
-            'verified_at' => gmdate('c'),
+            'last_checked_at' => $verified_at,
+            'verified_at' => $verified_at,
         );
         if (! $context['status_column_id'] || ! $context['status_field']) {
-            return new \WP_Error('sharepoint_status_column_missing_id', __('SharePoint returnerade inte kolumnens interna namn.', 'ssf-member-portal'));
+            return $this->remember_failure(
+                new \WP_Error('sharepoint_status_column_missing_id', __('SharePoint returnerade inte kolumnens interna namn.', 'ssf-member-portal')),
+                'validate_column',
+                $list_id
+            );
         }
 
         update_option(self::OPTION, $context, false);
@@ -250,6 +256,39 @@ final class MotionSchema
     private function required_choices(): array
     {
         return array_values(MotionStatus::all());
+    }
+
+    private function remember_failure(\WP_Error $error, string $stage, string $list_id = ''): \WP_Error
+    {
+        $data = (array) $error->get_error_data();
+        $status = (int) ($data['http_status'] ?? $data['status'] ?? 0);
+        if (403 === $status) {
+            $data['schema_stage'] = $stage;
+            $data['required_application_permission'] = 'Sites.Selected';
+            $data['required_site_role'] = 'manage';
+            $error = new \WP_Error(
+                'sharepoint_motion_schema_access_denied',
+                __('Microsoft Graph nekade åtkomst till dokumentbibliotekets kolumnschema. Filuppladdning kan fungera med site-rollen write, men automatisk kontroll och reparation av statuskolumnen kräver Sites.Selected med rollen manage på just denna SharePoint-site. Lägg inte till den tenantomfattande behörigheten Sites.Manage.All.', 'ssf-member-portal'),
+                $data
+            );
+        }
+
+        $context = (array) get_option(self::OPTION, array());
+        if ($list_id) {
+            $context['list_id'] = sanitize_text_field($list_id);
+        }
+        $context['last_checked_at'] = gmdate('c');
+        $context['last_error'] = sanitize_text_field($error->get_error_message());
+        $context['last_error_code'] = sanitize_key($error->get_error_code());
+        $context['last_error_stage'] = sanitize_key($stage);
+        update_option(self::OPTION, $context, false);
+        Logger::add('motion_sharepoint_status_schema_failed', array(
+            'stage' => $stage,
+            'http_status' => $status,
+            'graph_code' => sanitize_key((string) ($data['graph_code'] ?? '')),
+        ));
+
+        return $error;
     }
 
     private function missing_choices(array $existing): array

@@ -18,6 +18,7 @@ $authentication = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\I
 $graph = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\GraphClient.php'
 $membership = Read-RepoFile 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-sharepoint.php'
 $motions = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePoint.php'
+$motionSchema = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\MotionSchema.php'
 $motionRuntime = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\MotionSharePoint.php'
 $motionModule = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\Module.php'
 $meetingRegistration = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\AnnualMeetings\RegistrationService.php'
@@ -57,6 +58,10 @@ Assert-Contains 'Medlemsansökans DEV-skydd' $membership "SharePointDestinations
 Assert-Contains 'Motioner använder central site' $motions "Configuration::value('site_id')"
 Assert-Contains 'Motioner använder central drive' $motions "Configuration::value('drive_id')"
 Assert-Contains 'Motioner använder central mapp' $motions "Configuration::value('annual_meeting_folder_id')"
+Assert-Contains 'Statusschema sparar misslyckad kontroll' $motionSchema "'last_checked_at'"
+Assert-Contains 'Statusschema förklarar avgränsad manage-roll' $motionSchema "`$data['required_site_role'] = 'manage';"
+Assert-Contains 'Statusschema undviker tenantomfattande manage' $motionSchema 'Lägg inte till den tenantomfattande behörigheten Sites.Manage.All'
+Assert-Contains 'Admin visar manuell statuskolumnsväg' $controller 'Alternativ: skapa statuskolumnen manuellt i SharePoint'
 Assert-Contains 'Motionsuppladdning finns kvar' $motionRuntime 'upload_motion_attachment'
 Assert-Contains 'Motionsstatussynk finns kvar' $motions 'get_motion_status'
 Assert-NotContains 'Ingen Power Automate-adminpanel' $controller 'Power Automate'

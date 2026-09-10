@@ -45,9 +45,9 @@ Pluginet cachelagrar token med WordPress Transients API fram till `expires_in - 
 
 ### Microsoft Graph-behörighet
 
-Den valda Graph v1.0-metoden använder app-only uppladdning med `PUT /drives/{drive-id}/items/{parent-id}:/{filename}:/content`. SSF använder **Microsoft Graph Application permission `Sites.Selected`** med en explicit `write`-grant till enbart styrelsens SharePoint-site. Admin consent krävs för permissionen och site-granten krävs dessutom för den valda siten.
+Den valda Graph v1.0-metoden använder app-only uppladdning med `PUT /drives/{drive-id}/items/{parent-id}:/{filename}:/content`. SSF använder **Microsoft Graph Application permission `Sites.Selected`** med en explicit grant till enbart den berörda SharePoint-siten. `write` räcker för filhantering. Den automatiska reparationen av motionernas statuskolumn skapar och uppdaterar listkolumner och kräver därför site-rollen `manage` på styrelsens site.
 
-`Files.ReadWrite.All`, `Sites.ReadWrite.All` och `Sites.FullControl.All` ska inte läggas till när `Sites.Selected` med site-grant fungerar. Microsofts aktuella referens finns i [Graph permissions reference](https://learn.microsoft.com/en-us/graph/permissions-reference) och [Upload small files](https://learn.microsoft.com/en-us/graph/api/driveitem-put-content?view=graph-rest-1.0).
+`Files.ReadWrite.All`, `Sites.ReadWrite.All`, `Sites.Manage.All` och `Sites.FullControl.All` ska inte läggas till på tenantnivå när `Sites.Selected` med en site-avgränsad grant fungerar. Microsofts aktuella referens finns i [Selected permissions overview](https://learn.microsoft.com/en-us/graph/permissions-selected-overview), [Create a list column](https://learn.microsoft.com/en-us/graph/api/list-post-columns?view=graph-rest-1.0) och [Upload small files](https://learn.microsoft.com/en-us/graph/api/driveitem-put-content?view=graph-rest-1.0).
 
 ### Testa säkert
 
@@ -89,6 +89,7 @@ uppdatering av SharePoints statusmetadata. Källmarkeringen gör att en hämtad
 ## Felsökning
 
 - `401` vid token-test: kontrollera nytt Client secret **value**, Tenant ID, Client ID och att secret inte har löpt ut.
-- `403` från Graph: kontrollera att `Sites.Selected` är av typen **Application**, att Admin consent har givits och att appen har en explicit `write`-grant till styrelsens site.
+- `403` vid filåtkomst: kontrollera att `Sites.Selected` är av typen **Application**, att Admin consent har givits och att appen har en explicit `write`-grant till rätt site.
+- `403` vid kontroll eller reparation av motionernas statuskolumn: ändra den site-avgränsade granten för SSF WordPress-appen till `manage`, eller skapa valkolumnen `Status` och dess sju statusval manuellt i SharePoint. Ge inte WordPress-appen tenantomfattande `Sites.Manage.All` eller `Sites.FullControl.All`.
 - `404` för site, drive eller rotmapp: kontrollera respektive Graph ID i `wp-config.php`.
 - `409` vid mappskapande: pluginet söker om efter den befintliga mappen och fortsätter när den hittas.
