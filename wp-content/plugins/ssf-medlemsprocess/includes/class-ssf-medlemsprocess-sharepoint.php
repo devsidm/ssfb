@@ -333,6 +333,9 @@ class SSF_Medlemsprocess_SharePoint
         if (is_wp_error($list_item)) {
             return $list_item;
         }
+        $list_id = $this->application_list_id();
+        update_post_meta($application_id, '_ssf_sp_list_id', $list_id);
+        update_post_meta($application_id, '_ssf_sp_application_list_item_id', sanitize_text_field((string) ($list_item['id'] ?? '')));
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $submitted = (string) get_post_meta($application_id, '_ssf_submitted_at', true);
         $fields = array(
@@ -349,9 +352,6 @@ class SSF_Medlemsprocess_SharePoint
         }
         $result = $this->request('PATCH', $this->item_path($folder_id) . '/listItem/fields', array_filter($fields, static function ($value, $key) { return '' !== (string) $key && '' !== (string) $value; }, ARRAY_FILTER_USE_BOTH));
         if (! is_wp_error($result)) {
-            $list_id = $this->application_list_id();
-            update_post_meta($application_id, '_ssf_sp_list_id', $list_id);
-            update_post_meta($application_id, '_ssf_sp_application_list_item_id', sanitize_text_field((string) ($list_item['id'] ?? '')));
             if ($is_initial) { update_post_meta($application_id, '_ssf_sp_last_status', 'Inkommen'); }
         }
         return ! is_wp_error($result) && $schema_error ? $schema_error : $result;
@@ -450,7 +450,17 @@ class SSF_Medlemsprocess_SharePoint
 
     private function list_item(string $drive_item_id)
     {
-        return $this->request('GET', $this->item_path($drive_item_id) . '/listItem?$expand=fields');
+        $result = null;
+        for ($attempt = 0; $attempt < 4; ++$attempt) {
+            $result = $this->request('GET', $this->item_path($drive_item_id) . '/listItem?$expand=fields');
+            if (! is_wp_error($result) && ! empty($result['id'])) {
+                return $result;
+            }
+            if ($attempt < 3) {
+                usleep((250 + ($attempt * 250)) * 1000);
+            }
+        }
+        return is_wp_error($result) ? $result : new WP_Error('application_list_item_missing', 'SharePoint returnerade inget ListItem-ID.');
     }
 
     private function fail(int $application_id, WP_Error $error): void
