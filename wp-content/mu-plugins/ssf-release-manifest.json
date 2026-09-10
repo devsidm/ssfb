@@ -2,16 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "",
-    "build":  "20260910.1",
-    "built_at":  "2026-09-10T08:05:36.8286582Z",
+    "build":  "20260910.2",
+    "built_at":  "2026-09-10T08:24:50.6746714Z",
     "source":  "codex",
-    "source_revision":  "d60622012567a37f2c9a8ef4b0aeb343e032191a",
-    "description":  "Modernisera medlemsansökan med PDF, SharePoint-arkiv och statussynk",
+    "source_revision":  "836dfe0291132181db2371480f8abcd33764a279",
+    "description":  "Slutför medlemsansökans SharePoint-ID och verifierad statussynk",
     "notes":  "",
     "components":  [
-                       "ssf-medlemsfartyg",
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
