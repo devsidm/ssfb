@@ -2,15 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260910.9",
-    "built_at":  "2026-09-10T21:17:21.6714124Z",
+    "build":  "20260910.10",
+    "built_at":  "2026-09-10T21:28:46.1634645Z",
     "source":  "codex",
-    "source_revision":  "bb39a451c88fa15e0091117891f8bc980ad24021",
-    "description":  "Förbättrad diagnostik och minsta SharePoint-behörighet för motionernas statuskolumn",
+    "source_revision":  "21122ea32fc6ccc7592869d0ddc58f4c86721c78",
+    "description":  "Rättad stegvalidering för samtliga fyra vägar i fartygsansökan",
     "notes":  "",
     "components":  [
                        "release-tooling",
-                       "ssf-member-portal"
+                       "ssf-medlemsfartyg",
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
