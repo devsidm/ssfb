@@ -95,8 +95,8 @@
     var routeHeading = form.querySelector('.ssf-route-card.is-selected strong');
     addReviewSection('Ansökningsväg', [['Vald väg', routeHeading ? routeHeading.textContent : '']]);
     addReviewSection('Fartygsombud', [
-      ['Namn', textValue('applicant_name')], ['Adress', [textValue('applicant_street'), textValue('applicant_postal_code'), textValue('applicant_city')].filter(Boolean).join(', ')],
-      ['Telefon', textValue('applicant_phone')], ['E-post', textValue('applicant_email')], ['Hemsida', textValue('applicant_website')]
+      ['Namn', [textValue('applicant_first_name'), textValue('applicant_last_name')].filter(Boolean).join(' ')], ['Postadress', [textValue('applicant_street'), textValue('applicant_postal_code'), textValue('applicant_city')].filter(Boolean).join(', ')],
+      ['Telefon', textValue('applicant_phone')], ['E-post', textValue('applicant_email')], ['Faktura-e-post', textValue('applicant_invoice_email')], ['Hemsida', textValue('applicant_website')]
     ]);
     addReviewSection('Fartyget', [
       ['Namn', textValue('post_title')], ['Fartygstyp', textValue('tax_fartygstyp')], ['Hemmahamn', textValue('_ssf_home_port')],

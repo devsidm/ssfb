@@ -61,6 +61,7 @@ class SSF_Medlemsprocess_PDF
             array('field', 'Adress', $data['applicant_address'] ?? ''),
             array('field', 'Telefon', $data['applicant_phone'] ?? ''),
             array('field', 'E-post', $data['applicant_email'] ?? ''),
+            array('field', 'Faktura-e-post', $data['applicant_invoice_email'] ?? ''),
             array('field', 'Hemsida', $data['applicant_website'] ?? ''),
         );
 

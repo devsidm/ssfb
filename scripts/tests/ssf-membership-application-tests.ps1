@@ -22,12 +22,21 @@ $sharepoint = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins
 $configuration = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\Configuration.php')
 $emails = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-emails.php')
 $statusPage = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\templates\status-page.php')
+$styles = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\css\ssf-medlemsprocess.css')
+$formScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')
 
 Assert-True 'Formuläret ska ha sex steg' (([regex]::Matches($form, 'data-application-step=')).Count -eq 6)
 foreach ($route in @('normal', 'small_registered', 'restoration', 'new_traditional')) { Assert-Contains "Medlemsväg $route" $profile "'$route' => array(" }
 Assert-Contains 'Gemensam Vessel Profile' $form 'SSF_Medlemsfartyg_Profile::render'
 foreach ($field in @('_ssf_owner', '_ssf_build_country', '_ssf_call_sign', '_ssf_length_overall', '_ssf_gross_tonnage', '_ssf_original_rig', '_ssf_sail_material')) { Assert-Contains "Fartygsfält $field" $profile "'$field'" }
-foreach ($field in @('applicant_street', 'applicant_postal_code', 'applicant_city')) { Assert-Contains "Ombudsfält $field" $public "'$field'" }
+foreach ($field in @('applicant_first_name', 'applicant_last_name', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_invoice_email')) { Assert-Contains "Ombudsfält $field" $public "'$field'" }
+Assert-Contains 'Kontaktperson som rubrik' $form '<legend>Kontaktperson</legend>'
+Assert-Contains 'Postadress i formuläret' $form '<span>Postadress</span>'
+Assert-Contains 'Dolda steg och knappar' $styles '.ssf-process-form [hidden] { display: none !important; }'
+Assert-Contains 'Nästa döljs på sista steget' $formScript 'next.hidden = index === steps.length - 1;'
+Assert-Contains 'Skicka visas på sista steget' $formScript 'submit.hidden = index !== steps.length - 1;'
+Assert-Contains 'Komplettering via statuslänk' $statusPage '$can_complete'
+Assert-Contains 'Frivillig komplettering behåller status' $public "if ('needs_completion' === `$current_status)"
 Assert-Contains 'DOCX i formuläret' $form 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 Assert-Contains 'DOCX på servern' $public "'docx'"
 Assert-Contains 'Submit-idempotens' $public 'ssf_application_submit_'

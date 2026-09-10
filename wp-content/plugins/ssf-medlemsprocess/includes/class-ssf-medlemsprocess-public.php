@@ -105,8 +105,11 @@ class SSF_Medlemsprocess_Public
         }
 
         $data = $this->collect_application_data();
-        if (! is_email($data['applicant_email']) || ! $data['applicant_name']) {
-            wp_die('Fyll i fartygsnamn, namn och en giltig e-postadress.');
+        if (! is_email($data['applicant_email']) || ! $data['applicant_first_name'] || ! $data['applicant_last_name']) {
+            wp_die('Fyll i förnamn, efternamn och en giltig e-postadress.');
+        }
+        if ($data['applicant_invoice_email'] && ! is_email($data['applicant_invoice_email'])) {
+            wp_die('Fyll i en giltig e-postadress för fakturor.');
         }
         if (class_exists('SSF_Medlemsfartyg_Profile')) {
             $errors = SSF_Medlemsfartyg_Profile::validate((array) $data['vessel_profile'], (string) $data['application_route'], SSF_Medlemsfartyg_Profile::MODE_APPLICATION);
@@ -157,15 +160,30 @@ class SSF_Medlemsprocess_Public
         if (class_exists('SSF_Antispam') && ! SSF_Antispam::validate('application_completion')) {
             wp_die(esc_html(SSF_Antispam::error_message()));
         }
+        $current_status = SSF_Medlemsprocess_Application::status($application_id);
+        if (in_array($current_status, array('approved_aspirant', 'approved', 'rejected', 'archived'), true)) {
+            wp_die('Ärendet är avslutat och kan inte kompletteras.');
+        }
         $message = sanitize_textarea_field(wp_unslash($_POST['completion_message'] ?? ''));
         if (! $message && empty($_FILES['ssf_completion_files']['name'][0])) {
             wp_die('Skriv ett svar eller bifoga en fil innan du skickar kompletteringen.');
         }
+        $upload_errors = $this->validate_uploads(array(
+            'ssf_completion_files' => array('jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'),
+        ));
+        if ($upload_errors->has_errors()) {
+            wp_die(esc_html(implode(' ', $upload_errors->get_error_messages())));
+        }
         $files = $this->handle_uploads($application_id, 'ssf_completion_files');
+        if (! $message && ! $files) {
+            wp_die('Filen kunde inte sparas. Kontrollera filen och försök igen.');
+        }
         $all_files = array_merge((array) get_post_meta($application_id, '_ssf_completion_files', true), $files);
         update_post_meta($application_id, '_ssf_completion_files', array_map('intval', $all_files));
         SSF_Medlemsprocess_Application::add_history($application_id, 'completion', $message ?: 'Kompletterande filer skickades in.', true, array('files' => $files));
-        SSF_Medlemsprocess_Application::transition($application_id, 'completion_submitted', '', false);
+        if ('needs_completion' === $current_status) {
+            SSF_Medlemsprocess_Application::transition($application_id, 'completion_submitted', '', false);
+        }
         $new_token = SSF_Medlemsprocess_Application::issue_token($application_id);
         SSF_Medlemsprocess_Plugin::instance()->emails->send_template('completion_received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($new_token)));
         SSF_Medlemsprocess_Plugin::instance()->sharepoint->queue($application_id);
@@ -175,12 +193,14 @@ class SSF_Medlemsprocess_Public
 
     private function collect_application_data(): array
     {
-        $fields = array('applicant_name', 'applicant_phone', 'applicant_organization', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_website');
+        $fields = array('applicant_first_name', 'applicant_last_name', 'applicant_phone', 'applicant_organization', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_website');
         $data = array();
         foreach ($fields as $field) {
-            $data[$field] = sanitize_textarea_field(wp_unslash($_POST[$field] ?? ''));
+            $data[$field] = sanitize_text_field(wp_unslash($_POST[$field] ?? ''));
         }
         $data['applicant_email'] = sanitize_email(wp_unslash($_POST['applicant_email'] ?? ''));
+        $data['applicant_invoice_email'] = sanitize_email(wp_unslash($_POST['applicant_invoice_email'] ?? ''));
+        $data['applicant_name'] = trim($data['applicant_first_name'] . ' ' . $data['applicant_last_name']);
         $data['applicant_address'] = trim(implode(', ', array_filter(array($data['applicant_street'], trim($data['applicant_postal_code'] . ' ' . $data['applicant_city'])))));
         $data['application_route'] = sanitize_key(wp_unslash($_POST['application_route'] ?? ''));
         if (class_exists('SSF_Medlemsfartyg_Profile')) {
@@ -247,11 +267,11 @@ class SSF_Medlemsprocess_Public
         return $attachments;
     }
 
-    private function validate_uploads(): WP_Error
+    private function validate_uploads(?array $fields = null): WP_Error
     {
         $errors = new WP_Error();
         $settings = SSF_Medlemsprocess_Plugin::settings();
-        $fields = array(
+        $fields = $fields ?: array(
             'ssf_application_main_image' => array('jpg', 'jpeg', 'png', 'webp'),
             'ssf_application_gallery' => array('jpg', 'jpeg', 'png', 'webp'),
             'ssf_application_documents' => array('jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'),

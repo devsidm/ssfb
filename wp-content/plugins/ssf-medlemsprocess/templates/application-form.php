@@ -49,15 +49,17 @@ $steps = array('Medlemsväg', 'Fartygsombud', 'Fartyget', 'Historia', 'Filer', '
         </fieldset>
 
         <fieldset class="ssf-process-step" data-application-step="Fartygsombud" hidden>
-            <legend>Fartygsombud</legend>
-            <p>Kontaktuppgifterna används för ärendet och publiceras inte automatiskt.</p>
+            <legend>Kontaktperson</legend>
+            <p>Kontaktuppgifter för fartygsombud</p>
             <div class="ssf-vessel-fields">
-                <label class="ssf-vessel-field"><span>Namn <em>Obligatorisk</em></span><input type="text" name="applicant_name" autocomplete="name" required></label>
-                <label class="ssf-vessel-field"><span>Gatuadress</span><input type="text" name="applicant_street" autocomplete="street-address"></label>
+                <label class="ssf-vessel-field"><span>Förnamn <em>Obligatorisk</em></span><input type="text" name="applicant_first_name" autocomplete="given-name" required></label>
+                <label class="ssf-vessel-field"><span>Efternamn <em>Obligatorisk</em></span><input type="text" name="applicant_last_name" autocomplete="family-name" required></label>
+                <label class="ssf-vessel-field"><span>Postadress</span><input type="text" name="applicant_street" autocomplete="street-address"></label>
                 <label class="ssf-vessel-field"><span>Postnummer</span><input type="text" name="applicant_postal_code" autocomplete="postal-code"></label>
                 <label class="ssf-vessel-field"><span>Ort</span><input type="text" name="applicant_city" autocomplete="address-level2"></label>
                 <label class="ssf-vessel-field"><span>Telefon / mobil <em>Obligatorisk</em></span><input type="tel" name="applicant_phone" autocomplete="tel" required></label>
                 <label class="ssf-vessel-field"><span>E-postadress <em>Obligatorisk</em></span><input type="email" name="applicant_email" autocomplete="email" required></label>
+                <label class="ssf-vessel-field"><span>Faktura-e-post</span><input type="email" name="applicant_invoice_email" autocomplete="email"><small>Ange adressen som ska användas för fakturor.</small></label>
                 <label class="ssf-vessel-field"><span>Organisation, förening eller rederi</span><input type="text" name="applicant_organization" autocomplete="organization"></label>
                 <label class="ssf-vessel-field"><span>Hemsida</span><input type="url" name="applicant_website" inputmode="url"></label>
             </div>

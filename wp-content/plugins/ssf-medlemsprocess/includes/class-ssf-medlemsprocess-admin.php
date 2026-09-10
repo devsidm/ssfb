@@ -76,7 +76,7 @@ class SSF_Medlemsprocess_Admin
             'ship_length' => 'Längd i huvuddäck', 'ship_beam' => 'Bredd', 'ship_draft' => 'Djupgående', 'ship_register' => 'Svenskt skeppsregister', 'ship_registry_number' => 'Registreringsnummer',
             'ship_name' => 'Fartygets namn', 'ship_type' => 'Fartygstyp', 'ship_rig' => 'Rigtyp', 'ship_build_year' => 'Byggår', 'ship_shipyard' => 'Byggplats eller varv', 'ship_home_port' => 'Hemmahamn', 'ship_restoration' => 'Under restaurering',
             'ship_short_description' => 'Kort beskrivning', 'ship_history' => 'Historia', 'ship_current_use' => 'Nuvarande användning', 'ship_description' => 'Fördjupad beskrivning',
-            'applicant_name' => 'Fartygsombud', 'applicant_email' => 'E-post', 'applicant_phone' => 'Telefon', 'applicant_organization' => 'Organisation eller rederi', 'applicant_address' => 'Adress', 'applicant_website' => 'Webbplats',
+            'applicant_name' => 'Fartygsombud', 'applicant_email' => 'E-post', 'applicant_invoice_email' => 'Faktura-e-post', 'applicant_phone' => 'Telefon', 'applicant_organization' => 'Organisation eller rederi', 'applicant_address' => 'Postadress', 'applicant_website' => 'Webbplats',
         );
         echo '<table class="widefat striped ssf-process-data-table"><tbody>';
         foreach ($labels as $key => $label) {
