@@ -2,19 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260910.8",
-    "built_at":  "2026-09-10T20:19:15.8696274Z",
+    "build":  "20260910.9",
+    "built_at":  "2026-09-10T21:17:21.6714124Z",
     "source":  "codex",
-    "source_revision":  "027f3ad8bc4efbd76d8f50f4658cce59f4a6f9cd",
-    "description":  "Centrala organisationsuppgifter och medlemsavgifter på webbplatsen",
+    "source_revision":  "bb39a451c88fa15e0091117891f8bc980ad24021",
+    "description":  "Förbättrad diagnostik och minsta SharePoint-behörighet för motionernas statuskolumn",
     "notes":  "",
     "components":  [
-                       "documentation",
-                       "ssf-email-template",
-                       "ssf-medlemsprocess",
-                       "ssf-organization-info",
-                       "ssf-site-customizations",
-                       "ssf-theme"
+                       "release-tooling",
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
