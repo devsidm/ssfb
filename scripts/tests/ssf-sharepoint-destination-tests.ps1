@@ -19,6 +19,7 @@ $graph = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integratio
 $membership = Read-RepoFile 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-sharepoint.php'
 $motions = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePoint.php'
 $motionRuntime = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\MotionSharePoint.php'
+$motionModule = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\Module.php'
 $meetingRegistration = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\AnnualMeetings\RegistrationService.php'
 $controller = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\Admin\Controller.php'
 $javascript = Read-RepoFile 'wp-content\plugins\ssf-member-portal\assets\js\sharepoint-admin.js'
@@ -58,6 +59,10 @@ Assert-Contains 'Motioner använder central drive' $motions "Configuration::valu
 Assert-Contains 'Motioner använder central mapp' $motions "Configuration::value('annual_meeting_folder_id')"
 Assert-Contains 'Motionsuppladdning finns kvar' $motionRuntime 'upload_motion_attachment'
 Assert-Contains 'Motionsstatussynk finns kvar' $motions 'get_motion_status'
+Assert-NotContains 'Ingen Power Automate-adminpanel' $controller 'Power Automate'
+Assert-NotContains 'Ingen Power Automate-webhook' $motionModule 'PowerAutomateWebhook'
+Assert-NotContains 'Ingen publik statuswebhook' $system "'ssf-motions/v1'"
+Assert-True 'Power Automate-klassen är borttagen' (-not (Test-Path -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\PowerAutomateWebhook.php')))
 Assert-Contains 'Årsmötesexport finns kvar' $meetingRegistration 'upload_registration_excel'
 Assert-NotContains 'Inget secret i admin-JS' $javascript 'client_secret'
 Assert-True 'Endast GraphClient ska anropa wp_remote_request för Graph' (([regex]::Matches($discovery, 'wp_remote_')).Count -eq 0 -and ([regex]::Matches($admin, 'wp_remote_')).Count -eq 0 -and $graph.Contains('wp_remote_request'))

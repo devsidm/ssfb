@@ -84,7 +84,7 @@ final class MotionStatusService
         $email_sent = false;
         if ('wordpress' === $source) {
             $this->sharepoint->queue_status_update($motion_id);
-        } elseif (in_array($source, array('sharepoint', 'power_automate'), true)) {
+        } elseif ('sharepoint' === $source) {
             $email_sent = $this->mailer->send_status_change($motion_id, $old_status, $new_status);
         }
 

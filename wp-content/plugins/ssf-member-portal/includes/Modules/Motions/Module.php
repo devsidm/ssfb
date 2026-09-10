@@ -16,7 +16,6 @@ final class Module
     private MotionDeadline $deadline;
     private MotionService $service;
     private AdminController $admin;
-    private PowerAutomateWebhook $webhook;
 
     public function __construct(AnnualMeetings $meetings)
     {
@@ -27,7 +26,6 @@ final class Module
         $statuses = new MotionStatusService($sharepoint, $mailer);
         $sharepoint->set_status_service($statuses);
         $this->service = new MotionService($this->deadline, new MotionNumber(), new MotionFiles(), $mailer, $sharepoint, $statuses);
-        $this->webhook = new PowerAutomateWebhook($statuses);
         $this->admin = new AdminController($meetings, $this->deadline, $this->service);
         new FrontendController($this->deadline, $this->service);
     }
@@ -85,11 +83,6 @@ final class Module
     public function test_sharepoint_motion_schema(): array
     {
         return $this->graph_result($this->service->ensure_sharepoint_status_schema(), __('SharePoints motionsstatus är konfigurerad.', 'ssf-member-portal'));
-    }
-
-    public function handle_power_automate_webhook(\WP_REST_Request $request): \WP_REST_Response
-    {
-        return $this->webhook->handle($request);
     }
 
     private function graph_result($result, string $success_message): array

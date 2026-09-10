@@ -283,9 +283,7 @@ final class MotionSharePoint
     }
 
     /**
-     * Reads each current/coming motion directly from its saved list item. This
-     * is deliberately separate from the webhook, but both write through the
-     * same MotionStatusService and are therefore idempotent.
+     * Reads each current or coming motion directly from its saved list item.
      */
     public function poll_statuses(): array
     {

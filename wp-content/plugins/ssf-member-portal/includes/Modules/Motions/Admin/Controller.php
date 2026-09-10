@@ -36,8 +36,6 @@ final class Controller
         add_action('admin_post_ssf_member_portal_save_motion_settings', array($this, 'save_settings'));
         add_action('admin_post_ssf_member_portal_save_microsoft365_configuration', array($this, 'save_microsoft365_configuration'));
         add_action('admin_post_ssf_member_portal_reset_microsoft365_configuration', array($this, 'reset_microsoft365_configuration'));
-        add_action('admin_post_ssf_member_portal_generate_webhook_secret', array($this, 'generate_webhook_secret'));
-        add_action('admin_post_ssf_member_portal_test_power_automate_webhook', array($this, 'test_power_automate_webhook'));
         add_action('admin_post_ssf_member_portal_test_sharepoint_authentication', array($this, 'test_sharepoint_authentication'));
         add_action('admin_post_ssf_member_portal_test_sharepoint', array($this, 'test_sharepoint'));
         add_action('admin_post_ssf_member_portal_test_sharepoint_temporary_write', array($this, 'test_sharepoint_temporary_write'));
@@ -158,7 +156,7 @@ final class Controller
                 <tr><th><?php esc_html_e('Mottagare av ny motion', 'ssf-member-portal'); ?></th><td><p class="description"><?php esc_html_e('Styrs centralt under SSF → System → Microsoft 365.', 'ssf-member-portal'); ?></p></td></tr>
                 <tr><th><label for="ssf-upload-size"><?php esc_html_e('Max filstorlek', 'ssf-member-portal'); ?></label></th><td><input id="ssf-upload-size" class="small-text" type="number" min="1" max="25" name="max_upload_mb" value="<?php echo esc_attr($settings['max_upload_mb']); ?>"> MB</td></tr>
                 <tr><th><?php esc_html_e('Kompletterande statusmeddelanden', 'ssf-member-portal'); ?></th><td>
-                    <p class="description"><?php esc_html_e('Visas i e-post när SharePoint eller Power Automate ändrar status. Lämna tomt för att använda standardmeddelandet.', 'ssf-member-portal'); ?></p>
+                    <p class="description"><?php esc_html_e('Visas i e-post när en statusändring hämtas från SharePoint. Lämna tomt för att använda standardmeddelandet.', 'ssf-member-portal'); ?></p>
                     <?php foreach (MotionStatus::all() as $status => $label) : ?>
                         <p><label for="ssf-status-message-<?php echo esc_attr($status); ?>"><strong><?php echo esc_html($label); ?></strong></label><br><textarea id="ssf-status-message-<?php echo esc_attr($status); ?>" class="large-text" rows="2" name="motion_status_messages[<?php echo esc_attr($status); ?>]"><?php echo esc_textarea((string) ($settings['motion_status_messages'][$status] ?? '')); ?></textarea></p>
                     <?php endforeach; ?>
@@ -178,13 +176,6 @@ final class Controller
 
         $config = Configuration::public_status();
         $values = Configuration::editable_values();
-        $webhook = Configuration::webhook_public_status();
-        $webhook_url = rest_url('ssf-motions/v1/status');
-        $last_webhook = (array) get_option('ssf_member_portal_power_automate_last_result', array());
-        $generated_secret = (string) get_transient('ssf_member_portal_generated_webhook_secret_' . get_current_user_id());
-        if ($generated_secret) {
-            delete_transient('ssf_member_portal_generated_webhook_secret_' . get_current_user_id());
-        }
         $notice = get_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
         if ($notice) {
             delete_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
@@ -230,8 +221,6 @@ final class Controller
 
             <?php if (current_user_can(Capabilities::MANAGE)) { $this->sharepoint_admin->render(); } ?>
 
-            <?php $this->render_webhook_section($webhook, $webhook_url, $last_webhook, $generated_secret); ?>
-
             <div class="postbox" style="max-width:980px;padding:20px">
                 <h2><?php esc_html_e('SharePoint motionsstatus', 'ssf-member-portal'); ?></h2>
                 <table class="widefat striped"><tbody>
@@ -262,58 +251,6 @@ final class Controller
         <?php
     }
 
-    private function render_webhook_section(array $webhook, string $webhook_url, array $last_webhook, string $generated_secret): void
-    {
-        $motions = get_posts(array(
-            'post_type' => MotionPostType::POST_TYPE,
-            'post_status' => 'any',
-            'posts_per_page' => 20,
-            'orderby' => 'date',
-            'order' => 'DESC',
-        ));
-        ?>
-        <div class="postbox" style="max-width:980px;padding:20px">
-            <h2><?php esc_html_e('Power Automate statussynk', 'ssf-member-portal'); ?></h2>
-            <table class="widefat striped"><tbody>
-            <tr><th><?php esc_html_e('Webhook URL', 'ssf-member-portal'); ?></th><td><code><?php echo esc_html($webhook_url); ?></code></td></tr>
-            <tr><th><?php esc_html_e('Webhook secret', 'ssf-member-portal'); ?></th><td><?php echo esc_html($webhook['configured'] ? __('Konfigurerad', 'ssf-member-portal') : __('Saknas', 'ssf-member-portal')); ?><?php if ($webhook['configured']) : ?> <span class="description">(<?php echo esc_html('server' === $webhook['source'] ? __('server', 'ssf-member-portal') : __('admin', 'ssf-member-portal')); ?>)</span><?php endif; ?></td></tr>
-            <tr><th><?php esc_html_e('Inbound sync', 'ssf-member-portal'); ?></th><td><?php echo esc_html($webhook['inbound_enabled'] ? __('Aktiverad', 'ssf-member-portal') : __('Avstängd', 'ssf-member-portal')); ?></td></tr>
-            <tr><th><?php esc_html_e('Senaste webhook', 'ssf-member-portal'); ?></th><td><?php echo esc_html((string) ($last_webhook['timestamp'] ?? __('Ingen ännu', 'ssf-member-portal'))); ?></td></tr>
-            <tr><th><?php esc_html_e('Senaste resultat', 'ssf-member-portal'); ?></th><td><?php echo esc_html((string) ($last_webhook['result'] ?? '–')); ?><?php if (! empty($last_webhook['http_status'])) : ?> (HTTP <?php echo esc_html((string) $last_webhook['http_status']); ?>)<?php endif; ?></td></tr>
-            </tbody></table>
-
-            <?php if (current_user_can(Capabilities::MANAGE)) : ?>
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top:16px">
-                    <input type="hidden" name="action" value="ssf_member_portal_save_microsoft365_configuration">
-                    <?php wp_nonce_field('ssf_member_portal_save_microsoft365_configuration'); ?>
-                    <table class="form-table" role="presentation"><tbody>
-                    <tr><th><label for="ssf-power-automate-webhook-url"><?php esc_html_e('Webhook URL', 'ssf-member-portal'); ?></label></th><td><input id="ssf-power-automate-webhook-url" class="large-text code" type="text" readonly value="<?php echo esc_attr($webhook_url); ?>"> <button type="button" class="button" onclick="navigator.clipboard.writeText(document.getElementById('ssf-power-automate-webhook-url').value)"><?php esc_html_e('Kopiera webhook URL', 'ssf-member-portal'); ?></button></td></tr>
-                    <tr><th><label for="ssf-webhook-secret"><?php esc_html_e('Power Automate webhook secret', 'ssf-member-portal'); ?></label></th><td><input id="ssf-webhook-secret" class="regular-text" type="password" name="webhook[webhook_secret]" value="" autocomplete="new-password"><p class="description"><?php esc_html_e('Lämna tomt för att behålla ett sparat secret-värde. Det visas aldrig igen.', 'ssf-member-portal'); ?></p></td></tr>
-                    <tr><th><?php esc_html_e('Inbound sync', 'ssf-member-portal'); ?></th><td><label><input type="checkbox" name="webhook[inbound_enabled]" value="1" <?php checked($webhook['inbound_enabled']); ?>> <?php esc_html_e('Aktivera inkommande statusuppdateringar från Power Automate', 'ssf-member-portal'); ?></label></td></tr>
-                    </tbody></table>
-                    <?php submit_button(__('Spara webhookinställningar', 'ssf-member-portal')); ?>
-                </form>
-                <?php $this->microsoft365_button('ssf_member_portal_generate_webhook_secret', 'ssf_member_portal_generate_webhook_secret', __('Generera nytt webhook secret', 'ssf-member-portal'), 'secondary'); ?>
-                <?php if ($generated_secret) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Kopiera detta webhook secret nu. Det visas bara denna gång:', 'ssf-member-portal'); ?></strong><br><code style="user-select:all"><?php echo esc_html($generated_secret); ?></code></p></div><?php endif; ?>
-
-                <?php if ($motions) : ?>
-                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top:16px">
-                        <input type="hidden" name="action" value="ssf_member_portal_test_power_automate_webhook">
-                        <?php wp_nonce_field('ssf_member_portal_test_power_automate_webhook'); ?>
-                        <label for="ssf-webhook-test-motion"><?php esc_html_e('Testmotion', 'ssf-member-portal'); ?></label>
-                        <select id="ssf-webhook-test-motion" name="motion_id">
-                            <?php foreach ($motions as $motion) : ?><option value="<?php echo esc_attr($motion->ID); ?>"><?php echo esc_html(get_post_meta($motion->ID, '_ssf_mp_motion_number', true) . ' – ' . $motion->post_title); ?></option><?php endforeach; ?>
-                        </select>
-                        <select name="status"><?php foreach (MotionStatus::all() as $value => $label) : ?><option value="<?php echo esc_attr($value); ?>" <?php selected($value, MotionStatus::UNDER_BEHANDLING); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select>
-                        <label><input type="checkbox" name="confirm" value="1"> <?php esc_html_e('Jag förstår att testet uppdaterar vald motion.', 'ssf-member-portal'); ?></label>
-                        <?php submit_button(__('Testa webhook', 'ssf-member-portal'), 'secondary', 'submit', false); ?>
-                    </form>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
-        <?php
-    }
-
     public function save_settings(): void
     {
         if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_member_portal_save_motion_settings')) {
@@ -333,44 +270,9 @@ final class Controller
         }
 
         $result = Configuration::save_admin((array) wp_unslash($_POST['graph'] ?? array()));
-        if (! is_wp_error($result) && isset($_POST['webhook'])) {
-            $result = Configuration::save_webhook_settings((array) wp_unslash($_POST['webhook']));
-        }
         $notice = is_wp_error($result)
             ? array('type' => 'error', 'message' => $result->get_error_message())
             : array('type' => 'success', 'message' => __('Microsoft 365-konfigurationen har sparats.', 'ssf-member-portal'));
-        set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
-        wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
-        exit;
-    }
-
-    public function generate_webhook_secret(): void
-    {
-        $this->guard_microsoft365_action('ssf_member_portal_generate_webhook_secret');
-        $secret = Configuration::generate_webhook_secret();
-        if (is_wp_error($secret)) {
-            set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), array('type' => 'error', 'message' => $secret->get_error_message()), MINUTE_IN_SECONDS);
-        } else {
-            set_transient('ssf_member_portal_generated_webhook_secret_' . get_current_user_id(), $secret, MINUTE_IN_SECONDS);
-            set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), array('type' => 'success', 'message' => __('Ett nytt webhook secret har skapats.', 'ssf-member-portal')), MINUTE_IN_SECONDS);
-        }
-        wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
-        exit;
-    }
-
-    public function test_power_automate_webhook(): void
-    {
-        $this->guard_microsoft365_action('ssf_member_portal_test_power_automate_webhook');
-        $motion_id = absint($_POST['motion_id'] ?? 0);
-        $status = sanitize_key(wp_unslash($_POST['status'] ?? ''));
-        if (empty($_POST['confirm']) || ! $motion_id || ! MotionStatus::is_valid($status)) {
-            wp_die(esc_html__('Välj en giltig motion och bekräfta testuppdateringen.', 'ssf-member-portal'));
-        }
-
-        $result = $this->service->update_status($motion_id, $status, 'power_automate', array('changed_at' => gmdate('c')));
-        $notice = is_wp_error($result)
-            ? array('type' => 'error', 'message' => $result->get_error_message())
-            : array('type' => 'success', 'message' => __('Webhook-testet har genomförts. Ingen status har skrivits tillbaka till SharePoint.', 'ssf-member-portal'));
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;

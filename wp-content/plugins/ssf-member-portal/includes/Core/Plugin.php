@@ -55,6 +55,7 @@ final class Plugin
     {
         Capabilities::register();
         Settings::remove_legacy_graph_settings();
+        \SSF\MemberPortal\Integrations\Microsoft365\Configuration::remove_legacy_webhook_settings();
         $this->meetings->register();
         $this->motions->register();
         self::install_pages();
@@ -172,20 +173,6 @@ final class Plugin
             );
         }
 
-        if (self::feature_public('motions')) {
-            register_rest_route(
-                'ssf-motions/v1',
-                '/status',
-                array(
-                    'methods' => 'POST',
-                    'callback' => array($this->motions, 'handle_power_automate_webhook'),
-                    'permission_callback' => static function (): bool {
-                        // The callback validates the server-to-server webhook secret.
-                        return true;
-                    },
-                )
-            );
-        }
     }
 
     public function test_sharepoint(): \WP_REST_Response

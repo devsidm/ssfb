@@ -135,7 +135,7 @@ WordPress standardmeny `Inlägg` är den tekniska platsen för nyheter. Den är 
 - Nuvarande admin: skapar toppmenyn `SSF Årsmöten` med slug `ssf` och fungerar samtidigt som parent för flera andra plugin.
 - Slugs: `ssf`, `edit.php?post_type=ssf_annual_meeting`, `post-new.php?post_type=ssf_annual_meeting`, `ssf-member-portal-meeting-registrations`, `edit.php?post_type=ssf_motion`, `ssf-member-portal-settings`, `ssf-member-portal-microsoft365`, `ssf-member-portal-status`.
 - Capabilities: `ssf_manage_member_portal`, `ssf_manage_motions`, `manage_ssf_annual_meetings`, `manage_ssf_features`.
-- Frontendberoenden: årsmötessidor, anmälan, motionsflöden, REST-diagnostik, SharePoint, Power Automate, e-post och cron.
+- Frontendberoenden: årsmötessidor, anmälan, motionsflöden, REST-diagnostik, SharePoint, e-post och cron.
 - Föreslagen placering: egen toppmeny `Årsmöten`. Microsoft 365 och systemstatus flyttas visuellt till `SSF > System`; funktion och slugs bevaras.
 
 ### SSF Microsoft 365 Mailer
