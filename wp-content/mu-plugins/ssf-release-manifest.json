@@ -1,16 +1,20 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.10.1",
-    "build":  "20260910.5",
-    "built_at":  "2026-09-10T14:13:08.5185824Z",
+    "version":  "0.11.0",
+    "build":  "20260910.6",
+    "built_at":  "2026-09-10T18:39:20.6635319Z",
     "source":  "codex",
-    "source_revision":  "9529c5df9862cedbed7f2c07e8e7cbca79831e93",
-    "description":  "Oanvänd Power Automate-statuswebhook borttagen; SharePoint-pollning behålls",
+    "source_revision":  "b9e990876fd9a9fdd21fadcf800d0ff16c90f3a0",
+    "description":  "Gemensam SSF-mall för externa transaktionsmejl",
     "notes":  "",
     "components":  [
                        "documentation",
-                       "ssf-member-portal"
+                       "ssf-email-template",
+                       "ssf-medlemsfartyg",
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal",
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
