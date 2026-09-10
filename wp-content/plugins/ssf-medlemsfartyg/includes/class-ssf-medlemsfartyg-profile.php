@@ -423,8 +423,16 @@ class SSF_Medlemsfartyg_Profile
                 continue;
             }
             $section_routes = array();
+            $section_has_shared_fields = false;
             foreach ($section_fields as $section_field) {
+                if (empty($section_field['routes'])) {
+                    $section_has_shared_fields = true;
+                    continue;
+                }
                 $section_routes = array_merge($section_routes, $section_field['routes']);
+            }
+            if ($section_has_shared_fields) {
+                $section_routes = array();
             }
             $section_routes = array_values(array_unique($section_routes));
             $classes = 'ssf-vessel-profile-section' . ($as_steps ? ' ssf-collection-step' : '');

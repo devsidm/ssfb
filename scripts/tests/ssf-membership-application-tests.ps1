@@ -29,6 +29,10 @@ $formScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins
 Assert-True 'Formuläret ska ha sex steg' (([regex]::Matches($form, 'data-application-step=')).Count -eq 6)
 foreach ($route in @('normal', 'small_registered', 'restoration', 'new_traditional')) { Assert-Contains "Medlemsväg $route" $profile "'$route' => array(" }
 Assert-Contains 'Gemensam Vessel Profile' $form 'SSF_Medlemsfartyg_Profile::render'
+Assert-Contains 'Sektioner identifierar gemensamma fält' $profile '$section_has_shared_fields = false;'
+Assert-Contains 'Gemensamma fält håller sektionen synlig för alla vägar' $profile 'if ($section_has_shared_fields) {'
+Assert-Contains 'Gemensam obligatorisk historik' $profile "'_ssf_history' => self::field('Fartygets historia och nuvarande användning', 'textarea', 'history', true, true, `$all"
+foreach ($routeField in @('_ssf_professional_use', '_ssf_registration_type', '_ssf_restoration_condition', '_ssf_traditional_archetype')) { Assert-Contains "Vägspecifikt fält $routeField" $profile "'$routeField' => self::field(" }
 foreach ($field in @('_ssf_owner', '_ssf_build_country', '_ssf_call_sign', '_ssf_length_overall', '_ssf_gross_tonnage', '_ssf_original_rig', '_ssf_sail_material')) { Assert-Contains "Fartygsfält $field" $profile "'$field'" }
 foreach ($field in @('applicant_first_name', 'applicant_last_name', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_invoice_email')) { Assert-Contains "Ombudsfält $field" $public "'$field'" }
 Assert-Contains 'Obligatorisk fartygskategori' $profile "'_ssf_vessel_operation' => self::field('Fartygskategori', 'select', 'basic', true"
@@ -44,6 +48,9 @@ Assert-Contains 'Ansökningsnummer anges vid betalning' $emails 'som meddelande 
 Assert-Contains 'Kontaktperson som rubrik' $form '<legend>Kontaktperson</legend>'
 Assert-Contains 'Postadress i formuläret' $form '<span>Postadress</span>'
 Assert-Contains 'Dolda steg och knappar' $styles '.ssf-process-form [hidden] { display: none !important; }'
+Assert-Contains 'Nästa validerar aktuellt steg' $formScript 'if (!validate(steps[index])) return;'
+Assert-Contains 'Dolda vägfält avaktiveras' $formScript 'control.disabled = !visible;'
+Assert-Contains 'Endast synliga vägkrav är obligatoriska' $formScript 'control.required = visible;'
 Assert-Contains 'Nästa döljs på sista steget' $formScript 'next.hidden = index === steps.length - 1;'
 Assert-Contains 'Skicka visas på sista steget' $formScript 'submit.hidden = index !== steps.length - 1;'
 Assert-Contains 'Komplettering via statuslänk' $statusPage '$can_complete'
