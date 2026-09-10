@@ -110,6 +110,10 @@ function ssf_site_handle_application(): void
         wp_safe_redirect(add_query_arg('ssf_status', 'consent', wp_get_referer() ?: home_url('/ansokan/')));
         exit;
     }
+    if (! in_array($data['fartygstyp'], array('fritidsfartyg', 'handelsfartyg'), true)) {
+        wp_safe_redirect(add_query_arg('ssf_status', 'invalid', wp_get_referer() ?: home_url('/ansokan/')));
+        exit;
+    }
 
     $result = ssf_site_application_result($data);
     $title = sprintf('Ansökan: %s', $data['fartygsnamn'] ?: current_time('Y-m-d H:i'));
@@ -140,16 +144,24 @@ function ssf_site_handle_application(): void
     SSF_Email_Router::send_to_function('membership_application', $internal_subject, $content, $headers);
 
     if (is_email($data['ombud_epost'])) {
+        $legacy_fees = array(
+            'fritidsfartyg' => '500 kr/år per fartyg',
+            'handelsfartyg' => '1 500 kr/år per fartyg',
+        );
+        $fee = $legacy_fees[strtolower($data['fartygstyp'])] ?? '';
         SSF_Email_Template::send(
             $data['ombud_epost'],
             'Vi har tagit emot din ansökan',
             'application_received',
             array(
                 'recipient_name' => $data['ombud_namn'],
-                'body' => array('Tack för din ansökan som fartygsombud för ' . $data['fartygsnamn'] . '. SSF återkommer när ansökan har granskats.'),
-                'sections' => array(array('title' => 'Ansökan', 'rows' => array('Fartyg' => $data['fartygsnamn'], 'Status' => 'Inkommen'))),
-                'notice_title' => $result['title'],
-                'notice' => $result['text'],
+                'body' => array('Tack för din ansökan som fartygsombud för ' . $data['fartygsnamn'] . '. För att vi ska börja behandla ansökan behöver medlemsavgiften betalas in.'),
+                'sections' => array(
+                    array('title' => 'Ansökan', 'rows' => array('Fartyg' => $data['fartygsnamn'], 'Fartygskategori' => ucfirst($data['fartygstyp']), 'Status' => 'Inkommen')),
+                    array('title' => 'Betalning', 'rows' => array('Årsavgift' => $fee, 'Bankgiro' => '332-1908', 'Swish' => '1236400279')),
+                ),
+                'notice_title' => 'Viktigt om betalningen',
+                'notice' => 'Betala in årsavgiften och ange fartygets namn som meddelande i betalningen.',
             )
         );
     }

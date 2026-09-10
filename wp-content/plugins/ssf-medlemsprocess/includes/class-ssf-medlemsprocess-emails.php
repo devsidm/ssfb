@@ -104,6 +104,7 @@ class SSF_Medlemsprocess_Emails
             'applicant_name' => $data['applicant_name'] ?? '',
             'applicant_email' => $data['applicant_email'] ?? '',
             'ship_name' => $data['ship_name'] ?? get_the_title($application_id),
+            'vessel_operation' => $data['vessel_operation'] ?? '',
             'application_id' => get_post_meta($application_id, '_ssf_application_number', true),
             'application_status' => SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($application_id)),
             'received_date' => get_the_date('j F Y, H:i', $application_id),
@@ -155,6 +156,9 @@ class SSF_Medlemsprocess_Emails
         $title = '';
         $button_label = 'Följ din ansökan';
         $extra_rows = array();
+        $sections = array();
+        $notice_title = $comment ? 'Meddelande från SSF' : '';
+        $notice = $comment;
 
         if ('received' === $key) {
             $body = 'Tack för din ansökan om medlemskap för ' . $ship_name . '. Ansökan har registrerats och kommer att behandlas av Sveriges Segelfartygsförbund.';
@@ -191,13 +195,32 @@ class SSF_Medlemsprocess_Emails
             'Inkommen' => 'received' === $key ? (string) ($variables['received_date'] ?? '') : '',
             'Status' => $status,
         ), $extra_rows);
+        $sections[] = array('title' => 'Ansökan', 'rows' => array_filter($rows));
+        if ('received' === $key) {
+            $operation = sanitize_key((string) ($variables['vessel_operation'] ?? ''));
+            $fees = array(
+                'leisure' => array('label' => 'Fritidsfartyg', 'fee' => '500 kr/år per fartyg'),
+                'commercial' => array('label' => 'Handelsfartyg', 'fee' => '1 500 kr/år per fartyg'),
+            );
+            if (isset($fees[$operation])) {
+                $body .= ' För att vi ska börja behandla ansökan behöver medlemsavgiften betalas in.';
+                $sections[] = array('title' => 'Betalning', 'rows' => array(
+                    'Fartygskategori' => $fees[$operation]['label'],
+                    'Årsavgift' => $fees[$operation]['fee'],
+                    'Bankgiro' => '332-1908',
+                    'Swish' => '1236400279',
+                ));
+                $notice_title = 'Viktigt om betalningen';
+                $notice = 'Betala in årsavgiften och ange ansökningsnummer ' . $application_number . ' som meddelande i betalningen.';
+            }
+        }
         return array(
             'title' => $title,
             'recipient_name' => (string) ($variables['applicant_name'] ?? ''),
             'body' => array($body),
-            'sections' => array(array('title' => 'Ansökan', 'rows' => array_filter($rows))),
-            'notice_title' => $comment ? 'Meddelande från SSF' : '',
-            'notice' => $comment,
+            'sections' => $sections,
+            'notice_title' => $notice_title,
+            'notice' => $notice,
             'button_label' => $button_label,
             'button_url' => esc_url_raw((string) ($variables['status_link'] ?? '')),
         );

@@ -25,6 +25,9 @@ foreach ($type in @('motion_received','motion_status','application_received','ap
 foreach ($value in @('Sveriges Segelfartygsförbund','https://ssfb.se','HSX 031W BILLO','106 46 Stockholm','role="presentation"','AltBody','[DEV] ','wp_enqueue_media','ssf_email_template_preview','ssf_email_template_test')) {
     Assert-Contains "Central renderer $value" $template $value
 }
+foreach ($paymentValue in @('500 kr/år per fartyg','332-1908','1236400279','Viktigt om betalningen')) {
+    Assert-Contains "Ansökningsmejlets betalningsuppgift $paymentValue" $template $paymentValue
+}
 Assert-Contains 'Central HTML-escaping' $template 'nl2br(esc_html($paragraph))'
 Assert-Contains 'Central URL-escaping' $template 'esc_url($button_url)'
 Assert-NotContains 'Ingen generell dynamisk kommentar' $applications "variables['comment']"

@@ -70,6 +70,7 @@ class SSF_Medlemsfartyg_Profile
     {
         $all = array(self::MODE_APPLICATION, self::MODE_UPDATE, self::MODE_PORTAL, self::MODE_ADMIN);
         $edit = array(self::MODE_UPDATE, self::MODE_PORTAL, self::MODE_ADMIN);
+        $application_admin = array(self::MODE_APPLICATION, self::MODE_ADMIN);
 
         return array(
             'post_title' => self::field('Fartygsnamn', 'text', 'basic', true, true, $all),
@@ -83,6 +84,7 @@ class SSF_Medlemsfartyg_Profile
             '_ssf_home_port' => self::field('Hemmahamn', 'text', 'basic', true, true, $all),
             '_ssf_call_sign' => self::field('Signalbokstäver / anropssignal', 'text', 'basic', false, true, $all),
             'tax_fartygstyp' => self::field('Fartygstyp', 'taxonomy', 'basic', true, true, $all, array(), '', array('taxonomy' => 'fartygstyp')),
+            '_ssf_vessel_operation' => self::field('Fartygskategori', 'select', 'basic', true, false, $application_admin, array(), 'Välj efter hur fartyget används. Valet avgör årsavgiften.', array('options' => array('' => 'Välj fartygskategori', 'leisure' => 'Fritidsfartyg', 'commercial' => 'Handelsfartyg'))),
             '_ssf_rig' => self::field('Nuvarande rigg', 'text', 'basic', false, true, $all),
             '_ssf_hull_type' => self::field('Skrovtyp', 'text', 'basic', false, true, $all),
             '_ssf_material' => self::field('Material', 'text', 'basic', false, true, $all),
@@ -234,6 +236,9 @@ class SSF_Medlemsfartyg_Profile
             }
             if ('email' === $field['type'] && $value && ! is_email($value)) {
                 $errors->add($key, sprintf('%s måste vara en giltig e-postadress.', $field['label']));
+            }
+            if ('select' === $field['type'] && $value && ! array_key_exists($value, (array) ($field['options'] ?? array()))) {
+                $errors->add($key, sprintf('Välj ett giltigt alternativ för %s.', $field['label']));
             }
             if ('number' === $field['type'] && $value && ! is_numeric(str_replace(',', '.', $value))) {
                 $errors->add($key, sprintf('%s måste vara ett tal.', $field['label']));
@@ -392,6 +397,7 @@ class SSF_Medlemsfartyg_Profile
             'ship_draft' => self::value($ship_id, '_ssf_draft'),
             'ship_registry_number' => self::value($ship_id, '_ssf_registry_number'),
             'ship_type' => self::value($ship_id, 'tax_fartygstyp'),
+            'vessel_operation' => self::value($ship_id, '_ssf_vessel_operation'),
             'ship_rig' => self::value($ship_id, '_ssf_rig'),
             'ship_build_year' => self::value($ship_id, '_ssf_build_year'),
             'ship_shipyard' => self::value($ship_id, '_ssf_shipyard'),

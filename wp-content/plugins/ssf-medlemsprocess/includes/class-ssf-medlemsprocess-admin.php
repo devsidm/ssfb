@@ -74,7 +74,7 @@ class SSF_Medlemsprocess_Admin
         $labels = array(
             'application_path' => 'Ansökningsväg', 'ship_is_sailing' => 'Segelfartyg', 'ship_professional_use' => 'Seglande yrkesfartyg', 'ship_traditional_newbuild' => 'Traditionell nybyggnation',
             'ship_length' => 'Längd i huvuddäck', 'ship_beam' => 'Bredd', 'ship_draft' => 'Djupgående', 'ship_register' => 'Svenskt skeppsregister', 'ship_registry_number' => 'Registreringsnummer',
-            'ship_name' => 'Fartygets namn', 'ship_type' => 'Fartygstyp', 'ship_rig' => 'Rigtyp', 'ship_build_year' => 'Byggår', 'ship_shipyard' => 'Byggplats eller varv', 'ship_home_port' => 'Hemmahamn', 'ship_restoration' => 'Under restaurering',
+            'ship_name' => 'Fartygets namn', 'ship_type' => 'Fartygstyp', 'vessel_operation' => 'Fartygskategori', 'ship_rig' => 'Rigtyp', 'ship_build_year' => 'Byggår', 'ship_shipyard' => 'Byggplats eller varv', 'ship_home_port' => 'Hemmahamn', 'ship_restoration' => 'Under restaurering',
             'ship_short_description' => 'Kort beskrivning', 'ship_history' => 'Historia', 'ship_current_use' => 'Nuvarande användning', 'ship_description' => 'Fördjupad beskrivning',
             'applicant_name' => 'Fartygsombud', 'applicant_email' => 'E-post', 'applicant_invoice_email' => 'Faktura-e-post', 'applicant_phone' => 'Telefon', 'applicant_organization' => 'Organisation eller rederi', 'applicant_address' => 'Postadress', 'applicant_website' => 'Webbplats',
         );

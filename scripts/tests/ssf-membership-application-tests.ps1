@@ -30,6 +30,15 @@ foreach ($route in @('normal', 'small_registered', 'restoration', 'new_tradition
 Assert-Contains 'Gemensam Vessel Profile' $form 'SSF_Medlemsfartyg_Profile::render'
 foreach ($field in @('_ssf_owner', '_ssf_build_country', '_ssf_call_sign', '_ssf_length_overall', '_ssf_gross_tonnage', '_ssf_original_rig', '_ssf_sail_material')) { Assert-Contains "Fartygsfält $field" $profile "'$field'" }
 foreach ($field in @('applicant_first_name', 'applicant_last_name', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_invoice_email')) { Assert-Contains "Ombudsfält $field" $public "'$field'" }
+Assert-Contains 'Obligatorisk fartygskategori' $profile "'_ssf_vessel_operation' => self::field('Fartygskategori', 'select', 'basic', true"
+Assert-Contains 'Fritidsfartyg kan väljas' $profile "'leisure' => 'Fritidsfartyg'"
+Assert-Contains 'Handelsfartyg kan väljas' $profile "'commercial' => 'Handelsfartyg'"
+Assert-Contains 'Manipulerad fartygskategori avvisas' $profile "'select' === `$field['type'] && `$value && ! array_key_exists"
+Assert-Contains 'Fritidsfartygets årsavgift' $emails "'500 kr/år per fartyg'"
+Assert-Contains 'Handelsfartygets årsavgift' $emails "'1 500 kr/år per fartyg'"
+Assert-Contains 'Betalningens bankgiro' $emails "'332-1908'"
+Assert-Contains 'Betalningens Swishnummer' $emails "'1236400279'"
+Assert-Contains 'Ansökningsnummer anges vid betalning' $emails 'som meddelande i betalningen.'
 Assert-Contains 'Kontaktperson som rubrik' $form '<legend>Kontaktperson</legend>'
 Assert-Contains 'Postadress i formuläret' $form '<span>Postadress</span>'
 Assert-Contains 'Dolda steg och knappar' $styles '.ssf-process-form [hidden] { display: none !important; }'

@@ -99,7 +99,7 @@
       ['Telefon', textValue('applicant_phone')], ['E-post', textValue('applicant_email')], ['Faktura-e-post', textValue('applicant_invoice_email')], ['Hemsida', textValue('applicant_website')]
     ]);
     addReviewSection('Fartyget', [
-      ['Namn', textValue('post_title')], ['Fartygstyp', textValue('tax_fartygstyp')], ['Hemmahamn', textValue('_ssf_home_port')],
+      ['Namn', textValue('post_title')], ['Fartygstyp', textValue('tax_fartygstyp')], ['Fartygskategori', textValue('_ssf_vessel_operation')], ['Hemmahamn', textValue('_ssf_home_port')],
       ['Byggår', textValue('_ssf_build_year')], ['Längd i huvuddäck', textValue('_ssf_main_deck_length')], ['Bredd', textValue('_ssf_beam')],
       ['Nuvarande rigg', textValue('_ssf_rig')], ['Historik', textValue('_ssf_history')], ['Användning idag', textValue('_ssf_today')]
     ]);

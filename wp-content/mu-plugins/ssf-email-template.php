@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SSF Email Template
  * Description: Central presentation layer for SSF transactional email.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: SIDM
  */
 
@@ -310,6 +310,16 @@ final class SSF_Email_Template
         if ('annual_meeting_registration' === $template || 'annual_meeting_registration_updated' === $template) {
             $data['sections'] = array(array('title' => 'Årsmöteshelg', 'rows' => array('Datum' => '18–20 oktober 2026', 'Plats' => 'Marstrand')), array('title' => 'Dina val', 'rows' => array('Middag' => 'Ja', 'Aktivitet' => 'Guidad stadsvandring')));
             $data['button_label'] = 'Visa eller ändra min anmälan';
+        }
+        if ('application_received' === $template) {
+            $data['body'] = array('Tack för din ansökan om medlemskap för Exempelskutan. För att vi ska börja behandla ansökan behöver medlemsavgiften betalas in.');
+            $data['sections'] = array(
+                array('title' => 'Ansökan', 'rows' => array('Fartyg' => 'Exempelskutan', 'Ansökningsnummer' => 'SSF-2026-0004', 'Status' => 'Inkommen')),
+                array('title' => 'Betalning', 'rows' => array('Fartygskategori' => 'Fritidsfartyg', 'Årsavgift' => '500 kr/år per fartyg', 'Bankgiro' => '332-1908', 'Swish' => '1236400279')),
+            );
+            $data['notice_title'] = 'Viktigt om betalningen';
+            $data['notice'] = 'Betala in årsavgiften och ange ansökningsnummer SSF-2026-0004 som meddelande i betalningen.';
+            $data['button_label'] = 'Följ din ansökan';
         }
         if ('contact_confirmation' === $template) {
             $data['sections'] = array(array('title' => 'Ditt meddelande', 'rows' => array('Ämne' => 'Fråga om medlemskap')));
