@@ -2,19 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "",
-    "build":  "20260909.1",
-    "built_at":  "2026-09-09T18:06:53.7026249Z",
+    "build":  "20260910.1",
+    "built_at":  "2026-09-10T08:05:36.8286582Z",
     "source":  "codex",
-    "source_revision":  "64f1b3dba91b69787522713245b6de834a035311",
-    "description":  "Add centralized Cloudflare Turnstile protection for SSF forms",
+    "source_revision":  "d60622012567a37f2c9a8ef4b0aeb343e032191a",
+    "description":  "Modernisera medlemsansökan med PDF, SharePoint-arkiv och statussynk",
     "notes":  "",
     "components":  [
-                       "ssf-admin-navigation",
-                       "ssf-antispam",
                        "ssf-medlemsfartyg",
                        "ssf-medlemsprocess",
-                       "ssf-member-portal",
-                       "ssf-site-customizations"
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
