@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "",
-    "build":  "20260910.2",
-    "built_at":  "2026-09-10T08:24:50.6746714Z",
+    "build":  "20260910.3",
+    "built_at":  "2026-09-10T11:55:45.9984159Z",
     "source":  "codex",
-    "source_revision":  "836dfe0291132181db2371480f8abcd33764a279",
-    "description":  "Slutför medlemsansökans SharePoint-ID och verifierad statussynk",
+    "source_revision":  "b26f028e538249300c07d79b1428c58302066c4b",
+    "description":  "Förbättrat fartygsombudsformulär och efterhandskomplettering",
     "notes":  "",
     "components":  [
                        "ssf-medlemsprocess"
