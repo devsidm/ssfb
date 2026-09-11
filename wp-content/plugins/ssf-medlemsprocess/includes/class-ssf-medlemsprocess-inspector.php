@@ -286,7 +286,7 @@ class SSF_Medlemsprocess_Inspector
             if ($this->all_assigned_reports_complete($application_id)) {
                 $previous_status = SSF_Medlemsprocess_Application::status($application_id);
                 if (! in_array($previous_status, array('awaiting_decision', 'approved', 'approved_aspirant', 'rejected', 'archived'), true)) {
-                    SSF_Medlemsprocess_Application::transition($application_id, 'inspection_completed', '', false);
+                    SSF_Medlemsprocess_Application::transition($application_id, 'awaiting_decision', '', false, 'inspector');
                 }
                 SSF_Medlemsprocess_Plugin::instance()->emails->send_inspection_complete($application_id);
             }
@@ -309,7 +309,7 @@ class SSF_Medlemsprocess_Inspector
         $requires_completion = ! empty($_POST['requires_completion']);
         $send_email = ! empty($_POST['send_email']);
         if ($requires_completion) {
-            SSF_Medlemsprocess_Application::transition($application_id, 'needs_completion', $message, false);
+            SSF_Medlemsprocess_Application::transition($application_id, 'needs_completion', $message, false, 'inspector');
         } else {
             SSF_Medlemsprocess_Application::add_history($application_id, 'inspector_message', $message, true, array('audience' => 'inspectors', 'inspector_id' => $user_id));
         }

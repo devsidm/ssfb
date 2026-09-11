@@ -309,7 +309,7 @@ final class SSF_Admin_Navigation
         if (in_array($page, array('ssf-webbinnehall', 'ssf-calendar-events', 'ssf-calendar-settings', 'ssf-newsletter-editor', 'ssf-newsletter-import', 'ssf-newsletter-settings', 'ssf-stadgar-settings'), true) || in_array($post_type, array('post', 'ssf_promotion', 'ssf_newsletter', 'ssf_event', 'ssf_document'), true)) {
             return self::CONTENT;
         }
-        if (in_array($page, array('ssf-medlemsprocess-overview', 'ssf-medlemsprocess-settings', 'ssf-mina-fartyg', 'ssf-insamlingslankar', 'ssf-medlemsfartyg-settings', 'ssf-medlemsfartyg-export'), true) || in_array($post_type, array('ssf_application', 'ssf_ansokan', 'medlemsfartyg', 'ssf_ship_submission'), true)) {
+        if (in_array($page, array('ssf-medlemsprocess-overview', 'ssf-medlemsprocess-aspirants', 'ssf-medlemsprocess-settings', 'ssf-mina-fartyg', 'ssf-insamlingslankar', 'ssf-medlemsfartyg-settings', 'ssf-medlemsfartyg-export'), true) || in_array($post_type, array('ssf_application', 'ssf_ansokan', 'medlemsfartyg', 'ssf_ship_submission'), true)) {
             return self::MEMBERSHIP;
         }
         if ('ssf_kontakt' === $post_type) {

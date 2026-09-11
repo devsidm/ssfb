@@ -186,7 +186,7 @@ class SSF_Medlemsprocess_SharePoint
                 'meta_query' => array(
                     array('key' => '_ssf_sp_sync_status', 'value' => 'synced'),
                     array('key' => '_ssf_sp_application_folder_id', 'compare' => 'EXISTS'),
-                    array('key' => '_ssf_process_status', 'value' => array('approved', 'approved_aspirant', 'rejected', 'archived'), 'compare' => 'NOT IN'),
+                    array('key' => '_ssf_process_status', 'value' => array('approved', 'rejected', 'archived'), 'compare' => 'NOT IN'),
                 ),
             ));
             foreach ($ids as $id) {
@@ -222,31 +222,31 @@ class SSF_Medlemsprocess_SharePoint
 
     private function poll_application_unlocked(int $application_id)
     {
-        $folder_id = (string) get_post_meta($application_id, '_ssf_sp_application_folder_id', true);
         $list_id = (string) (get_post_meta($application_id, '_ssf_sp_list_id', true) ?: $this->application_list_id());
         $list_item_id = (string) get_post_meta($application_id, '_ssf_sp_application_list_item_id', true);
-        if (! $folder_id || (! $list_item_id && ! $folder_id)) {
-            return new WP_Error('application_sharepoint_reference_missing', 'Ansökan saknar en stabil SharePoint-referens.');
+        if (! $list_id || ! $list_item_id) {
+            return new WP_Error('application_sharepoint_reference_missing', 'Ansökan saknar List ID eller mappens stabila ListItem ID.');
         }
         $status_field = $this->config('metadata_application_status_field');
         $comment_field = $this->config('metadata_application_public_comment_field');
-        if ($list_id && $list_item_id) {
-            $remote = $this->request('GET', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '?$expand=fields');
-        } else {
-            $remote = $this->request('GET', $this->item_path($folder_id) . '/listItem?$expand=fields');
-        }
+        $membership_field = $this->config('metadata_application_membership_status_field');
+        $decision_field = $this->config('metadata_application_decision_date_field');
+        $remote = $this->request('GET', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '?$expand=fields');
         update_post_meta($application_id, '_ssf_sp_last_checked_at', gmdate('c'));
         if (is_wp_error($remote)) {
             update_post_meta($application_id, '_ssf_sp_status_poll_error', $remote->get_error_message());
+            update_post_meta($application_id, '_ssf_sp_last_error_details', $this->error_details($remote));
             return $remote;
         }
         $fields = (array) ($remote['fields'] ?? array());
         $remote_label = sanitize_text_field((string) ($fields[$status_field] ?? ''));
         $public_comment = sanitize_textarea_field((string) ($fields[$comment_field] ?? ''));
+        $decision_date = substr(sanitize_text_field((string) ($fields[$decision_field] ?? '')), 0, 10);
         update_post_meta($application_id, '_ssf_sp_last_status', $remote_label);
         update_post_meta($application_id, '_ssf_sp_last_checked_at', gmdate('c'));
         update_post_meta($application_id, '_ssf_sp_public_comment', $public_comment);
         delete_post_meta($application_id, '_ssf_sp_status_poll_error');
+        delete_post_meta($application_id, '_ssf_sp_last_error_details');
         $status = $this->wordpress_status($remote_label);
         if (! $status) {
             update_post_meta($application_id, '_ssf_sp_status_warning', 'Okänd SharePoint-status: ' . $remote_label);
@@ -254,24 +254,45 @@ class SSF_Medlemsprocess_SharePoint
         }
         delete_post_meta($application_id, '_ssf_sp_status_warning');
         $old = SSF_Medlemsprocess_Application::status($application_id);
-        if ($old === $status) {
+        $membership_before = SSF_Medlemsprocess_Application::membership_status($application_id);
+        if ($old === $status && ! ('approved_aspirant' === $status && 'not_member' === $membership_before && $decision_date)) {
             return array('changed' => false, 'email_sent' => false);
         }
-        $changed = SSF_Medlemsprocess_Application::transition($application_id, $status, $public_comment, true);
+        if ('approved_aspirant' === $status && ! $decision_date) {
+            update_post_meta($application_id, '_ssf_decision_date_required', '1');
+            update_post_meta($application_id, '_ssf_sp_status_warning', 'Beslutsdatum saknas. Fyll i DecisionDate i SharePoint för att slutföra aspirantbeslutet.');
+            return array('changed' => false, 'decision_date_missing' => true, 'email_sent' => false);
+        }
+        $changed = SSF_Medlemsprocess_Application::transition($application_id, $status, $public_comment, true, 'sharepoint', $decision_date);
+        if (! $changed) {
+            update_post_meta($application_id, '_ssf_sp_status_warning', 'Statusövergången från SharePoint är inte tillåten enligt arbetsflödet.');
+            return array('changed' => false, 'invalid_transition' => true, 'email_sent' => false);
+        }
         update_post_meta($application_id, '_ssf_status_source', 'sharepoint');
         update_post_meta($application_id, '_ssf_sp_status_changed_at', sanitize_text_field((string) ($remote['lastModifiedDateTime'] ?? gmdate('c'))));
+        update_post_meta($application_id, '_ssf_sp_last_membership_status', sanitize_text_field((string) ($fields[$membership_field] ?? '')));
+        delete_post_meta($application_id, '_ssf_sp_status_warning');
+        $this->push_status($application_id);
         $this->log('application_status_changed', array('application_id' => $application_id, 'old_status' => $old, 'new_status' => $status));
         return array('changed' => $changed, 'email_sent' => $changed);
     }
 
     public function push_status(int $application_id): void
     {
-        $folder_id = (string) get_post_meta($application_id, '_ssf_sp_application_folder_id', true);
-        if (! $folder_id) {
+        $list_id = (string) (get_post_meta($application_id, '_ssf_sp_list_id', true) ?: $this->application_list_id());
+        $list_item_id = (string) get_post_meta($application_id, '_ssf_sp_application_list_item_id', true);
+        if (! $list_id || ! $list_item_id) {
+            update_post_meta($application_id, '_ssf_sp_status_push_error', 'SharePoint-kopplingen saknar List ID eller mappens ListItem ID.');
             return;
         }
-        $field = $this->config('metadata_application_status_field');
-        $result = $this->request('PATCH', $this->item_path($folder_id) . '/listItem/fields', array($field => $this->sharepoint_status(SSF_Medlemsprocess_Application::status($application_id))));
+        $fields = array(
+            $this->config('metadata_application_status_field') => $this->sharepoint_status(SSF_Medlemsprocess_Application::status($application_id)),
+            $this->config('metadata_application_membership_status_field') => SSF_Medlemsprocess_Application::membership_status_label(SSF_Medlemsprocess_Application::membership_status($application_id)),
+            $this->config('metadata_application_decision_date_field') => (string) get_post_meta($application_id, '_ssf_decision_date', true),
+            $this->config('metadata_application_aspirant_start_field') => (string) get_post_meta($application_id, '_ssf_aspirant_started_at', true),
+            $this->config('metadata_application_aspirant_review_field') => (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
+        );
+        $result = $this->request('PATCH', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '/fields', array_filter($fields, static function ($value, $key) { return '' !== (string) $key && '' !== (string) $value; }, ARRAY_FILTER_USE_BOTH));
         if (is_wp_error($result)) {
             update_post_meta($application_id, '_ssf_sp_status_push_error', $result->get_error_message());
         } else {
@@ -329,8 +350,7 @@ class SSF_Medlemsprocess_SharePoint
 
     private function set_folder_metadata(int $application_id, string $folder_id)
     {
-        $schema = $this->ensure_schema();
-        $schema_error = is_wp_error($schema) ? $schema : null;
+        $is_initial = ! get_post_meta($application_id, '_ssf_sp_application_list_item_id', true);
         $list_item = $this->list_item($folder_id);
         if (is_wp_error($list_item)) {
             return $list_item;
@@ -338,25 +358,29 @@ class SSF_Medlemsprocess_SharePoint
         $list_id = $this->application_list_id();
         update_post_meta($application_id, '_ssf_sp_list_id', $list_id);
         update_post_meta($application_id, '_ssf_sp_application_list_item_id', sanitize_text_field((string) ($list_item['id'] ?? '')));
+        $schema = $this->ensure_schema();
+        if (is_wp_error($schema)) {
+            return $schema;
+        }
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $submitted = (string) get_post_meta($application_id, '_ssf_submitted_at', true);
         $fields = array(
             $this->config('metadata_application_wp_id_field') => (string) $application_id,
             $this->config('metadata_application_number_field') => (string) get_post_meta($application_id, '_ssf_application_number', true),
             $this->config('metadata_application_vessel_field') => (string) ($data['ship_name'] ?? ''),
-            $this->config('metadata_application_representative_field') => (string) ($data['applicant_name'] ?? ''),
             $this->config('metadata_application_received_field') => $submitted ? gmdate('Y-m-d', strtotime($submitted)) : gmdate('Y-m-d'),
             $this->config('metadata_application_route_field') => (string) ($data['application_path'] ?? ''),
+            $this->config('metadata_application_status_field') => $this->sharepoint_status(SSF_Medlemsprocess_Application::status($application_id)),
+            $this->config('metadata_application_membership_status_field') => SSF_Medlemsprocess_Application::membership_status_label(SSF_Medlemsprocess_Application::membership_status($application_id)),
+            $this->config('metadata_application_decision_date_field') => (string) get_post_meta($application_id, '_ssf_decision_date', true),
+            $this->config('metadata_application_aspirant_start_field') => (string) get_post_meta($application_id, '_ssf_aspirant_started_at', true),
+            $this->config('metadata_application_aspirant_review_field') => (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
         );
-        $is_initial = ! get_post_meta($application_id, '_ssf_sp_application_list_item_id', true);
-        if ($is_initial) {
-            $fields[$this->config('metadata_application_status_field')] = 'Inkommen';
-        }
         $result = $this->request('PATCH', $this->item_path($folder_id) . '/listItem/fields', array_filter($fields, static function ($value, $key) { return '' !== (string) $key && '' !== (string) $value; }, ARRAY_FILTER_USE_BOTH));
         if (! is_wp_error($result)) {
             if ($is_initial) { update_post_meta($application_id, '_ssf_sp_last_status', 'Inkommen'); }
         }
-        return ! is_wp_error($result) && $schema_error ? $schema_error : $result;
+        return $result;
     }
 
     private function ensure_schema()
@@ -373,39 +397,127 @@ class SSF_Medlemsprocess_SharePoint
         foreach ((array) ($columns['value'] ?? array()) as $column) {
             $existing[strtolower((string) ($column['name'] ?? ''))] = $column;
         }
-        $definitions = array(
-            $this->config('metadata_application_wp_id_field') => array('displayName' => 'WordPress Application ID', 'text' => new stdClass()),
-            $this->config('metadata_application_number_field') => array('displayName' => 'Ansökningsnummer', 'text' => new stdClass()),
-            $this->config('metadata_application_status_field') => array('displayName' => 'Status', 'choice' => array('allowTextEntry' => false, 'displayAs' => 'dropDownMenu', 'choices' => array_values($this->status_labels()))),
-            $this->config('metadata_application_vessel_field') => array('displayName' => 'Fartyg', 'text' => new stdClass()),
-            $this->config('metadata_application_representative_field') => array('displayName' => 'Fartygsombud', 'text' => new stdClass()),
-            $this->config('metadata_application_received_field') => array('displayName' => 'Inkommen datum', 'dateTime' => array('displayAs' => 'default', 'format' => 'dateOnly')),
-            $this->config('metadata_application_route_field') => array('displayName' => 'Ansökningsväg', 'text' => new stdClass()),
-            $this->config('metadata_application_public_comment_field') => array('displayName' => 'Extern statuskommentar', 'text' => array('allowMultipleLines' => true, 'appendChangesToExistingText' => false, 'linesForEditing' => 6, 'maxLength' => 4000)),
-        );
-        foreach ($definitions as $name => $definition) {
-            if (! $name) {
-                continue;
-            }
-            $existing_column = $existing[strtolower($name)] ?? null;
-            if ($existing_column) {
-                if ($name === $this->config('metadata_application_status_field')) {
-                    $current_choices = (array) ($existing_column['choice']['choices'] ?? array());
-                    $required_choices = array_values($this->status_labels());
-                    if (array_diff($required_choices, $current_choices) && ! empty($existing_column['id'])) {
-                        $updated = $this->request('PATCH', $this->list_base($list_id) . '/columns/' . rawurlencode((string) $existing_column['id']), array('choice' => array('allowTextEntry' => false, 'displayAs' => 'dropDownMenu', 'choices' => array_values(array_unique(array_merge($current_choices, $required_choices))))));
-                        if (is_wp_error($updated)) { return $updated; }
-                    }
-                }
-                continue;
-            }
-            $result = $this->request('POST', $this->list_base($list_id) . '/columns', array_merge(array('name' => $name), $definition));
-            if (is_wp_error($result)) {
-                return $result;
+        $checks = array();
+        $missing = array();
+        foreach ($this->schema_requirements() as $key => $requirement) {
+            $name = $this->config($requirement['config']);
+            $column = $name ? ($existing[strtolower($name)] ?? null) : null;
+            $missing_choices = $column && ! empty($requirement['choices']) ? array_values(array_diff($requirement['choices'], (array) ($column['choice']['choices'] ?? array()))) : array();
+            $type_ok = (bool) $column && array_key_exists($requirement['type'], $column);
+            $ok = $type_ok && ! $missing_choices;
+            $checks[$key] = array('name' => $name, 'label' => $requirement['label'], 'type' => $requirement['type'], 'type_ok' => $type_ok, 'ok' => $ok, 'missing_choices' => $missing_choices, 'choices_found' => $column ? count(array_intersect($requirement['choices'], (array) ($column['choice']['choices'] ?? array()))) : 0, 'choices_required' => count($requirement['choices']));
+            if (! $ok) {
+                $missing[] = $name ?: $requirement['label'];
             }
         }
-        update_option('ssf_medlemsprocess_graph_schema', array('verified_at' => gmdate('c'), 'list_id' => $list_id), false);
-        return array('list_id' => $list_id);
+        $diagnostics = array('ok' => ! $missing, 'verified_at' => gmdate('c'), 'list_id' => $list_id, 'fields' => $checks, 'missing' => $missing);
+        update_option('ssf_medlemsprocess_graph_schema', $diagnostics, false);
+        if ($missing) {
+            return new WP_Error('application_sharepoint_schema_incomplete', 'SharePoint-fält saknas eller har fel Choice-värden: ' . implode(', ', $missing) . '.', $diagnostics);
+        }
+        return $diagnostics;
+    }
+
+    public function schema_diagnostics(): array
+    {
+        $steps = array();
+        $this->ensure_graph();
+        if (! $this->graph) {
+            return $this->save_schema_diagnostics(array('ok' => false, 'message' => 'Microsoft Graph-klienten är inte tillgänglig.', 'steps' => array('authentication' => array('label' => 'Autentisering', 'ok' => false))));
+        }
+
+        $auth = $this->graph->authentication()->test();
+        $steps['authentication'] = $this->diagnostic_step('Autentisering', $auth);
+        if (is_wp_error($auth)) {
+            return $this->save_schema_diagnostics(array_merge(array('ok' => false, 'message' => $auth->get_error_message(), 'steps' => $steps), $this->error_details($auth)));
+        }
+
+        $site = $this->request('GET', 'sites/' . rawurlencode($this->config('application_site_id')) . '?$select=id,displayName,webUrl');
+        $steps['site'] = $this->diagnostic_step('Site access', $site);
+        $drive = is_wp_error($site) ? new WP_Error('site_access_required', 'Site access måste fungera först.') : $this->request('GET', $this->drive_base() . '?$select=id,name,webUrl');
+        $steps['drive'] = $this->diagnostic_step('Drive access', $drive);
+        $list_id = is_wp_error($drive) ? '' : $this->application_list_id();
+        $list = $list_id ? $this->request('GET', $this->list_base($list_id) . '?$select=id,displayName,webUrl') : new WP_Error('application_sharepoint_list_missing', 'List ID kunde inte identifieras.');
+        $steps['list'] = $this->diagnostic_step('List access', $list);
+
+        $schema = is_wp_error($list) ? new WP_Error('list_access_required', 'List access måste fungera först.') : $this->ensure_schema();
+        $steps['columns'] = $this->diagnostic_step('Läs kolumner', $schema);
+        $fields = is_wp_error($schema) ? (array) (($schema->get_error_data()['fields'] ?? array())) : (array) ($schema['fields'] ?? array());
+
+        $application_ids = get_posts(array(
+            'post_type' => SSF_Medlemsprocess_Application::POST_TYPE,
+            'post_status' => 'private',
+            'fields' => 'ids',
+            'posts_per_page' => 1,
+            'meta_key' => '_ssf_sp_application_list_item_id',
+            'orderby' => 'modified',
+            'order' => 'DESC',
+        ));
+        if ($list_id && $application_ids) {
+            $application_id = (int) $application_ids[0];
+            $folder_id = (string) get_post_meta($application_id, '_ssf_sp_application_folder_id', true);
+            $list_item_id = (string) get_post_meta($application_id, '_ssf_sp_application_list_item_id', true);
+            $folder = $folder_id ? $this->request('GET', $this->item_path($folder_id) . '?$select=id,name,folder,webUrl') : new WP_Error('application_folder_missing', 'Ärendet saknar mappens DriveItem ID.');
+            $steps['folder'] = $this->diagnostic_step('Hitta ärendemapp', $folder);
+            $folder_metadata = $list_item_id ? $this->request('GET', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '?$expand=fields') : new WP_Error('application_list_item_missing', 'Ärendet saknar mappens ListItem ID.');
+            $steps['read_metadata'] = $this->diagnostic_step('Läs mappmetadata', $folder_metadata);
+            if (! is_wp_error($schema) && ! is_wp_error($folder_metadata)) {
+                $write = $this->request('PATCH', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '/fields', array(
+                    $this->config('metadata_application_status_field') => $this->sharepoint_status(SSF_Medlemsprocess_Application::status($application_id)),
+                ));
+                $steps['write_metadata'] = $this->diagnostic_step('Skriv mappmetadata', $write);
+            } else {
+                $steps['write_metadata'] = array('label' => 'Skriv mappmetadata', 'ok' => null, 'message' => 'Inte testad eftersom kolumn- eller läskontrollen inte är godkänd.');
+            }
+        } else {
+            foreach (array('folder' => 'Hitta ärendemapp', 'read_metadata' => 'Läs mappmetadata', 'write_metadata' => 'Skriv mappmetadata') as $key => $label) {
+                $steps[$key] = array('label' => $label, 'ok' => null, 'message' => 'Ingen länkad ansökningsmapp finns att testa mot.');
+            }
+        }
+
+        $ok = ! is_wp_error($schema);
+        foreach ($steps as $step) {
+            if (false === ($step['ok'] ?? null)) {
+                $ok = false;
+            }
+        }
+        $diagnostics = array('ok' => $ok, 'verified_at' => gmdate('c'), 'list_id' => $list_id, 'fields' => $fields, 'steps' => $steps);
+        if (is_wp_error($schema)) {
+            $diagnostics['message'] = $schema->get_error_message();
+            $diagnostics = array_merge($diagnostics, $this->error_details($schema));
+        }
+        return $this->save_schema_diagnostics($diagnostics);
+    }
+
+    private function diagnostic_step(string $label, $result): array
+    {
+        if (! is_wp_error($result)) {
+            return array('label' => $label, 'ok' => true);
+        }
+        return array_merge(array('label' => $label, 'ok' => false, 'message' => $result->get_error_message()), $this->error_details($result));
+    }
+
+    private function save_schema_diagnostics(array $diagnostics): array
+    {
+        $diagnostics['verified_at'] = $diagnostics['verified_at'] ?? gmdate('c');
+        update_option('ssf_medlemsprocess_graph_schema', $diagnostics, false);
+        return $diagnostics;
+    }
+
+    private function schema_requirements(): array
+    {
+        return array(
+            'number' => array('label' => 'Ansökningsnummer', 'config' => 'metadata_application_number_field', 'type' => 'text', 'choices' => array()),
+            'vessel' => array('label' => 'Fartyg', 'config' => 'metadata_application_vessel_field', 'type' => 'text', 'choices' => array()),
+            'route' => array('label' => 'Ansökningsväg', 'config' => 'metadata_application_route_field', 'type' => 'choice', 'choices' => array('Normalfallet', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg')),
+            'application_status' => array('label' => 'Ansökningsstatus', 'config' => 'metadata_application_status_field', 'type' => 'choice', 'choices' => array_values($this->status_labels())),
+            'membership_status' => array('label' => 'Medlemsstatus', 'config' => 'metadata_application_membership_status_field', 'type' => 'choice', 'choices' => array_values(SSF_Medlemsprocess_Application::membership_statuses())),
+            'received' => array('label' => 'Inkommen datum', 'config' => 'metadata_application_received_field', 'type' => 'dateTime', 'choices' => array()),
+            'decision_date' => array('label' => 'Beslutsdatum', 'config' => 'metadata_application_decision_date_field', 'type' => 'dateTime', 'choices' => array()),
+            'aspirant_start' => array('label' => 'Aspirant från', 'config' => 'metadata_application_aspirant_start_field', 'type' => 'dateTime', 'choices' => array()),
+            'aspirant_review' => array('label' => 'Aspirant uppföljning', 'config' => 'metadata_application_aspirant_review_field', 'type' => 'dateTime', 'choices' => array()),
+            'wordpress_id' => array('label' => 'WordPress-ID', 'config' => 'metadata_application_wp_id_field', 'type' => 'text', 'choices' => array()),
+        );
     }
 
     private function application_list_id(): string
@@ -471,6 +583,7 @@ class SSF_Medlemsprocess_SharePoint
         update_post_meta($application_id, '_ssf_sp_sync_attempts', $attempts);
         update_post_meta($application_id, '_ssf_sp_sync_status', 'error');
         update_post_meta($application_id, '_ssf_sp_last_error', $error->get_error_message());
+        update_post_meta($application_id, '_ssf_sp_last_error_details', $this->error_details($error));
         SSF_Medlemsprocess_Application::add_history($application_id, 'sharepoint_error', 'SharePoint-synkningen misslyckades och kommer att försöka igen.', false);
         $this->log('application_sharepoint_failed', array('application_id' => $application_id, 'attempt' => $attempts, 'error' => $error->get_error_code()));
         if ($attempts <= count(self::RETRIES)) {
@@ -481,10 +594,9 @@ class SSF_Medlemsprocess_SharePoint
     private function status_labels(): array
     {
         return array(
-            'received' => 'Inkommen', 'under_review' => 'Under granskning', 'needs_completion' => 'Begär komplettering', 'completion_submitted' => 'Komplettering inkommen',
+            'received' => 'Inkommen', 'under_review' => 'Under granskning', 'needs_completion' => 'Begär komplettering', 'awaiting_completion' => 'Väntar på komplettering',
             'inspection_planned' => 'Inspektion ska bokas', 'inspection_booked' => 'Inspektion bokad',
-            'inspection_completed' => 'Inspektion genomförd', 'awaiting_decision' => 'Under bedömning',
-            'approved_aspirant' => 'Godkänd som aspirant', 'approved' => 'Godkänd', 'rejected' => 'Avslagen', 'paused' => 'Vilande', 'archived' => 'Avslutad',
+            'awaiting_decision' => 'Under slutbedömning', 'approved_aspirant' => 'Godkänd som aspirant', 'rejected' => 'Avslagen',
         );
     }
 
@@ -496,7 +608,7 @@ class SSF_Medlemsprocess_SharePoint
                 return $status;
             }
         }
-        $legacy = array('mottagen' => 'received', 'inskickad' => 'received', 'komplettering krävs' => 'needs_completion', 'väntar på beslut' => 'awaiting_decision', 'arkiverad' => 'archived');
+        $legacy = array('mottagen' => 'received', 'inskickad' => 'received', 'komplettering krävs' => 'needs_completion', 'komplettering inkommen' => 'under_review', 'väntar på beslut' => 'awaiting_decision', 'under bedömning' => 'awaiting_decision');
         return $legacy[$normalized] ?? '';
     }
 
@@ -514,6 +626,16 @@ class SSF_Medlemsprocess_SharePoint
     {
         $this->ensure_graph();
         return $this->graph ? $this->graph->request($method, $path, $body, $headers) : new WP_Error('graph_unavailable', 'Microsoft Graph-klienten är inte tillgänglig.');
+    }
+
+    private function error_details(WP_Error $error): array
+    {
+        $data = (array) $error->get_error_data();
+        return array(
+            'http_status' => (int) ($data['http_status'] ?? $data['status'] ?? 0),
+            'graph_code' => sanitize_text_field((string) ($data['graph_code'] ?? $data['microsoft_code'] ?? $error->get_error_code())),
+            'technical_message' => sanitize_text_field($error->get_error_message()),
+        );
     }
 
     private function ensure_graph(): void

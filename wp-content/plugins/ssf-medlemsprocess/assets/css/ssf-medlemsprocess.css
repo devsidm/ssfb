@@ -104,6 +104,10 @@
 .ssf-process-confirmation, .ssf-process-error { padding: 38px; }
 .ssf-status-summary, .ssf-status-section { padding: 24px; margin: 18px 0; }
 .ssf-status-badge { display: inline-block; padding: 6px 10px; color: var(--ssf-blue-deep); background: var(--ssf-gold-soft); border: 1px solid var(--ssf-gold); border-radius: 99px; font-weight: 700; }
+.ssf-status-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 18px 0; background: var(--ssf-border); border: 1px solid var(--ssf-border); }
+.ssf-status-dates div { min-width: 0; padding: 12px 14px; background: var(--ssf-white); }
+.ssf-status-dates dt { color: var(--ssf-muted); font-size: 13px; font-weight: 700; }
+.ssf-status-dates dd { margin: 4px 0 0; color: var(--ssf-blue-deep); font-weight: 700; }
 .ssf-status-timeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 0; margin: 28px 0; list-style: none; }
 .ssf-status-timeline li { position: relative; padding: 31px 8px 0; color: var(--ssf-muted); font-size: 13px; text-align: center; }
 .ssf-status-timeline li span { position: absolute; z-index: 1; top: 0; left: calc(50% - 12px); display: grid; width: 24px; height: 24px; place-items: center; background: var(--ssf-bg-soft); border: 1px solid var(--ssf-border); border-radius: 50%; color: var(--ssf-muted); font-weight: 700; }
@@ -115,8 +119,11 @@
 .ssf-status-message { padding: 13px 0; border-bottom: 1px solid var(--ssf-border); }
 .ssf-status-message:last-child { border-bottom: 0; }
 .ssf-status-files { padding-left: 20px; }
+.ssf-aspirant-upcoming td { background: #fff8dc; }
+.ssf-aspirant-urgent td { background: #fbe9e7; font-weight: 600; }
 
 @media (max-width: 680px) {
+  .ssf-status-dates { grid-template-columns: 1fr; }
   .ssf-process-shell { width: calc(100vw - 32px); max-width: calc(100vw - 32px); margin: 24px 0 24px calc(50% - 50vw + 16px); }
   .ssf-process-heading h1 { font-size: 30px; }
   .ssf-process-form { padding: 20px; }

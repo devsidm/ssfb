@@ -59,6 +59,7 @@ final class SSF_Medlemsprocess_Plugin
     public static function deactivate(): void
     {
         SSF_Medlemsprocess_SharePoint::unschedule();
+        SSF_Medlemsprocess_Application::unschedule();
         flush_rewrite_rules();
     }
 

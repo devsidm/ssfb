@@ -13,7 +13,7 @@ final class SharePointDestinations
 {
     public const OPTION = 'ssf_member_portal_sharepoint_destinations';
     public const HEALTH_OPTION = 'ssf_member_portal_sharepoint_health';
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
 
     public static function definitions(): array
     {
@@ -46,12 +46,16 @@ final class SharePointDestinations
                 ),
                 'metadata' => array(
                     'wordpress_id' => array('label' => 'WordPress Application ID', 'default' => 'WordPressApplicationID', 'legacy' => 'metadata_application_wp_id_field'),
-                    'number' => array('label' => 'Ansökningsnummer', 'default' => 'Ansokningsnummer', 'legacy' => 'metadata_application_number_field'),
-                    'status' => array('label' => 'Status', 'default' => 'Status', 'legacy' => 'metadata_application_status_field'),
-                    'vessel' => array('label' => 'Fartyg', 'default' => 'Fartyg', 'legacy' => 'metadata_application_vessel_field'),
+                    'number' => array('label' => 'Ansökningsnummer', 'default' => 'ApplicationNumber', 'legacy' => 'metadata_application_number_field'),
+                    'status' => array('label' => 'Ansökningsstatus', 'default' => 'ApplicationStatus', 'legacy' => 'metadata_application_status_field'),
+                    'membership_status' => array('label' => 'Medlemsstatus', 'default' => 'MembershipStatus', 'legacy' => 'metadata_application_membership_status_field'),
+                    'vessel' => array('label' => 'Fartyg', 'default' => 'VesselName', 'legacy' => 'metadata_application_vessel_field'),
                     'representative' => array('label' => 'Fartygsombud', 'default' => 'Fartygsombud', 'legacy' => 'metadata_application_representative_field'),
-                    'received' => array('label' => 'Inkommet datum', 'default' => 'InkommenDatum', 'legacy' => 'metadata_application_received_field'),
-                    'route' => array('label' => 'Ansökningsväg', 'default' => 'Ansokningsvag', 'legacy' => 'metadata_application_route_field'),
+                    'received' => array('label' => 'Inkommet datum', 'default' => 'ReceivedDate', 'legacy' => 'metadata_application_received_field'),
+                    'route' => array('label' => 'Ansökningsväg', 'default' => 'ApplicationPath', 'legacy' => 'metadata_application_route_field'),
+                    'decision_date' => array('label' => 'Beslutsdatum', 'default' => 'DecisionDate', 'legacy' => 'metadata_application_decision_date_field'),
+                    'aspirant_start' => array('label' => 'Aspirant från', 'default' => 'AspirantStartDate', 'legacy' => 'metadata_application_aspirant_start_field'),
+                    'aspirant_review' => array('label' => 'Aspirant uppföljning', 'default' => 'AspirantReviewDate', 'legacy' => 'metadata_application_aspirant_review_field'),
                     'public_comment' => array('label' => 'Extern statuskommentar', 'default' => 'ExternStatuskommentar', 'legacy' => 'metadata_application_public_comment_field'),
                 ),
             ),
@@ -73,7 +77,10 @@ final class SharePointDestinations
 
         $environment = self::valid_environment($environment ?: self::environment());
         $stored = self::stored();
-        $profile = array_merge(self::profile_defaults($definition), (array) ($stored['destinations'][$destination][$environment] ?? array()));
+        $defaults = self::profile_defaults($definition);
+        $saved = (array) ($stored['destinations'][$destination][$environment] ?? array());
+        $profile = array_merge($defaults, $saved);
+        $profile['metadata'] = array_merge((array) $defaults['metadata'], (array) ($saved['metadata'] ?? array()));
         if ($environment === self::environment()) {
             $profile = self::apply_server_overrides($destination, $profile);
         }

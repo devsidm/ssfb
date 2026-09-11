@@ -1,5 +1,7 @@
 # Central SharePoint-konfiguration
 
+Medlemsansökningarnas workflowkolumner skapas alltid manuellt i SharePoint. WordPress läser och validerar schemat men gör inga `POST`- eller `PATCH`-anrop mot `/columns`. Fullständig fältlista och exakta Choice-värden finns i [membership-applications.md](membership-applications.md).
+
 SSF använder två SharePoint-destinationer:
 
 - `annual_meetings`: motioner, motionsmetadata och årsmötesanmälningsexporter.

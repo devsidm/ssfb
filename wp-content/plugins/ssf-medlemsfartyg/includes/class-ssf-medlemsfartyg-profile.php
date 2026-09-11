@@ -21,7 +21,7 @@ class SSF_Medlemsfartyg_Profile
         return array(
             'normal' => array(
                 'number' => 1,
-                'title' => 'Seglande yrkesfartyg',
+                'title' => 'Normalfallet',
                 'summary' => 'Fartyget uppfyller stadgans måttkrav.',
                 'description' => 'Fartyget är ett segelfartyg eller segelfartyg med hjälpmotor, används eller har tidigare använts som seglande yrkesfartyg, har en längd i huvuddäck över 12 meter och uppfyller stadgans breddkrav om 4 meter.',
             ),

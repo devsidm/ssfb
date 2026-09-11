@@ -181,8 +181,8 @@ class SSF_Medlemsprocess_Public
         $all_files = array_merge((array) get_post_meta($application_id, '_ssf_completion_files', true), $files);
         update_post_meta($application_id, '_ssf_completion_files', array_map('intval', $all_files));
         SSF_Medlemsprocess_Application::add_history($application_id, 'completion', $message ?: 'Kompletterande filer skickades in.', true, array('files' => $files));
-        if ('needs_completion' === $current_status) {
-            SSF_Medlemsprocess_Application::transition($application_id, 'completion_submitted', '', false);
+        if (in_array($current_status, array('needs_completion', 'awaiting_completion'), true)) {
+            SSF_Medlemsprocess_Application::transition($application_id, 'under_review', '', false, 'system');
         }
         $new_token = SSF_Medlemsprocess_Application::issue_token($application_id);
         SSF_Medlemsprocess_Plugin::instance()->emails->send_template('completion_received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($new_token)));

@@ -20,7 +20,6 @@ class SSF_Medlemsprocess_Emails
             'completion_received' => array('label' => 'Komplettering mottagen', 'subject' => 'Vi har tagit emot din komplettering', 'body' => "Hej {applicant_name},\n\nTack, din komplettering för {ship_name} är mottagen och granskas av SSF.\n\n{status_link}"),
             'booking' => array('label' => 'Tid bokad', 'subject' => 'Tid bokad för ansökan till SSF - {ship_name}', 'body' => "Hej {applicant_name},\n\nSSF har bokat en tid för din ansökan.\n\nTid: {booking_time}\nPlats/form: {booking_location}\n\n{admin_comment}\n\n{status_link}"),
             'inspection_completed' => array('label' => 'Inspektion genomförd', 'subject' => 'Inspektionen är genomförd - {ship_name}', 'body' => "Hej {applicant_name},\n\nInspektionsunderlaget för {ship_name} är klart. SSF återkommer när nästa steg är beslutat.\n\n{status_link}"),
-            'approved' => array('label' => 'Beslut: godkänd', 'subject' => 'Din ansökan till SSF är godkänd', 'body' => "Hej {applicant_name},\n\nVi är glada att meddela att ansökan för {ship_name} har godkänts av Sveriges Segelfartygsförbund.\n\nNästa steg: {next_step}\n\n{status_link}\n\nVälkommen till SSF!"),
             'approved_aspirant' => array('label' => 'Beslut: godkänd som aspirant', 'subject' => 'Din ansökan till SSF är godkänd som aspirant', 'body' => "Hej {applicant_name},\n\nAnsökan för {ship_name} har godkänts som aspirant.\n\n{admin_comment}\n\n{status_link}"),
             'rejected' => array('label' => 'Beslut: avslagen', 'subject' => 'Beslut om din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nSSF har fattat beslut om ansökan för {ship_name}.\n\n{admin_comment}\n\n{status_link}"),
             'reminder' => array('label' => 'Påminnelse till sökanden', 'subject' => 'Påminnelse om din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nDet finns en uppdatering i ditt ärende för {ship_name}.\n\n{admin_comment}\n\n{status_link}"),
@@ -39,8 +38,7 @@ class SSF_Medlemsprocess_Emails
     {
         $map = array(
             'needs_completion' => 'completion_required', 'completion_submitted' => 'completion_received',
-            'inspection_completed' => 'inspection_completed', 'approved' => 'approved',
-            'approved_aspirant' => 'approved_aspirant', 'rejected' => 'rejected',
+            'inspection_completed' => 'inspection_completed', 'approved_aspirant' => 'approved_aspirant', 'rejected' => 'rejected',
         );
         $token = SSF_Medlemsprocess_Application::issue_token($application_id);
         $this->send_template($map[$status] ?? 'status_updated', $application_id, array('public_status_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
@@ -116,6 +114,9 @@ class SSF_Medlemsprocess_Emails
             'booking_location' => '',
             'decision' => '',
             'decision_comment' => get_post_meta($application_id, '_ssf_decision_public_reason', true),
+            'decision_date' => get_post_meta($application_id, '_ssf_decision_date', true),
+            'aspirant_start' => get_post_meta($application_id, '_ssf_aspirant_started_at', true),
+            'aspirant_review' => get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
         );
         $variables = array_merge($defaults, $variables);
         $replace = array();
@@ -176,12 +177,10 @@ class SSF_Medlemsprocess_Emails
         } elseif ('inspection_completed' === $key) {
             $title = 'Inspektionen är genomförd';
             $body = 'Inspektionsunderlaget för ' . $ship_name . ' är klart. SSF återkommer när nästa steg är beslutat.';
-        } elseif ('approved' === $key) {
-            $title = 'Din ansökan är godkänd';
-            $body = 'Vi är glada att meddela att ansökan för ' . $ship_name . ' har godkänts av Sveriges Segelfartygsförbund.';
         } elseif ('approved_aspirant' === $key) {
             $title = 'Din ansökan är godkänd som aspirant';
-            $body = 'Ansökan för ' . $ship_name . ' har godkänts som aspirant.';
+            $body = 'Er ansökan har godkänts och fartyget antas som aspirant i Sveriges Segelfartygsförbund. Aspirantperioden är ett år och följs av en uppföljning inför ett aktivt beslut om medlemskap som medlemsfartyg.';
+            $extra_rows = array('Aspirant från' => (string) ($variables['aspirant_start'] ?? ''), 'Planerat uppföljningsdatum' => (string) ($variables['aspirant_review'] ?? ''));
         } elseif ('rejected' === $key) {
             $title = 'Beslut om din ansökan';
             $body = 'SSF har fattat beslut om ansökan för ' . $ship_name . '.';

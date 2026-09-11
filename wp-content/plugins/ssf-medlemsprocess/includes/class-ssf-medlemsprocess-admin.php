@@ -27,6 +27,7 @@ class SSF_Medlemsprocess_Admin
         add_action('admin_post_ssf_export_memlist', array($this, 'export_memlist'));
         add_action('admin_post_ssf_retry_application_sharepoint', array($this, 'retry_sharepoint'));
         add_action('admin_post_ssf_poll_application_sharepoint', array($this, 'poll_sharepoint'));
+        add_action('admin_post_ssf_check_application_sharepoint_schema', array($this, 'check_sharepoint_schema'));
     }
 
     public function add_meta_boxes(): void
@@ -50,6 +51,11 @@ class SSF_Medlemsprocess_Admin
         $assigned = (int) get_post_meta($post->ID, '_ssf_assigned_user', true);
         $route = (string) get_post_meta($post->ID, '_ssf_application_route', true);
         $linked_ship = (int) get_post_meta($post->ID, '_ssf_linked_ship_id', true);
+        $membership_status = SSF_Medlemsprocess_Application::membership_status($post->ID);
+        $decision_date = (string) get_post_meta($post->ID, '_ssf_decision_date', true);
+        $aspirant_start = (string) get_post_meta($post->ID, '_ssf_aspirant_started_at', true);
+        $aspirant_review = (string) get_post_meta($post->ID, '_ssf_aspirant_review_due_at', true);
+        $available_statuses = array_unique(array_merge(array($status), SSF_Medlemsprocess_Application::allowed_transitions($status)));
         wp_nonce_field('ssf_save_application_' . $post->ID, 'ssf_application_admin_nonce');
         ?>
         <div class="ssf-process-admin-overview">
@@ -57,9 +63,14 @@ class SSF_Medlemsprocess_Admin
             <div><span class="ssf-process-admin-label">Fartyg</span><strong><?php echo esc_html($data['ship_name'] ?? ''); ?></strong></div>
             <div><span class="ssf-process-admin-label">Sökande</span><strong><?php echo esc_html($data['applicant_name'] ?? ''); ?></strong><a href="mailto:<?php echo esc_attr($data['applicant_email'] ?? ''); ?>"><?php echo esc_html($data['applicant_email'] ?? ''); ?></a></div>
             <div><span class="ssf-process-admin-label">Ansökningsväg</span><strong><?php echo esc_html(class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route); ?></strong><?php if ($linked_ship) : ?><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Visa fartygsuppgifter</a><?php endif; ?></div>
+            <div><span class="ssf-process-admin-label">Medlemsstatus</span><strong><?php echo esc_html(SSF_Medlemsprocess_Application::membership_status_label($membership_status)); ?></strong></div>
+            <div><span class="ssf-process-admin-label">Beslutsdatum</span><strong><?php echo esc_html($decision_date ?: 'Inte fastställt'); ?></strong></div>
+            <div><span class="ssf-process-admin-label">Aspirant från</span><strong><?php echo esc_html($aspirant_start ?: '–'); ?></strong></div>
+            <div><span class="ssf-process-admin-label">Aspirant uppföljning</span><strong><?php echo esc_html($aspirant_review ?: '–'); ?></strong></div>
         </div>
+        <?php if (get_post_meta($post->ID, '_ssf_decision_date_required', true)) : ?><div class="notice notice-warning inline"><p><strong>Beslutsdatum saknas.</strong> Aspirantbeslutet slutförs och mejlet skickas först när ett giltigt beslutsdatum har angetts.</p></div><?php endif; ?>
         <div class="ssf-process-admin-grid">
-            <label>Status<?php if ('synced' === get_post_meta($post->ID, '_ssf_sp_sync_status', true)) : ?><input type="hidden" name="ssf_process_status" value="<?php echo esc_attr($status); ?>"><strong class="ssf-process-readonly-status"><?php echo esc_html(SSF_Medlemsprocess_Application::status_label($status)); ?></strong><small>Ändras i SharePoint och synkas automatiskt.</small><?php else : ?><select name="ssf_process_status"><?php foreach (SSF_Medlemsprocess_Application::statuses() as $key => $item) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>><?php echo esc_html($item['label']); ?></option><?php endforeach; ?></select><?php endif; ?></label>
+            <label>Ansökningsstatus<select name="ssf_process_status"><?php foreach ($available_statuses as $key) : $item = SSF_Medlemsprocess_Application::statuses()[$key] ?? null; if (! $item || in_array($key, array('approved_aspirant', 'rejected'), true)) { continue; } ?><option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>><?php echo esc_html($item['label']); ?></option><?php endforeach; ?><?php if (in_array($status, array('approved_aspirant', 'rejected'), true)) : ?><option value="<?php echo esc_attr($status); ?>" selected><?php echo esc_html(SSF_Medlemsprocess_Application::status_label($status)); ?></option><?php endif; ?></select><small>Endast tillåtna nästa steg visas. Beslut fattas i beslutspanelen.</small></label>
             <label>Ansvarig handläggare<?php wp_dropdown_users(array('name' => 'ssf_assigned_user', 'selected' => $assigned, 'show_option_none' => 'Ej tilldelad', 'role__in' => array('administrator', 'ssf_inspector', 'ssf_inspektor', 'ssf_beslutsfattare'))); ?></label>
             <label>Nästa åtgärd<input type="text" name="ssf_next_action" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_next_action', true)); ?>" placeholder="Exempel: inväntar registreringsbevis"></label>
             <label>Publikt statusmeddelande<textarea name="ssf_status_message" rows="3" placeholder="Visas för sökanden vid statusändring"></textarea></label>
@@ -153,7 +164,9 @@ class SSF_Medlemsprocess_Admin
     {
         $decision = (array) get_post_meta($post->ID, '_ssf_decision', true);
         $linked_ship = (int) get_post_meta($post->ID, '_ssf_linked_ship_id', true);
-        ?><label>Beslut<select name="ssf_decision[status]"><option value="">Inget beslut ännu</option><option value="approved" <?php selected($decision['status'] ?? '', 'approved'); ?>>Godkänd</option><option value="approved_aspirant" <?php selected($decision['status'] ?? '', 'approved_aspirant'); ?>>Godkänd som aspirant</option><option value="rejected" <?php selected($decision['status'] ?? '', 'rejected'); ?>>Avslagen</option><option value="paused" <?php selected($decision['status'] ?? '', 'paused'); ?>>Vilande</option></select></label><label>Intern motivering<textarea name="ssf_decision[internal_reason]" rows="3"><?php echo esc_textarea($decision['internal_reason'] ?? ''); ?></textarea></label><label>Motivering till sökanden<textarea name="ssf_decision[public_reason]" rows="3"><?php echo esc_textarea($decision['public_reason'] ?? ''); ?></textarea></label><label class="ssf-process-check"><input type="checkbox" name="ssf_create_ship" value="1" <?php checked($linked_ship > 0); ?> <?php disabled($linked_ship > 0); ?>> <?php echo esc_html($linked_ship ? 'Fartygsprofil kopplad till ansökan' : 'Skapa fartygsprofil vid godkännande'); ?></label><?php if ($linked_ship) : ?><p><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Öppna kopplat medlemsfartyg</a></p><?php endif; ?><label>Memlist-status<select name="ssf_memlist_status"><?php foreach (array('not_ready' => 'Ej överförd', 'ready' => 'Redo för överföring', 'transferred' => 'Överförd') as $key => $label) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected(get_post_meta($post->ID, '_ssf_memlist_status', true), $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label><label>Memlist-ID<input type="text" name="ssf_memlist_id" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_memlist_id', true)); ?>"></label><?php
+        $membership_status = SSF_Medlemsprocess_Application::membership_status($post->ID);
+        $decision_date = (string) (get_post_meta($post->ID, '_ssf_decision_date', true) ?: ($decision['date'] ?? wp_date('Y-m-d')));
+        ?><?php if ('awaiting_decision' === SSF_Medlemsprocess_Application::status($post->ID) && current_user_can('ssf_decide_applications')) : ?><label>Ansökningsbeslut<select name="ssf_decision[status]"><option value="">Inget nytt beslut</option><option value="approved_aspirant">Godkänn som aspirant</option><option value="rejected">Avslå ansökan</option></select></label><label>Beslutsdatum<input type="date" name="ssf_decision[date]" value="<?php echo esc_attr($decision_date); ?>"><small>Krävs för godkännande som aspirant.</small></label><label>Intern motivering<textarea name="ssf_decision[internal_reason]" rows="3"><?php echo esc_textarea($decision['internal_reason'] ?? ''); ?></textarea></label><label>Motivering till sökanden<textarea name="ssf_decision[public_reason]" rows="3"><?php echo esc_textarea($decision['public_reason'] ?? ''); ?></textarea></label><?php endif; ?><?php if ('follow_up' === $membership_status && current_user_can('ssf_decide_applications')) : ?><label>Beslut efter aspirantperiod<select name="ssf_membership_decision"><option value="">Inget nytt beslut</option><option value="member_ship">Godkänn som medlemsfartyg</option><option value="closed">Avsluta</option></select></label><?php elseif ('aspirant' === $membership_status) : ?><p>Aspirantperioden pågår. Ordinarie medlemskap kräver ett aktivt beslut efter uppföljningsdatumet.</p><?php endif; ?><?php if ($linked_ship) : ?><p><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Öppna kopplad fartygsprofil</a></p><?php endif; ?><label>Memlist-status<select name="ssf_memlist_status"><?php foreach (array('not_ready' => 'Ej överförd', 'ready' => 'Redo för överföring', 'transferred' => 'Överförd') as $key => $label) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected(get_post_meta($post->ID, '_ssf_memlist_status', true), $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label><label>Memlist-ID<input type="text" name="ssf_memlist_id" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_memlist_id', true)); ?>"></label><?php
     }
 
     public function render_sharepoint(WP_Post $post): void
@@ -163,13 +176,20 @@ class SSF_Medlemsprocess_Admin
         $last_sync = (string) get_post_meta($post->ID, '_ssf_sp_synced_at', true);
         $last_check = (string) get_post_meta($post->ID, '_ssf_sp_last_checked_at', true);
         $error = (string) (get_post_meta($post->ID, '_ssf_sp_last_error', true) ?: get_post_meta($post->ID, '_ssf_sp_status_poll_error', true));
+        $error_details = (array) get_post_meta($post->ID, '_ssf_sp_last_error_details', true);
         $warning = (string) get_post_meta($post->ID, '_ssf_sp_schema_warning', true);
+        $site_id = (string) get_post_meta($post->ID, '_ssf_sp_site_id', true);
+        $drive_id = (string) get_post_meta($post->ID, '_ssf_sp_drive_id', true);
+        $list_item_id = (string) get_post_meta($post->ID, '_ssf_sp_application_list_item_id', true);
         echo '<p><strong>Synk:</strong> ' . esc_html($sync_status ?: 'Inte startad') . '</p>';
         if ($last_sync) { echo '<p><strong>Senast synkad:</strong><br>' . esc_html($last_sync) . '</p>'; }
         if ($last_check) { echo '<p><strong>Status kontrollerad:</strong><br>' . esc_html($last_check) . '</p>'; }
         if ($web_url) { echo '<p><a class="button button-primary" href="' . esc_url($web_url) . '" target="_blank" rel="noopener">Öppna SharePoint</a></p>'; }
         if ($error) { echo '<div class="notice notice-error inline"><p>' . esc_html($error) . '</p></div>'; }
+        if ($error_details) { echo '<details><summary>Tekniska detaljer</summary><dl><dt>HTTP-status</dt><dd>' . esc_html((string) ($error_details['http_status'] ?? '–')) . '</dd><dt>Graph-felkod</dt><dd>' . esc_html((string) ($error_details['graph_code'] ?? '–')) . '</dd><dt>Meddelande</dt><dd>' . esc_html((string) ($error_details['technical_message'] ?? '–')) . '</dd></dl></details>'; }
         if ($warning) { echo '<div class="notice notice-warning inline"><p>' . esc_html($warning) . '</p></div>'; }
+        if ($web_url && (! $site_id || ! $drive_id || ! $list_item_id)) { echo '<div class="notice notice-warning inline"><p>Äldre ärende saknar en fullständig ID-koppling. Använd Synka filer igen för att komplettera SharePoint-kopplingen.</p></div>'; }
+        if ($site_id || $drive_id || $list_item_id) { echo '<details><summary>SharePoint-ID:n</summary><dl><dt>Site ID</dt><dd>' . esc_html($site_id ?: '–') . '</dd><dt>Drive ID</dt><dd>' . esc_html($drive_id ?: '–') . '</dd><dt>Mappens ListItem ID</dt><dd>' . esc_html($list_item_id ?: '–') . '</dd></dl></details>'; }
         echo '<p><a class="button" href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_retry_application_sharepoint&application_id=' . $post->ID), 'ssf_retry_application_sharepoint_' . $post->ID)) . '">Synka filer igen</a></p>';
         if ($web_url) { echo '<p><a class="button" href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_poll_application_sharepoint&application_id=' . $post->ID), 'ssf_poll_application_sharepoint_' . $post->ID)) . '">Synka status nu</a></p>'; }
     }
@@ -211,11 +231,22 @@ class SSF_Medlemsprocess_Admin
             update_post_meta($post_id, '_ssf_decision', $decision);
             update_post_meta($post_id, '_ssf_decision_public_reason', $decision['public_reason']);
             $status = $decision['status'];
-            if (in_array($status, array('approved', 'approved_aspirant'), true) && (! empty($_POST['ssf_create_ship']) || get_post_meta($post_id, '_ssf_linked_ship_id', true))) { SSF_Medlemsprocess_Application::create_member_ship($post_id); }
         }
         $old_status = SSF_Medlemsprocess_Application::status($post_id);
-        SSF_Medlemsprocess_Application::transition($post_id, $status, sanitize_textarea_field(wp_unslash($_POST['ssf_status_message'] ?? '')));
-        if ($old_status !== $status && get_post_meta($post_id, '_ssf_sp_application_folder_id', true)) {
+        if (in_array($status, array('approved_aspirant', 'rejected'), true) && ! current_user_can('ssf_decide_applications')) {
+            $status = $old_status;
+        }
+        $status_message = $decision['status'] ? $decision['public_reason'] : sanitize_textarea_field(wp_unslash($_POST['ssf_status_message'] ?? ''));
+        $changed = SSF_Medlemsprocess_Application::transition($post_id, $status, $status_message, true, 'wordpress_admin', (string) $decision['date']);
+        $membership_changed = false;
+        $membership_decision = sanitize_key(wp_unslash($_POST['ssf_membership_decision'] ?? ''));
+        if ($membership_decision && current_user_can('ssf_decide_applications')) {
+            $membership_changed = SSF_Medlemsprocess_Application::set_membership_status($post_id, $membership_decision, 'wordpress_admin');
+            if ($membership_changed && 'member_ship' === $membership_decision) {
+                SSF_Medlemsprocess_Application::create_member_ship($post_id);
+            }
+        }
+        if ((($changed && $old_status !== SSF_Medlemsprocess_Application::status($post_id)) || $membership_changed) && get_post_meta($post_id, '_ssf_sp_application_folder_id', true)) {
             SSF_Medlemsprocess_Plugin::instance()->sharepoint->push_status($post_id);
         }
     }
@@ -263,15 +294,25 @@ class SSF_Medlemsprocess_Admin
         exit;
     }
 
+    public function check_sharepoint_schema(): void
+    {
+        if (! current_user_can('ssf_manage_application_settings') || ! check_admin_referer('ssf_check_application_sharepoint_schema')) { wp_die('Du saknar behörighet.'); }
+        SSF_Medlemsprocess_Plugin::instance()->sharepoint->schema_diagnostics();
+        wp_safe_redirect(add_query_arg('schema_checked', '1', admin_url('admin.php?page=ssf-medlemsprocess-settings')));
+        exit;
+    }
+
     public function add_menu_pages(): void
     {
         if (class_exists('SSF_Admin_Navigation')) {
             add_submenu_page(null, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
+            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Aspiranter', 'Aspiranter', 'ssf_view_applications', 'ssf-medlemsprocess-aspirants', array($this, 'render_aspirants'), 30);
             add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Inställningar för medlemsprocessen', 'Processinställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'), 80);
             return;
         }
 
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
+        add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Aspiranter', 'Aspiranter', 'ssf_view_applications', 'ssf-medlemsprocess-aspirants', array($this, 'render_aspirants'));
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Inställningar', 'Inställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'));
     }
 
@@ -279,14 +320,22 @@ class SSF_Medlemsprocess_Admin
     {
         if (! current_user_can('ssf_view_applications')) { wp_die('Du saknar behörighet.'); }
         $counts = array(); foreach (SSF_Medlemsprocess_Application::statuses() as $key => $item) { $counts[$key] = count(get_posts(array('post_type' => SSF_Medlemsprocess_Application::POST_TYPE, 'post_status' => 'private', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => '_ssf_process_status', 'meta_value' => $key))); }
-        ?><div class="wrap ssf-process-dashboard"><h1>Medlemsprocess</h1><div class="ssf-process-dashboard-cards"><?php foreach (array('received', 'under_review', 'needs_completion', 'inspection_booked', 'awaiting_decision', 'approved') as $status) : ?><div class="ssf-process-dashboard-card"><span><?php echo esc_html(SSF_Medlemsprocess_Application::status_label($status)); ?></span><strong><?php echo esc_html((string) ($counts[$status] ?? 0)); ?></strong></div><?php endforeach; ?></div><p><a class="button button-primary" href="<?php echo esc_url(admin_url('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE)); ?>">Öppna ansökningar</a> <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_export_memlist'), 'ssf_export_memlist')); ?>">Exportera godkända till CSV</a></p></div><?php
+        ?><div class="wrap ssf-process-dashboard"><h1>Medlemsprocess</h1><div class="ssf-process-dashboard-cards"><?php foreach (array('received', 'under_review', 'awaiting_completion', 'inspection_booked', 'awaiting_decision', 'approved_aspirant') as $status) : ?><div class="ssf-process-dashboard-card"><span><?php echo esc_html(SSF_Medlemsprocess_Application::status_label($status)); ?></span><strong><?php echo esc_html((string) ($counts[$status] ?? 0)); ?></strong></div><?php endforeach; ?></div><p><a class="button button-primary" href="<?php echo esc_url(admin_url('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE)); ?>">Öppna ansökningar</a> <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-medlemsprocess-aspirants')); ?>">Visa aspiranter</a> <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_export_memlist'), 'ssf_export_memlist')); ?>">Exportera medlemsfartyg till CSV</a></p></div><?php
+    }
+
+    public function render_aspirants(): void
+    {
+        if (! current_user_can('ssf_view_applications')) { wp_die('Du saknar behörighet.'); }
+        $applications = get_posts(array('post_type' => SSF_Medlemsprocess_Application::POST_TYPE, 'post_status' => 'private', 'posts_per_page' => 200, 'meta_key' => '_ssf_aspirant_review_due_at', 'orderby' => 'meta_value', 'order' => 'ASC', 'meta_query' => array(array('key' => '_ssf_membership_status', 'value' => array('aspirant', 'follow_up'), 'compare' => 'IN'))));
+        ?><div class="wrap"><h1>Aspiranter</h1><table class="widefat striped"><thead><tr><th>Fartyg</th><th>Ansökningsnummer</th><th>Aspirant från</th><th>Uppföljningsdatum</th><th>Dagar kvar</th><th>Status</th></tr></thead><tbody><?php if (! $applications) : ?><tr><td colspan="6">Det finns inga aktiva aspiranter.</td></tr><?php endif; ?><?php foreach ($applications as $application) : $data = SSF_Medlemsprocess_Application::data($application->ID); $start = (string) get_post_meta($application->ID, '_ssf_aspirant_started_at', true); $review = (string) get_post_meta($application->ID, '_ssf_aspirant_review_due_at', true); $days = $review ? (int) floor((strtotime($review . ' 00:00:00') - current_time('timestamp')) / DAY_IN_SECONDS) : 0; $membership = SSF_Medlemsprocess_Application::membership_status($application->ID); $timing = $days < 0 ? 'Förfallen' : ($days <= 30 ? 'Åtgärd inom 30 dagar' : ($days <= 60 ? 'Kommande inom 60 dagar' : SSF_Medlemsprocess_Application::membership_status_label($membership))); ?><tr class="<?php echo $days <= 30 ? 'ssf-aspirant-urgent' : ($days <= 60 ? 'ssf-aspirant-upcoming' : ''); ?>"><td><a href="<?php echo esc_url(get_edit_post_link($application->ID)); ?>"><?php echo esc_html($data['ship_name'] ?? get_the_title($application)); ?></a></td><td><?php echo esc_html((string) get_post_meta($application->ID, '_ssf_application_number', true)); ?></td><td><?php echo esc_html($start); ?></td><td><?php echo esc_html($review); ?></td><td><?php echo esc_html($review ? (string) $days : '–'); ?></td><td><?php echo esc_html($timing); ?></td></tr><?php endforeach; ?></tbody></table></div><?php
     }
 
     public function render_settings(): void
     {
         if (! current_user_can('ssf_manage_application_settings')) { wp_die('Du saknar behörighet.'); }
         $settings = SSF_Medlemsprocess_Plugin::settings();
-        ?><div class="wrap"><h1>Inställningar för medlemsprocessen</h1><p>Interna e-postmottagare och den gemensamma e-postdesignen styrs under SSF → System → Microsoft 365.</p><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_save_process_settings"><?php wp_nonce_field('ssf_save_process_settings'); ?><table class="form-table"><tr><th>Statuslänkens giltighet</th><td><input type="number" min="1" max="730" name="settings[token_days]" value="<?php echo esc_attr((string) $settings['token_days']); ?>"> dagar</td></tr><tr><th>Max bildstorlek</th><td><input type="number" min="1" max="32" name="settings[max_image_mb]" value="<?php echo esc_attr((string) $settings['max_image_mb']); ?>"> MB</td></tr><tr><th>Max PDF-storlek</th><td><input type="number" min="1" max="32" name="settings[max_file_mb]" value="<?php echo esc_attr((string) $settings['max_file_mb']); ?>"> MB</td></tr></table><h2>Ämnesrader för e-post</h2><p>Meddelandets struktur, statusrutor, knappar och footer hanteras av den centrala SSF-mallen.</p><?php foreach (SSF_Medlemsprocess_Emails::templates() as $key => $template) : if ('admin_notice' === $key) { continue; } $saved = (array) ($settings['templates'][$key] ?? array()); ?><p><label><strong><?php echo esc_html($template['label']); ?></strong><input class="large-text" type="text" name="settings[templates][<?php echo esc_attr($key); ?>][subject]" value="<?php echo esc_attr($saved['subject'] ?? $template['subject']); ?>"></label></p><?php endforeach; submit_button('Spara inställningar'); ?></form></div><?php
+        $schema = (array) get_option('ssf_medlemsprocess_graph_schema', array());
+        ?><div class="wrap"><h1>Inställningar för medlemsprocessen</h1><p>Interna e-postmottagare och den gemensamma e-postdesignen styrs under SSF → System → Microsoft 365.</p><h2>SharePoint-fält</h2><p>WordPress kontrollerar anslutningen och dokumentbibliotekets schema. Kolumner och Choice-värden skapas alltid manuellt i SharePoint.</p><p><a class="button button-secondary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_check_application_sharepoint_schema'), 'ssf_check_application_sharepoint_schema')); ?>">Kontrollera SharePoint-konfiguration</a></p><?php if ($schema) : ?><?php if (! empty($schema['steps'])) : ?><table class="widefat striped"><thead><tr><th>Kontroll</th><th>Resultat</th><th>Tekniska detaljer</th></tr></thead><tbody><?php foreach ((array) $schema['steps'] as $step) : ?><tr><td><?php echo esc_html($step['label'] ?? ''); ?></td><td><?php echo true === ($step['ok'] ?? null) ? 'PASS' : (false === ($step['ok'] ?? null) ? 'FAIL' : 'INTE TESTAD'); ?></td><td><?php echo esc_html($step['message'] ?? ''); ?><?php if (! empty($step['http_status']) || ! empty($step['graph_code'])) : ?><br><small>HTTP <?php echo esc_html((string) ($step['http_status'] ?? '–')); ?> · <?php echo esc_html((string) ($step['graph_code'] ?? '–')); ?></small><?php endif; ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?><h3>Kolumner</h3><table class="widefat striped"><thead><tr><th>Fält</th><th>Internnamn</th><th>Resultat</th></tr></thead><tbody><?php foreach ((array) ($schema['fields'] ?? array()) as $field) : ?><tr><td><?php echo esc_html($field['label'] ?? ''); ?></td><td><code><?php echo esc_html($field['name'] ?? ''); ?></code></td><td><?php echo ! empty($field['ok']) ? '✓' : 'Saknas eller är felkonfigurerat'; ?><?php if (! empty($field['choices_required'])) : ?> — <?php echo esc_html((string) ($field['choices_found'] ?? 0)); ?> av <?php echo esc_html((string) $field['choices_required']); ?> val<?php endif; ?><?php if (! empty($field['missing_choices'])) : ?><br><small>Lägg till: <?php echo esc_html(implode(', ', $field['missing_choices'])); ?></small><?php endif; ?></td></tr><?php endforeach; ?></tbody></table><p>Senast kontrollerad: <?php echo esc_html((string) ($schema['verified_at'] ?? 'Aldrig')); ?></p><?php endif; ?><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_save_process_settings"><?php wp_nonce_field('ssf_save_process_settings'); ?><table class="form-table"><tr><th>Statuslänkens giltighet</th><td><input type="number" min="1" max="730" name="settings[token_days]" value="<?php echo esc_attr((string) $settings['token_days']); ?>"> dagar</td></tr><tr><th>Max bildstorlek</th><td><input type="number" min="1" max="32" name="settings[max_image_mb]" value="<?php echo esc_attr((string) $settings['max_image_mb']); ?>"> MB</td></tr><tr><th>Max PDF-storlek</th><td><input type="number" min="1" max="32" name="settings[max_file_mb]" value="<?php echo esc_attr((string) $settings['max_file_mb']); ?>"> MB</td></tr></table><h2>Ämnesrader för e-post</h2><p>Meddelandets struktur, statusrutor, knappar och footer hanteras av den centrala SSF-mallen.</p><?php foreach (SSF_Medlemsprocess_Emails::templates() as $key => $template) : if ('admin_notice' === $key) { continue; } $saved = (array) ($settings['templates'][$key] ?? array()); ?><p><label><strong><?php echo esc_html($template['label']); ?></strong><input class="large-text" type="text" name="settings[templates][<?php echo esc_attr($key); ?>][subject]" value="<?php echo esc_attr($saved['subject'] ?? $template['subject']); ?>"></label></p><?php endforeach; submit_button('Spara inställningar'); ?></form></div><?php
     }
 
     public function save_settings(): void
@@ -301,7 +350,7 @@ class SSF_Medlemsprocess_Admin
     public function export_memlist(): void
     {
         if (! current_user_can('ssf_manage_application_settings') || ! check_admin_referer('ssf_export_memlist')) { wp_die('Du saknar behörighet.'); }
-        $applications = get_posts(array('post_type' => SSF_Medlemsprocess_Application::POST_TYPE, 'post_status' => 'private', 'posts_per_page' => -1, 'meta_query' => array(array('key' => '_ssf_process_status', 'value' => array('approved', 'approved_aspirant'), 'compare' => 'IN'))));
+        $applications = get_posts(array('post_type' => SSF_Medlemsprocess_Application::POST_TYPE, 'post_status' => 'private', 'posts_per_page' => -1, 'meta_key' => '_ssf_membership_status', 'meta_value' => 'member_ship'));
         nocache_headers(); header('Content-Type: text/csv; charset=UTF-8'); header('Content-Disposition: attachment; filename=ssf-memlist-' . gmdate('Y-m-d') . '.csv'); $output = fopen('php://output', 'w'); fwrite($output, "\xEF\xBB\xBF"); fputcsv($output, array('Ärendenummer', 'Status', 'Fartyg', 'Ombud', 'E-post', 'Telefon', 'Organisation', 'Memlist-ID'), ';');
         foreach ($applications as $application) { $data = SSF_Medlemsprocess_Application::data($application->ID); fputcsv($output, array(get_post_meta($application->ID, '_ssf_application_number', true), SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($application->ID)), $data['ship_name'] ?? '', $data['applicant_name'] ?? '', $data['applicant_email'] ?? '', $data['applicant_phone'] ?? '', $data['applicant_organization'] ?? '', get_post_meta($application->ID, '_ssf_memlist_id', true)), ';'); }
         fclose($output); exit;
@@ -314,8 +363,8 @@ class SSF_Medlemsprocess_Admin
         wp_enqueue_script('ssf-medlemsprocess-admin', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-medlemsprocess-admin.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
     }
 
-    public function columns(array $columns): array { return array('cb' => $columns['cb'], 'title' => 'Ansökningsnummer', 'ssf_ship' => 'Fartyg', 'ssf_applicant' => 'Fartygsombud', 'ssf_route' => 'Medlemsväg', 'ssf_status' => 'Status', 'ssf_sharepoint' => 'SharePoint', 'ssf_activity' => 'Senast synkad', 'date' => 'Inkommen'); }
-    public function column_content(string $column, int $post_id): void { $data = SSF_Medlemsprocess_Application::data($post_id); if ('ssf_ship' === $column) echo esc_html($data['ship_name'] ?? ''); if ('ssf_applicant' === $column) echo esc_html($data['applicant_name'] ?? ''); if ('ssf_route' === $column) echo esc_html($data['application_path'] ?? ''); if ('ssf_status' === $column) echo '<span class="ssf-process-status-badge">' . esc_html(SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($post_id))) . '</span>'; if ('ssf_sharepoint' === $column) { $url = (string) get_post_meta($post_id, '_ssf_sp_application_web_url', true); $sync = (string) get_post_meta($post_id, '_ssf_sp_sync_status', true); echo $url ? '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">Öppna</a><br>' : ''; echo esc_html($sync ?: 'Ej synkad'); } if ('ssf_activity' === $column) echo esc_html((string) (get_post_meta($post_id, '_ssf_sp_last_checked_at', true) ?: get_post_meta($post_id, '_ssf_sp_synced_at', true))); }
+    public function columns(array $columns): array { return array('cb' => $columns['cb'], 'title' => 'Ansökningsnummer', 'ssf_ship' => 'Fartyg', 'ssf_applicant' => 'Fartygsombud', 'ssf_route' => 'Ansökningsväg', 'ssf_status' => 'Ansökningsstatus', 'ssf_membership' => 'Medlemsstatus', 'ssf_sharepoint' => 'SharePoint', 'ssf_activity' => 'Senast synkad', 'date' => 'Inkommen'); }
+    public function column_content(string $column, int $post_id): void { $data = SSF_Medlemsprocess_Application::data($post_id); if ('ssf_ship' === $column) echo esc_html($data['ship_name'] ?? ''); if ('ssf_applicant' === $column) echo esc_html($data['applicant_name'] ?? ''); if ('ssf_route' === $column) echo esc_html($data['application_path'] ?? ''); if ('ssf_status' === $column) echo '<span class="ssf-process-status-badge">' . esc_html(SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($post_id))) . '</span>'; if ('ssf_membership' === $column) echo esc_html(SSF_Medlemsprocess_Application::membership_status_label(SSF_Medlemsprocess_Application::membership_status($post_id))); if ('ssf_sharepoint' === $column) { $url = (string) get_post_meta($post_id, '_ssf_sp_application_web_url', true); $sync = (string) get_post_meta($post_id, '_ssf_sp_sync_status', true); echo $url ? '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">Öppna</a><br>' : ''; echo esc_html($sync ?: 'Ej synkad'); } if ('ssf_activity' === $column) echo esc_html((string) (get_post_meta($post_id, '_ssf_sp_last_checked_at', true) ?: get_post_meta($post_id, '_ssf_sp_synced_at', true))); }
 
     public function status_filter(string $post_type): void
     {
@@ -348,5 +397,5 @@ class SSF_Medlemsprocess_Admin
     private function sanitize_checklist(array $items): array { $clean = array(); foreach ($items as $key => $item) { $clean[sanitize_key($key)] = array('status' => sanitize_key($item['status'] ?? ''), 'comment' => sanitize_text_field($item['comment'] ?? '')); } return $clean; }
     private function sanitize_inspection(array $inspection): array { $clean = array(); foreach (array('date', 'place', 'inspector', 'attendees', 'type', 'conditions', 'summary', 'strengths', 'deficiencies', 'actions', 'board_comment', 'public_comment', 'recommendation') as $key) { $clean[$key] = sanitize_textarea_field($inspection[$key] ?? ''); } $clean['checks'] = $this->sanitize_checklist((array) ($inspection['checks'] ?? array())); return $clean; }
     private function sanitize_booking(array $booking): array { $clean = array(); foreach (array('date', 'start', 'end', 'location', 'type', 'participants', 'comment') as $key) $clean[$key] = sanitize_textarea_field($booking[$key] ?? ''); return $clean; }
-    private function sanitize_decision(array $decision): array { return array('status' => sanitize_key($decision['status'] ?? ''), 'internal_reason' => sanitize_textarea_field($decision['internal_reason'] ?? ''), 'public_reason' => sanitize_textarea_field($decision['public_reason'] ?? ''), 'date' => current_time('mysql'), 'by' => get_current_user_id()); }
+    private function sanitize_decision(array $decision): array { $date = sanitize_text_field($decision['date'] ?? ''); return array('status' => in_array(sanitize_key($decision['status'] ?? ''), array('approved_aspirant', 'rejected'), true) ? sanitize_key($decision['status']) : '', 'internal_reason' => sanitize_textarea_field($decision['internal_reason'] ?? ''), 'public_reason' => sanitize_textarea_field($decision['public_reason'] ?? ''), 'date' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : '', 'by' => get_current_user_id()); }
 }
