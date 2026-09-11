@@ -6,8 +6,26 @@ renderern, som skapar HTML och ren text. Utskicket går därefter genom befintli
 `wp_mail`, Microsoft 365 Mailer och befintliga DEV-regler.
 
 ```text
-Affärsmodul -> meddelandedata -> SSF_Email_Template -> wp_mail -> aktiv transport
+Affärsmodul -> malltyp -> e-postkategori -> sidfotskontakt -> SSF_Email_Template -> wp_mail -> aktiv transport
 ```
+
+## Kategorier och kontakt
+
+Varje extern malltyp har en kategori i den centrala `templates()`-definitionen.
+Renderern använder kategorin för både den synliga kontakten i HTML- och
+textsidfoten och för `Reply-To`. Ett `Reply-To` som uttryckligen skickats in av
+anroparen bevaras. Teknisk avsändare och aktiv Microsoft 365-transport ändras
+inte.
+
+| Kategori | Standardkontakt | Migrerade malltyper |
+| --- | --- | --- |
+| Årsmöte (`annual_meeting`) | `styrelsen@ssfb.se` | Årsmötesanmälan, ändrad anmälan, motion mottagen och motionsstatus |
+| Medlem (`membership`) | `medlem@ssfb.se` | Ansökan, status, komplettering, fartygsuppgifter och inspektörsuppdrag |
+| Allmänt (`general`) | `info@ssfb.se` | Kontaktbekräftelse och okända framtida typer |
+
+En okänd malltyp renderas som ett allmänt meddelande och skickas vidare med
+den allmänna kontakten. Händelsen sparas som administrativ varning och loggas
+utan mottagaradress eller meddelandeinnehåll.
 
 ## Inventering
 
@@ -41,8 +59,13 @@ ersatts av den centrala renderern.
 
 Under `SSF -> System -> Microsoft 365 -> Organisationsuppgifter och e-postdesign`
 kan administratören välja logotyp från mediabiblioteket, kontrollera de centrala organisationsuppgifterna,
-förhandsvisa samtliga malltyper och skicka testmejl genom aktiv transport.
+redigera sidfotskontakt per e-postkategori, se vilka malltyper som hör till
+respektive kategori, förhandsvisa samtliga malltyper och skicka testmejl genom aktiv transport.
 Förhandsvisningen använder samma `render()` som riktiga utskick.
+
+Preview och testmejl har ett separat kategorival och visar den sidfotskontakt
+och `Reply-To` som kommer att användas. Interna notifieringsmottagare fortsätter
+att administreras separat under E-postmottagare via `SSF_Email_Router`.
 
 Namn, webbplats och postadress hämtas från `SSF_Organization_Info`, samma källa
 som webbplatsens sidfot och informationssidor.

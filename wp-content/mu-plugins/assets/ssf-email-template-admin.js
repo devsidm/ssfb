@@ -24,4 +24,33 @@
       preview.src = ssfEmailTemplateAdmin.defaultLogo;
     }
   });
+
+  function updateContactSummary(categorySelect) {
+    var option = categorySelect.options[categorySelect.selectedIndex];
+    var form = categorySelect.closest('form');
+    var summary = form ? form.querySelector('[data-ssf-email-contact-summary]') : null;
+    if (!option || !summary) {
+      return;
+    }
+    summary.textContent = 'Sidfot: ' + option.dataset.contactLabel + ' ' + option.dataset.contactEmail + ' | Reply-To: ' + option.dataset.contactEmail;
+  }
+
+  document.querySelectorAll('[data-ssf-email-category]').forEach(function (categorySelect) {
+    updateContactSummary(categorySelect);
+    categorySelect.addEventListener('change', function () {
+      updateContactSummary(categorySelect);
+    });
+  });
+
+  document.querySelectorAll('[data-ssf-email-template]').forEach(function (templateSelect) {
+    templateSelect.addEventListener('change', function () {
+      var form = templateSelect.closest('form');
+      var categorySelect = form ? form.querySelector('[data-ssf-email-category]') : null;
+      var option = templateSelect.options[templateSelect.selectedIndex];
+      if (categorySelect && option && option.dataset.category) {
+        categorySelect.value = option.dataset.category;
+        updateContactSummary(categorySelect);
+      }
+    });
+  });
 }());

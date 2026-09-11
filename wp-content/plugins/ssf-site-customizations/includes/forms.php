@@ -357,6 +357,7 @@ function ssf_site_handle_contact(): void
     SSF_Email_Router::send_to_function($context ? 'contact_board' : 'contact_form', $mail_subject, $body, $headers);
 
     SSF_Email_Template::send($email, 'Vi har tagit emot ditt meddelande', 'contact_confirmation', array(
+        'category' => $context ? 'annual_meeting' : 'general',
         'recipient_name' => $name,
         'body' => array('Tack för att du kontaktat Sveriges Segelfartygsförbund. Vi har tagit emot ditt meddelande.'),
         'sections' => array(array('title' => 'Ditt meddelande', 'rows' => array('Ämne' => $subject))),

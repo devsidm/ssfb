@@ -13,8 +13,13 @@ if (! defined('ABSPATH')) {
 final class SSF_Email_Template
 {
     private const OPTION = 'ssf_email_template_brand';
+    private const CATEGORY_OPTION = 'ssf_email_footer_contacts';
+    private const UNKNOWN_TYPES_OPTION = 'ssf_email_unknown_template_types';
     private const NOTICE_PREFIX = 'ssf_email_template_notice_';
     private const ADMIN_PAGE = 'ssf-member-portal-microsoft365';
+    private const GENERAL_CATEGORY = 'general';
+
+    private static array $reported_unknown_types = array();
 
     public static function boot(): void
     {
@@ -28,18 +33,69 @@ final class SSF_Email_Template
     public static function templates(): array
     {
         return array(
-            'motion_received' => array('label' => 'Motion mottagen', 'title' => 'Din motion har tagits emot', 'preheader' => 'Vi har registrerat din motion och du kan följa handläggningen online.'),
-            'motion_status' => array('label' => 'Motion statusändrad', 'title' => 'Din motion har uppdaterats', 'preheader' => 'Statusen för din motion har ändrats.'),
-            'application_received' => array('label' => 'Ansökan mottagen', 'title' => 'Vi har tagit emot din ansökan', 'preheader' => 'Din ansökan är registrerad och kommer att behandlas av SSF.'),
-            'application_status' => array('label' => 'Ansökan statusändrad', 'title' => 'Din ansökan har uppdaterats', 'preheader' => 'Det finns en uppdatering i ditt ärende.'),
-            'application_completion' => array('label' => 'Begär komplettering', 'title' => 'Vi behöver en komplettering till din ansökan', 'preheader' => 'Vi behöver ytterligare information för att behandla din ansökan.'),
-            'annual_meeting_registration' => array('label' => 'Årsmötesanmälan', 'title' => 'Din anmälan är bekräftad', 'preheader' => 'Din anmälan till aktiviteter under SSF:s årsmöteshelg är registrerad.'),
-            'annual_meeting_registration_updated' => array('label' => 'Ändrad årsmötesanmälan', 'title' => 'Din anmälan har uppdaterats', 'preheader' => 'Dina aktuella val för årsmöteshelgen finns i detta meddelande.'),
-            'contact_confirmation' => array('label' => 'Kontaktbekräftelse', 'title' => 'Vi har tagit emot ditt meddelande', 'preheader' => 'Tack för att du kontaktat Sveriges Segelfartygsförbund.'),
-            'vessel_update_invitation' => array('label' => 'Begäran om fartygsuppgifter', 'title' => 'Uppdatera uppgifter om ditt fartyg', 'preheader' => 'SSF behöver aktuella uppgifter om ditt fartyg.'),
-            'vessel_update_received' => array('label' => 'Fartygsuppgifter mottagna', 'title' => 'Vi har tagit emot dina fartygsuppgifter', 'preheader' => 'Uppgifterna granskas före publicering.'),
-            'inspector_assignment' => array('label' => 'Inspektörsuppdrag', 'title' => 'Du har fått ett nytt inspektörsuppdrag', 'preheader' => 'Ett nytt inspektionsärende har tilldelats dig.'),
+            'motion_received' => array('label' => 'Motion mottagen', 'title' => 'Din motion har tagits emot', 'preheader' => 'Vi har registrerat din motion och du kan följa handläggningen online.', 'category' => 'annual_meeting'),
+            'motion_status' => array('label' => 'Motion statusändrad', 'title' => 'Din motion har uppdaterats', 'preheader' => 'Statusen för din motion har ändrats.', 'category' => 'annual_meeting'),
+            'application_received' => array('label' => 'Ansökan mottagen', 'title' => 'Vi har tagit emot din ansökan', 'preheader' => 'Din ansökan är registrerad och kommer att behandlas av SSF.', 'category' => 'membership'),
+            'application_status' => array('label' => 'Ansökan statusändrad', 'title' => 'Din ansökan har uppdaterats', 'preheader' => 'Det finns en uppdatering i ditt ärende.', 'category' => 'membership'),
+            'application_completion' => array('label' => 'Begär komplettering', 'title' => 'Vi behöver en komplettering till din ansökan', 'preheader' => 'Vi behöver ytterligare information för att behandla din ansökan.', 'category' => 'membership'),
+            'annual_meeting_registration' => array('label' => 'Årsmötesanmälan', 'title' => 'Din anmälan är bekräftad', 'preheader' => 'Din anmälan till aktiviteter under SSF:s årsmöteshelg är registrerad.', 'category' => 'annual_meeting'),
+            'annual_meeting_registration_updated' => array('label' => 'Ändrad årsmötesanmälan', 'title' => 'Din anmälan har uppdaterats', 'preheader' => 'Dina aktuella val för årsmöteshelgen finns i detta meddelande.', 'category' => 'annual_meeting'),
+            'contact_confirmation' => array('label' => 'Kontaktbekräftelse', 'title' => 'Vi har tagit emot ditt meddelande', 'preheader' => 'Tack för att du kontaktat Sveriges Segelfartygsförbund.', 'category' => 'general'),
+            'vessel_update_invitation' => array('label' => 'Begäran om fartygsuppgifter', 'title' => 'Uppdatera uppgifter om ditt fartyg', 'preheader' => 'SSF behöver aktuella uppgifter om ditt fartyg.', 'category' => 'membership'),
+            'vessel_update_received' => array('label' => 'Fartygsuppgifter mottagna', 'title' => 'Vi har tagit emot dina fartygsuppgifter', 'preheader' => 'Uppgifterna granskas före publicering.', 'category' => 'membership'),
+            'inspector_assignment' => array('label' => 'Inspektörsuppdrag', 'title' => 'Du har fått ett nytt inspektörsuppdrag', 'preheader' => 'Ett nytt inspektionsärende har tilldelats dig.', 'category' => 'membership'),
         );
+    }
+
+    public static function category_definitions(): array
+    {
+        return array(
+            'annual_meeting' => array('label' => 'Årsmöte', 'contact_label' => 'Frågor om årsmötet?', 'contact_email' => 'styrelsen@ssfb.se'),
+            'membership' => array('label' => 'Medlem', 'contact_label' => 'Frågor om medlemskap?', 'contact_email' => 'medlem@ssfb.se'),
+            self::GENERAL_CATEGORY => array('label' => 'Allmänt', 'contact_label' => 'Frågor?', 'contact_email' => 'info@ssfb.se'),
+        );
+    }
+
+    public static function categories(): array
+    {
+        $definitions = self::category_definitions();
+        $saved = (array) get_option(self::CATEGORY_OPTION, array());
+        foreach ($definitions as $key => &$definition) {
+            $row = isset($saved[$key]) && is_array($saved[$key]) ? $saved[$key] : array();
+            $label = self::text($row['contact_label'] ?? '');
+            $email = sanitize_email((string) ($row['contact_email'] ?? ''));
+            if ($label) {
+                $definition['contact_label'] = $label;
+            }
+            if (is_email($email)) {
+                $definition['contact_email'] = $email;
+            }
+        }
+        unset($definition);
+        return (array) apply_filters('ssf_email_categories', $definitions);
+    }
+
+    public static function category_for_template(string $template): string
+    {
+        $templates = self::templates();
+        if (isset($templates[$template])) {
+            $category = sanitize_key((string) ($templates[$template]['category'] ?? ''));
+            if (isset(self::category_definitions()[$category])) {
+                return $category;
+            }
+        }
+        self::report_unknown_template($template);
+        return self::GENERAL_CATEGORY;
+    }
+
+    public static function contact_for_template(string $template, string $category_override = ''): array
+    {
+        $categories = self::categories();
+        $category = sanitize_key($category_override);
+        if (! isset($categories[$category])) {
+            $category = self::category_for_template($template);
+        }
+        return array_merge(array('key' => $category), $categories[$category] ?? $categories[self::GENERAL_CATEGORY]);
     }
 
     public static function brand(): array
@@ -73,9 +129,9 @@ final class SSF_Email_Template
 
     public static function render(string $template, array $data = array()): string
     {
-        $definitions = self::templates();
-        $definition = $definitions[$template] ?? reset($definitions);
+        $definition = self::template_definition($template);
         $brand = self::brand();
+        $contact = self::contact_for_template($template, (string) ($data['category'] ?? ''));
         $title = self::text($data['title'] ?? '') ?: self::text($definition['title']);
         $preheader = self::text($data['preheader'] ?? '') ?: self::text($definition['preheader']);
         $greeting = self::greeting((string) ($data['recipient_name'] ?? ''));
@@ -112,7 +168,7 @@ final class SSF_Email_Template
 <?php if ($button_label && $button_url) : ?><tr><td align="center" style="padding:28px 32px 0;"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="<?php echo esc_attr($brand['accent_color']); ?>" style="background-color:<?php echo esc_attr($brand['accent_color']); ?>;"><a href="<?php echo esc_url($button_url); ?>" style="display:inline-block;padding:14px 24px;color:#ffffff;font-size:16px;font-weight:bold;line-height:20px;text-align:center;text-decoration:none;"><?php echo esc_html($button_label); ?></a></td></tr></table><p style="margin:12px 0 0;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:12px;line-height:18px;overflow-wrap:anywhere;">Om knappen inte fungerar: <a href="<?php echo esc_url($button_url); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($button_url); ?></a></p></td></tr><?php endif; ?>
 <?php if ($secondary_links) : ?><tr><td style="padding:22px 32px 0;text-align:center;"><?php foreach ($secondary_links as $index => $link) : ?><?php if ($index) : ?><span style="color:#9aa8b3;"> &nbsp;|&nbsp; </span><?php endif; ?><a href="<?php echo esc_url($link['url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;font-size:14px;line-height:22px;text-decoration:underline;"><?php echo esc_html($link['label']); ?></a><?php endforeach; ?></td></tr><?php endif; ?>
 <tr><td style="padding:30px 32px 8px;color:#243b4d;font-size:16px;line-height:24px;">Vänliga hälsningar<br><strong><?php echo esc_html($brand['name']); ?></strong></td></tr>
-<tr><td style="padding:22px 32px 30px;border-top:1px solid #d8e1e7;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:13px;line-height:20px;"><strong style="color:<?php echo esc_attr($brand['primary_color']); ?>;"><?php echo esc_html($brand['name']); ?></strong><br><a href="<?php echo esc_url($brand['website_url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($brand['website_label']); ?></a><br><br>Postadress:<br><?php foreach ($brand['address_lines'] as $line) : ?><?php echo esc_html($line); ?><br><?php endforeach; ?></td></tr>
+<tr><td style="padding:22px 32px 30px;border-top:1px solid #d8e1e7;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:13px;line-height:20px;"><strong style="color:<?php echo esc_attr($brand['primary_color']); ?>;"><?php echo esc_html($brand['name']); ?></strong><br><br><?php echo esc_html($contact['contact_label']); ?><br><a href="mailto:<?php echo esc_attr($contact['contact_email']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;font-weight:bold;text-decoration:underline;"><?php echo esc_html($contact['contact_email']); ?></a><br><br><a href="<?php echo esc_url($brand['website_url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($brand['website_label']); ?></a><br><br>Postadress:<br><?php foreach ($brand['address_lines'] as $line) : ?><?php echo esc_html($line); ?><br><?php endforeach; ?></td></tr>
 </table></td></tr></table></body></html>
         <?php
         return (string) ob_get_clean();
@@ -120,9 +176,9 @@ final class SSF_Email_Template
 
     public static function render_text(string $template, array $data = array()): string
     {
-        $definitions = self::templates();
-        $definition = $definitions[$template] ?? reset($definitions);
+        $definition = self::template_definition($template);
         $brand = self::brand();
+        $contact = self::contact_for_template($template, (string) ($data['category'] ?? ''));
         $title = self::text($data['title'] ?? '') ?: self::text($definition['title']);
         $lines = array($brand['name'], '', $title, '', self::greeting((string) ($data['recipient_name'] ?? '')));
         foreach (self::paragraphs($data['body'] ?? array()) as $paragraph) {
@@ -155,15 +211,16 @@ final class SSF_Email_Template
         foreach (self::links($data['secondary_links'] ?? array()) as $link) {
             $lines[] = $link['label'] . ': ' . $link['url'];
         }
-        return implode("\n", array_merge($lines, array('', 'Vänliga hälsningar', $brand['name'], '', $brand['website_url'], '', 'Postadress:'), $brand['address_lines']));
+        return implode("\n", array_merge($lines, array('', 'Vänliga hälsningar', $brand['name'], '', $contact['contact_label'], $contact['contact_email'], '', $brand['website_url'], '', 'Postadress:'), $brand['address_lines']));
     }
 
     public static function send(string $recipient, string $subject, string $template, array $data = array(), $headers = array(), array $attachments = array()): bool
     {
         $recipient = sanitize_email($recipient);
-        if (! is_email($recipient) || ! isset(self::templates()[$template])) {
+        if (! is_email($recipient)) {
             return false;
         }
+        $contact = self::contact_for_template($template, (string) ($data['category'] ?? ''));
         $subject = self::prepare_subject(self::text($subject));
         $html = self::render($template, $data);
         $text = self::render_text($template, $data);
@@ -171,6 +228,12 @@ final class SSF_Email_Template
         $headers = array_values(array_filter($headers, static function ($header): bool {
             return 0 !== stripos(trim((string) $header), 'Content-Type:');
         }));
+        $has_reply_to = (bool) array_filter($headers, static function ($header): bool {
+            return 0 === stripos(trim((string) $header), 'Reply-To:');
+        });
+        if (! $has_reply_to) {
+            $headers[] = 'Reply-To: ' . $contact['contact_email'];
+        }
         $headers[] = 'Content-Type: text/html; charset=UTF-8';
         $alternative = static function ($phpmailer) use ($text): void {
             $phpmailer->isHTML(true);
@@ -201,7 +264,12 @@ final class SSF_Email_Template
         }
         $brand = self::brand();
         $organization = SSF_Organization_Info::get();
-        $preview_base = admin_url('admin-post.php?action=ssf_email_template_preview');
+        $categories = self::categories();
+        $types_by_category = array_fill_keys(array_keys($categories), array());
+        foreach (self::templates() as $key => $template) {
+            $category = self::category_for_template($key);
+            $types_by_category[$category][$key] = $template['label'];
+        }
         ?>
         <div id="ssf-email-design" class="postbox" style="max-width:1180px;padding:20px">
             <h2>Organisationsuppgifter och e-postdesign</h2>
@@ -216,18 +284,40 @@ final class SSF_Email_Template
                     <tr><th><label for="ssf-organization-number">Organisationsnummer</label></th><td><input id="ssf-organization-number" class="regular-text" name="brand[organization_number]" value="<?php echo esc_attr($brand['organization_number']); ?>" inputmode="numeric" required></td></tr>
                     <tr><th>Betalning</th><td><label>Bankgiro <input class="regular-text" name="brand[bankgiro]" value="<?php echo esc_attr($brand['bankgiro']); ?>" required></label><br><label>Swishnummer <input class="regular-text" name="brand[swish]" value="<?php echo esc_attr($brand['swish']); ?>" inputmode="numeric" required></label></td></tr>
                 </tbody></table>
+                <h3>E-postkategorier</h3>
+                <p>Kontakten visas i sidfoten och används som Reply-To för externa användarmejl. Interna mottagare konfigureras separat under E-postmottagare.</p>
+                <table class="widefat striped"><thead><tr><th>Kategori</th><th>Kontakttext</th><th>Kontakt i sidfot</th><th>Används av</th></tr></thead><tbody>
+                <?php foreach ($categories as $key => $category) : ?>
+                    <tr>
+                        <th scope="row"><?php echo esc_html($category['label']); ?><br><code><?php echo esc_html($key); ?></code></th>
+                        <td><input class="regular-text" name="categories[<?php echo esc_attr($key); ?>][contact_label]" value="<?php echo esc_attr($category['contact_label']); ?>" required></td>
+                        <td><input class="regular-text" type="email" name="categories[<?php echo esc_attr($key); ?>][contact_email]" value="<?php echo esc_attr($category['contact_email']); ?>" required></td>
+                        <td><?php echo esc_html(implode(', ', $types_by_category[$key])); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody></table>
                 <?php submit_button('Spara organisationsuppgifter och e-postdesign'); ?>
             </form>
             <h3>Mallar</h3>
-            <table class="widefat striped"><thead><tr><th>Malltyp</th><th>Standardrubrik</th><th>Förhandsvisning</th></tr></thead><tbody>
-            <?php foreach (self::templates() as $key => $template) : ?><tr><th><?php echo esc_html($template['label']); ?></th><td><?php echo esc_html($template['title']); ?></td><td><a class="button" target="_blank" rel="noopener" href="<?php echo esc_url(wp_nonce_url(add_query_arg('template', $key, $preview_base), 'ssf_email_template_preview_' . $key)); ?>">Förhandsvisa</a></td></tr><?php endforeach; ?>
+            <table class="widefat striped"><thead><tr><th>Malltyp</th><th>Kategori</th><th>Standardrubrik</th></tr></thead><tbody>
+            <?php foreach (self::templates() as $key => $template) : ?><tr><th><?php echo esc_html($template['label']); ?><br><code><?php echo esc_html($key); ?></code></th><td><?php echo esc_html($categories[self::category_for_template($key)]['label']); ?></td><td><?php echo esc_html($template['title']); ?></td></tr><?php endforeach; ?>
             </tbody></table>
+            <h3>Förhandsvisa mall</h3>
+            <form method="get" target="_blank" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="ssf_email_template_preview"><?php wp_nonce_field('ssf_email_template_preview'); ?>
+                <label for="ssf-email-preview-template"><strong>Mall</strong></label> <select id="ssf-email-preview-template" name="template" data-ssf-email-template><?php foreach (self::templates() as $key => $template) : ?><option value="<?php echo esc_attr($key); ?>" data-category="<?php echo esc_attr(self::category_for_template($key)); ?>"><?php echo esc_html($template['label']); ?></option><?php endforeach; ?></select>
+                <label for="ssf-email-preview-category"><strong>Kategori</strong></label> <select id="ssf-email-preview-category" name="category" data-ssf-email-category><?php foreach ($categories as $key => $category) : ?><option value="<?php echo esc_attr($key); ?>" data-contact-label="<?php echo esc_attr($category['contact_label']); ?>" data-contact-email="<?php echo esc_attr($category['contact_email']); ?>"><?php echo esc_html($category['label']); ?></option><?php endforeach; ?></select>
+                <?php submit_button('Förhandsvisa', 'secondary', 'submit', false); ?>
+                <p class="description" data-ssf-email-contact-summary></p>
+            </form>
             <h3>Skicka testmejl</h3>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_email_template_test"><?php wp_nonce_field('ssf_email_template_test'); ?>
-                <label for="ssf-email-test-template"><strong>Mall</strong></label> <select id="ssf-email-test-template" name="template"><?php foreach (self::templates() as $key => $template) : ?><option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($template['label']); ?></option><?php endforeach; ?></select>
+                <label for="ssf-email-test-template"><strong>Mall</strong></label> <select id="ssf-email-test-template" name="template" data-ssf-email-template><?php foreach (self::templates() as $key => $template) : ?><option value="<?php echo esc_attr($key); ?>" data-category="<?php echo esc_attr(self::category_for_template($key)); ?>"><?php echo esc_html($template['label']); ?></option><?php endforeach; ?></select>
+                <label for="ssf-email-test-category"><strong>Kategori</strong></label> <select id="ssf-email-test-category" name="category" data-ssf-email-category><?php foreach ($categories as $key => $category) : ?><option value="<?php echo esc_attr($key); ?>" data-contact-label="<?php echo esc_attr($category['contact_label']); ?>" data-contact-email="<?php echo esc_attr($category['contact_email']); ?>"><?php echo esc_html($category['label']); ?></option><?php endforeach; ?></select>
                 <label for="ssf-email-test-recipient"><strong>Mottagare</strong></label> <input id="ssf-email-test-recipient" type="email" name="recipient" value="<?php echo esc_attr((string) wp_get_current_user()->user_email); ?>" required>
                 <?php submit_button('Skicka testmejl', 'secondary', 'submit', false); ?>
+                <p class="description" data-ssf-email-contact-summary></p>
             </form>
             <p class="description">Förhandsvisning och test använder exakt samma renderer som de riktiga utskicken. DEV får automatiskt prefixet [DEV].</p>
         </div>
@@ -240,7 +330,7 @@ final class SSF_Email_Template
             return;
         }
         wp_enqueue_media();
-        wp_enqueue_script('ssf-email-template-admin', content_url('/mu-plugins/assets/ssf-email-template-admin.js'), array('media-editor'), '1.0.0', true);
+        wp_enqueue_script('ssf-email-template-admin', content_url('/mu-plugins/assets/ssf-email-template-admin.js'), array('media-editor'), '1.1.0', true);
         wp_localize_script('ssf-email-template-admin', 'ssfEmailTemplateAdmin', array('defaultLogo' => set_url_scheme(get_template_directory_uri() . '/assets/images/ssf-logo.svg', 'https')));
     }
 
@@ -248,6 +338,23 @@ final class SSF_Email_Template
     {
         self::guard('ssf_email_template_save');
         $input = isset($_POST['brand']) && is_array($_POST['brand']) ? wp_unslash($_POST['brand']) : array();
+        $category_input = isset($_POST['categories']) && is_array($_POST['categories']) ? wp_unslash($_POST['categories']) : array();
+        $category_settings = array();
+        $invalid = array();
+        foreach (self::category_definitions() as $key => $definition) {
+            $row = isset($category_input[$key]) && is_array($category_input[$key]) ? $category_input[$key] : array();
+            $contact_label = self::text($row['contact_label'] ?? '') ?: $definition['contact_label'];
+            $raw_email = isset($row['contact_email']) && is_scalar($row['contact_email']) ? trim((string) $row['contact_email']) : '';
+            $contact_email = sanitize_email($raw_email);
+            if (! is_email($contact_email)) {
+                $invalid[] = $definition['label'];
+            }
+            $category_settings[$key] = array('contact_label' => $contact_label, 'contact_email' => $contact_email);
+        }
+        if ($invalid) {
+            self::notice('error', 'Inställningarna sparades inte. Kontrollera kontaktadressen för: ' . implode(', ', $invalid) . '.');
+            self::redirect();
+        }
         SSF_Organization_Info::save(array(
             'organization_name' => $input['name'] ?? '',
             'website_url' => $input['website_url'] ?? '',
@@ -261,6 +368,7 @@ final class SSF_Email_Template
             'swish' => $input['swish'] ?? '',
         ));
         update_option(self::OPTION, array('logo_id' => absint($input['logo_id'] ?? 0)), false);
+        update_option(self::CATEGORY_OPTION, $category_settings, false);
         self::notice('success', 'Organisationsuppgifterna och e-postdesignen har sparats.');
         self::redirect();
     }
@@ -268,12 +376,13 @@ final class SSF_Email_Template
     public static function handle_preview(): void
     {
         $template = sanitize_key((string) ($_GET['template'] ?? ''));
-        if (! current_user_can('manage_options') || ! isset(self::templates()[$template]) || ! check_admin_referer('ssf_email_template_preview_' . $template)) {
+        $category = sanitize_key((string) ($_GET['category'] ?? ''));
+        if (! current_user_can('manage_options') || ! isset(self::templates()[$template]) || ! isset(self::categories()[$category]) || ! check_admin_referer('ssf_email_template_preview')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-email-template'));
         }
         nocache_headers();
         header('Content-Type: text/html; charset=UTF-8');
-        echo self::render($template, self::sample_data($template)); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        echo self::render($template, array_merge(self::sample_data($template), array('category' => $category))); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         exit;
     }
 
@@ -281,13 +390,14 @@ final class SSF_Email_Template
     {
         self::guard('ssf_email_template_test');
         $template = sanitize_key((string) ($_POST['template'] ?? ''));
+        $category = sanitize_key((string) ($_POST['category'] ?? ''));
         $recipient = sanitize_email((string) ($_POST['recipient'] ?? ''));
-        if (! isset(self::templates()[$template]) || ! is_email($recipient)) {
-            self::notice('error', 'Välj en giltig mall och mottagare.');
+        if (! isset(self::templates()[$template]) || ! isset(self::categories()[$category]) || ! is_email($recipient)) {
+            self::notice('error', 'Välj en giltig mall, kategori och mottagare.');
             self::redirect();
         }
         $label = self::templates()[$template]['label'];
-        $sent = self::send($recipient, 'SSF test – ' . $label, $template, self::sample_data($template));
+        $sent = self::send($recipient, 'SSF test – ' . $label, $template, array_merge(self::sample_data($template), array('category' => $category)));
         self::notice($sent ? 'success' : 'error', $sent ? 'Testmejlet accepterades av den aktiva e-posttransporten.' : 'Testmejlet kunde inte skickas. Kontrollera Microsoft 365-anslutningen.');
         self::redirect();
     }
@@ -297,12 +407,47 @@ final class SSF_Email_Template
         if (! current_user_can('manage_options')) {
             return;
         }
+        $unknown_types = (array) get_option(self::UNKNOWN_TYPES_OPTION, array());
+        if ($unknown_types) {
+            printf('<div class="notice notice-warning"><p>%s</p></div>', esc_html('SSF har använt kategorin Allmänt för okända e-posttyper: ' . implode(', ', array_keys($unknown_types)) . '. Kontrollera den centrala typmappningen.'));
+        }
         $notice = get_transient(self::NOTICE_PREFIX . get_current_user_id());
         if (! is_array($notice)) {
             return;
         }
         delete_transient(self::NOTICE_PREFIX . get_current_user_id());
         printf('<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>', esc_attr((string) $notice['type']), esc_html((string) $notice['message']));
+    }
+
+    private static function template_definition(string $template): array
+    {
+        $templates = self::templates();
+        if (isset($templates[$template])) {
+            return $templates[$template];
+        }
+        self::report_unknown_template($template);
+        return array(
+            'label' => 'Allmänt meddelande',
+            'title' => 'Meddelande från SSF',
+            'preheader' => 'Ett meddelande från Sveriges Segelfartygsförbund.',
+            'category' => self::GENERAL_CATEGORY,
+        );
+    }
+
+    private static function report_unknown_template(string $template): void
+    {
+        $template = sanitize_key($template) ?: '(tom typ)';
+        if (isset(self::$reported_unknown_types[$template])) {
+            return;
+        }
+        self::$reported_unknown_types[$template] = true;
+        $unknown_types = (array) get_option(self::UNKNOWN_TYPES_OPTION, array());
+        $unknown_types[$template] = current_time('mysql');
+        update_option(self::UNKNOWN_TYPES_OPTION, array_slice($unknown_types, -10, null, true), false);
+        if (class_exists('SSF\\MemberPortal\\Core\\Logger')) {
+            \SSF\MemberPortal\Core\Logger::add('email_template_unknown_type', array('template' => $template, 'fallback_category' => self::GENERAL_CATEGORY));
+        }
+        do_action('ssf_email_template_unknown_type', $template, self::GENERAL_CATEGORY);
     }
 
     private static function sample_data(string $template): array

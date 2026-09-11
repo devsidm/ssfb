@@ -19,13 +19,42 @@ $applications = Read-RepoFile 'wp-content\plugins\ssf-medlemsprocess\includes\cl
 $forms = Read-RepoFile 'wp-content\plugins\ssf-site-customizations\includes\forms.php'
 $vesselForm = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\class-ssf-medlemsfartyg-public-form.php'
 $vesselTokens = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\class-ssf-medlemsfartyg-tokens.php'
+$sendMethod = [regex]::Match($template, '(?s)public static function send\(.*?(?=public static function render_admin_section)').Value
 
 foreach ($type in @('motion_received','motion_status','application_received','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
     Assert-Contains "Malltyp $type" $template "'$type' =>"
 }
+foreach ($mapping in @(
+    @('motion_received', "'category' => 'annual_meeting'"),
+    @('motion_status', "'category' => 'annual_meeting'"),
+    @('annual_meeting_registration', "'category' => 'annual_meeting'"),
+    @('application_received', "'category' => 'membership'"),
+    @('application_status', "'category' => 'membership'"),
+    @('application_completion', "'category' => 'membership'"),
+    @('inspector_assignment', "'category' => 'membership'"),
+    @('contact_confirmation', "'category' => 'general'")
+)) {
+    $line = ($template -split "`n" | Where-Object { $_.Contains("'$($mapping[0])' =>") } | Select-Object -First 1)
+    Assert-Contains "Kategori för $($mapping[0])" $line $mapping[1]
+}
 foreach ($value in @('Sveriges Segelfartygsförbund','role="presentation"','AltBody','[DEV] ','wp_enqueue_media','ssf_email_template_preview','ssf_email_template_test','SSF_Organization_Info::get()','SSF_Organization_Info::address_lines()')) {
     Assert-Contains "Central renderer $value" $template $value
 }
+foreach ($categoryValue in @("'annual_meeting'", "'membership'", "'general'", 'styrelsen@ssfb.se', 'medlem@ssfb.se', 'info@ssfb.se', 'Frågor om årsmötet?', 'Frågor om medlemskap?')) {
+    Assert-Contains "Central kategori $categoryValue" $template $categoryValue
+}
+Assert-Contains 'HTML-sidfot har klickbar kontaktadress' $template 'href="mailto:<?php echo esc_attr($contact['
+Assert-Contains 'Textsidfot använder samma kontakt' $template "`$contact['contact_email']"
+Assert-Contains 'Reply-To sätts centralt' $template "`$headers[] = 'Reply-To: ' . `$contact['contact_email'];"
+Assert-Contains 'Befintligt Reply-To bevaras' $template '$has_reply_to'
+Assert-Contains 'Okänd typ använder allmän kategori' $template 'return self::GENERAL_CATEGORY;'
+Assert-Contains 'Okänd typ loggas' $template 'email_template_unknown_type'
+Assert-Contains 'Okänd typ kan skickas' $template "if (! is_email(`$recipient))"
+Assert-NotContains 'Okänd typ blockeras inte i send' $sendMethod "! isset(self::templates()[`$template])"
+Assert-Contains 'Admin visar e-postkategorier' $template 'E-postkategorier'
+Assert-Contains 'Admin visar typmappning' $template '$types_by_category'
+Assert-Contains 'Preview kan välja kategori' $template 'ssf-email-preview-category'
+Assert-Contains 'Testmejl kan välja kategori' $template 'ssf-email-test-category'
 foreach ($paymentValue in @('500 kr/år per fartyg','332-1908','1236400279')) {
     Assert-Contains "Central betalningsuppgift $paymentValue" $organization $paymentValue
 }
@@ -41,6 +70,7 @@ Assert-Contains 'Motion mottagen använder central mall' $motions "'motion_recei
 Assert-Contains 'Motion status använder central mall' $motions "'motion_status'"
 Assert-Contains 'Ansökan använder central mall' $applications 'SSF_Email_Template::send'
 Assert-Contains 'Kontaktbekräftelse finns' $forms "'contact_confirmation'"
+Assert-Contains 'Årsmötesfråga använder årsmöteskontakt' $forms "'category' => `$context ? 'annual_meeting' : 'general'"
 Assert-Contains 'Fartygskvittens finns' $vesselForm "'vessel_update_received'"
 Assert-Contains 'Fartygsinbjudan finns' $vesselTokens "'vessel_update_invitation'"
 Assert-True 'Separat årsmötesmall är borttagen' (-not (Test-Path -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\templates\emails\annual-meeting-confirmation.php')))
