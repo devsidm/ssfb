@@ -2,16 +2,17 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260910.10",
-    "built_at":  "2026-09-10T21:28:46.1634645Z",
+    "build":  "20260911.1",
+    "built_at":  "2026-09-11T07:55:35.4133538Z",
     "source":  "codex",
-    "source_revision":  "21122ea32fc6ccc7592869d0ddc58f4c86721c78",
-    "description":  "Rättad stegvalidering för samtliga fyra vägar i fartygsansökan",
+    "source_revision":  "d69d6ba02276b27bc5c9c308b87036ef6389dd00",
+    "description":  "Kategoristyrda kontaktuppgifter i e-postsidfot med central Reply-To, admin-preview och fallback för okända malltyper.",
     "notes":  "",
     "components":  [
+                       "documentation",
                        "release-tooling",
-                       "ssf-medlemsfartyg",
-                       "ssf-medlemsprocess"
+                       "ssf-email-template",
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
