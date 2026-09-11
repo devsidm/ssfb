@@ -5,6 +5,14 @@ externa transaktionsmejl. Affärsmodulerna lämnar typad meddelandedata till
 renderern, som skapar HTML och ren text. Utskicket går därefter genom befintlig
 `wp_mail`, Microsoft 365 Mailer och befintliga DEV-regler.
 
+## Gemensam header
+
+Alla HTML-mail från den centrala renderern använder samma `render_header()`. Headern har den befintliga marinblå profilfärgen `#12324a`, en tabellbaserad tvåkolumnslayout och textidentiteten **SVERIGES SEGELFARTYGSFÖRBUND** samt **SVERIGES SEGLANDE KULTURARV**. En egen tabellcell bildar separatorn mellan logga och text för stabil rendering i Outlook. Under 480 px staplas logga och text och separatorn döljs.
+
+En särskild e-postlogga väljs under **SSF -> System -> Microsoft 365 -> Organisationsuppgifter och e-postdesign -> Visuell identitet**. Attachment-ID sparas miljöspecifikt i WordPress. Renderern använder den publika HTTPS-adressen till originalbilden, avsedd för en vit transparent PNG på minst 500 px bredd som visas med 145 px HTML-bredd.
+
+Ingen SVG eller CSS-filter används som fallback. Om ingen logga är vald, eller om attachment-filen har raderats, visas organisationens namn och tagline centrerade utan bild. Det ger ingen broken-image-symbol och utskicket fortsätter; en administrativ varning och en logghändelse skapas för ett saknat valt attachment.
+
 ```text
 Affärsmodul -> malltyp -> e-postkategori -> sidfotskontakt -> SSF_Email_Template -> wp_mail -> aktiv transport
 ```

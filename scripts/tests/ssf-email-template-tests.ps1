@@ -20,6 +20,7 @@ $forms = Read-RepoFile 'wp-content\plugins\ssf-site-customizations\includes\form
 $vesselForm = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\class-ssf-medlemsfartyg-public-form.php'
 $vesselTokens = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\class-ssf-medlemsfartyg-tokens.php'
 $sendMethod = [regex]::Match($template, '(?s)public static function send\(.*?(?=public static function render_admin_section)').Value
+$headerMethod = [regex]::Match($template, '(?s)private static function render_header\(.*?(?=public static function render_text)').Value
 
 foreach ($type in @('motion_received','motion_status','application_received','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
     Assert-Contains "Malltyp $type" $template "'$type' =>"
@@ -65,6 +66,36 @@ Assert-NotContains 'Ingen generell dynamisk kommentar' $applications "variables[
 Assert-Contains 'Endast publik statuskommentar' $applications "variables['public_status_comment']"
 Assert-NotContains 'Ingen intern kommentarsfallback' $applications "public_status_comment'] ?? `$variables['admin_comment"
 Assert-Contains 'Admin visar e-postdesign' $controller 'SSF_Email_Template::render_admin_section'
+Assert-Contains 'Central header-renderer' $template 'private static function render_header(array $brand): string'
+Assert-Contains 'Alla HTML-mail använder header-renderern' $template 'echo self::render_header($brand)'
+Assert-Contains 'Godkänd tagline' $template 'SVERIGES SEGLANDE KULTURARV'
+Assert-NotContains 'Äldre tagline får inte användas' $template 'För en levande maritim kultur'
+Assert-NotContains 'Mockupetikett får inte användas' $headerMethod 'Förslag 3'
+Assert-Contains 'Header använder befintlig marinblå' $template "'primary_color' => '#12324a'"
+Assert-Contains 'Outlook-kompatibel headerbakgrund' $headerMethod 'bgcolor="<?php echo esc_attr($brand['
+Assert-Contains 'Tabellbaserad header' $headerMethod '<table role="presentation" width="100%"'
+Assert-Contains 'Fysisk separatorcell' $headerMethod 'ssf-email-header-separator'
+Assert-Contains 'Separator har egen bredd' $headerMethod 'width="1"'
+Assert-Contains 'Logotypens HTML-bredd' $headerMethod 'width="145"'
+Assert-Contains 'Logotypen behåller proportioner' $headerMethod 'height:auto'
+Assert-Contains 'Tillgänglig alt-text' $headerMethod 'alt="Sveriges Segelfartygsförbund"'
+Assert-Contains 'Organisationen är HTML-text' $headerMethod "header_line_2'"
+Assert-Contains 'Tagline är HTML-text' $headerMethod "email_tagline'"
+Assert-NotContains 'Ingen CSS-filterlogga' $headerMethod 'filter:'
+Assert-Contains 'Mobil header staplas' $template '@media only screen and (max-width:480px)'
+Assert-Contains 'Mobil separator döljs' $template '.ssf-email-header-separator{display:none!important'
+Assert-Contains 'Originalbild används från Media Library' $template 'wp_get_attachment_url($logo_id)'
+Assert-NotContains 'Ingen medium-thumbnail i headern' $template "wp_get_attachment_image_url(`$logo_id, 'medium')"
+Assert-NotContains 'Ingen SVG-fallback i e-postmallen' $template 'ssf-logo.svg'
+Assert-Contains 'Bild renderas endast med giltig URL' $headerMethod "if (`$brand['logo_url'])"
+Assert-Contains 'Saknad logga loggas' $template 'email_header_logo_missing'
+Assert-Contains 'Logovarning rensas även utan valt attachment' $template '} else {'
+Assert-Contains 'Headertext saknar extra teckenavstånd' $headerMethod 'letter-spacing:0'
+Assert-NotContains 'Headertext får inte ha extra teckenavstånd' $headerMethod 'letter-spacing:1px'
+Assert-Contains 'Visuell identitet i admin' $template '<h3>Visuell identitet</h3>'
+Assert-Contains 'Admin visar PNG-vägledning' $template 'Använd en vit PNG-logga med transparent bakgrund.'
+Assert-Contains 'Admin visar rekommenderad Retina-bredd' $template 'Rekommenderad bredd minst 500 px'
+Assert-Contains 'Admin väljer originalbild' (Read-RepoFile 'wp-content\mu-plugins\assets\ssf-email-template-admin.js') 'preview.src = attachment.url;'
 Assert-Contains 'Årsmöte använder central mall' $annual 'SSF_Email_Template::send'
 Assert-Contains 'Motion mottagen använder central mall' $motions "'motion_received'"
 Assert-Contains 'Motion status använder central mall' $motions "'motion_status'"

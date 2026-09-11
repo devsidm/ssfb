@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SSF Email Template
  * Description: Central presentation layer for SSF transactional email.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: SIDM
  */
 
@@ -15,6 +15,7 @@ final class SSF_Email_Template
     private const OPTION = 'ssf_email_template_brand';
     private const CATEGORY_OPTION = 'ssf_email_footer_contacts';
     private const UNKNOWN_TYPES_OPTION = 'ssf_email_unknown_template_types';
+    private const LOGO_WARNING_OPTION = 'ssf_email_header_logo_warning';
     private const NOTICE_PREFIX = 'ssf_email_template_notice_';
     private const ADMIN_PAGE = 'ssf-member-portal-microsoft365';
     private const GENERAL_CATEGORY = 'general';
@@ -103,9 +104,11 @@ final class SSF_Email_Template
         $saved = (array) get_option(self::OPTION, array());
         $organization = SSF_Organization_Info::get();
         $logo_id = absint($saved['logo_id'] ?? 0);
-        $logo_url = $logo_id ? (string) wp_get_attachment_image_url($logo_id, 'medium') : '';
-        if (! $logo_url) {
-            $logo_url = get_template_directory_uri() . '/assets/images/ssf-logo.svg';
+        $logo_url = $logo_id && wp_attachment_is_image($logo_id) ? (string) wp_get_attachment_url($logo_id) : '';
+        if ($logo_id && ! $logo_url) {
+            self::report_logo_warning($logo_id);
+        } else {
+            delete_option(self::LOGO_WARNING_OPTION);
         }
 
         return array(
@@ -117,8 +120,13 @@ final class SSF_Email_Template
             'bankgiro' => $organization['bankgiro'],
             'swish' => $organization['swish'],
             'logo_id' => $logo_id,
-            'logo_url' => set_url_scheme($logo_url, 'https'),
+            'logo_url' => $logo_url ? set_url_scheme($logo_url, 'https') : '',
+            'header_line_1' => 'SVERIGES',
+            'header_line_2' => 'SEGELFARTYGSFÖRBUND',
+            'email_tagline' => 'SVERIGES SEGLANDE KULTURARV',
             'primary_color' => '#12324a',
+            'header_separator_color' => '#8fb8d2',
+            'header_tagline_color' => '#b9d4e4',
             'accent_color' => '#16716a',
             'text_color' => '#182c3d',
             'muted_color' => '#526576',
@@ -147,16 +155,13 @@ final class SSF_Email_Template
         ?>
 <!doctype html>
 <html lang="sv">
-<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title><?php echo esc_html($title); ?></title></head>
+<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title><?php echo esc_html($title); ?></title><style type="text/css">@media only screen and (max-width:480px){.ssf-email-header-logo,.ssf-email-header-copy{display:block!important;width:100%!important;text-align:center!important}.ssf-email-header-logo{padding:26px 24px 14px!important}.ssf-email-header-copy{padding:12px 24px 28px!important}.ssf-email-header-logo img{margin:0 auto!important}.ssf-email-header-separator{display:none!important;width:0!important;height:0!important;overflow:hidden!important}.ssf-email-header-name{font-size:22px!important;line-height:27px!important}.ssf-email-header-tagline{font-size:12px!important;line-height:18px!important}}</style></head>
 <body style="margin:0;padding:0;background-color:<?php echo esc_attr($brand['background_color']); ?>;color:<?php echo esc_attr($brand['text_color']); ?>;font-family:Arial,Helvetica,sans-serif;">
 <div style="display:none!important;max-height:0;max-width:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;"><?php echo esc_html($preheader); ?>&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:<?php echo esc_attr($brand['background_color']); ?>;"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="<?php echo esc_attr((string) $brand['content_width']); ?>" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:<?php echo esc_attr((string) $brand['content_width']); ?>px;background-color:#ffffff;">
-<tr><td style="padding:24px 32px;background-color:<?php echo esc_attr($brand['primary_color']); ?>;color:#ffffff;">
-<?php if ($brand['logo_url']) : ?><img src="<?php echo esc_url($brand['logo_url']); ?>" width="145" alt="<?php echo esc_attr($brand['name']); ?>" style="display:block;width:145px;max-width:100%;height:auto;margin:0 0 12px;border:0;"><?php endif; ?>
-<p style="margin:0;color:#ffffff;font-size:14px;font-weight:bold;line-height:20px;"><?php echo esc_html($brand['name']); ?></p>
-</td></tr>
-<tr><td style="padding:32px 32px 8px;"><h1 style="margin:0;color:<?php echo esc_attr($brand['primary_color']); ?>;font-size:27px;font-weight:bold;line-height:34px;"><?php echo esc_html($title); ?></h1>
+<?php echo self::render_header($brand); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+<tr><td style="padding:28px 32px 8px;"><h1 style="margin:0;color:<?php echo esc_attr($brand['primary_color']); ?>;font-size:27px;font-weight:bold;line-height:34px;"><?php echo esc_html($title); ?></h1>
 <p style="margin:22px 0 0;color:#243b4d;font-size:16px;line-height:25px;"><?php echo esc_html($greeting); ?></p>
 <?php foreach ($paragraphs as $paragraph) : ?><p style="margin:14px 0 0;color:#243b4d;font-size:16px;line-height:25px;"><?php echo nl2br(esc_html($paragraph)); ?></p><?php endforeach; ?>
 </td></tr>
@@ -170,6 +175,22 @@ final class SSF_Email_Template
 <tr><td style="padding:30px 32px 8px;color:#243b4d;font-size:16px;line-height:24px;">Vänliga hälsningar<br><strong><?php echo esc_html($brand['name']); ?></strong></td></tr>
 <tr><td style="padding:22px 32px 30px;border-top:1px solid #d8e1e7;color:<?php echo esc_attr($brand['muted_color']); ?>;font-size:13px;line-height:20px;"><strong style="color:<?php echo esc_attr($brand['primary_color']); ?>;"><?php echo esc_html($brand['name']); ?></strong><br><br><?php echo esc_html($contact['contact_label']); ?><br><a href="mailto:<?php echo esc_attr($contact['contact_email']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;font-weight:bold;text-decoration:underline;"><?php echo esc_html($contact['contact_email']); ?></a><br><br><a href="<?php echo esc_url($brand['website_url']); ?>" style="color:<?php echo esc_attr($brand['primary_color']); ?>;text-decoration:underline;"><?php echo esc_html($brand['website_label']); ?></a><br><br>Postadress:<br><?php foreach ($brand['address_lines'] as $line) : ?><?php echo esc_html($line); ?><br><?php endforeach; ?></td></tr>
 </table></td></tr></table></body></html>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    private static function render_header(array $brand): string
+    {
+        ob_start();
+        ?>
+<tr><td bgcolor="<?php echo esc_attr($brand['primary_color']); ?>" style="padding:0;background-color:<?php echo esc_attr($brand['primary_color']); ?>;color:#ffffff;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:<?php echo esc_attr($brand['primary_color']); ?>;"><tr>
+<?php if ($brand['logo_url']) : ?><td class="ssf-email-header-logo" width="38%" align="center" valign="middle" style="width:38%;padding:30px 28px;"><img src="<?php echo esc_url($brand['logo_url']); ?>" width="145" alt="Sveriges Segelfartygsförbund" style="display:block;width:145px;max-width:100%;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;"></td><td class="ssf-email-header-separator" width="1" bgcolor="<?php echo esc_attr($brand['header_separator_color']); ?>" style="width:1px;background-color:<?php echo esc_attr($brand['header_separator_color']); ?>;font-size:0;line-height:0;">&nbsp;</td><?php endif; ?>
+<td class="ssf-email-header-copy" align="<?php echo $brand['logo_url'] ? 'left' : 'center'; ?>" valign="middle" style="padding:30px 34px;text-align:<?php echo $brand['logo_url'] ? 'left' : 'center'; ?>;">
+<p class="ssf-email-header-name" style="margin:0;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:29px;letter-spacing:0;"><?php echo esc_html($brand['header_line_1']); ?><br><?php echo esc_html($brand['header_line_2']); ?></p>
+<p class="ssf-email-header-tagline" style="margin:16px 0 0;color:<?php echo esc_attr($brand['header_tagline_color']); ?>;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;line-height:19px;letter-spacing:0;"><?php echo esc_html($brand['email_tagline']); ?></p>
+</td></tr></table>
+</td></tr>
         <?php
         return (string) ob_get_clean();
     }
@@ -276,9 +297,11 @@ final class SSF_Email_Template
             <p>Gemensam organisationsinformation för webbplatsens sidfot, medlemssidor och externa användarmejl.</p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_email_template_save"><?php wp_nonce_field('ssf_email_template_save'); ?>
+                <h3>Visuell identitet</h3>
                 <table class="form-table" role="presentation"><tbody>
                     <tr><th><label for="ssf-email-brand-name">Avsändaridentitet</label></th><td><input id="ssf-email-brand-name" class="regular-text" name="brand[name]" value="<?php echo esc_attr($brand['name']); ?>" required></td></tr>
-                    <tr><th>E-postlogotyp</th><td><img data-ssf-email-logo-preview src="<?php echo esc_url($brand['logo_url']); ?>" alt="Förhandsvisning av e-postlogotyp" style="display:block;max-width:180px;max-height:90px;margin-bottom:10px;background:#12324a;padding:10px;"><input data-ssf-email-logo-id type="hidden" name="brand[logo_id]" value="<?php echo esc_attr((string) $brand['logo_id']); ?>"><button data-ssf-email-logo-select type="button" class="button">Byt logotyp</button> <button data-ssf-email-logo-clear type="button" class="button">Använd standardlogotyp</button></td></tr>
+                    <tr><th>E-postlogotyp</th><td><div style="display:inline-block;min-width:220px;margin-bottom:10px;padding:18px;background:<?php echo esc_attr($brand['primary_color']); ?>;text-align:center;"><img data-ssf-email-logo-preview <?php if (! $brand['logo_url']) : ?>hidden<?php else : ?>src="<?php echo esc_url($brand['logo_url']); ?>"<?php endif; ?> alt="Förhandsvisning av e-postlogotyp" style="display:block;max-width:180px;max-height:120px;margin:0 auto;"><strong data-ssf-email-logo-fallback <?php if ($brand['logo_url']) : ?>hidden<?php endif; ?> style="color:#ffffff;">Ingen särskild e-postlogga vald</strong></div><br><input data-ssf-email-logo-id type="hidden" name="brand[logo_id]" value="<?php echo esc_attr((string) $brand['logo_id']); ?>"><button data-ssf-email-logo-select type="button" class="button">Välj eller byt logga</button> <button data-ssf-email-logo-clear type="button" class="button">Ta bort vald logga</button><p class="description">Använd en vit PNG-logga med transparent bakgrund. Rekommenderad bredd minst 500 px för skarp rendering på Retina-skärmar.</p><?php $logo_warning = (array) get_option(self::LOGO_WARNING_OPTION, array()); if ($logo_warning) : ?><div class="notice notice-warning inline"><p>Den valda e-postloggan kunde inte läsas. Mail skickas med organisationens namn som säker fallback. Välj loggan på nytt.</p></div><?php endif; ?></td></tr>
+                    <tr><th>Headeridentitet</th><td><strong>SVERIGES SEGELFARTYGSFÖRBUND</strong><br><span>Sveriges seglande kulturarv</span><p><span style="display:inline-block;width:18px;height:18px;margin-right:6px;vertical-align:middle;background:<?php echo esc_attr($brand['primary_color']); ?>;"></span><code><?php echo esc_html($brand['primary_color']); ?></code></p></td></tr>
                     <tr><th><label for="ssf-email-website-url">Webbplats</label></th><td><input id="ssf-email-website-url" class="regular-text code" type="url" name="brand[website_url]" value="<?php echo esc_attr($brand['website_url']); ?>" required> <input class="regular-text" name="brand[website_label]" value="<?php echo esc_attr($brand['website_label']); ?>" aria-label="Webbplatsens länktext" required></td></tr>
                     <tr><th>Postadress</th><td><input class="regular-text" name="brand[address_line_1]" value="<?php echo esc_attr($organization['address_line_1']); ?>" required><br><input class="regular-text" name="brand[address_line_2]" value="<?php echo esc_attr($organization['address_line_2']); ?>" required><br><input class="small-text" name="brand[postal_code]" value="<?php echo esc_attr($organization['postal_code']); ?>" inputmode="numeric" required> <input class="regular-text" name="brand[city]" value="<?php echo esc_attr($organization['city']); ?>" required></td></tr>
                     <tr><th><label for="ssf-organization-number">Organisationsnummer</label></th><td><input id="ssf-organization-number" class="regular-text" name="brand[organization_number]" value="<?php echo esc_attr($brand['organization_number']); ?>" inputmode="numeric" required></td></tr>
@@ -330,8 +353,7 @@ final class SSF_Email_Template
             return;
         }
         wp_enqueue_media();
-        wp_enqueue_script('ssf-email-template-admin', content_url('/mu-plugins/assets/ssf-email-template-admin.js'), array('media-editor'), '1.1.0', true);
-        wp_localize_script('ssf-email-template-admin', 'ssfEmailTemplateAdmin', array('defaultLogo' => set_url_scheme(get_template_directory_uri() . '/assets/images/ssf-logo.svg', 'https')));
+        wp_enqueue_script('ssf-email-template-admin', content_url('/mu-plugins/assets/ssf-email-template-admin.js'), array('media-editor'), '1.2.0', true);
     }
 
     public static function handle_save(): void
@@ -448,6 +470,18 @@ final class SSF_Email_Template
             \SSF\MemberPortal\Core\Logger::add('email_template_unknown_type', array('template' => $template, 'fallback_category' => self::GENERAL_CATEGORY));
         }
         do_action('ssf_email_template_unknown_type', $template, self::GENERAL_CATEGORY);
+    }
+
+    private static function report_logo_warning(int $logo_id): void
+    {
+        $reported = (array) get_option(self::LOGO_WARNING_OPTION, array());
+        if ((int) ($reported['logo_id'] ?? 0) === $logo_id) {
+            return;
+        }
+        update_option(self::LOGO_WARNING_OPTION, array('logo_id' => $logo_id, 'time' => current_time('mysql')), false);
+        if (class_exists('SSF\\MemberPortal\\Core\\Logger')) {
+            \SSF\MemberPortal\Core\Logger::add('email_header_logo_missing', array('attachment_id' => $logo_id));
+        }
     }
 
     private static function sample_data(string $template): array

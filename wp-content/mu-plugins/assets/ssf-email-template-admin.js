@@ -6,6 +6,7 @@
     var clear = event.target.closest('[data-ssf-email-logo-clear]');
     var input = document.querySelector('[data-ssf-email-logo-id]');
     var preview = document.querySelector('[data-ssf-email-logo-preview]');
+    var fallback = document.querySelector('[data-ssf-email-logo-fallback]');
 
     if (select && window.wp && wp.media) {
       event.preventDefault();
@@ -13,7 +14,9 @@
       frame.on('select', function () {
         var attachment = frame.state().get('selection').first().toJSON();
         input.value = attachment.id;
-        preview.src = attachment.sizes && attachment.sizes.medium ? attachment.sizes.medium.url : attachment.url;
+        preview.src = attachment.url;
+        preview.hidden = false;
+        fallback.hidden = true;
       });
       frame.open();
     }
@@ -21,7 +24,9 @@
     if (clear) {
       event.preventDefault();
       input.value = '';
-      preview.src = ssfEmailTemplateAdmin.defaultLogo;
+      preview.removeAttribute('src');
+      preview.hidden = true;
+      fallback.hidden = false;
     }
   });
 
