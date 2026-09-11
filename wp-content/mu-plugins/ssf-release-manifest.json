@@ -2,19 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260911.2",
-    "built_at":  "2026-09-11T09:17:33.1170884Z",
+    "build":  "20260911.3",
+    "built_at":  "2026-09-11T13:29:01.7232071Z",
     "source":  "codex",
-    "source_revision":  "5bd3f97c0f370ff39809061e2598005efd224c6e",
-    "description":  "Tvåstatusmodell för medlemsansökningar, SharePoint-ärendemapp och ett års aspirantperiod.",
+    "source_revision":  "0284d63b331d53c3c3b9382ce1adbc8057166d04",
+    "description":  "Gemensam responsiv e-postheader enligt designförslag 3",
     "notes":  "",
     "components":  [
                        "documentation",
                        "release-tooling",
-                       "ssf-admin-navigation",
-                       "ssf-medlemsfartyg",
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal"
+                       "ssf-email-template"
                    ],
     "status":  "development",
     "prepared_at":  ""
