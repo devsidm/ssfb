@@ -103,8 +103,11 @@ foreach ($key in @('metadata_application_membership_status_field', 'metadata_app
 }
 $createColumnCall = '$this->request(''POST'', $this->list_base($list_id) . ''/columns'''
 $updateColumnCall = '$this->request(''PATCH'', $this->list_base($list_id) . ''/columns/'''
-Assert-True 'Medlemsprocessen får inte skapa SharePoint-kolumner' (-not $sharepoint.Contains($createColumnCall))
-Assert-True 'Medlemsprocessen får inte ändra SharePoint-kolumner' (-not $sharepoint.Contains($updateColumnCall))
+Assert-Contains 'Medlemsprocessen kan skapa saknade SharePoint-kolumner via reparation' $sharepoint $createColumnCall
+Assert-Contains 'Medlemsprocessen kan lägga till saknade SharePoint-val via reparation' $sharepoint $updateColumnCall
+Assert-Contains 'Schemareparation kräver bekräftelse' $admin 'confirm_schema'
+Assert-Contains 'Schemareparation har separat admin action' $admin 'ssf_repair_application_sharepoint_schema'
+Assert-Contains 'Schemareparation anger manage-roll vid 403' $sharepoint "`$data['required_site_role'] = 'manage'"
 Assert-Contains 'ListItem-ID sparas innan schemakontroll' $sharepoint 'update_post_meta($application_id, ''_ssf_sp_application_list_item_id'''
 $metadataFunction = $sharepoint.IndexOf('private function set_folder_metadata')
 $listItemSave = $sharepoint.IndexOf('update_post_meta($application_id, ''_ssf_sp_application_list_item_id''', $metadataFunction)

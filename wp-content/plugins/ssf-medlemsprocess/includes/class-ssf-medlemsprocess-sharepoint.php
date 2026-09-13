@@ -489,6 +489,30 @@ class SSF_Medlemsprocess_SharePoint
         return $this->save_schema_diagnostics($diagnostics);
     }
 
+    public function repair_schema(): array
+    {
+        $this->ensure_graph();
+        if (! $this->graph) {
+            return $this->save_schema_diagnostics(array('ok' => false, 'message' => 'Microsoft Graph-klienten är inte tillgänglig.', 'steps' => array('repair_schema' => array('label' => 'Uppdatera schema', 'ok' => false))));
+        }
+
+        $list_id = $this->application_list_id();
+        if (! $list_id) {
+            return $this->save_schema_diagnostics(array('ok' => false, 'message' => 'Dokumentbibliotekets List ID kunde inte identifieras.', 'steps' => array('repair_schema' => array('label' => 'Uppdatera schema', 'ok' => false))));
+        }
+
+        $columns = $this->request('GET', $this->list_base($list_id) . '/columns?$select=id,name,displayName,choice,text,dateTime');
+        $repair = is_wp_error($columns) ? $columns : $this->repair_schema_columns($list_id, (array) ($columns['value'] ?? array()));
+        $diagnostics = $this->schema_diagnostics();
+        $diagnostics['steps'] = array('repair_schema' => $this->diagnostic_step('Uppdatera schema', $repair)) + (array) ($diagnostics['steps'] ?? array());
+        if (is_wp_error($repair)) {
+            $diagnostics['ok'] = false;
+            $diagnostics['message'] = $repair->get_error_message();
+            $diagnostics = array_merge($diagnostics, $this->error_details($repair));
+        }
+        return $this->save_schema_diagnostics($diagnostics);
+    }
+
     private function diagnostic_step(string $label, $result): array
     {
         if (! is_wp_error($result)) {
@@ -502,6 +526,94 @@ class SSF_Medlemsprocess_SharePoint
         $diagnostics['verified_at'] = $diagnostics['verified_at'] ?? gmdate('c');
         update_option('ssf_medlemsprocess_graph_schema', $diagnostics, false);
         return $diagnostics;
+    }
+
+    private function repair_schema_columns(string $list_id, array $columns)
+    {
+        $existing = array();
+        foreach ($columns as $column) {
+            $existing[strtolower((string) ($column['name'] ?? ''))] = $column;
+        }
+
+        $changes = array();
+        foreach ($this->schema_requirements() as $requirement) {
+            $name = $this->config($requirement['config']);
+            if (! $name) {
+                return new WP_Error('application_sharepoint_schema_field_missing', 'Ett SharePoint-fältnamn saknas i konfigurationen: ' . $requirement['label']);
+            }
+
+            $key = strtolower($name);
+            $column = $existing[$key] ?? null;
+            if (! $column) {
+                $created = $this->create_schema_column($list_id, $name, $requirement);
+                if (is_wp_error($created)) {
+                    return $this->schema_repair_error($created, 'create_column');
+                }
+                $existing[$key] = $created;
+                $changes[] = 'created:' . $name;
+                continue;
+            }
+
+            if (! array_key_exists($requirement['type'], $column)) {
+                return new WP_Error('application_sharepoint_schema_wrong_type', 'SharePoint-fältet ' . $name . ' finns men har fel typ och behöver ändras manuellt.');
+            }
+
+            if ('choice' !== $requirement['type']) {
+                continue;
+            }
+
+            $choice = (array) ($column['choice'] ?? array());
+            $existing_choices = array_values(array_map('strval', (array) ($choice['choices'] ?? array())));
+            $missing_choices = array_values(array_diff($requirement['choices'], $existing_choices));
+            if (! $missing_choices) {
+                continue;
+            }
+            $choice['choices'] = array_values(array_unique(array_merge($existing_choices, $missing_choices)));
+            $choice['allowTextEntry'] = false;
+            $choice['displayAs'] = 'dropDownMenu';
+            $updated = $this->request('PATCH', $this->list_base($list_id) . '/columns/' . rawurlencode((string) ($column['id'] ?? '')), array('choice' => $choice));
+            if (is_wp_error($updated)) {
+                return $this->schema_repair_error($updated, 'update_choices');
+            }
+            $changes[] = 'updated:' . $name;
+        }
+
+        $this->log('application_sharepoint_schema_repaired', array('list_id' => $list_id, 'changes' => $changes));
+        return array('ok' => true, 'changes' => $changes, 'changed' => ! empty($changes));
+    }
+
+    private function create_schema_column(string $list_id, string $name, array $requirement)
+    {
+        $body = array('displayName' => $requirement['label'], 'name' => $name);
+        if ('choice' === $requirement['type']) {
+            $body['choice'] = array(
+                'allowTextEntry' => false,
+                'choices' => array_values($requirement['choices']),
+                'displayAs' => 'dropDownMenu',
+            );
+        } elseif ('dateTime' === $requirement['type']) {
+            $body['dateTime'] = array('displayAs' => 'default', 'format' => 'dateOnly');
+        } else {
+            $body['text'] = new stdClass();
+        }
+        return $this->request('POST', $this->list_base($list_id) . '/columns', $body);
+    }
+
+    private function schema_repair_error(WP_Error $error, string $stage): WP_Error
+    {
+        $data = (array) $error->get_error_data();
+        $status = (int) ($data['http_status'] ?? $data['status'] ?? 0);
+        if (403 === $status) {
+            $data['schema_stage'] = $stage;
+            $data['required_application_permission'] = 'Sites.Selected';
+            $data['required_site_role'] = 'manage';
+            return new WP_Error(
+                'application_sharepoint_schema_access_denied',
+                'Microsoft Graph nekade åtkomst till att uppdatera SharePoint-schemat. Filuppladdning kan fungera med site-rollen write, men kolumnschema kräver Sites.Selected med rollen manage på just denna SharePoint-site.',
+                $data
+            );
+        }
+        return $error;
     }
 
     private function schema_requirements(): array
