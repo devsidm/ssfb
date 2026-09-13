@@ -292,6 +292,14 @@ class SSF_Medlemsprocess_SharePoint
             $this->config('metadata_application_aspirant_start_field') => (string) get_post_meta($application_id, '_ssf_aspirant_started_at', true),
             $this->config('metadata_application_aspirant_review_field') => (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
         );
+        $schema = $this->ensure_schema();
+        if (is_wp_error($schema)) {
+            if (! $this->schema_field_ok($schema, 'application_status')) {
+                update_post_meta($application_id, '_ssf_sp_status_push_error', $schema->get_error_message());
+                return;
+            }
+            $fields = array($this->config('metadata_application_status_field') => $fields[$this->config('metadata_application_status_field')] ?? '');
+        }
         $result = $this->request('PATCH', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '/fields', array_filter($fields, static function ($value, $key) { return '' !== (string) $key && '' !== (string) $value; }, ARRAY_FILTER_USE_BOTH));
         if (is_wp_error($result)) {
             update_post_meta($application_id, '_ssf_sp_status_push_error', $result->get_error_message());
@@ -359,9 +367,6 @@ class SSF_Medlemsprocess_SharePoint
         update_post_meta($application_id, '_ssf_sp_list_id', $list_id);
         update_post_meta($application_id, '_ssf_sp_application_list_item_id', sanitize_text_field((string) ($list_item['id'] ?? '')));
         $schema = $this->ensure_schema();
-        if (is_wp_error($schema)) {
-            return $schema;
-        }
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $submitted = (string) get_post_meta($application_id, '_ssf_submitted_at', true);
         $fields = array(
@@ -376,11 +381,17 @@ class SSF_Medlemsprocess_SharePoint
             $this->config('metadata_application_aspirant_start_field') => (string) get_post_meta($application_id, '_ssf_aspirant_started_at', true),
             $this->config('metadata_application_aspirant_review_field') => (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
         );
+        if (is_wp_error($schema)) {
+            if (! $this->schema_field_ok($schema, 'application_status')) {
+                return $schema;
+            }
+            $fields = array($this->config('metadata_application_status_field') => $fields[$this->config('metadata_application_status_field')] ?? '');
+        }
         $result = $this->request('PATCH', $this->item_path($folder_id) . '/listItem/fields', array_filter($fields, static function ($value, $key) { return '' !== (string) $key && '' !== (string) $value; }, ARRAY_FILTER_USE_BOTH));
         if (! is_wp_error($result)) {
             if ($is_initial) { update_post_meta($application_id, '_ssf_sp_last_status', 'Inkommen'); }
         }
-        return $result;
+        return is_wp_error($schema) && ! is_wp_error($result) ? $schema : $result;
     }
 
     private function ensure_schema()
@@ -461,7 +472,7 @@ class SSF_Medlemsprocess_SharePoint
             $steps['folder'] = $this->diagnostic_step('Hitta ärendemapp', $folder);
             $folder_metadata = $list_item_id ? $this->request('GET', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '?$expand=fields') : new WP_Error('application_list_item_missing', 'Ärendet saknar mappens ListItem ID.');
             $steps['read_metadata'] = $this->diagnostic_step('Läs mappmetadata', $folder_metadata);
-            if (! is_wp_error($schema) && ! is_wp_error($folder_metadata)) {
+            if (! is_wp_error($folder_metadata) && (! is_wp_error($schema) || $this->schema_field_ok($schema, 'application_status'))) {
                 $write = $this->request('PATCH', $this->list_base($list_id) . '/items/' . rawurlencode($list_item_id) . '/fields', array(
                     $this->config('metadata_application_status_field') => $this->sharepoint_status(SSF_Medlemsprocess_Application::status($application_id)),
                 ));
@@ -526,6 +537,13 @@ class SSF_Medlemsprocess_SharePoint
         $diagnostics['verified_at'] = $diagnostics['verified_at'] ?? gmdate('c');
         update_option('ssf_medlemsprocess_graph_schema', $diagnostics, false);
         return $diagnostics;
+    }
+
+    private function schema_field_ok($schema, string $key): bool
+    {
+        $data = is_wp_error($schema) ? (array) $schema->get_error_data() : (array) $schema;
+        $fields = (array) ($data['fields'] ?? array());
+        return ! empty($fields[$key]['ok']);
     }
 
     private function repair_schema_columns(string $list_id, array $columns)

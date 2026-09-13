@@ -108,6 +108,8 @@ Assert-Contains 'Medlemsprocessen kan lägga till saknade SharePoint-val via rep
 Assert-Contains 'Schemareparation kräver bekräftelse' $admin 'confirm_schema'
 Assert-Contains 'Schemareparation har separat admin action' $admin 'ssf_repair_application_sharepoint_schema'
 Assert-Contains 'Schemareparation anger manage-roll vid 403' $sharepoint "`$data['required_site_role'] = 'manage'"
+Assert-Contains 'Status kan skrivas trots ofärdigt metadata-schema' $sharepoint "schema_field_ok(`$schema, 'application_status')"
+Assert-Contains 'Ofärdigt schema lämnar varning efter statuspatch' $sharepoint 'return is_wp_error($schema) && ! is_wp_error($result) ? $schema : $result'
 Assert-Contains 'ListItem-ID sparas innan schemakontroll' $sharepoint 'update_post_meta($application_id, ''_ssf_sp_application_list_item_id'''
 $metadataFunction = $sharepoint.IndexOf('private function set_folder_metadata')
 $listItemSave = $sharepoint.IndexOf('update_post_meta($application_id, ''_ssf_sp_application_list_item_id''', $metadataFunction)
