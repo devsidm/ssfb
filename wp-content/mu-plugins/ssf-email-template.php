@@ -37,6 +37,7 @@ final class SSF_Email_Template
             'motion_received' => array('label' => 'Motion mottagen', 'title' => 'Din motion har tagits emot', 'preheader' => 'Vi har registrerat din motion och du kan följa handläggningen online.', 'category' => 'annual_meeting'),
             'motion_status' => array('label' => 'Motion statusändrad', 'title' => 'Din motion har uppdaterats', 'preheader' => 'Statusen för din motion har ändrats.', 'category' => 'annual_meeting'),
             'application_received' => array('label' => 'Ansökan mottagen', 'title' => 'Vi har tagit emot din ansökan', 'preheader' => 'Din ansökan är registrerad och kommer att behandlas av SSF.', 'category' => 'membership'),
+            'application_admin_notice' => array('label' => 'Ny medlemsansökan - admin', 'title' => 'Ny medlemsansökan har inkommit', 'preheader' => 'En ny medlemsansökan väntar på handläggning i WordPress.', 'category' => 'membership'),
             'application_status' => array('label' => 'Ansökan statusändrad', 'title' => 'Din ansökan har uppdaterats', 'preheader' => 'Det finns en uppdatering i ditt ärende.', 'category' => 'membership'),
             'application_completion' => array('label' => 'Begär komplettering', 'title' => 'Vi behöver en komplettering till din ansökan', 'preheader' => 'Vi behöver ytterligare information för att behandla din ansökan.', 'category' => 'membership'),
             'annual_meeting_registration' => array('label' => 'Årsmötesanmälan', 'title' => 'Din anmälan är bekräftad', 'preheader' => 'Din anmälan till aktiviteter under SSF:s årsmöteshelg är registrerad.', 'category' => 'annual_meeting'),
@@ -510,6 +511,25 @@ final class SSF_Email_Template
             $data['notice_title'] = 'Viktigt om betalningen';
             $data['notice'] = 'Betala in årsavgiften och ange ansökningsnummer SSF-2026-0004 som meddelande i betalningen.';
             $data['button_label'] = 'Följ din ansökan';
+        }
+        if ('application_admin_notice' === $template) {
+            $data['recipient_name'] = 'Medlemsgruppen';
+            $data['body'] = array('En ny ansökan om medlemskap för fartyg har skickats in. Öppna ärendet i WordPress för att granska uppgifter, bilagor, status och SharePoint-synk.');
+            $data['sections'] = array(array('title' => 'Ansökan', 'rows' => array(
+                'Ansökningsnummer' => 'SSF-2026-0004',
+                'Fartyg' => 'Exempelskutan',
+                'Sökande' => 'Anna Andersson',
+                'E-post' => 'anna@example.se',
+                'Ansökningsväg' => 'Normalfallet',
+                'Ansökningsstatus' => 'Inkommen',
+                'Medlemsstatus' => 'Ej medlem',
+                'Inkommen' => '13 september 2026, 14:32',
+                'SharePoint-synk' => 'Väntar',
+            )));
+            $data['notice_title'] = '';
+            $data['notice'] = '';
+            $data['button_label'] = 'Öppna ansökan i WordPress';
+            $data['button_url'] = admin_url('post.php?post=1234&action=edit');
         }
         if ('contact_confirmation' === $template) {
             $data['sections'] = array(array('title' => 'Ditt meddelande', 'rows' => array('Ämne' => 'Fråga om medlemskap')));

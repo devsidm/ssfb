@@ -221,6 +221,17 @@ class SSF_Medlemsprocess_Application
         return SSF_Medlemsprocess_Plugin::page_url('ansokan_status', array('token' => rawurlencode($token)));
     }
 
+    public static function admin_url(int $application_id): string
+    {
+        $post = get_post($application_id);
+        if (! $post || self::POST_TYPE !== $post->post_type) {
+            return '';
+        }
+
+        $url = get_edit_post_link($application_id, '');
+        return $url ? (string) $url : admin_url('post.php?post=' . (int) $application_id . '&action=edit');
+    }
+
     public static function add_history(int $application_id, string $type, string $message, bool $public = false, array $extra = array()): void
     {
         $history = (array) get_post_meta($application_id, '_ssf_application_history', true);

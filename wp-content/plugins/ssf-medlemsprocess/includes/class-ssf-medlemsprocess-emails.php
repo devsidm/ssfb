@@ -23,15 +23,59 @@ class SSF_Medlemsprocess_Emails
             'approved_aspirant' => array('label' => 'Beslut: godkänd som aspirant', 'subject' => 'Din ansökan till SSF är godkänd som aspirant', 'body' => "Hej {applicant_name},\n\nAnsökan för {ship_name} har godkänts som aspirant.\n\n{admin_comment}\n\n{status_link}"),
             'rejected' => array('label' => 'Beslut: avslagen', 'subject' => 'Beslut om din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nSSF har fattat beslut om ansökan för {ship_name}.\n\n{admin_comment}\n\n{status_link}"),
             'reminder' => array('label' => 'Påminnelse till sökanden', 'subject' => 'Påminnelse om din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nDet finns en uppdatering i ditt ärende för {ship_name}.\n\n{admin_comment}\n\n{status_link}"),
-            'admin_notice' => array('label' => 'Intern notis till admin', 'subject' => 'Ny ansökan till SSF - {ship_name}', 'body' => "En ny ansökan har skickats in.\n\nÄrende: {application_id}\nFartyg: {ship_name}\nSökande: {applicant_name}\n\nÖppna ärendet i WordPress."),
+            'admin_notice' => array('label' => 'Intern notis till admin', 'subject' => 'Ny medlemsansökan: {ship_name} ({application_id})', 'body' => "En ny ansökan har skickats in.\n\nÄrende: {application_id}\nFartyg: {ship_name}\nSökande: {applicant_name}\n\nÖppna ärendet i WordPress:\n{admin_url}"),
         );
     }
 
     public function send_received(int $application_id, string $token): bool
     {
+        $this->send_admin_notice($application_id);
         $applicant_sent = $this->send_template('received', $application_id, array('status_link' => SSF_Medlemsprocess_Application::status_link($token)));
-        $this->send_template('admin_notice', $application_id, array(), true);
         return $applicant_sent;
+    }
+
+    public function send_admin_notice(int $application_id): bool
+    {
+        if (get_post_meta($application_id, '_ssf_admin_new_application_notification_sent_at', true)) {
+            return true;
+        }
+
+        $variables = $this->application_variables($application_id, array(
+            'admin_url' => SSF_Medlemsprocess_Application::admin_url($application_id),
+        ));
+        if (! $variables['admin_url']) {
+            return false;
+        }
+
+        $sharepoint_status = (string) get_post_meta($application_id, '_ssf_sp_sync_status', true);
+        $subject = strtr(self::templates()['admin_notice']['subject'], $this->replace_map($variables));
+        $sent = false;
+        if (class_exists('SSF_Email_Router') && class_exists('SSF_Email_Template')) {
+            $sent = SSF_Email_Router::send_template_to_function('membership_application', $subject, 'application_admin_notice', array(
+                'category' => 'membership',
+                'recipient_name' => 'Medlemsgruppen',
+                'body' => array('En ny ansökan om medlemskap för fartyg har skickats in. Öppna ärendet i WordPress för att granska uppgifter, bilagor, status och SharePoint-synk.'),
+                'sections' => array(array('title' => 'Ansökan', 'rows' => array_filter(array(
+                    'Ansökningsnummer' => $variables['application_id'],
+                    'Fartyg' => $variables['ship_name'],
+                    'Sökande' => $variables['applicant_name'],
+                    'E-post' => $variables['applicant_email'],
+                    'Ansökningsväg' => $variables['application_path'],
+                    'Ansökningsstatus' => $variables['application_status'],
+                    'Medlemsstatus' => $variables['membership_status'],
+                    'Inkommen' => $variables['received_date'],
+                    'SharePoint-synk' => $this->sharepoint_status_label($sharepoint_status),
+                )))),
+                'button_label' => 'Öppna ansökan i WordPress',
+                'button_url' => $variables['admin_url'],
+            ));
+        }
+
+        if ($sent) {
+            update_post_meta($application_id, '_ssf_admin_new_application_notification_sent_at', current_time('mysql'));
+        }
+        SSF_Medlemsprocess_Application::add_history($application_id, 'email', 'Adminnotis för ny medlemsansökan ' . ($sent ? 'skickades.' : 'kunde inte skickas.'), false);
+        return $sent;
     }
 
     public function send_status_email(int $application_id, string $status, string $message = ''): void
@@ -98,34 +142,14 @@ class SSF_Medlemsprocess_Emails
         $override = (array) ($settings['templates'][$key] ?? array());
         $template = array_merge($templates[$key], array_filter($override, 'is_string'));
         $data = SSF_Medlemsprocess_Application::data($application_id);
-        $defaults = array(
-            'applicant_name' => $data['applicant_name'] ?? '',
-            'applicant_email' => $data['applicant_email'] ?? '',
-            'ship_name' => $data['ship_name'] ?? get_the_title($application_id),
-            'vessel_operation' => $data['vessel_operation'] ?? '',
-            'application_id' => get_post_meta($application_id, '_ssf_application_number', true),
-            'application_status' => SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($application_id)),
-            'received_date' => get_the_date('j F Y, H:i', $application_id),
-            'status_link' => '',
-            'admin_comment' => '',
-            'public_status_comment' => '',
-            'next_step' => get_post_meta($application_id, '_ssf_next_action', true),
-            'booking_time' => '',
-            'booking_location' => '',
-            'decision' => '',
-            'decision_comment' => get_post_meta($application_id, '_ssf_decision_public_reason', true),
-            'decision_date' => get_post_meta($application_id, '_ssf_decision_date', true),
-            'aspirant_start' => get_post_meta($application_id, '_ssf_aspirant_started_at', true),
-            'aspirant_review' => get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
-        );
-        $variables = array_merge($defaults, $variables);
-        $replace = array();
-        foreach ($variables as $name => $value) {
-            $replace['{' . $name . '}'] = (string) $value;
-        }
+        $variables = $this->application_variables($application_id, $variables);
+        $replace = $this->replace_map($variables);
         $subject = strtr($template['subject'], $replace);
         $body = strtr($template['body'], $replace);
         if ($admin_recipient) {
+            if ('admin_notice' === $key) {
+                return $this->send_admin_notice($application_id);
+            }
             $sent = SSF_Email_Router::send_to_function('membership_application', $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
             SSF_Medlemsprocess_Application::add_history($application_id, 'email', sprintf('E-postmall "%s" %s.', $template['label'], $sent ? 'skickad' : 'kunde inte skickas'), false);
             return $sent;
@@ -137,6 +161,56 @@ class SSF_Medlemsprocess_Emails
         $sent = SSF_Email_Template::send($recipient, $subject, $this->central_template($key), $this->central_message($key, $variables));
         SSF_Medlemsprocess_Application::add_history($application_id, 'email', sprintf('E-postmall "%s" %s.', $template['label'], $sent ? 'skickad' : 'kunde inte skickas'), false);
         return $sent;
+    }
+
+    private function application_variables(int $application_id, array $variables = array()): array
+    {
+        $data = SSF_Medlemsprocess_Application::data($application_id);
+        $defaults = array(
+            'applicant_name' => $data['applicant_name'] ?? '',
+            'applicant_email' => $data['applicant_email'] ?? '',
+            'ship_name' => $data['ship_name'] ?? get_the_title($application_id),
+            'vessel_operation' => $data['vessel_operation'] ?? '',
+            'application_id' => get_post_meta($application_id, '_ssf_application_number', true),
+            'application_path' => $data['application_path'] ?? '',
+            'application_status' => SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($application_id)),
+            'membership_status' => SSF_Medlemsprocess_Application::membership_status_label(SSF_Medlemsprocess_Application::membership_status($application_id)),
+            'received_date' => get_the_date('j F Y, H:i', $application_id),
+            'status_link' => '',
+            'admin_url' => '',
+            'admin_comment' => '',
+            'public_status_comment' => '',
+            'next_step' => get_post_meta($application_id, '_ssf_next_action', true),
+            'booking_time' => '',
+            'booking_location' => '',
+            'decision' => '',
+            'decision_comment' => get_post_meta($application_id, '_ssf_decision_public_reason', true),
+            'decision_date' => get_post_meta($application_id, '_ssf_decision_date', true),
+            'aspirant_start' => get_post_meta($application_id, '_ssf_aspirant_started_at', true),
+            'aspirant_review' => get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
+        );
+        return array_merge($defaults, $variables);
+    }
+
+    private function replace_map(array $variables): array
+    {
+        $replace = array();
+        foreach ($variables as $name => $value) {
+            $replace['{' . $name . '}'] = (string) $value;
+        }
+        return $replace;
+    }
+
+    private function sharepoint_status_label(string $status): string
+    {
+        $labels = array(
+            'pending' => 'Väntar',
+            'syncing' => 'Synkas',
+            'synced' => 'Synkad',
+            'error' => 'Fel - försöker igen enligt befintlig policy',
+            'not_configured' => 'Inte konfigurerad',
+        );
+        return $labels[$status] ?? ($status ?: 'Väntar');
     }
 
     private function central_template(string $key): string

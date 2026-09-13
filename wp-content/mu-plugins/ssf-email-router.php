@@ -128,6 +128,21 @@ final class SSF_Email_Router
         return (bool) $sent;
     }
 
+    public static function send_template_to_function(string $key, string $subject, string $template, array $data = array(), $headers = array(), array $attachments = array()): bool
+    {
+        $key = sanitize_key($key);
+        $environment = self::environment();
+        $recipient = self::get_recipient($key, $environment);
+        if (! $recipient || ! class_exists('SSF_Email_Template')) {
+            self::log_result(false, $key, $environment, $recipient ?: 'missing');
+            return false;
+        }
+
+        $sent = SSF_Email_Template::send($recipient, $subject, $template, $data, $headers, $attachments);
+        self::log_result((bool) $sent, $key, $environment, $recipient);
+        return (bool) $sent;
+    }
+
     public static function settings(): array
     {
         $saved = (array) get_option(self::OPTION, array());

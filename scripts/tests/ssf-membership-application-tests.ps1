@@ -9,6 +9,10 @@ function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) {
     if (-not $Content.Contains($Expected)) { $failures.Add("$Name saknar: $Expected") }
 }
 
+function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) {
+    if ($Content.Contains($Unexpected)) { $failures.Add("$Name innehåller otillåtet: $Unexpected") }
+}
+
 function Assert-True([string]$Name, [bool]$Condition) {
     if (-not $Condition) { $failures.Add($Name) }
 }
@@ -79,6 +83,12 @@ Assert-Contains 'Generellt statusmail' $emails "'status_updated'"
 Assert-Contains 'Idempotent statustransition' $application 'if ($old_status === $status)'
 Assert-Contains 'Initial status Inkommen' $application "'_ssf_process_status', 'received'"
 Assert-Contains 'Initial medlemsstatus Ej medlem' $application "'_ssf_membership_status', 'not_member'"
+Assert-Contains 'Adminlänk-helper finns' $application 'public static function admin_url(int $application_id): string'
+Assert-Contains 'Adminlänk använder WordPress edit-länk' $application 'get_edit_post_link($application_id, '''')'
+Assert-Contains 'Adminlänk fallback via admin_url' $application "admin_url('post.php?post='"
+Assert-NotContains 'Adminlänk får inte hårdkoda DEV' $application 'https://ssfb.se/dev/wp-admin'
+Assert-NotContains 'Adminlänk får inte hårdkoda PROD' $application 'https://ssfb.se/wp-admin'
+Assert-NotContains 'Adminlänk får inte kräva nonce' ([regex]::Match($application, '(?s)public static function admin_url.*?(?=public static function add_history)').Value) 'nonce'
 
 $applicationStatuses = @('Inkommen', 'Under granskning', 'Begär komplettering', 'Väntar på komplettering', 'Inspektion ska bokas', 'Inspektion bokad', 'Under slutbedömning', 'Godkänd som aspirant', 'Avslagen')
 foreach ($statusLabel in $applicationStatuses) { Assert-Contains "Ansökningsstatus $statusLabel" $sharepoint "'$statusLabel'" }

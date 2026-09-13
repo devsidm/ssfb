@@ -22,7 +22,7 @@ $vesselTokens = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\cla
 $sendMethod = [regex]::Match($template, '(?s)public static function send\(.*?(?=public static function render_admin_section)').Value
 $headerMethod = [regex]::Match($template, '(?s)private static function render_header\(.*?(?=public static function render_text)').Value
 
-foreach ($type in @('motion_received','motion_status','application_received','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
+foreach ($type in @('motion_received','motion_status','application_received','application_admin_notice','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
     Assert-Contains "Malltyp $type" $template "'$type' =>"
 }
 foreach ($mapping in @(
@@ -30,6 +30,7 @@ foreach ($mapping in @(
     @('motion_status', "'category' => 'annual_meeting'"),
     @('annual_meeting_registration', "'category' => 'annual_meeting'"),
     @('application_received', "'category' => 'membership'"),
+    @('application_admin_notice', "'category' => 'membership'"),
     @('application_status', "'category' => 'membership'"),
     @('application_completion', "'category' => 'membership'"),
     @('inspector_assignment', "'category' => 'membership'"),
@@ -100,6 +101,14 @@ Assert-Contains 'Årsmöte använder central mall' $annual 'SSF_Email_Template::
 Assert-Contains 'Motion mottagen använder central mall' $motions "'motion_received'"
 Assert-Contains 'Motion status använder central mall' $motions "'motion_status'"
 Assert-Contains 'Ansökan använder central mall' $applications 'SSF_Email_Template::send'
+Assert-Contains 'Adminansökan använder central HTML-mall' $applications "'application_admin_notice'"
+Assert-Contains 'Adminansökan använder router' $applications "SSF_Email_Router::send_template_to_function('membership_application'"
+Assert-Contains 'Adminansökan har WordPress-CTA' $applications "'Öppna ansökan i WordPress'"
+Assert-Contains 'Adminansökan har idempotensflagga' $applications '_ssf_admin_new_application_notification_sent_at'
+Assert-Contains 'Adminlänk genereras av WordPress-helper' $applications 'SSF_Medlemsprocess_Application::admin_url($application_id)'
+Assert-Contains 'Adminnotis har ansökningsväg' $applications "'Ansökningsväg'"
+Assert-Contains 'Adminnotis har medlemsstatus' $applications "'Medlemsstatus'"
+Assert-NotContains 'Adminnotis får inte använda sökandetoken' ([regex]::Match($applications, '(?s)public function send_admin_notice.*?(?=public function send_status_email)').Value) 'status_link'
 Assert-Contains 'Kontaktbekräftelse finns' $forms "'contact_confirmation'"
 Assert-Contains 'Årsmötesfråga använder årsmöteskontakt' $forms "'category' => `$context ? 'annual_meeting' : 'general'"
 Assert-Contains 'Fartygskvittens finns' $vesselForm "'vessel_update_received'"
