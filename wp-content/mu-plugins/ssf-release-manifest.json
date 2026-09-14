@@ -2,15 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260914.4",
-    "built_at":  "2026-09-14T14:16:49.3089635Z",
+    "build":  "20260914.5",
+    "built_at":  "2026-09-14T14:26:47.9329545Z",
     "source":  "codex",
-    "source_revision":  "d1f6417b7da08e1b9f25e080e455137e2cc1a844",
-    "description":  "Allow release users to run SharePoint readiness checks",
-    "notes":  "Production readiness checklist build from current HEAD. Adds read-only PROD SharePoint readiness check and release-user access for readiness checks.",
+    "source_revision":  "9d029038e80225f768d9c7eb8fad8d5fcde36f34",
+    "description":  "Fix SharePoint readiness nonce parsing",
+    "notes":  "Production readiness checklist build from current HEAD. Adds read-only PROD SharePoint readiness check, release-user readiness access, and exact nonce parsing.",
     "components":  [
-                       "ssf-member-portal"
+                       "release-tooling"
                    ],
     "status":  "prepared",
-    "prepared_at":  "2026-09-14T14:16:57.1402298Z"
+    "prepared_at":  "2026-09-14T14:26:55.3918824Z"
 }
