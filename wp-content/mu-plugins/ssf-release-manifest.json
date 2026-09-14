@@ -2,17 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260914.1",
-    "built_at":  "2026-09-14T04:52:28.2009792Z",
+    "build":  "20260914.3",
+    "built_at":  "2026-09-14T14:06:05.1993270Z",
     "source":  "codex",
-    "source_revision":  "63f260c8eb498602b345e0feb5fdc2cb28b3d47d",
-    "description":  "Add frontend membership application handling portal",
-    "notes":  "",
+    "source_revision":  "4ece12cd0f69bc46aa45a5d0b57700a9bccde798",
+    "description":  "Add production SharePoint readiness check",
+    "notes":  "Production readiness checklist build from current HEAD. Adds read-only PROD SharePoint readiness check.",
     "components":  [
                        "release-tooling",
-                       "ssf-email-template",
-                       "ssf-medlemsprocess"
+                       "ssf-member-portal"
                    ],
-    "status":  "development",
-    "prepared_at":  ""
+    "status":  "prepared",
+    "prepared_at":  "2026-09-14T14:06:11.2038268Z"
 }
