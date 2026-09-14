@@ -2,16 +2,18 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260914.8",
-    "built_at":  "2026-09-14T17:00:59.7612174Z",
+    "build":  "20260914.9",
+    "built_at":  "2026-09-14T22:05:48.6596579Z",
     "source":  "codex",
-    "source_revision":  "2e4a7285f297a0e5f6834eaff5658699369fa29c",
-    "description":  "Verify annual meeting folder parent by id",
+    "source_revision":  "79ae0fd7409c7f842769c093789c7bde1ffd65c0",
+    "description":  "DEV remediation, aspirant decision, read-only SharePoint schema",
     "notes":  "Production readiness checklist build from current HEAD. Adds annual meetings folder parent and status readiness checks.",
     "components":  [
                        "release-tooling",
+                       "ssf-dev-protection",
+                       "ssf-medlemsprocess",
                        "ssf-member-portal"
                    ],
-    "status":  "prepared",
-    "prepared_at":  "2026-09-14T17:01:08.8320324Z"
+    "status":  "development",
+    "prepared_at":  ""
 }
