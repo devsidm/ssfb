@@ -2,16 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260914.7",
-    "built_at":  "2026-09-14T16:53:10.2097733Z",
+    "build":  "20260914.8",
+    "built_at":  "2026-09-14T17:00:59.7612174Z",
     "source":  "codex",
-    "source_revision":  "d56b03cec8d4056e4fa3b4f2e735ec6de7d456f5",
-    "description":  "Add annual meetings SharePoint readiness checks",
-    "notes":  "Production readiness checklist build from current HEAD. Adds strict read-only annual meetings SharePoint PROD readiness checks.",
+    "source_revision":  "2e4a7285f297a0e5f6834eaff5658699369fa29c",
+    "description":  "Verify annual meeting folder parent by id",
+    "notes":  "Production readiness checklist build from current HEAD. Adds annual meetings folder parent and status readiness checks.",
     "components":  [
                        "release-tooling",
                        "ssf-member-portal"
                    ],
     "status":  "prepared",
-    "prepared_at":  "2026-09-14T16:53:21.3933528Z"
+    "prepared_at":  "2026-09-14T17:01:08.8320324Z"
 }
