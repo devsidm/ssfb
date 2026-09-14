@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $Password,
     [ValidateSet('all', 'annual_meetings', 'membership_applications')]
-    [string] $Destination = 'all'
+    [string] $Destination = 'all',
+    [string] $ExpectedMembershipFolderId = '01R636G55IV3Z2XJ2S3VA2AGTD4SG6NTTX'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,10 +87,10 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
             @{ Key = 'route'; Type = 'choice'; Choices = @('Normalfallet', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg') },
             @{ Key = 'status'; Type = 'choice'; Choices = @('Inkommen', 'Under granskning', 'Begär komplettering', 'Väntar på komplettering', 'Inspektion ska bokas', 'Inspektion bokad', 'Under slutbedömning', 'Godkänd som aspirant', 'Avslagen') },
             @{ Key = 'membership_status'; Type = 'choice'; Choices = @('Ej medlem', 'Aspirant', 'Uppföljning', 'Medlemsfartyg', 'Avslutad') },
-            @{ Key = 'received'; Type = 'dateTime'; Choices = @() },
-            @{ Key = 'decision_date'; Type = 'dateTime'; Choices = @() },
-            @{ Key = 'aspirant_start'; Type = 'dateTime'; Choices = @() },
-            @{ Key = 'aspirant_review'; Type = 'dateTime'; Choices = @() },
+            @{ Key = 'received'; Type = 'dateOnly'; Choices = @() },
+            @{ Key = 'decision_date'; Type = 'dateOnly'; Choices = @() },
+            @{ Key = 'aspirant_start'; Type = 'dateOnly'; Choices = @() },
+            @{ Key = 'aspirant_review'; Type = 'dateOnly'; Choices = @() },
             @{ Key = 'wordpress_id'; Type = 'text'; Choices = @() }
         )
     } else {
@@ -112,22 +113,60 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
         $name = [string] $Profile.metadata.($req.Key)
         $column = if ($name -and $byName.ContainsKey($name)) { $byName[$name] } else { $null }
         $missingChoices = @()
+        $extraChoices = @()
+        $choiceOrderOk = $true
         if ($column -and $req.Choices.Count -gt 0) {
             $found = @($column.choices | ForEach-Object { [string] $_ })
             $missingChoices = @($req.Choices | Where-Object { $found -notcontains $_ })
+            $extraChoices = @($found | Where-Object { $req.Choices -notcontains $_ })
+            $choiceOrderOk = $found.Count -eq $req.Choices.Count
+            if ($choiceOrderOk) {
+                for ($i = 0; $i -lt $req.Choices.Count; $i++) {
+                    if ($found[$i] -ne $req.Choices[$i]) {
+                        $choiceOrderOk = $false
+                        break
+                    }
+                }
+            }
+        }
+        $actualType = if ($column) { [string] $column.type } else { '' }
+        $actualDateFormat = if ($column) { [string] $column.date_time_format } else { '' }
+        $typeOk = if ([string] $req.Type -eq 'dateOnly') {
+            [bool] ($column -and $actualType -eq 'dateTime' -and $actualDateFormat -eq 'dateOnly')
+        } else {
+            [bool] ($column -and $actualType -eq [string] $req.Type)
         }
         $results += [pscustomobject]@{
             Key = $req.Key
             Name = $name
             Found = [bool] $column
-            Type = if ($column) { [string] $column.type } else { '' }
+            Type = $actualType
+            DateTimeFormat = $actualDateFormat
             ExpectedType = $req.Type
-            TypeOk = [bool] ($column -and [string] $column.type -eq [string] $req.Type)
+            TypeOk = $typeOk
             MissingChoices = $missingChoices
-            Ok = [bool] ($column -and [string] $column.type -eq [string] $req.Type -and $missingChoices.Count -eq 0)
+            ExtraChoices = $extraChoices
+            ChoiceOrderOk = $choiceOrderOk
+            ChoicesOk = [bool] ($missingChoices.Count -eq 0 -and $extraChoices.Count -eq 0 -and $choiceOrderOk)
+            Ok = [bool] ($column -and $typeOk -and $missingChoices.Count -eq 0 -and $extraChoices.Count -eq 0 -and $choiceOrderOk)
         }
     }
     return $results
+}
+
+function Get-StepOk([object] $Diagnostics, [string] $Name) {
+    return [bool] ($Diagnostics.success -and $Diagnostics.data.steps.$Name.ok)
+}
+
+function Get-ChoiceScore([object[]] $ColumnChecks, [string] $Key, [int] $ExpectedCount) {
+    $check = @($ColumnChecks | Where-Object { $_.Key -eq $Key }) | Select-Object -First 1
+    if (-not $check -or -not $check.Found) { return "0/$ExpectedCount" }
+    $missing = @($check.MissingChoices).Count
+    $extra = @($check.ExtraChoices).Count
+    $score = $ExpectedCount - $missing
+    if ($extra -gt 0 -or -not $check.ChoiceOrderOk) { $score = [Math]::Min($score, $ExpectedCount - 1) }
+    if ($score -lt 0) { $score = 0 }
+    return "$score/$ExpectedCount"
 }
 
 $destinations = if ($Destination -eq 'all') { @('annual_meetings', 'membership_applications') } else { @($Destination) }
@@ -160,8 +199,24 @@ try {
 
         $diagnostics = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'diagnostics' $profile $ajaxPath
         $columnsResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'columns' $profile $ajaxPath
+        $folderPathResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'folder_path' $profile $ajaxPath
         $columns = if ($columnsResponse.success) { @($columnsResponse.data) } else { @() }
         $columnChecks = if ($columnsResponse.success) { @(Test-Columns $destinationName $columns $profile) } else { @() }
+        $folderIdMatches = if ($destinationName -eq 'membership_applications' -and $ExpectedMembershipFolderId) {
+            [bool] ($profile.folder_id -eq $ExpectedMembershipFolderId -and $folderPathResponse.success -and $folderPathResponse.data.id -eq $ExpectedMembershipFolderId)
+        } else {
+            [bool] ($folderPathResponse.success)
+        }
+        $summary = [ordered]@{
+            Site = if (Get-StepOk $diagnostics 'site') { 'PASS' } else { 'FAIL' }
+            Drive = if (Get-StepOk $diagnostics 'drive') { 'PASS' } else { 'FAIL' }
+            List = if (Get-StepOk $diagnostics 'list') { 'PASS' } else { 'FAIL' }
+            BaseFolder = if ((Get-StepOk $diagnostics 'folder') -and $folderIdMatches) { 'PASS' } else { 'FAIL' }
+            Columns = ('{0}/{1}' -f @($columnChecks | Where-Object { $_.Found -and $_.TypeOk }).Count, @($columnChecks).Count)
+            ApplicationPath = Get-ChoiceScore $columnChecks 'route' 4
+            ApplicationStatus = Get-ChoiceScore $columnChecks 'status' 9
+            MembershipStatus = Get-ChoiceScore $columnChecks 'membership_status' 5
+        }
 
         $results += [pscustomobject]@{
             Destination = $destinationName
@@ -169,6 +224,10 @@ try {
             Diagnostics = $diagnostics
             ColumnsOk = [bool] ($columnsResponse.success -and (@($columnChecks | Where-Object { -not $_.Ok }).Count -eq 0))
             ColumnChecks = $columnChecks
+            FolderPathOk = [bool] ($folderPathResponse.success)
+            ExpectedFolderId = $ExpectedMembershipFolderId
+            FolderIdMatches = $folderIdMatches
+            Summary = $summary
             ReadOnly = $true
         }
     }

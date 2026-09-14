@@ -151,6 +151,7 @@ final class SharePointDiscovery
                 'name' => sanitize_text_field((string) ($column['name'] ?? '')),
                 'display_name' => sanitize_text_field((string) ($column['displayName'] ?? '')),
                 'type' => $type,
+                'date_time_format' => sanitize_text_field((string) ($column['dateTime']['format'] ?? '')),
                 'choices' => array_map('sanitize_text_field', (array) ($column['choice']['choices'] ?? array())),
                 'read_only' => ! empty($column['readOnly']),
             );
