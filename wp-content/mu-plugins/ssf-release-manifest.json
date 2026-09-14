@@ -2,16 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260914.6",
-    "built_at":  "2026-09-14T16:25:10.8840532Z",
+    "build":  "20260914.7",
+    "built_at":  "2026-09-14T16:53:10.2097733Z",
     "source":  "codex",
-    "source_revision":  "8c0437fb79811b3e05df83f78a77587cde203cb1",
-    "description":  "Tighten SharePoint membership readiness check",
-    "notes":  "Production readiness checklist build from current HEAD. Adds strict read-only membership SharePoint PROD readiness checks.",
+    "source_revision":  "d56b03cec8d4056e4fa3b4f2e735ec6de7d456f5",
+    "description":  "Add annual meetings SharePoint readiness checks",
+    "notes":  "Production readiness checklist build from current HEAD. Adds strict read-only annual meetings SharePoint PROD readiness checks.",
     "components":  [
                        "release-tooling",
                        "ssf-member-portal"
                    ],
     "status":  "prepared",
-    "prepared_at":  "2026-09-14T16:25:17.8695749Z"
+    "prepared_at":  "2026-09-14T16:53:21.3933528Z"
 }
