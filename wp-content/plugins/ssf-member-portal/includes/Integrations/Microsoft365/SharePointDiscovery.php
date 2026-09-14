@@ -197,14 +197,20 @@ final class SharePointDiscovery
             $steps['list'] = array('ok' => false, 'label' => 'Listmetadata', 'message' => 'List ID kunde inte identifieras.');
         }
 
-        $folder = $this->graph->request('GET', 'drives/' . rawurlencode((string) $profile['drive_id']) . '/items/' . rawurlencode((string) $profile['folder_id']) . '?$select=id,name,folder,webUrl');
+        $folder = $this->graph->request('GET', 'drives/' . rawurlencode((string) $profile['drive_id']) . '/items/' . rawurlencode((string) $profile['folder_id']) . '?$select=id,name,folder,webUrl,parentReference');
         if (is_wp_error($folder)) {
             return $this->diagnostic_failure('folder', $folder, $steps, $profile);
         }
         if (empty($folder['folder'])) {
             return $this->diagnostic_failure('folder', new \WP_Error('sharepoint_folder_not_folder', 'Den valda posten är inte en mapp.'), $steps, $profile);
         }
-        $steps['folder'] = array('ok' => true, 'label' => 'Mapp', 'name' => sanitize_text_field((string) ($folder['name'] ?? '')));
+        $steps['folder'] = array(
+            'ok' => true,
+            'label' => 'Mapp',
+            'id' => sanitize_text_field((string) ($folder['id'] ?? '')),
+            'name' => sanitize_text_field((string) ($folder['name'] ?? '')),
+            'parent_path' => sanitize_text_field((string) ($folder['parentReference']['path'] ?? '')),
+        );
         $steps['read'] = array('ok' => true, 'label' => 'Läsåtkomst');
         return array('ok' => ! empty($steps['list']['ok']), 'timestamp' => gmdate('c'), 'steps' => $steps, 'list_id' => $list_id);
     }

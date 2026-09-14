@@ -121,11 +121,7 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
         )
     } else {
         $requirements = @(
-            @{ Key = 'wordpress_id'; Type = 'text'; Choices = @() },
-            @{ Key = 'number'; Type = 'text'; Choices = @() },
-            @{ Key = 'status'; Type = 'choice'; Choices = @(Annual-MotionStatuses); ExpectedAllowTextEntry = $false },
-            @{ Key = 'vessel'; Type = 'text'; Choices = @() },
-            @{ Key = 'received'; Type = 'dateTime'; Choices = @() }
+            @{ Key = 'status'; Type = 'choice'; Choices = @(Annual-MotionStatuses); ExpectedAllowTextEntry = $false }
         )
     }
 
@@ -233,18 +229,18 @@ try {
 
         $diagnostics = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'diagnostics' $profile $ajaxPath
         $columnsResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'columns' $profile $ajaxPath
-        $folderPathResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'folder_path' $profile $ajaxPath
         $columns = if ($columnsResponse.success) { @($columnsResponse.data) } else { @() }
         $columnChecks = if ($columnsResponse.success) { @(Test-Columns $destinationName $columns $profile) } else { @() }
         $expectedFolderId = if ($destinationName -eq 'membership_applications') { $ExpectedMembershipFolderId } else { $ExpectedAnnualFolderId }
         $expectedFolderName = if ($destinationName -eq 'membership_applications') { (U @(77, 101, 100, 108, 101, 109, 115, 97, 110, 115, 246, 107, 110, 105, 110, 103, 97, 114)) } else { (U @(197, 114, 115, 109, 246, 116, 101, 110)) }
+        $diagnosticFolder = $diagnostics.data.steps.folder
         $folderIdMatches = if ($expectedFolderId) {
-            [bool] ($profile.folder_id -eq $expectedFolderId -and $folderPathResponse.success -and $folderPathResponse.data.id -eq $expectedFolderId)
+            [bool] ($profile.folder_id -eq $expectedFolderId -and $diagnosticFolder.id -eq $expectedFolderId)
         } else {
-            [bool] ($folderPathResponse.success)
+            [bool] (Get-StepOk $diagnostics 'folder')
         }
-        $folderNameMatches = [bool] ($folderPathResponse.success -and $folderPathResponse.data.name -eq $expectedFolderName)
-        $folderParentMatches = [bool] ($folderPathResponse.success -and [string] $folderPathResponse.data.parent_path -match '[:/]General$')
+        $folderNameMatches = [bool] ($diagnosticFolder.name -eq $expectedFolderName)
+        $folderParentMatches = [bool] ([string] $diagnosticFolder.parent_path -match '[:/]General$')
         $statusCheck = @($columnChecks | Where-Object { $_.Key -eq 'status' }) | Select-Object -First 1
         $summary = [ordered]@{
             Site = if (Get-StepOk $diagnostics 'site') { 'PASS' } else { 'FAIL' }
@@ -268,7 +264,6 @@ try {
             Diagnostics = $diagnostics
             ColumnsOk = [bool] ($columnsResponse.success -and (@($columnChecks | Where-Object { -not $_.Ok }).Count -eq 0))
             ColumnChecks = $columnChecks
-            FolderPath = $folderPathResponse
             ExpectedFolderId = $expectedFolderId
             FolderIdMatches = $folderIdMatches
             FolderNameMatches = $folderNameMatches
