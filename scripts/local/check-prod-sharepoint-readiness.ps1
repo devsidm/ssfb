@@ -27,9 +27,9 @@ function Get-InputAttributes([string] $Tag) {
 }
 
 function Get-SharePointNonce([string] $Html) {
-    $match = [regex]::Match($Html, '"nonce"\s*:\s*"([^"]+)"')
+    $match = [regex]::Match($Html, 'ssfSharePointAdmin\s*=\s*\{[^}]*"nonce"\s*:\s*"([^"]+)"', 'Singleline')
     if (-not $match.Success) {
-        $match = [regex]::Match($Html, "nonce['""]?\s*[:=]\s*['""]([^'""]+)['""]")
+        $match = [regex]::Match($Html, "ssfSharePointAdmin\s*=\s*\{[^}]*nonce['""]?\s*[:=]\s*['""]([^'""]+)['""]", 'Singleline')
     }
     if (-not $match.Success) {
         throw 'Kunde inte hitta SharePoint admin nonce.'
