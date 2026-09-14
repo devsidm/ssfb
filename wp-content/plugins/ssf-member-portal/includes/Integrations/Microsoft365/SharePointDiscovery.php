@@ -121,6 +121,7 @@ final class SharePointDiscovery
             'id' => sanitize_text_field((string) ($item['id'] ?? '')),
             'name' => sanitize_text_field((string) ($item['name'] ?? '')),
             'path' => $folder_path,
+            'parent_path' => sanitize_text_field((string) ($item['parentReference']['path'] ?? '')),
             'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
         );
     }
@@ -153,6 +154,7 @@ final class SharePointDiscovery
                 'type' => $type,
                 'date_time_format' => sanitize_text_field((string) ($column['dateTime']['format'] ?? '')),
                 'choices' => array_map('sanitize_text_field', (array) ($column['choice']['choices'] ?? array())),
+                'allow_text_entry' => ! empty($column['choice']['allowTextEntry']),
                 'read_only' => ! empty($column['readOnly']),
             );
         }

@@ -6,7 +6,8 @@
     [string] $Password,
     [ValidateSet('all', 'annual_meetings', 'membership_applications')]
     [string] $Destination = 'all',
-    [string] $ExpectedMembershipFolderId = '01R636G55IV3Z2XJ2S3VA2AGTD4SG6NTTX'
+    [string] $ExpectedMembershipFolderId = '01R636G55IV3Z2XJ2S3VA2AGTD4SG6NTTX',
+    [string] $ExpectedAnnualFolderId = '01YQZLHNOR4EIPLSI6ERAKQYR2ECTT4KD2'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,18 @@ function Decode-Html([string] $Value) {
 
 function U([int[]] $Codepoints) {
     return -join ($Codepoints | ForEach-Object { [char] $_ })
+}
+
+function Annual-MotionStatuses() {
+    return @(
+        'Inkommen',
+        'Under behandling',
+        (U @(66, 101, 103, 228, 114, 32, 107, 111, 109, 112, 108, 101, 116, 116, 101, 114, 105, 110, 103)),
+        (U @(70, 228, 114, 100, 105, 103, 98, 101, 104, 97, 110, 100, 108, 97, 100, 32, 97, 118, 32, 115, 116, 121, 114, 101, 108, 115, 101, 110)),
+        (U @(84, 105, 108, 108, 32, 229, 114, 115, 109, 246, 116, 101, 116)),
+        (U @(66, 101, 115, 108, 117, 116, 97, 100, 32, 112, 229, 32, 229, 114, 115, 109, 246, 116, 101, 116)),
+        'Avslutad'
+    )
 }
 
 function Get-InputAttributes([string] $Tag) {
@@ -110,7 +123,7 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
         $requirements = @(
             @{ Key = 'wordpress_id'; Type = 'text'; Choices = @() },
             @{ Key = 'number'; Type = 'text'; Choices = @() },
-            @{ Key = 'status'; Type = 'choice'; Choices = @('Inkommen', 'Under behandling', 'BegÃ¤r komplettering', 'FÃ¤rdigbehandlad av styrelsen', 'Till Ã¥rsmÃ¶tet', 'Beslutad pÃ¥ Ã¥rsmÃ¶tet', 'Avslutad') },
+            @{ Key = 'status'; Type = 'choice'; Choices = @(Annual-MotionStatuses); ExpectedAllowTextEntry = $false },
             @{ Key = 'vessel'; Type = 'text'; Choices = @() },
             @{ Key = 'received'; Type = 'dateTime'; Choices = @() }
         )
@@ -144,6 +157,12 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
         }
         $actualType = if ($column) { [string] $column.type } else { '' }
         $actualDateFormat = if ($column) { [string] $column.date_time_format } else { '' }
+        $allowTextEntry = [bool] ($column -and $column.allow_text_entry)
+        $allowTextEntryOk = if ($req.ContainsKey('ExpectedAllowTextEntry')) {
+            [bool] ($column -and $allowTextEntry -eq [bool] $req.ExpectedAllowTextEntry)
+        } else {
+            $true
+        }
         $typeOk = if ([string] $req.Type -eq 'dateOnly') {
             [bool] ($column -and $actualType -eq 'dateTime' -and $actualDateFormat -eq 'dateOnly')
         } else {
@@ -155,13 +174,15 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
             Found = [bool] $column
             Type = $actualType
             DateTimeFormat = $actualDateFormat
+            AllowTextEntry = $allowTextEntry
             ExpectedType = $req.Type
             TypeOk = $typeOk
+            AllowTextEntryOk = $allowTextEntryOk
             MissingChoices = $missingChoices
             ExtraChoices = $extraChoices
             ChoiceOrderOk = $choiceOrderOk
             ChoicesOk = [bool] ($missingChoices.Count -eq 0 -and $extraChoices.Count -eq 0 -and $choiceOrderOk)
-            Ok = [bool] ($column -and $typeOk -and $missingChoices.Count -eq 0 -and $extraChoices.Count -eq 0 -and $choiceOrderOk)
+            Ok = [bool] ($column -and $typeOk -and $allowTextEntryOk -and $missingChoices.Count -eq 0 -and $extraChoices.Count -eq 0 -and $choiceOrderOk)
         }
     }
     return $results
@@ -212,13 +233,19 @@ try {
 
         $diagnostics = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'diagnostics' $profile $ajaxPath
         $columnsResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'columns' $profile $ajaxPath
+        $folderPathResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'folder_path' $profile $ajaxPath
         $columns = if ($columnsResponse.success) { @($columnsResponse.data) } else { @() }
         $columnChecks = if ($columnsResponse.success) { @(Test-Columns $destinationName $columns $profile) } else { @() }
-        $folderIdMatches = if ($destinationName -eq 'membership_applications' -and $ExpectedMembershipFolderId) {
-            [bool] ($profile.folder_id -eq $ExpectedMembershipFolderId -and (Get-StepOk $diagnostics 'folder'))
+        $expectedFolderId = if ($destinationName -eq 'membership_applications') { $ExpectedMembershipFolderId } else { $ExpectedAnnualFolderId }
+        $expectedFolderName = if ($destinationName -eq 'membership_applications') { (U @(77, 101, 100, 108, 101, 109, 115, 97, 110, 115, 246, 107, 110, 105, 110, 103, 97, 114)) } else { (U @(197, 114, 115, 109, 246, 116, 101, 110)) }
+        $folderIdMatches = if ($expectedFolderId) {
+            [bool] ($profile.folder_id -eq $expectedFolderId -and $folderPathResponse.success -and $folderPathResponse.data.id -eq $expectedFolderId)
         } else {
-            [bool] (Get-StepOk $diagnostics 'folder')
+            [bool] ($folderPathResponse.success)
         }
+        $folderNameMatches = [bool] ($folderPathResponse.success -and $folderPathResponse.data.name -eq $expectedFolderName)
+        $folderParentMatches = [bool] ($folderPathResponse.success -and [string] $folderPathResponse.data.parent_path -match '[:/]General$')
+        $statusCheck = @($columnChecks | Where-Object { $_.Key -eq 'status' }) | Select-Object -First 1
         $summary = [ordered]@{
             Site = if (Get-StepOk $diagnostics 'site') { 'PASS' } else { 'FAIL' }
             Drive = if (Get-StepOk $diagnostics 'drive') { 'PASS' } else { 'FAIL' }
@@ -228,6 +255,11 @@ try {
             ApplicationPath = Get-ChoiceScore $columnChecks 'route' 4
             ApplicationStatus = Get-ChoiceScore $columnChecks 'status' 9
             MembershipStatus = Get-ChoiceScore $columnChecks 'membership_status' 5
+            AnnualMeetingsFolder = if ((Get-StepOk $diagnostics 'folder') -and $folderIdMatches -and $folderNameMatches -and $folderParentMatches) { 'PASS' } else { 'FAIL' }
+            StatusColumn = if ($statusCheck -and $statusCheck.Found -and $statusCheck.Name -eq 'Status') { 'PASS' } else { 'FAIL' }
+            StatusColumnType = if ($statusCheck -and $statusCheck.TypeOk -and $statusCheck.AllowTextEntryOk) { 'PASS' } else { 'FAIL' }
+            MotionStatuses = Get-ChoiceScore $columnChecks 'status' 7
+            GraphApplicationAccess = if ($diagnostics.success -and $diagnostics.data.steps.authentication.ok) { 'PASS' } else { 'FAIL' }
         }
 
         $results += [pscustomobject]@{
@@ -236,14 +268,17 @@ try {
             Diagnostics = $diagnostics
             ColumnsOk = [bool] ($columnsResponse.success -and (@($columnChecks | Where-Object { -not $_.Ok }).Count -eq 0))
             ColumnChecks = $columnChecks
-            ExpectedFolderId = $ExpectedMembershipFolderId
+            FolderPath = $folderPathResponse
+            ExpectedFolderId = $expectedFolderId
             FolderIdMatches = $folderIdMatches
+            FolderNameMatches = $folderNameMatches
+            FolderParentMatches = $folderParentMatches
             Summary = $summary
             ReadOnly = $true
         }
     }
 
-    $overall = [bool] (@($results | Where-Object { -not ($_.DiagnosticsOk -and $_.ColumnsOk -and $_.FolderIdMatches) }).Count -eq 0)
+    $overall = [bool] (@($results | Where-Object { -not ($_.DiagnosticsOk -and $_.ColumnsOk -and $_.FolderIdMatches -and $_.FolderNameMatches -and $_.FolderParentMatches) }).Count -eq 0)
     [pscustomobject]@{
         Ok = $overall
         EnvironmentProfile = 'production'
