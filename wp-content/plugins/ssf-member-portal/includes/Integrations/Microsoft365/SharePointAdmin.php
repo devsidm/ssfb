@@ -152,7 +152,7 @@ final class SharePointAdmin
     {
         $destination = sanitize_key((string) ($_POST['destination'] ?? ''));
         $environment = 'production' === ($_POST['profile_environment'] ?? '') ? 'production' : 'development';
-        if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_save_sharepoint_destination_' . $destination . '_' . $environment)) {
+        if (! $this->can_configure() || ! check_admin_referer('ssf_save_sharepoint_destination_' . $destination . '_' . $environment)) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
         }
         $result = SharePointDestinations::save($destination, $environment, (array) wp_unslash($_POST['profile'] ?? array()));
@@ -161,7 +161,7 @@ final class SharePointAdmin
 
     public function save_policy(): void
     {
-        if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_save_sharepoint_policy')) {
+        if (! $this->can_configure() || ! check_admin_referer('ssf_save_sharepoint_policy')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
         }
         SharePointDestinations::save_policy(! empty($_POST['block_shared_development']));
@@ -174,7 +174,7 @@ final class SharePointAdmin
 
     public function ajax(): void
     {
-        if (! current_user_can(Capabilities::MANAGE) || ! check_ajax_referer('ssf_sharepoint_admin', 'nonce', false)) {
+        if (! $this->can_manage() || ! check_ajax_referer('ssf_sharepoint_admin', 'nonce', false)) {
             wp_send_json_error(array('message' => 'Du saknar behörighet.'), 403);
         }
         $operation = sanitize_key((string) ($_POST['operation'] ?? ''));
@@ -242,6 +242,22 @@ final class SharePointAdmin
     {
         $is_identifier = in_array($key, array('site_id', 'drive_id', 'list_id', 'folder_id'), true);
         ?><label><?php echo esc_html($label); ?><span class="ssf-sp-field-control"><input class="<?php echo $is_identifier ? 'large-text code' : 'regular-text'; ?>" type="<?php echo esc_attr($type); ?>" name="profile[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($profile[$key] ?? '')); ?>" placeholder="<?php echo esc_attr($placeholder); ?>" data-sp-field="<?php echo esc_attr($key); ?>"><?php if ($is_identifier) : ?><button type="button" class="button ssf-sp-copy" data-sp-copy-field="<?php echo esc_attr($key); ?>" title="Kopiera <?php echo esc_attr($label); ?>"><span class="dashicons dashicons-clipboard" aria-hidden="true"></span><span class="screen-reader-text">Kopiera <?php echo esc_html($label); ?></span></button><?php endif; ?></span></label><?php
+    }
+
+    private function can_manage(): bool
+    {
+        return current_user_can(Capabilities::MANAGE)
+            || current_user_can(Capabilities::MANAGE_MOTIONS)
+            || current_user_can(Capabilities::MANAGE_ANNUAL_MEETINGS)
+            || current_user_can('ssf_manage_application_settings')
+            || current_user_can('manage_options');
+    }
+
+    private function can_configure(): bool
+    {
+        return current_user_can(Capabilities::MANAGE)
+            || current_user_can('ssf_manage_application_settings')
+            || current_user_can('manage_options');
     }
 
     private function log(string $operation, string $destination, string $environment, array $result): void
