@@ -129,11 +129,11 @@ foreach ($key in @('metadata_application_membership_status_field', 'metadata_app
 }
 $createColumnCall = '$this->request(''POST'', $this->list_base($list_id) . ''/columns'''
 $updateColumnCall = '$this->request(''PATCH'', $this->list_base($list_id) . ''/columns/'''
-Assert-Contains 'Medlemsprocessen kan skapa saknade SharePoint-kolumner via reparation' $sharepoint $createColumnCall
-Assert-Contains 'Medlemsprocessen kan lägga till saknade SharePoint-val via reparation' $sharepoint $updateColumnCall
-Assert-Contains 'Schemareparation kräver bekräftelse' $admin 'confirm_schema'
+Assert-NotContains 'Medlemsprocessen får inte skapa SharePoint-kolumner i runtime' $sharepoint $createColumnCall
+Assert-NotContains 'Medlemsprocessen får inte patcha SharePoint-val i runtime' $sharepoint $updateColumnCall
+Assert-NotContains 'Schemaflödet får inte be om godkännande för runtime-reparation' $admin 'confirm_schema'
 Assert-Contains 'Schemareparation har separat admin action' $admin 'ssf_repair_application_sharepoint_schema'
-Assert-Contains 'Schemareparation anger manage-roll vid 403' $sharepoint "`$data['required_site_role'] = 'manage'"
+Assert-Contains 'Schemareparation blockerar med manuell åtgärd' $sharepoint 'manual_action_required'
 Assert-Contains 'Status kan skrivas trots ofärdigt metadata-schema' $sharepoint "schema_field_ok(`$schema, 'application_status')"
 Assert-Contains 'Ofärdigt schema lämnar varning efter statuspatch' $sharepoint 'return is_wp_error($schema) && ! is_wp_error($result) ? $schema : $result'
 Assert-Contains 'ListItem-ID sparas innan schemakontroll' $sharepoint 'update_post_meta($application_id, ''_ssf_sp_application_list_item_id'''

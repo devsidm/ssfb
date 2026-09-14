@@ -80,12 +80,19 @@ class SSF_Medlemsprocess_Emails
 
     public function send_status_email(int $application_id, string $status, string $message = ''): void
     {
+        if ('approved_aspirant' === $status && get_post_meta($application_id, '_ssf_aspirant_decision_email_sent_at', true)) {
+            return;
+        }
+
         $map = array(
             'needs_completion' => 'completion_required', 'completion_submitted' => 'completion_received',
             'inspection_completed' => 'inspection_completed', 'approved_aspirant' => 'approved_aspirant', 'rejected' => 'rejected',
         );
         $token = SSF_Medlemsprocess_Application::issue_token($application_id);
-        $this->send_template($map[$status] ?? 'status_updated', $application_id, array('public_status_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
+        $sent = $this->send_template($map[$status] ?? 'status_updated', $application_id, array('public_status_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
+        if ('approved_aspirant' === $status && $sent) {
+            update_post_meta($application_id, '_ssf_aspirant_decision_email_sent_at', current_time('mysql'));
+        }
     }
 
     public function send_booking(int $application_id, array $booking): void

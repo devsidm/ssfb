@@ -243,16 +243,16 @@ final class Controller
                 <?php if ($schema_error) : ?>
                     <div class="notice notice-warning inline">
                         <p><strong><?php esc_html_e('Statuskolumnen kunde inte kontrolleras.', 'ssf-member-portal'); ?></strong> <?php echo esc_html($schema_error); ?></p>
-                        <p><?php esc_html_e('Automatisk reparation: låt en Microsoft 365-administratör ändra SSF WordPress-appens site-avgränsade Sites.Selected-roll från write till manage för styrelsens SharePoint-site. WordPress-appen kan och ska inte ge sig själv denna behörighet.', 'ssf-member-portal'); ?></p>
+                        <p><?php esc_html_e('WordPress kontrollerar endast schemat. Saknade kolumner eller Choice-värden ska ändras manuellt i SharePoint av en behörig administratör.', 'ssf-member-portal'); ?></p>
                         <details>
                             <summary><?php esc_html_e('Alternativ: skapa statuskolumnen manuellt i SharePoint', 'ssf-member-portal'); ?></summary>
                             <p><?php esc_html_e('Skapa en kolumn av typen Val i dokumentbiblioteket. Döp den till Status, stäng av egna värden och använd listruta med följande val:', 'ssf-member-portal'); ?></p>
                             <ul><?php foreach (MotionStatus::all() as $status_label) : ?><li><?php echo esc_html($status_label); ?></li><?php endforeach; ?></ul>
-                            <p><?php esc_html_e('Kör sedan kontrollen igen. En redan korrekt kolumn behöver inte repareras.', 'ssf-member-portal'); ?></p>
+                            <p><?php esc_html_e('Kör sedan kontrollen igen. En redan korrekt kolumn behöver ingen manuell åtgärd.', 'ssf-member-portal'); ?></p>
                         </details>
                     </div>
                 <?php endif; ?>
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_ensure_sharepoint_motion_schema"><?php wp_nonce_field('ssf_member_portal_ensure_sharepoint_motion_schema'); ?><label><input type="checkbox" name="confirm_schema" value="1"> <?php esc_html_e('Jag godkänner att en saknad statuskolumn eller saknade statusval skapas.', 'ssf-member-portal'); ?></label><?php submit_button(__('Kontrollera och reparera statuskolumn', 'ssf-member-portal'), 'secondary', 'submit', false); ?></form>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_ensure_sharepoint_motion_schema"><?php wp_nonce_field('ssf_member_portal_ensure_sharepoint_motion_schema'); ?><?php submit_button(__('Kontrollera statuskolumn', 'ssf-member-portal'), 'secondary', 'submit', false); ?></form>
             </div>
 
             <div class="postbox" style="max-width:980px;padding:20px">
@@ -269,7 +269,7 @@ final class Controller
                 <p class="description"><?php esc_html_e('Automatisk kontroll körs ungefär var 30:e minut. WordPress cron är trafikdriven; konfigurera en system-cron för wp-cron.php om sajten har låg trafik.', 'ssf-member-portal'); ?></p>
             </div>
 
-            <p class="description"><?php esc_html_e('Filhanteringen använder Microsoft Graph Application permission Sites.Selected med en explicit write-grant. Automatisk ändring av statuskolumnens schema kräver i stället en manage-grant till just styrelsens SharePoint-site. Lägg inte till tenantomfattande Sites.Manage.All.', 'ssf-member-portal'); ?></p>
+            <p class="description"><?php esc_html_e('Filhanteringen använder Microsoft Graph Application permission Sites.Selected med en explicit write-grant. WordPress-applikationen administrerar inte SharePoint-schema; kolumner och val hålls manuellt i SharePoint.', 'ssf-member-portal'); ?></p>
         </div>
         <?php
     }
@@ -385,9 +385,6 @@ final class Controller
     public function ensure_sharepoint_motion_schema(): void
     {
         $this->guard_microsoft365_action('ssf_member_portal_ensure_sharepoint_motion_schema');
-        if (empty($_POST['confirm_schema'])) {
-            wp_die(esc_html__('Bekräfta att SharePoint-schemat får uppdateras.', 'ssf-member-portal'));
-        }
         $this->complete_microsoft365_action(
             $this->service->ensure_sharepoint_status_schema(),
             __('SharePoints statuskolumn är kontrollerad och klar.', 'ssf-member-portal')

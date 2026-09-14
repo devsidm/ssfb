@@ -23,6 +23,11 @@ function ssf_dev_protection_send_robots_header(): void
     }
 
     header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet', true);
+    if (ssf_dev_protection_is_public_status_route()) {
+        nocache_headers();
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private', true);
+        header('Pragma: no-cache', true);
+    }
 }
 
 function ssf_dev_protection_sync_search_visibility(): void
@@ -65,8 +70,34 @@ function ssf_dev_protection_allows_anonymous_request(): bool
         return true;
     }
 
+    if (ssf_dev_protection_is_public_status_route()) {
+        return true;
+    }
+
     global $pagenow;
     return in_array($pagenow, array('wp-login.php', 'wp-cron.php'), true);
+}
+
+function ssf_dev_protection_is_public_status_route(): bool
+{
+    $request_path = trim((string) wp_parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
+    $home_path = trim((string) wp_parse_url(home_url('/'), PHP_URL_PATH), '/');
+    if ($home_path && 0 === strpos($request_path . '/', $home_path . '/')) {
+        $request_path = trim(substr($request_path, strlen($home_path)), '/');
+    }
+
+    if ('ansokan-status' === $request_path) {
+        $token = isset($_GET['token']) && is_scalar($_GET['token']) ? (string) wp_unslash($_GET['token']) : '';
+        return strlen($token) >= 24;
+    }
+
+    if ('motion-status' === $request_path) {
+        $motion = isset($_GET['motion']) && is_scalar($_GET['motion']) ? (string) wp_unslash($_GET['motion']) : '';
+        $token = isset($_GET['token']) && is_scalar($_GET['token']) ? (string) wp_unslash($_GET['token']) : '';
+        return '' !== trim($motion) && strlen($token) >= 24;
+    }
+
+    return false;
 }
 
 function ssf_dev_protection_require_login(): void

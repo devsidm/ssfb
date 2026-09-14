@@ -10,10 +10,10 @@ if (! defined('ABSPATH')) {
 }
 
 /**
- * Owns the SharePoint document-library schema used by motion files.
+ * Verifies the SharePoint document-library schema used by motion files.
  *
- * The schema is discovered only during setup, upload and repair. Routine
- * status polling uses the cached list and internal column identifiers.
+ * The WordPress runtime must not administer SharePoint schema. It may read
+ * and cache the verified list/internal column identifiers only.
  */
 final class MotionSchema
 {
@@ -45,11 +45,10 @@ final class MotionSchema
 
         $column = $this->find_status_column($columns);
         if (! $column) {
-            $column = $this->create_status_column($list_id);
-            if (is_wp_error($column)) {
-                return $this->remember_failure($column, 'create_column', $list_id);
-            }
-            Logger::add('motion_sharepoint_status_column_created', array('list_id' => $list_id, 'column_id' => $column['id'] ?? ''));
+            return $this->remember_failure(new \WP_Error(
+                'sharepoint_status_column_missing',
+                __('SharePoint-kolumnen Status saknas. Skapa kolumnen manuellt i dokumentbiblioteket och kör kontrollen igen.', 'ssf-member-portal')
+            ), 'validate_column', $list_id);
         }
 
         if (empty($column['choice']) || ! is_array($column['choice'])) {
@@ -59,9 +58,18 @@ final class MotionSchema
             ), 'validate_column', $list_id);
         }
 
-        $column = $this->ensure_status_choices($list_id, $column);
-        if (is_wp_error($column)) {
-            return $this->remember_failure($column, 'update_choices', $list_id);
+        $choice = (array) ($column['choice'] ?? array());
+        $existing_choices = array_values(array_map('sanitize_text_field', (array) ($choice['choices'] ?? array())));
+        $missing_choices = $this->missing_choices($existing_choices);
+        if ($missing_choices || ! empty($choice['allowTextEntry'])) {
+            return $this->remember_failure(new \WP_Error(
+                'sharepoint_status_column_manual_action_required',
+                __('SharePoint-kolumnen Status har fel schema. Egna val ska vara avstängt och alla fördefinierade statusvärden måste finnas. Åtgärda manuellt i SharePoint och kör kontrollen igen.', 'ssf-member-portal'),
+                array(
+                    'missing_choices' => $missing_choices,
+                    'allow_text_entry' => ! empty($choice['allowTextEntry']),
+                )
+            ), 'validate_column', $list_id);
         }
 
         $verified_at = gmdate('c');
@@ -70,7 +78,8 @@ final class MotionSchema
             'status_column_id' => sanitize_text_field((string) ($column['id'] ?? '')),
             'status_field' => sanitize_text_field((string) ($column['name'] ?? $column['displayName'] ?? '')),
             'status_display_name' => sanitize_text_field((string) ($column['displayName'] ?? self::STATUS_NAME)),
-            'choices' => array_values(array_map('sanitize_text_field', (array) ($column['choice']['choices'] ?? array()))),
+            'choices' => $existing_choices,
+            'allow_text_entry' => ! empty($choice['allowTextEntry']),
             'last_checked_at' => $verified_at,
             'verified_at' => $verified_at,
         );
@@ -160,55 +169,18 @@ final class MotionSchema
 
     public function create_status_column(string $list_id)
     {
-        $created = $this->graph->request('POST', $this->list_base($list_id) . '/columns', array(
-            'displayName' => self::STATUS_NAME,
-            'name' => self::STATUS_NAME,
-            'choice' => array(
-                'allowTextEntry' => false,
-                'choices' => $this->required_choices(),
-                'displayAs' => 'dropDownMenu',
-            ),
-        ));
-        if (! is_wp_error($created)) {
-            return $created;
-        }
-
-        $error_data = (array) $created->get_error_data();
-        if (409 !== (int) ($error_data['http_status'] ?? $error_data['status'] ?? 0)) {
-            return $created;
-        }
-
-        // Another request may have created the column between discovery and POST.
-        $columns = $this->get_columns($list_id);
-        if (is_wp_error($columns)) {
-            return $columns;
-        }
-        return $this->find_status_column($columns) ?: $created;
+        return new \WP_Error(
+            'sharepoint_schema_write_disabled',
+            __('Automatisk skapning av SharePoint-kolumner är avstängd. Skapa kolumnen manuellt i SharePoint.', 'ssf-member-portal')
+        );
     }
 
     public function ensure_status_choices(string $list_id, array $column)
     {
-        $existing = array_values(array_filter(array_map('sanitize_text_field', (array) ($column['choice']['choices'] ?? array()))));
-        $missing = $this->missing_choices($existing);
-        $choice = (array) ($column['choice'] ?? array());
-        $requires_update = $missing || ! empty($choice['allowTextEntry']) || 'dropDownMenu' !== (string) ($choice['displayAs'] ?? '');
-        if (! $requires_update) {
-            return $column;
-        }
-
-        $choice['choices'] = array_merge($existing, $missing);
-        $choice['allowTextEntry'] = false;
-        $choice['displayAs'] = 'dropDownMenu';
-        $updated = $this->graph->request(
-            'PATCH',
-            $this->list_base($list_id) . '/columns/' . rawurlencode((string) ($column['id'] ?? '')),
-            array('choice' => $choice)
+        return new \WP_Error(
+            'sharepoint_schema_write_disabled',
+            __('Automatisk uppdatering av SharePoint Choice-värden är avstängd. Uppdatera kolumnen manuellt i SharePoint.', 'ssf-member-portal')
         );
-        if (! is_wp_error($updated)) {
-            Logger::add('motion_sharepoint_status_choices_repaired', array('list_id' => $list_id, 'added_choices' => $missing));
-        }
-
-        return $updated;
     }
 
     private function document_library_list_id()
@@ -265,10 +237,10 @@ final class MotionSchema
         if (403 === $status) {
             $data['schema_stage'] = $stage;
             $data['required_application_permission'] = 'Sites.Selected';
-            $data['required_site_role'] = 'manage';
+            $data['required_site_role'] = 'site-scoped access for reading list columns';
             $error = new \WP_Error(
                 'sharepoint_motion_schema_access_denied',
-                __('Microsoft Graph nekade åtkomst till dokumentbibliotekets kolumnschema. Filuppladdning kan fungera med site-rollen write, men automatisk kontroll och reparation av statuskolumnen kräver Sites.Selected med rollen manage på just denna SharePoint-site. Lägg inte till den tenantomfattande behörigheten Sites.Manage.All.', 'ssf-member-portal'),
+                __('Microsoft Graph nekade läsåtkomst till dokumentbibliotekets kolumnschema. WordPress försöker inte reparera SharePoint-schema automatiskt; kontrollera site-avgränsad Sites.Selected-åtkomst och att kolumnen finns manuellt i SharePoint.', 'ssf-member-portal'),
                 $data
             );
         }

@@ -59,8 +59,8 @@ Assert-Contains 'Motioner använder central site' $motions "Configuration::value
 Assert-Contains 'Motioner använder central drive' $motions "Configuration::value('drive_id')"
 Assert-Contains 'Motioner använder central mapp' $motions "Configuration::value('annual_meeting_folder_id')"
 Assert-Contains 'Statusschema sparar misslyckad kontroll' $motionSchema "'last_checked_at'"
-Assert-Contains 'Statusschema förklarar avgränsad manage-roll' $motionSchema "`$data['required_site_role'] = 'manage';"
-Assert-Contains 'Statusschema undviker tenantomfattande manage' $motionSchema 'Lägg inte till den tenantomfattande behörigheten Sites.Manage.All'
+Assert-Contains 'Statusschema read-only column check' $motionSchema 'site-scoped access for reading list columns'
+Assert-Contains 'Statusschema blockerar runtime-reparation' $motionSchema 'sharepoint_schema_write_disabled'
 Assert-Contains 'Admin visar manuell statuskolumnsväg' $controller 'Alternativ: skapa statuskolumnen manuellt i SharePoint'
 Assert-Contains 'Motionsuppladdning finns kvar' $motionRuntime 'upload_motion_attachment'
 Assert-Contains 'Motionsstatussynk finns kvar' $motions 'get_motion_status'

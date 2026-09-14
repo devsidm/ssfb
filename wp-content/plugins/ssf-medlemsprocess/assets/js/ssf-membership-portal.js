@@ -44,4 +44,27 @@
     });
     dragged = null;
   });
+
+  root.addEventListener('click', function (event) {
+    var opener = event.target.closest('[data-ssf-dialog-open]');
+    if (opener) {
+      var dialog = document.getElementById(opener.getAttribute('data-ssf-dialog-open'));
+      if (!dialog) return;
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', 'open');
+      }
+      return;
+    }
+
+    if (event.target.matches('[data-ssf-dialog-close]')) {
+      var closeDialog = event.target.closest('dialog');
+      if (closeDialog && typeof closeDialog.close === 'function') {
+        closeDialog.close();
+      } else if (closeDialog) {
+        closeDialog.removeAttribute('open');
+      }
+    }
+  });
 }());

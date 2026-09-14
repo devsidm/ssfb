@@ -384,9 +384,9 @@ final class SharePoint
     }
 
     /**
-     * Schema management requires broader Graph rights than normal file writes.
+     * Schema verification reads the configured Status field before normal file writes.
      * When a site already has the configured Status field, keep status sync
-     * working under Sites.Selected and surface the repair failure in admin.
+     * working under Sites.Selected and surface manual schema actions in admin.
      */
     private function status_context(bool $force_schema_check = false)
     {

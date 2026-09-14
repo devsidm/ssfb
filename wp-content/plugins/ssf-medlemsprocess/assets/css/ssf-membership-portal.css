@@ -415,6 +415,52 @@
     margin-bottom: 12px;
 }
 
+.ssf-decision-panel {
+    border: 1px solid var(--ssf-border);
+    border-radius: 8px;
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+}
+
+.ssf-decision-panel h3 {
+    color: var(--ssf-navy);
+    font-size: 18px;
+    margin: 0;
+}
+
+.ssf-decision-dialog {
+    border: 1px solid var(--ssf-border);
+    border-radius: 8px;
+    box-shadow: 0 18px 48px rgba(22, 50, 79, 0.22);
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 0;
+    width: 100%;
+}
+
+.ssf-decision-dialog::backdrop {
+    background: rgba(24, 48, 68, 0.48);
+}
+
+.ssf-decision-dialog-inner {
+    display: grid;
+    gap: 14px;
+    padding: 20px;
+}
+
+.ssf-decision-dialog h3 {
+    color: var(--ssf-navy);
+    font-size: 20px;
+    margin: 0;
+}
+
+.ssf-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
 .ssf-document-list article {
     align-items: center;
     border-bottom: 1px solid var(--ssf-border);

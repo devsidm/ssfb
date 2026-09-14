@@ -84,7 +84,8 @@ final class MotionStatusService
         $email_sent = false;
         if ('wordpress' === $source) {
             $this->sharepoint->queue_status_update($motion_id);
-        } elseif ('sharepoint' === $source) {
+        }
+        if ($this->should_notify($new_status)) {
             $email_sent = $this->mailer->send_status_change($motion_id, $old_status, $new_status);
         }
 
@@ -114,6 +115,11 @@ final class MotionStatusService
         if ($file_url && ! get_post_meta($motion_id, '_ssf_mp_sharepoint_web_url', true)) {
             update_post_meta($motion_id, '_ssf_mp_sharepoint_web_url', $file_url);
         }
+    }
+
+    private function should_notify(string $status): bool
+    {
+        return MotionStatus::INKOMMEN !== $status;
     }
 
     private function timestamp($value): string

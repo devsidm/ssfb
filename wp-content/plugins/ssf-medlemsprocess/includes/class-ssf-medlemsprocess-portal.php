@@ -125,7 +125,8 @@ class SSF_Medlemsprocess_Portal
         switch ($operation) {
             case 'transition':
                 $ok = $this->handle_transition($application_id);
-                $message = $ok ? 'updated' : 'failed';
+                $target_status = sanitize_key((string) wp_unslash($_POST['target_status'] ?? ''));
+                $message = $ok ? 'updated' : ('approved_aspirant' === $target_status && get_post_meta($application_id, '_ssf_decision_date_required', true) ? 'decision_date_missing' : 'failed');
                 break;
             case 'book_inspection':
                 $ok = $this->handle_booking($application_id);
@@ -159,6 +160,8 @@ class SSF_Medlemsprocess_Portal
             return false;
         }
         if ('approved_aspirant' === $target && (! current_user_can('ssf_decide_applications') || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $decision_date))) {
+            update_post_meta($application_id, '_ssf_decision_date_required', '1');
+            SSF_Medlemsprocess_Application::add_history($application_id, 'workflow_warning', 'Aspirantbeslut avbröts eftersom beslutsdatum saknas eller är ogiltigt.', false, array('source' => 'membership_portal'));
             return false;
         }
         if ('rejected' === $target && ! current_user_can('ssf_decide_applications')) {
@@ -311,8 +314,10 @@ class SSF_Medlemsprocess_Portal
             return;
         }
         if ('awaiting_decision' === $status) {
+            echo '<div class="ssf-decision-panel"><p class="ssf-portal-kicker">Slutbedömning</p><h3>Fatta beslut</h3><p class="ssf-muted">Godkännande skapar en aspirantperiod på ett år och kräver beslutsdatum.</p>';
             echo $this->approve_aspirant_form($application_id);
             echo $this->transition_form($application_id, 'rejected', 'Avslå ansökan', true, true);
+            echo '</div>';
             return;
         }
         $membership = SSF_Medlemsprocess_Application::membership_status($application_id);
@@ -553,6 +558,7 @@ class SSF_Medlemsprocess_Portal
             'drag_opened' => 'Välj och bekräfta rätt nästa steg för ärendet.',
             'failed' => 'Åtgärden kunde inte genomföras. Kontrollera att arbetsflödet tillåter steget.',
         );
+        $labels['decision_date_missing'] = 'Beslutsdatum krävs för att godkänna som aspirant. Inget beslut har sparats.';
         if (isset($labels[$message])) {
             echo '<div class="ssf-portal-notice">' . esc_html($labels[$message]) . '</div>';
         }
@@ -590,7 +596,8 @@ class SSF_Medlemsprocess_Portal
     {
         $today = wp_date('Y-m-d');
         $review = (new DateTimeImmutable($today, wp_timezone()))->modify('+1 year')->format('Y-m-d');
-        $fields = '<details class="ssf-action-details"><summary>Godkänn som aspirant</summary><p>Fartyget blir aspirant i ett år. Det blir inte automatiskt medlemsfartyg.</p><input type="hidden" name="target_status" value="approved_aspirant"><label>Beslutsdatum<input type="date" name="decision_date" value="' . esc_attr($today) . '" required></label><p class="ssf-muted">Planerad uppföljning: ' . esc_html($review) . '</p><label>Meddelande till sökanden<textarea name="public_comment" rows="3"></textarea></label><button class="ssf-portal-button ssf-portal-button-primary" type="submit">Godkänn som aspirant</button></details>';
+        $dialog_id = 'ssf-aspirant-dialog-' . $application_id;
+        $fields = '<input type="hidden" name="target_status" value="approved_aspirant"><button class="ssf-portal-button ssf-portal-button-primary" type="button" data-ssf-dialog-open="' . esc_attr($dialog_id) . '">Godkänn som aspirant</button><dialog class="ssf-decision-dialog" id="' . esc_attr($dialog_id) . '" aria-labelledby="' . esc_attr($dialog_id) . '-title"><div class="ssf-decision-dialog-inner"><h3 id="' . esc_attr($dialog_id) . '-title">Godkänn som aspirant</h3><p>Fartyget blir aspirant i ett år. Det blir inte automatiskt medlemsfartyg.</p><label>Beslutsdatum<input type="date" name="decision_date" value="' . esc_attr($today) . '" required></label><p class="ssf-muted">Planerad uppföljning: ' . esc_html($review) . '</p><label>Meddelande till sökanden<textarea name="public_comment" rows="3"></textarea></label><div class="ssf-dialog-actions"><button class="ssf-portal-button" type="button" data-ssf-dialog-close>Avbryt</button><button class="ssf-portal-button ssf-portal-button-primary" type="submit">Bekräfta godkännande</button></div></div></dialog>';
         return $this->action_form($application_id, 'transition', $fields);
     }
 

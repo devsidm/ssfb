@@ -48,11 +48,19 @@ final class MotionMailer
     }
 
     /**
-     * Sends one notification only after a persisted SharePoint-originated
-     * status change. Failed sends stay queued for a bounded retry sequence.
+     * Sends one notification after a persisted motion status change.
+     * Failed sends stay queued for a bounded retry sequence.
      */
     public function send_status_change(int $motion_id, string $old_status, string $new_status): bool
     {
+        $pending = (array) get_post_meta($motion_id, '_ssf_mp_pending_status_email', true);
+        if (
+            $new_status === (string) get_post_meta($motion_id, '_ssf_mp_last_notified_status', true)
+            && empty($pending['new_status'])
+        ) {
+            return true;
+        }
+
         $email = sanitize_email((string) get_post_meta($motion_id, '_ssf_mp_submitter_email', true));
         $number = (string) get_post_meta($motion_id, '_ssf_mp_motion_number', true);
         $name = sanitize_text_field((string) get_post_meta($motion_id, '_ssf_mp_submitter_name', true));

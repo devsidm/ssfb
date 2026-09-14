@@ -18,6 +18,7 @@ class SSF_Medlemsprocess_Public
         add_action('admin_post_ssf_submit_application', array($this, 'submit_application'));
         add_action('admin_post_nopriv_ssf_submit_completion', array($this, 'submit_completion'));
         add_action('admin_post_ssf_submit_completion', array($this, 'submit_completion'));
+        add_filter('wp_robots', array($this, 'robots'));
     }
 
     public function register_shortcodes(): void
@@ -52,6 +53,7 @@ class SSF_Medlemsprocess_Public
 
     public function status_page(): string
     {
+        $this->send_private_status_headers();
         $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
         $application_id = SSF_Medlemsprocess_Application::find_by_token($token);
         if (! $application_id) {
@@ -70,6 +72,30 @@ class SSF_Medlemsprocess_Public
         ob_start();
         include SSF_MEDLEMSPROCESS_PATH . 'templates/status-page.php';
         return ob_get_clean();
+    }
+
+    public function robots(array $robots): array
+    {
+        $pages = (array) (SSF_Medlemsprocess_Plugin::settings()['pages'] ?? array());
+        if (! empty($_GET['token']) && ! empty($pages['ansokan_status']) && is_page((int) $pages['ansokan_status'])) {
+            $robots['noindex'] = true;
+            $robots['nofollow'] = true;
+            $robots['noarchive'] = true;
+            $robots['nosnippet'] = true;
+        }
+        return $robots;
+    }
+
+    private function send_private_status_headers(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        nocache_headers();
+        header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet', true);
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private', true);
+        header('Pragma: no-cache', true);
     }
 
     public function submit_application(): void

@@ -297,7 +297,9 @@ class SSF_Medlemsprocess_Application
         if ('approved_aspirant' === $status) {
             self::start_aspirant_period($application_id, $decision_date, $source);
         } elseif ('rejected' === $status) {
-            self::set_membership_status($application_id, 'closed', $source);
+            if ('not_member' !== self::membership_status($application_id)) {
+                self::set_membership_status($application_id, 'closed', $source);
+            }
         }
         if ($notify) {
             SSF_Medlemsprocess_Plugin::instance()->emails->send_status_email($application_id, $status, $message);
@@ -358,6 +360,18 @@ class SSF_Medlemsprocess_Application
         update_post_meta($application_id, '_ssf_aspirant_review_due_at', $review->format('Y-m-d'));
         delete_post_meta($application_id, '_ssf_decision_date_required');
         self::set_membership_status($application_id, 'aspirant', $source);
+        self::add_history($application_id, 'decision', sprintf(
+            'Beslut: Godkänd som aspirant. Beslutsdatum %s, aspirantperiod till %s.',
+            $date->format('Y-m-d'),
+            $review->format('Y-m-d')
+        ), false, array(
+            'source' => $source,
+            'decision_date' => $date->format('Y-m-d'),
+            'aspirant_start_date' => $date->format('Y-m-d'),
+            'aspirant_review_date' => $review->format('Y-m-d'),
+            'application_status' => 'approved_aspirant',
+            'membership_status' => 'aspirant',
+        ));
     }
 
     private static function can_transition(string $from, string $to): bool

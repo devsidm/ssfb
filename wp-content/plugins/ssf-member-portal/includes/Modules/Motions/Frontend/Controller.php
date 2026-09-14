@@ -24,6 +24,7 @@ final class Controller
         add_shortcode('ssf_member_portal_motion_status', array($this, 'status_shortcode'));
         add_action('admin_post_nopriv_ssf_member_portal_submit_motion', array($this, 'submit'));
         add_action('admin_post_ssf_member_portal_submit_motion', array($this, 'submit'));
+        add_filter('wp_robots', array($this, 'robots'));
     }
 
     public function form_shortcode(array $atts = array()): string
@@ -68,6 +69,7 @@ final class Controller
 
     public function status_shortcode(): string
     {
+        $this->send_private_status_headers();
         $number = sanitize_text_field(wp_unslash($_GET['motion'] ?? ''));
         $token = sanitize_text_field(wp_unslash($_GET['token'] ?? ''));
         $meeting_id = isset($_GET['meeting']) && is_scalar($_GET['meeting']) ? absint(wp_unslash($_GET['meeting'])) : 0;
@@ -79,6 +81,30 @@ final class Controller
             return $this->template('confirmation', array('motion' => $motion, 'deadline' => $this->deadline, 'status_url' => $this->service->status_url($number, $token, (int) get_post_meta($motion->ID, '_ssf_mp_annual_meeting_id', true))));
         }
         return $this->template('status', array('motion' => $motion, 'deadline' => $this->deadline));
+    }
+
+    public function robots(array $robots): array
+    {
+        $page_id = (int) get_option('ssf_member_portal_motion_status_page_id', 0);
+        if (! empty($_GET['token']) && $page_id && is_page($page_id)) {
+            $robots['noindex'] = true;
+            $robots['nofollow'] = true;
+            $robots['noarchive'] = true;
+            $robots['nosnippet'] = true;
+        }
+        return $robots;
+    }
+
+    private function send_private_status_headers(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        nocache_headers();
+        header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet', true);
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private', true);
+        header('Pragma: no-cache', true);
     }
 
     public function submit(): void
