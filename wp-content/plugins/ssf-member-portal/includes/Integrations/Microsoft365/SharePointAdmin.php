@@ -174,10 +174,13 @@ final class SharePointAdmin
 
     public function ajax(): void
     {
-        if (! $this->can_manage() || ! check_ajax_referer('ssf_sharepoint_admin', 'nonce', false)) {
+        if (! check_ajax_referer('ssf_sharepoint_admin', 'nonce', false)) {
             wp_send_json_error(array('message' => 'Du saknar behörighet.'), 403);
         }
         $operation = sanitize_key((string) ($_POST['operation'] ?? ''));
+        if (! $this->can_run_operation($operation)) {
+            wp_send_json_error(array('message' => 'Du saknar behörighet.'), 403);
+        }
         $destination = sanitize_key((string) ($_POST['destination'] ?? ''));
         $environment = 'production' === ($_POST['environment'] ?? '') ? 'production' : 'development';
         if (! isset(SharePointDestinations::definitions()[$destination])) {
@@ -258,6 +261,16 @@ final class SharePointAdmin
         return current_user_can(Capabilities::MANAGE)
             || current_user_can('ssf_manage_application_settings')
             || current_user_can('manage_options');
+    }
+
+    private function can_run_operation(string $operation): bool
+    {
+        if ('write_test' === $operation) {
+            return $this->can_configure();
+        }
+
+        return $this->can_manage()
+            || current_user_can('manage_ssf_releases');
     }
 
     private function log(string $operation, string $destination, string $environment, array $result): void
