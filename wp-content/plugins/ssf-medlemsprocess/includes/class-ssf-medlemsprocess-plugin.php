@@ -18,6 +18,7 @@ final class SSF_Medlemsprocess_Plugin
     public SSF_Medlemsprocess_Public $public;
     public SSF_Medlemsprocess_Admin $admin;
     public SSF_Medlemsprocess_Inspector $inspector;
+    public SSF_Medlemsprocess_Portal $portal;
     public SSF_Medlemsprocess_PDF $pdf;
     public SSF_Medlemsprocess_SharePoint $sharepoint;
 
@@ -32,7 +33,7 @@ final class SSF_Medlemsprocess_Plugin
 
     private function __construct()
     {
-        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'public', 'admin', 'inspector') as $file) {
+        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'public', 'admin', 'inspector', 'portal') as $file) {
             require_once SSF_MEDLEMSPROCESS_PATH . 'includes/class-ssf-medlemsprocess-' . $file . '.php';
         }
 
@@ -43,6 +44,7 @@ final class SSF_Medlemsprocess_Plugin
         $this->public = new SSF_Medlemsprocess_Public();
         $this->admin = new SSF_Medlemsprocess_Admin();
         $this->inspector = new SSF_Medlemsprocess_Inspector();
+        $this->portal = new SSF_Medlemsprocess_Portal();
 
         add_action('init', array($this, 'register'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_public_assets'));
@@ -92,6 +94,46 @@ final class SSF_Medlemsprocess_Plugin
                 $page_id = $existing->ID;
             }
             update_option('ssf_medlemsprocess_' . str_replace('-', '_', $slug) . '_page_id', (int) $page_id, false);
+        }
+        self::install_portal_page();
+    }
+
+    private static function install_portal_page(): void
+    {
+        $parent = get_page_by_path('medlemskap');
+        if (! $parent) {
+            $parent_id = wp_insert_post(array(
+                'post_title' => 'Medlemskap',
+                'post_name' => 'medlemskap',
+                'post_content' => '',
+                'post_status' => 'publish',
+                'post_type' => 'page',
+            ));
+        } else {
+            $parent_id = (int) $parent->ID;
+        }
+
+        $existing = get_page_by_path('medlemskap/handlaggning');
+        if (! $existing) {
+            $page_id = wp_insert_post(array(
+                'post_title' => 'Handläggning',
+                'post_name' => 'handlaggning',
+                'post_parent' => (int) $parent_id,
+                'post_content' => '[ssf_membership_review_portal]',
+                'post_status' => 'publish',
+                'post_type' => 'page',
+            ));
+        } else {
+            $page_id = (int) $existing->ID;
+            if (false === strpos((string) $existing->post_content, '[ssf_membership_review_portal]')) {
+                wp_update_post(array('ID' => $page_id, 'post_content' => '[ssf_membership_review_portal]'));
+            }
+        }
+        update_option('ssf_medlemsprocess_handlaggning_page_id', (int) $page_id, false);
+
+        if (! get_option('ssf_medlemsprocess_portal_rewrite_flushed')) {
+            flush_rewrite_rules(false);
+            update_option('ssf_medlemsprocess_portal_rewrite_flushed', '1', false);
         }
     }
 
@@ -168,7 +210,8 @@ final class SSF_Medlemsprocess_Plugin
     {
         $application_pages = array((int) get_option('ssf_medlemsprocess_ansokan_page_id'), (int) get_option('ssf_medlemsprocess_ansokan_status_page_id'));
         $inspector_page = (int) get_option('ssf_medlemsprocess_mina_inspektioner_page_id');
-        if (! is_page(array_merge($application_pages, array($inspector_page)))) {
+        $portal_page = (int) get_option('ssf_medlemsprocess_handlaggning_page_id');
+        if (! is_page(array_merge($application_pages, array($inspector_page, $portal_page)))) {
             return;
         }
         wp_enqueue_style('ssf-medlemsprocess', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-medlemsprocess.css', array(), SSF_MEDLEMSPROCESS_VERSION);
@@ -176,6 +219,10 @@ final class SSF_Medlemsprocess_Plugin
         if (is_page($inspector_page)) {
             wp_enqueue_style('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-inspector-portal.css', array('ssf-medlemsprocess'), SSF_MEDLEMSPROCESS_VERSION);
             wp_enqueue_script('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-inspector-portal.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
+        }
+        if (is_page($portal_page)) {
+            wp_enqueue_style('ssf-membership-portal', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-membership-portal.css', array('ssf-medlemsprocess'), SSF_MEDLEMSPROCESS_VERSION);
+            wp_enqueue_script('ssf-membership-portal', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-membership-portal.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
         }
     }
 }

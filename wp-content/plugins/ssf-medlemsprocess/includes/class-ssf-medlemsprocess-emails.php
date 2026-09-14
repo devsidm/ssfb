@@ -23,7 +23,7 @@ class SSF_Medlemsprocess_Emails
             'approved_aspirant' => array('label' => 'Beslut: godkänd som aspirant', 'subject' => 'Din ansökan till SSF är godkänd som aspirant', 'body' => "Hej {applicant_name},\n\nAnsökan för {ship_name} har godkänts som aspirant.\n\n{admin_comment}\n\n{status_link}"),
             'rejected' => array('label' => 'Beslut: avslagen', 'subject' => 'Beslut om din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nSSF har fattat beslut om ansökan för {ship_name}.\n\n{admin_comment}\n\n{status_link}"),
             'reminder' => array('label' => 'Påminnelse till sökanden', 'subject' => 'Påminnelse om din ansökan till SSF', 'body' => "Hej {applicant_name},\n\nDet finns en uppdatering i ditt ärende för {ship_name}.\n\n{admin_comment}\n\n{status_link}"),
-            'admin_notice' => array('label' => 'Intern notis till admin', 'subject' => 'Ny medlemsansökan: {ship_name} ({application_id})', 'body' => "En ny ansökan har skickats in.\n\nÄrende: {application_id}\nFartyg: {ship_name}\nSökande: {applicant_name}\n\nÖppna ärendet i WordPress:\n{admin_url}"),
+            'admin_notice' => array('label' => 'Intern notis till admin', 'subject' => 'Ny medlemsansökan: {ship_name} ({application_id})', 'body' => "En ny ansökan har skickats in.\n\nÄrende: {application_id}\nFartyg: {ship_name}\nSökande: {applicant_name}\n\nGranska ansökan:\n{admin_url}"),
         );
     }
 
@@ -41,7 +41,7 @@ class SSF_Medlemsprocess_Emails
         }
 
         $variables = $this->application_variables($application_id, array(
-            'admin_url' => SSF_Medlemsprocess_Application::admin_url($application_id),
+            'admin_url' => SSF_Medlemsprocess_Application::review_url($application_id),
         ));
         if (! $variables['admin_url']) {
             return false;
@@ -54,7 +54,7 @@ class SSF_Medlemsprocess_Emails
             $sent = SSF_Email_Router::send_template_to_function('membership_application', $subject, 'application_admin_notice', array(
                 'category' => 'membership',
                 'recipient_name' => 'Medlemsgruppen',
-                'body' => array('En ny ansökan om medlemskap för fartyg har skickats in. Öppna ärendet i WordPress för att granska uppgifter, bilagor, status och SharePoint-synk.'),
+                'body' => array('En ny ansökan om medlemskap för fartyg har skickats in. Granska ärendet i handläggningsportalen för att se uppgifter, bilagor, status och SharePoint-synk.'),
                 'sections' => array(array('title' => 'Ansökan', 'rows' => array_filter(array(
                     'Ansökningsnummer' => $variables['application_id'],
                     'Fartyg' => $variables['ship_name'],
@@ -66,7 +66,7 @@ class SSF_Medlemsprocess_Emails
                     'Inkommen' => $variables['received_date'],
                     'SharePoint-synk' => $this->sharepoint_status_label($sharepoint_status),
                 )))),
-                'button_label' => 'Öppna ansökan i WordPress',
+                'button_label' => 'Granska ansökan',
                 'button_url' => $variables['admin_url'],
             ));
         }

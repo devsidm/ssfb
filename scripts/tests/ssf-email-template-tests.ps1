@@ -103,9 +103,9 @@ Assert-Contains 'Motion status använder central mall' $motions "'motion_status'
 Assert-Contains 'Ansökan använder central mall' $applications 'SSF_Email_Template::send'
 Assert-Contains 'Adminansökan använder central HTML-mall' $applications "'application_admin_notice'"
 Assert-Contains 'Adminansökan använder router' $applications "SSF_Email_Router::send_template_to_function('membership_application'"
-Assert-Contains 'Adminansökan har WordPress-CTA' $applications "'Öppna ansökan i WordPress'"
+Assert-Contains 'Adminansökan har portal-CTA' $applications "'Granska ansökan'"
 Assert-Contains 'Adminansökan har idempotensflagga' $applications '_ssf_admin_new_application_notification_sent_at'
-Assert-Contains 'Adminlänk genereras av WordPress-helper' $applications 'SSF_Medlemsprocess_Application::admin_url($application_id)'
+Assert-Contains 'Adminlänk genereras av portal-helper' $applications 'SSF_Medlemsprocess_Application::review_url($application_id)'
 Assert-Contains 'Adminnotis har ansökningsväg' $applications "'Ansökningsväg'"
 Assert-Contains 'Adminnotis har medlemsstatus' $applications "'Medlemsstatus'"
 Assert-NotContains 'Adminnotis får inte använda sökandetoken' ([regex]::Match($applications, '(?s)public function send_admin_notice.*?(?=public function send_status_email)').Value) 'status_link'

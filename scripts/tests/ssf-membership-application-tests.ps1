@@ -21,6 +21,8 @@ $form = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-m
 $profile = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsfartyg\includes\class-ssf-medlemsfartyg-profile.php')
 $public = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-public.php')
 $application = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-application.php')
+$plugin = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-plugin.php')
+$portal = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-portal.php')
 $pdf = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-pdf.php')
 $sharepoint = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-sharepoint.php')
 $configuration = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\Configuration.php')
@@ -28,7 +30,9 @@ $emails = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf
 $organization = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-organization-info.php')
 $statusPage = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\templates\status-page.php')
 $styles = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\css\ssf-medlemsprocess.css')
+$portalStyles = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\css\ssf-membership-portal.css')
 $formScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')
+$portalScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-membership-portal.js')
 $admin = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-admin.php')
 $destinations = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointDestinations.php')
 $inspector = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-inspector.php')
@@ -86,9 +90,31 @@ Assert-Contains 'Initial medlemsstatus Ej medlem' $application "'_ssf_membership
 Assert-Contains 'Adminlänk-helper finns' $application 'public static function admin_url(int $application_id): string'
 Assert-Contains 'Adminlänk använder WordPress edit-länk' $application 'get_edit_post_link($application_id, '''')'
 Assert-Contains 'Adminlänk fallback via admin_url' $application "admin_url('post.php?post='"
+Assert-Contains 'Frontend handläggningslänk-helper finns' $application 'public static function review_url(int $application_id): string'
+Assert-Contains 'Frontend handläggningslänk används av adminmail' $emails 'SSF_Medlemsprocess_Application::review_url($application_id)'
 Assert-NotContains 'Adminlänk får inte hårdkoda DEV' $application 'https://ssfb.se/dev/wp-admin'
 Assert-NotContains 'Adminlänk får inte hårdkoda PROD' $application 'https://ssfb.se/wp-admin'
 Assert-NotContains 'Adminlänk får inte kräva nonce' ([regex]::Match($application, '(?s)public static function admin_url.*?(?=public static function add_history)').Value) 'nonce'
+Assert-NotContains 'Adminmailet ska inte primärt länka till wp-admin' ([regex]::Match($emails, '(?s)public function send_admin_notice.*?public function send_status_email').Value) 'SSF_Medlemsprocess_Application::admin_url'
+Assert-Contains 'Adminmail CTA granskar ansökan' $emails "'button_label' => 'Granska ansökan'"
+
+Assert-Contains 'Portal klass laddas' $plugin "'portal'"
+Assert-Contains 'Portal sida installeras under medlemskap' $plugin "get_page_by_path('medlemskap/handlaggning')"
+Assert-Contains 'Portal shortcode finns' $portal "add_shortcode('ssf_membership_review_portal'"
+Assert-Contains 'Portal kräver inloggning' $portal 'is_user_logged_in()'
+Assert-Contains 'Portal använder capability' $portal "current_user_can('ssf_view_applications')"
+Assert-Contains 'Portal noindex' $portal 'noindex'
+Assert-Contains 'Portal har Kanban' $portal 'render_kanban'
+Assert-Contains 'Portal har aspirantvy' $portal 'render_aspirants'
+Assert-Contains 'Portal använder befintlig statusmotor' $portal 'SSF_Medlemsprocess_Application::transition'
+Assert-Contains 'Portal skyddar concurrency' $portal '$expected_status !== $current_status'
+Assert-Contains 'Portal synkar SharePoint status' $portal 'sharepoint->push_status'
+Assert-Contains 'Portal route för ärende' $portal "medlemskap/handlaggning/([^/]+)"
+Assert-Contains 'Portal CSS laddas' $plugin 'ssf-membership-portal.css'
+Assert-Contains 'Portal JS laddas' $plugin 'ssf-membership-portal.js'
+Assert-Contains 'Portal DnD ändrar inte status direkt' $portalScript 'portal_message=drag_opened'
+Assert-NotContains 'Portal JS får inte posta status vid drag' $portalScript 'fetch('
+Assert-Contains 'Portal visuella statuschips' $portalStyles '.ssf-status-chip'
 
 $applicationStatuses = @('Inkommen', 'Under granskning', 'Begär komplettering', 'Väntar på komplettering', 'Inspektion ska bokas', 'Inspektion bokad', 'Under slutbedömning', 'Godkänd som aspirant', 'Avslagen')
 foreach ($statusLabel in $applicationStatuses) { Assert-Contains "Ansökningsstatus $statusLabel" $sharepoint "'$statusLabel'" }
@@ -143,6 +169,8 @@ Assert-Contains 'Teknisk Graph-felkod' $sharepoint "'graph_code'"
 
 & node --check (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')
 if ($LASTEXITCODE -ne 0) { $failures.Add('JavaScript syntaxkontroll misslyckades') }
+& node --check (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-membership-portal.js')
+if ($LASTEXITCODE -ne 0) { $failures.Add('Portalens JavaScript syntaxkontroll misslyckades') }
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }

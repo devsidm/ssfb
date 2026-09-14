@@ -232,6 +232,17 @@ class SSF_Medlemsprocess_Application
         return $url ? (string) $url : admin_url('post.php?post=' . (int) $application_id . '&action=edit');
     }
 
+    public static function review_url(int $application_id): string
+    {
+        $post = get_post($application_id);
+        if (! $post || self::POST_TYPE !== $post->post_type) {
+            return '';
+        }
+        return class_exists('SSF_Medlemsprocess_Portal')
+            ? SSF_Medlemsprocess_Portal::review_url($application_id)
+            : self::admin_url($application_id);
+    }
+
     public static function add_history(int $application_id, string $type, string $message, bool $public = false, array $extra = array()): void
     {
         $history = (array) get_post_meta($application_id, '_ssf_application_history', true);
