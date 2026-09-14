@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string] $BaseUrl = 'https://ssfb.se/dev',
     [Parameter(Mandatory = $true)]
     [string] $Username,
@@ -14,6 +14,10 @@ $ErrorActionPreference = 'Stop'
 function Decode-Html([string] $Value) {
     Add-Type -AssemblyName System.Web
     return [System.Web.HttpUtility]::HtmlDecode($Value)
+}
+
+function U([int[]] $Codepoints) {
+    return -join ($Codepoints | ForEach-Object { [char] $_ })
 }
 
 function Get-InputAttributes([string] $Tag) {
@@ -41,9 +45,12 @@ function Get-SharePointNonce([string] $Html) {
 function Get-Profile([string] $Html) {
     $profile = [ordered]@{ metadata = [ordered]@{} }
 
-    foreach ($match in [regex]::Matches($Html, '<input\b[^>]*name="profile\[([^"\]]+)\]"[^>]*>', 'IgnoreCase')) {
+    foreach ($match in [regex]::Matches($Html, '<input\b[^>]*>', 'IgnoreCase')) {
         $attrs = Get-InputAttributes $match.Value
-        $key = $match.Groups[1].Value
+        $name = if ($attrs.ContainsKey('name')) { [string] $attrs['name'] } else { '' }
+        $nameMatch = [regex]::Match($name, '^profile\[([^\]]+)\]$')
+        if (-not $nameMatch.Success) { continue }
+        $key = $nameMatch.Groups[1].Value
         $profile[$key] = if ($attrs.ContainsKey('value')) { $attrs['value'] } else { '' }
     }
 
@@ -62,19 +69,25 @@ function Get-Profile([string] $Html) {
 
 function Invoke-AdminAjax([string] $BaseUrl, [string] $CookieJar, [string] $Nonce, [string] $Destination, [string] $Operation, [object] $Profile, [string] $OutFile) {
     $json = $Profile | ConvertTo-Json -Depth 8 -Compress
-    & curl.exe -sS -L -b $CookieJar -c $CookieJar `
-        --data-urlencode 'action=ssf_sharepoint_admin' `
-        --data-urlencode "nonce=$Nonce" `
-        --data-urlencode "operation=$Operation" `
-        --data-urlencode "destination=$Destination" `
-        --data-urlencode 'environment=production' `
-        --data-urlencode "profile=$json" `
-        "$($BaseUrl.TrimEnd('/'))/wp-admin/admin-ajax.php" -o $OutFile
-    $content = Get-Content -Raw -LiteralPath $OutFile
+    $profilePath = Join-Path $env:TEMP ('ssfb-prod-sp-profile-' + [guid]::NewGuid().ToString('N') + '.json')
     try {
-        return $content | ConvertFrom-Json
-    } catch {
-        throw "Admin AJAX returnerade inte JSON for $Destination/$Operation."
+        [IO.File]::WriteAllText($profilePath, $json, [Text.UTF8Encoding]::new($false))
+        & curl.exe -sS -L -b $CookieJar -c $CookieJar `
+            --data-urlencode 'action=ssf_sharepoint_admin' `
+            --data-urlencode "nonce=$Nonce" `
+            --data-urlencode "operation=$Operation" `
+            --data-urlencode "destination=$Destination" `
+            --data-urlencode 'environment=production' `
+            --data-urlencode "profile@$profilePath" `
+            "$($BaseUrl.TrimEnd('/'))/wp-admin/admin-ajax.php" -o $OutFile
+        $content = Get-Content -Raw -LiteralPath $OutFile
+        try {
+            return $content | ConvertFrom-Json
+        } catch {
+            throw "Admin AJAX returnerade inte JSON for $Destination/$Operation."
+        }
+    } finally {
+        if (Test-Path -LiteralPath $profilePath) { Remove-Item -LiteralPath $profilePath -Force }
     }
 }
 
@@ -85,8 +98,8 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
             @{ Key = 'number'; Type = 'text'; Choices = @() },
             @{ Key = 'vessel'; Type = 'text'; Choices = @() },
             @{ Key = 'route'; Type = 'choice'; Choices = @('Normalfallet', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg') },
-            @{ Key = 'status'; Type = 'choice'; Choices = @('Inkommen', 'Under granskning', 'Begär komplettering', 'Väntar på komplettering', 'Inspektion ska bokas', 'Inspektion bokad', 'Under slutbedömning', 'Godkänd som aspirant', 'Avslagen') },
-            @{ Key = 'membership_status'; Type = 'choice'; Choices = @('Ej medlem', 'Aspirant', 'Uppföljning', 'Medlemsfartyg', 'Avslutad') },
+            @{ Key = 'status'; Type = 'choice'; Choices = @('Inkommen', 'Under granskning', (U @(66, 101, 103, 228, 114, 32, 107, 111, 109, 112, 108, 101, 116, 116, 101, 114, 105, 110, 103)), (U @(86, 228, 110, 116, 97, 114, 32, 112, 229, 32, 107, 111, 109, 112, 108, 101, 116, 116, 101, 114, 105, 110, 103)), 'Inspektion ska bokas', 'Inspektion bokad', (U @(85, 110, 100, 101, 114, 32, 115, 108, 117, 116, 98, 101, 100, 246, 109, 110, 105, 110, 103)), (U @(71, 111, 100, 107, 228, 110, 100, 32, 115, 111, 109, 32, 97, 115, 112, 105, 114, 97, 110, 116)), 'Avslagen') },
+            @{ Key = 'membership_status'; Type = 'choice'; Choices = @('Ej medlem', 'Aspirant', (U @(85, 112, 112, 102, 246, 108, 106, 110, 105, 110, 103)), 'Medlemsfartyg', 'Avslutad') },
             @{ Key = 'received'; Type = 'dateOnly'; Choices = @() },
             @{ Key = 'decision_date'; Type = 'dateOnly'; Choices = @() },
             @{ Key = 'aspirant_start'; Type = 'dateOnly'; Choices = @() },
@@ -97,7 +110,7 @@ function Test-Columns([string] $Destination, [object[]] $Columns, [object] $Prof
         $requirements = @(
             @{ Key = 'wordpress_id'; Type = 'text'; Choices = @() },
             @{ Key = 'number'; Type = 'text'; Choices = @() },
-            @{ Key = 'status'; Type = 'choice'; Choices = @('Inkommen', 'Under behandling', 'Begär komplettering', 'Färdigbehandlad av styrelsen', 'Till årsmötet', 'Beslutad på årsmötet', 'Avslutad') },
+            @{ Key = 'status'; Type = 'choice'; Choices = @('Inkommen', 'Under behandling', 'BegÃ¤r komplettering', 'FÃ¤rdigbehandlad av styrelsen', 'Till Ã¥rsmÃ¶tet', 'Beslutad pÃ¥ Ã¥rsmÃ¶tet', 'Avslutad') },
             @{ Key = 'vessel'; Type = 'text'; Choices = @() },
             @{ Key = 'received'; Type = 'dateTime'; Choices = @() }
         )
@@ -199,13 +212,12 @@ try {
 
         $diagnostics = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'diagnostics' $profile $ajaxPath
         $columnsResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'columns' $profile $ajaxPath
-        $folderPathResponse = Invoke-AdminAjax $BaseUrl $cookieJar $nonce $destinationName 'folder_path' $profile $ajaxPath
         $columns = if ($columnsResponse.success) { @($columnsResponse.data) } else { @() }
         $columnChecks = if ($columnsResponse.success) { @(Test-Columns $destinationName $columns $profile) } else { @() }
         $folderIdMatches = if ($destinationName -eq 'membership_applications' -and $ExpectedMembershipFolderId) {
-            [bool] ($profile.folder_id -eq $ExpectedMembershipFolderId -and $folderPathResponse.success -and $folderPathResponse.data.id -eq $ExpectedMembershipFolderId)
+            [bool] ($profile.folder_id -eq $ExpectedMembershipFolderId -and (Get-StepOk $diagnostics 'folder'))
         } else {
-            [bool] ($folderPathResponse.success)
+            [bool] (Get-StepOk $diagnostics 'folder')
         }
         $summary = [ordered]@{
             Site = if (Get-StepOk $diagnostics 'site') { 'PASS' } else { 'FAIL' }
@@ -224,7 +236,6 @@ try {
             Diagnostics = $diagnostics
             ColumnsOk = [bool] ($columnsResponse.success -and (@($columnChecks | Where-Object { -not $_.Ok }).Count -eq 0))
             ColumnChecks = $columnChecks
-            FolderPathOk = [bool] ($folderPathResponse.success)
             ExpectedFolderId = $ExpectedMembershipFolderId
             FolderIdMatches = $folderIdMatches
             Summary = $summary
@@ -232,7 +243,7 @@ try {
         }
     }
 
-    $overall = [bool] (@($results | Where-Object { -not ($_.DiagnosticsOk -and $_.ColumnsOk) }).Count -eq 0)
+    $overall = [bool] (@($results | Where-Object { -not ($_.DiagnosticsOk -and $_.ColumnsOk -and $_.FolderIdMatches) }).Count -eq 0)
     [pscustomobject]@{
         Ok = $overall
         EnvironmentProfile = 'production'
