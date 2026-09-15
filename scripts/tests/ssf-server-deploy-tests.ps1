@@ -85,7 +85,16 @@ Assert-Contains 'file backup before deploy function' $script 'file_backup'
 Assert-Contains 'database export exists' $script 'wp_prod db export "$BACKUP_DIR/database.sql" --add-drop-table'
 Assert-Contains 'gzip integrity check exists' $script 'gzip -t "$BACKUP_DIR/database.sql.gz"'
 Assert-Contains 'file archive exists' $script 'prod-wp-content-targets.tar.gz'
-Assert-Contains 'tar integrity check exists' $script 'tar -tzf "$BACKUP_DIR/prod-wp-content-targets.tar.gz" >/dev/null'
+Assert-Contains 'tar integrity check exists' $script 'tar -tzf "$archive" >/dev/null'
+Assert-Contains 'archive listing file exists' $script 'archive_list="$BACKUP_DIR/.prod-wp-content-targets.list"'
+Assert-Contains 'archive listing written before membership checks' $script 'tar -tzf "$archive" > "$archive_list"'
+Assert-Contains 'archive membership uses fixed string exact match' $script '$0 == expected'
+Assert-Contains 'archive membership accepts child paths' $script 'index($0, expected "/") == 1'
+Assert-NotContains 'archive membership avoids tar rg pipe' $script 'tar -tzf "$BACKUP_DIR/prod-wp-content-targets.tar.gz" | rg -q'
+$archiveEntries = @('wp-content/mu-plugins/', 'wp-content/mu-plugins/ssf-antispam.php')
+$expectedArchivePath = 'wp-content/mu-plugins'
+$archivePathFound = @($archiveEntries | Where-Object { $_ -eq $expectedArchivePath -or $_.StartsWith("$expectedArchivePath/") }).Count -gt 0
+Assert-True 'archive membership regression: directory entry with trailing slash satisfies path without slash' $archivePathFound
 Assert-Contains 'exact DEPLOY confirmation exists' $script '[[ "$confirmation" == "DEPLOY" ]]'
 Assert-True 'only one interactive read' (([regex]::Matches($script, 'read -r confirmation')).Count -eq 1)
 Assert-NotContains 'no rsync delete' $script 'rsync --delete'

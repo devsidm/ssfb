@@ -661,14 +661,18 @@ file_backup() {
   done < <(plugin_plan_array "touched_plugins")
   while IFS= read -r theme; do paths+=("wp-content/themes/$theme"); done < <(json_array "production.themes")
   mapfile -t paths < <(printf '%s\n' "${paths[@]}" | sort -u)
-  tar -czf "$BACKUP_DIR/prod-wp-content-targets.tar.gz" -C "$PROD" "${paths[@]}"
-  [[ -s "$BACKUP_DIR/prod-wp-content-targets.tar.gz" ]] || fail "File backup missing or empty."
-  tar -tzf "$BACKUP_DIR/prod-wp-content-targets.tar.gz" >/dev/null
+  local archive archive_list
+  archive="$BACKUP_DIR/prod-wp-content-targets.tar.gz"
+  archive_list="$BACKUP_DIR/.prod-wp-content-targets.list"
+  tar -czf "$archive" -C "$PROD" "${paths[@]}"
+  [[ -s "$archive" ]] || fail "File backup missing or empty."
+  tar -tzf "$archive" >/dev/null
+  tar -tzf "$archive" > "$archive_list"
   for path in "${paths[@]}"; do
-    tar -tzf "$BACKUP_DIR/prod-wp-content-targets.tar.gz" | rg -q "^$path(/|$)" || fail "File backup missing expected path: $path"
+    awk -v expected="$path" '$0 == expected || index($0, expected "/") == 1 { found = 1; exit } END { exit found ? 0 : 1 }' "$archive_list" || fail "File backup missing expected path: $path"
   done
   FILE_BACKUP_STATUS="PASS"
-  echo "File backup: $BACKUP_DIR/prod-wp-content-targets.tar.gz"
+  echo "File backup: $archive"
 }
 
 backup_manifest() {
