@@ -59,9 +59,7 @@
 .ssf-route-card > input { position: absolute; top: 18px; right: 18px; width: 20px; height: 20px; }
 .ssf-route-card__number { display: grid; grid-row: 1 / 3; width: 34px; height: 34px; place-items: center; color: var(--ssf-blue-deep); background: var(--ssf-gold-soft); border: 1px solid var(--ssf-gold); border-radius: 50%; font-weight: 800; }
 .ssf-route-card > strong { min-width: 0; padding-right: 28px; color: var(--ssf-blue-dark); font-size: 18px; overflow-wrap: anywhere; }
-.ssf-route-card > span:not(.ssf-route-card__number):not(.ssf-route-card__action), .ssf-route-card details { grid-column: 2; color: var(--ssf-muted); font-weight: 400; }
-.ssf-route-card details summary { color: var(--ssf-blue); font-weight: 700; cursor: pointer; }
-.ssf-route-card details p { line-height: 1.55; }
+.ssf-route-card__description { grid-column: 2; max-width: 46rem; color: var(--ssf-muted); font-weight: 400; line-height: 1.55; }
 .ssf-route-card__action { grid-column: 2; align-self: end; color: var(--ssf-blue); font-weight: 800; }
 .ssf-route-card.is-selected .ssf-route-card__action::after { content: " - valt"; }
 .ssf-route-context { margin: 8px 0 18px; color: var(--ssf-blue-dark); font-weight: 700; }
