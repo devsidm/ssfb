@@ -2,15 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260915.3",
-    "built_at":  "2026-09-15T08:04:32.3654097Z",
+    "build":  "20260915.4",
+    "built_at":  "2026-09-15T17:28:14.3708831Z",
     "source":  "codex",
-    "source_revision":  "a3e51b1d0f63635b88d3b8ae83c85c31f25d0ec4",
-    "description":  "DEV login protection status route exemptions",
+    "source_revision":  "01474c15b7c96211cdb2074566df386de084c221",
+    "description":  "Simplify membership application category selection",
     "notes":  "Production readiness checklist build from current HEAD. Adds annual meetings folder parent and status readiness checks.",
     "components":  [
+                       "documentation",
                        "release-tooling",
-                       "ssf-dev-protection"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
