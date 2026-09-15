@@ -171,16 +171,22 @@ file_size() {
   stat -c '%s' "$file"
 }
 
+validate_maintenance_marker() {
+  local file="$1"
+  local marker
+  marker="$(cat "$file")"
+  [[ "$marker" =~ ^\<\?php[[:space:]]+\$upgrading[[:space:]]*=[[:space:]]*[0-9]+[[:space:]]*\;[[:space:]]*\?\>$ ]]
+}
+
 activate_maintenance() {
   local reason="${1:-deployment}"
   section "PRODUCTION MAINTENANCE"
-  local timestamp marker
+  local timestamp
   timestamp="$(date +%s)"
   [[ "$timestamp" =~ ^[0-9]+$ ]] || fail "Maintenance timestamp is not numeric."
   printf '<?php $upgrading = %s; ?>\n' "$timestamp" > "$PROD/.maintenance"
   [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker was not created."
-  marker="$(cat "$PROD/.maintenance")"
-  [[ "$marker" =~ ^\<\?php[[:space:]]+\$upgrading[[:space:]]*=[[:space:]]*[0-9]+[[:space:]]*\;[[:space:]]*\?\>$ ]] || fail "Production maintenance marker is malformed or non-numeric."
+  validate_maintenance_marker "$PROD/.maintenance" || fail "Production maintenance marker is malformed or non-numeric."
   MAINTENANCE_ACTIVE=1
   MAINTENANCE_STARTED_AT="$(date +%s)"
   verify_maintenance_active
@@ -200,7 +206,7 @@ deactivate_maintenance() {
 
 verify_maintenance_active() {
   [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker missing."
-  php -r '$c=trim(file_get_contents($argv[1])); exit(preg_match("/^<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?>$/", $c) ? 0 : 1);' "$PROD/.maintenance" || fail "Production maintenance marker timestamp is malformed."
+  validate_maintenance_marker "$PROD/.maintenance" || fail "Production maintenance marker timestamp is malformed."
   local status
   status="$(curl -sS -L -o /tmp/ssf-maintenance-check.html -w '%{http_code}' "$EXPECTED_PROD_URL/" || true)"
   if [[ "$status" != "503" ]] && ! rg -qi 'maintenance|underh.ll|briefly unavailable|upgrading' /tmp/ssf-maintenance-check.html; then

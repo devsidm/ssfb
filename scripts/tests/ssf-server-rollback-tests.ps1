@@ -15,6 +15,7 @@ function Read-RepoFile([string]$Path) { Get-Content -Raw -Encoding UTF8 -Literal
 function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { Fail $Name } }
 function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
 function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
+function Test-MaintenanceMarker([string]$Marker) { return $Marker.Trim() -match '^\<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?\>$' }
 
 $script = Read-RepoFile 'scripts\deploy\ssf-server-rollback.sh'
 $deploy = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
@@ -26,8 +27,16 @@ Assert-Contains 'rollback shebang' $script '#!/usr/bin/env bash'
 Assert-Contains 'rollback strict mode' $script 'set -Eeuo pipefail'
 Assert-Contains 'rollback maintenance numeric timestamp' $script 'printf ''<?php $upgrading = %s; ?>\n'' "$timestamp" > "$PROD/.maintenance"'
 Assert-Contains 'rollback maintenance timestamp numeric check' $script '[[ "$timestamp" =~ ^[0-9]+$ ]]'
+Assert-Contains 'rollback maintenance marker validation helper exists' $script 'validate_maintenance_marker()'
+Assert-Contains 'rollback maintenance marker helper is used after create' $script 'validate_maintenance_marker "$PROD/.maintenance" || fail "Production maintenance marker is malformed or non-numeric."'
+Assert-NotContains 'rollback maintenance validation must not use fragile PHP preg_match' $script 'preg_match("/^<\?php\s+\$upgrading'
 Assert-NotContains 'rollback maintenance marker must not call time' $script '$upgrading = time()'
 Assert-Contains 'rollback maintenance deactivate verifies inactive' $script 'verify_maintenance_inactive'
+Assert-True 'rollback valid numeric maintenance marker passes' (Test-MaintenanceMarker '<?php $upgrading = 1789501000; ?>')
+Assert-True 'rollback time maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = time(); ?>'))
+Assert-True 'rollback non-numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = abc; ?>'))
+Assert-True 'rollback empty maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = ; ?>'))
+Assert-True 'rollback quoted numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = "1789501000"; ?>'))
 Assert-Contains '--list exists' $script '--list'
 Assert-Contains 'rollback list shows deployment target' $script 'Deployment target:'
 Assert-Contains 'rollback list shows previous build' $script 'Previous build:'

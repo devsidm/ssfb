@@ -17,6 +17,7 @@ function Read-RepoFile([string]$Path) { Get-Content -Raw -Encoding UTF8 -Literal
 function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { Fail $Name } }
 function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
 function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
+function Test-MaintenanceMarker([string]$Marker) { return $Marker.Trim() -match '^\<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?\>$' }
 
 $script = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
 $doc = Read-RepoFile 'docs\SERVER-DEPLOYMENT.md'
@@ -44,13 +45,23 @@ Assert-Contains 'maintenance grace configured' $script 'MAINTENANCE_GRACE_SECOND
 Assert-Contains 'maintenance marker created' $script 'printf ''<?php $upgrading = %s; ?>\n'' "$timestamp" > "$PROD/.maintenance"'
 Assert-Contains 'maintenance timestamp is numeric' $script '[[ "$timestamp" =~ ^[0-9]+$ ]]'
 Assert-Contains 'maintenance marker numeric validation' $script 'Production maintenance marker timestamp is malformed'
+Assert-Contains 'maintenance marker validation helper exists' $script 'validate_maintenance_marker()'
+Assert-Contains 'maintenance marker helper is used after create' $script 'validate_maintenance_marker "$PROD/.maintenance" || fail "Production maintenance marker is malformed or non-numeric."'
+Assert-Contains 'maintenance marker helper is used before HTTP verify' $script 'validate_maintenance_marker "$PROD/.maintenance" || fail "Production maintenance marker timestamp is malformed."'
+Assert-NotContains 'maintenance validation must not use fragile PHP preg_match' $script 'preg_match("/^<\?php\s+\$upgrading'
 Assert-NotContains 'maintenance marker must not call time' $script '$upgrading = time()'
 Assert-Contains 'maintenance active verified by curl' $script 'verify_maintenance_active'
 Assert-Contains 'maintenance inactive verified after deactivate' $script 'verify_maintenance_inactive'
 Assert-Contains 'maintenance grace before backup' $script 'maintenance_grace_period'
 Assert-Contains 'failure handler keeps mutated site paused' $script 'PROD_MUTATED" == "1"'
+Assert-True 'failure before PROD mutation removes maintenance' ($script.Contains('elif [[ "$PROD_MUTATED" == "1" ]]; then') -and $script.Contains("else`n    deactivate_maintenance"))
 Assert-Contains 'public smoke failure relocks site' $script 'public_smoke_failed'
 Assert-NotContains 'no naive trap always deactivates maintenance' $script 'trap cleanup EXIT;'
+Assert-True 'valid numeric maintenance marker passes' (Test-MaintenanceMarker '<?php $upgrading = 1789501000; ?>')
+Assert-True 'time maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = time(); ?>'))
+Assert-True 'non-numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = abc; ?>'))
+Assert-True 'empty maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = ; ?>'))
+Assert-True 'quoted numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = "1789501000"; ?>'))
 
 Assert-True 'deploy component schema version' ($config.schema_version -eq 1)
 Assert-True 'seven production plugins configured' (@($config.production.plugins).Count -eq 7)
