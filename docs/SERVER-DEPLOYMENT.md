@@ -91,23 +91,66 @@ The component source of truth is:
 config/deploy-components.json
 ```
 
+All active DEV plugins are production dependencies by default. Before the
+single production confirmation, the deploy script compares every normal
+WordPress plugin in DEV and PROD using WP-CLI:
+
+```bash
+wp plugin list --format=json
+```
+
+If a normal plugin is active in DEV, it must exist and be active in PROD unless
+it is explicitly listed as DEV-only in `config/deploy-components.json`.
+
+Plugin policy exceptions live under:
+
+```json
+"plugin_policy": {
+  "dev_only": [],
+  "prod_only": [],
+  "ignore_version": []
+}
+```
+
+Do not infer DEV-only behavior from a plugin name. Third-party plugins are
+checked with the same seriousness as SSF plugins.
+
 Production receives:
 
 - configured SSF plugins
 - configured SSF theme
 - configured production MU plugin files
+- active DEV normal plugins that the generated deployment plan marks for copy,
+  update or activation
 
 Production does not receive:
 
 - `wp-config.php`
 - uploads
 - WordPress core
-- third-party plugins
 - `ssf-promotions`
 - DEV-only MU plugins
 - DEV database
 
 The deployment uses `rsync -a` and never uses `rsync --delete`.
+
+PROD-only plugins, or plugins that are inactive in DEV but active in PROD, are
+reported as warnings. They are not automatically deactivated, because removing a
+production-specific plugin can be more dangerous than leaving it alone.
+
+The deployment never downloads plugins from wordpress.org. If an active DEV
+plugin is missing in PROD and its files exist in DEV, the plan may copy that
+exact tested DEV plugin directory to PROD and activate it. If the plugin cannot
+be safely copied from DEV, deployment stops before confirmation.
+
+Environment-specific plugin configuration is never copied from DEV. API keys,
+secrets and WordPress options must remain per environment.
+
+Concrete example: `simple-cloudflare-turnstile` may be active in both DEV and
+PROD, but PROD must have its own Cloudflare Turnstile keys. DEV test keys must
+not be copied to PROD. The deployment script checks the SSF antispam integration
+without printing keys; it reports only `FOUND`, `MISSING`, `Test mode` and
+`Configured`.
 
 ## Backups
 
@@ -134,8 +177,8 @@ The database backup is created with PROD WP-CLI using credentials from PROD
 `wp-config.php`. The deploy script verifies the gzip archive with `gzip -t`.
 
 The file backup contains the currently deployed production components that the
-deployment may overwrite. The deploy script verifies the tar archive with
-`tar -tzf`.
+deployment may overwrite, including any plugin directories in the generated
+plugin parity plan. The deploy script verifies the tar archive with `tar -tzf`.
 
 Uploads are not included because this deployment does not touch uploads.
 

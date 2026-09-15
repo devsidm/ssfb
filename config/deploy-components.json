@@ -34,5 +34,10 @@
     "plugins": [
       "ssf-promotions"
     ]
+  },
+  "plugin_policy": {
+    "dev_only": [],
+    "prod_only": [],
+    "ignore_version": []
   }
 }
