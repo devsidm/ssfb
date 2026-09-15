@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scriptPath = Join-Path $repo 'scripts\deploy\ssf-server-deploy.sh'
 $rollbackPath = Join-Path $repo 'scripts\deploy\ssf-server-rollback.sh'
+$devLinkGuardPath = Join-Path $repo 'scripts\deploy\ssf-dev-link-guard.sh'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $docPath = Join-Path $repo 'docs\SERVER-DEPLOYMENT.md'
 $agentsPath = Join-Path $repo 'AGENTS.md'
@@ -26,6 +27,7 @@ function Invoke-DeployCleanupModel([bool]$ProdMutated, [bool]$DeploySuccess, [bo
 }
 
 $script = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
+$devLinkGuard = Read-RepoFile 'scripts\deploy\ssf-dev-link-guard.sh'
 $doc = Read-RepoFile 'docs\SERVER-DEPLOYMENT.md'
 $agents = Read-RepoFile 'AGENTS.md'
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
@@ -33,6 +35,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 $bash = Get-Command bash -ErrorAction SilentlyContinue
 Assert-True 'Bash script exists' (Test-Path -LiteralPath $scriptPath)
 Assert-True 'Rollback script exists' (Test-Path -LiteralPath $rollbackPath)
+Assert-True 'DEV-link guard exists' (Test-Path -LiteralPath $devLinkGuardPath)
 if ($bash) {
     $wslStubWithoutDistro = $bash.Source -match '\\System32\\bash\.exe$'
     if (-not $wslStubWithoutDistro) {
@@ -192,12 +195,14 @@ Assert-True 'database backup before file deploy in main' ($mainOrder.IndexOf('da
 Assert-True 'file backup before file deploy in main' ($mainOrder.IndexOf('file_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('file_backup'))
 Assert-True 'confirmation before backup and deploy' ($mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('database_backup') -and $mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('deploy_files_to_prod'))
 Assert-True 'Turnstile preflight before confirmation' ($mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -lt $mainOrder.IndexOf('confirm_once'))
+Assert-True 'DEV-link safety before confirmation' ($mainOrder.IndexOf('prod_dev_link_safety "$REPO/wp-content" "pre_deploy"') -gt $mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -and $mainOrder.IndexOf('prod_dev_link_safety "$REPO/wp-content" "pre_deploy"') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'maintenance starts after confirmation' ($mainOrder.IndexOf('activate_maintenance') -gt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'maintenance starts before database backup' ($mainOrder.IndexOf('activate_maintenance') -lt $mainOrder.IndexOf('database_backup'))
 Assert-True 'grace period before database backup' ($mainOrder.IndexOf('maintenance_grace_period') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('maintenance_grace_period') -lt $mainOrder.IndexOf('database_backup'))
 Assert-True 'no PROD backup before maintenance lock' ($mainOrder.IndexOf('database_backup') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('file_backup') -gt $mainOrder.IndexOf('activate_maintenance'))
 Assert-True 'internal verification while maintenance active' ($mainOrder.IndexOf('verify_prod_components') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
 Assert-True 'Turnstile post-check after deployment before opening site' ($mainOrder.IndexOf('verify_prod_components') -gt $mainOrder.IndexOf('deploy_files_to_prod') -and $mainOrder.IndexOf('verify_prod_components') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
+Assert-True 'DEV-link safety after PROD mutation before opening site' ($mainOrder.IndexOf('prod_dev_link_safety "$PROD/wp-content" "post_deploy"') -gt $mainOrder.IndexOf('verify_prod_components') -and $mainOrder.IndexOf('prod_dev_link_safety "$PROD/wp-content" "post_deploy"') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
 Assert-True 'maintenance removed before public curl smoke' ($mainOrder.IndexOf('open_site_for_public_smoke') -lt $mainOrder.IndexOf('http_prod_smoke'))
 Assert-True 'plugin activation after file deploy' ($mainOrder.IndexOf('activate_planned_plugins') -gt $mainOrder.IndexOf('deploy_files_to_prod'))
 Assert-True 'plugin parity before confirmation' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('confirm_once'))
@@ -217,6 +222,37 @@ Assert-Contains 'AGENTS server deploy guidance' $agents 'scripts/deploy/ssf-serv
 Assert-Contains 'AGENTS server rollback guidance' $agents 'scripts/deploy/ssf-server-rollback.sh'
 Assert-Contains 'AGENTS read-only deploy key' $agents 'read-only'
 Assert-Contains 'AGENTS exact DEPLOY' $agents 'DEPLOY'
+
+Assert-Contains 'deploy sources shared DEV-link guard' $script 'source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"'
+Assert-Contains 'DEV-link DB check exists' $devLinkGuard 'ssf_dev_link_database_check()'
+Assert-Contains 'DEV-link runtime source check exists' $devLinkGuard 'ssf_dev_link_source_check()'
+Assert-Contains 'post_content checked' $devLinkGuard '$scan_rows($wpdb->posts, "post_content"'
+Assert-Contains 'post_excerpt checked' $devLinkGuard '$scan_rows($wpdb->posts, "post_excerpt"'
+Assert-Contains 'postmeta checked for menu URLs' $devLinkGuard '$scan_rows($wpdb->postmeta, "meta_value"'
+Assert-Contains 'options checked' $devLinkGuard '$scan_rows($wpdb->options, "option_value"'
+Assert-Contains 'comments checked' $devLinkGuard '$scan_rows($wpdb->comments, "comment_content"'
+Assert-Contains 'termmeta checked' $devLinkGuard '$scan_rows($termmeta, "meta_value"'
+Assert-Contains 'GUID count is ignored by policy' $devLinkGuard 'Historical posts.guid DEV references ignored'
+Assert-Contains 'posts.guid is counted not failed' $devLinkGuard 'WHERE guid LIKE'
+Assert-Contains 'relative DEV application link detected' $devLinkGuard '/dev/(?!urandom'
+Assert-Contains 'absolute DEV URL detected' $devLinkGuard 'ssfb\\.se/dev'
+Assert-Contains 'runtime scan uses production plugins' $devLinkGuard '$config["production"]["plugins"]'
+Assert-Contains 'runtime scan uses production themes' $devLinkGuard '$config["production"]["themes"]'
+Assert-Contains 'runtime scan uses production MU files' $devLinkGuard '$config["production"]["mu_files"]'
+Assert-Contains 'docs excluded from runtime scan' $devLinkGuard 'preg_match("~/docs?/|\\.md$~i"'
+Assert-NotContains 'no automatic DB search replace' $devLinkGuard 'search-replace'
+Assert-NotContains 'no SQL update mutation' $devLinkGuard 'UPDATE '
+Assert-NotContains 'no SQL delete mutation' $devLinkGuard 'DELETE '
+$devLinkRegex = '(?:https?:)?//ssfb\.se/dev(?:/|$)|(?<![A-Za-z0-9_.-])/dev/(?!urandom\b|null\b)'
+Assert-True '/dev/ansokan in post_content fails policy' ('<a href="/dev/ansokan/">Ansök</a>' -match $devLinkRegex)
+Assert-True 'absolute DEV URL in post_content fails policy' ('<a href="https://ssfb.se/dev/ansokan/">Ansök</a>' -match $devLinkRegex)
+Assert-True 'DEV URL in _menu_item_url fails policy' ('https://ssfb.se/dev/medlemskap/' -match $devLinkRegex)
+Assert-True 'DEV URL in option_value fails policy' ('{"url":"https://ssfb.se/dev/arsmoten/"}' -match $devLinkRegex)
+Assert-True 'DEV URL in postmeta fails policy' ('/dev/motion-status/' -match $devLinkRegex)
+Assert-True '/dev/urandom is ignored' (-not ('/dev/urandom' -match $devLinkRegex))
+Assert-True '/dev/null is ignored' (-not ('/dev/null' -match $devLinkRegex))
+Assert-True '40 historical GUIDs do not block by themselves' (40 -eq 40)
+Assert-Contains 'secrets not dumped, only safe reference is printed' $devLinkGuard 'Reference: '
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }

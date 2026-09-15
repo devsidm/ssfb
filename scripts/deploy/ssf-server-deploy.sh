@@ -173,6 +173,8 @@ wp_eval_prod() {
   wp_prod eval "$1"
 }
 
+source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"
+
 sha256_file() {
   local file="$1"
   sha256sum "$file" | awk '{print $1}'
@@ -1171,6 +1173,8 @@ File deployment:     $FILE_DEPLOY_STATUS
 Release verify:      $RELEASE_VERIFY_STATUS
 Plugin verification: $PLUGIN_VERIFY_STATUS
 Theme verification:  $THEME_VERIFY_STATUS
+PROD DEV-link safety: $DEV_LINK_STATUS
+Historical GUIDs ignored: $DEV_LINK_GUID_IGNORED
 HTTP smoke:          $HTTP_SMOKE_STATUS
 Error log:           $ERROR_LOG_STATUS
 
@@ -1197,8 +1201,9 @@ main() {
   dev_smoke
   prod_target_safety
   build_plugin_parity_plan
-  prod_dry_run
   validate_turnstile_prod_config "preflight"
+  prod_dev_link_safety "$REPO/wp-content" "pre_deploy"
+  prod_dry_run
   record_error_log_baseline
   confirm_once
   create_backup_dir
@@ -1212,6 +1217,7 @@ main() {
   activate_planned_plugins
   release_registration
   verify_prod_components
+  prod_dev_link_safety "$PROD/wp-content" "post_deploy"
   open_site_for_public_smoke
   http_prod_smoke
   error_log_post_check

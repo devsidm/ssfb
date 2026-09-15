@@ -7,6 +7,7 @@ PROD="$HOME_DIR/ssfb.se/public_html"
 PROD_WP_CLI="$PROD/wp-cli.phar"
 BACKUP_ROOT="$HOME_DIR/ssf-backups"
 ERROR_LOG="$HOME_DIR/ssfb.se/logs/error_log"
+CONFIG="$REPO/config/deploy-components.json"
 EXPECTED_PROD_URL="https://ssfb.se"
 MAINTENANCE_GRACE_SECONDS="${SSF_MAINTENANCE_GRACE_SECONDS:-10}"
 
@@ -70,6 +71,8 @@ wp_prod() {
 wp_eval_prod() {
   wp_prod eval "$1"
 }
+
+source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"
 
 json_value() {
   local file="$1"
@@ -541,6 +544,7 @@ main() {
     restore_plugin_state
   fi
   internal_verify
+  prod_dev_link_safety "$PROD/wp-content" "post_restore"
   public_smoke
   error_log_post_check
   ROLLBACK_SUCCESS=1
