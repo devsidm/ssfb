@@ -233,10 +233,13 @@ confirm_once() {
 
 activate_maintenance() {
   local reason="${1:-rollback}"
-  cat > "$PROD/.maintenance" <<'PHP'
-<?php $upgrading = time(); ?>
-PHP
+  local timestamp marker
+  timestamp="$(date +%s)"
+  [[ "$timestamp" =~ ^[0-9]+$ ]] || fail "Maintenance timestamp is not numeric."
+  printf '<?php $upgrading = %s; ?>\n' "$timestamp" > "$PROD/.maintenance"
   [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker missing."
+  marker="$(cat "$PROD/.maintenance")"
+  php -r '$c=trim(file_get_contents($argv[1])); exit(preg_match("/^<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?>$/", $c) ? 0 : 1);' "$PROD/.maintenance" || fail "Production maintenance marker is malformed or non-numeric."
   MAINTENANCE_ACTIVE=1
   local status
   status="$(curl -sS -L -o /tmp/ssf-rollback-maintenance.html -w '%{http_code}' "$EXPECTED_PROD_URL/" || true)"
@@ -251,8 +254,21 @@ PHP
 
 deactivate_maintenance() {
   rm -f "$PROD/.maintenance"
+  [[ ! -e "$PROD/.maintenance" ]] || fail "Production maintenance marker still exists after deactivation."
   MAINTENANCE_ACTIVE=0
+  verify_maintenance_inactive
   echo "Production maintenance: INACTIVE"
+}
+
+verify_maintenance_inactive() {
+  [[ ! -e "$PROD/.maintenance" ]] || fail "Production maintenance marker still exists."
+  local status
+  status="$(curl -sS -L -o /tmp/ssf-rollback-maintenance-open.html -w '%{http_code}' "$EXPECTED_PROD_URL/" || true)"
+  if [[ "$status" == "503" ]] || rg -qi 'briefly unavailable|maintenance|upgrading' /tmp/ssf-rollback-maintenance-open.html; then
+    rm -f /tmp/ssf-rollback-maintenance-open.html
+    fail "Production still appears to be in maintenance after deactivation."
+  fi
+  rm -f /tmp/ssf-rollback-maintenance-open.html
 }
 
 maintenance_grace_period() {
@@ -363,9 +379,43 @@ internal_verify() {
   wp_prod ssf release status >/dev/null || true
   wp_prod theme list --status=active >/dev/null
   wp_prod plugin list >/dev/null
-  if wp_prod plugin is-active simple-cloudflare-turnstile >/dev/null 2>&1; then
-    wp_eval_prod 'if (class_exists("SSF_Antispam") && ! SSF_Antispam::is_configured()) { exit(1); }'
+  validate_turnstile_prod_config
+}
+
+validate_turnstile_prod_config() {
+  if ! wp_prod plugin is-active simple-cloudflare-turnstile >/dev/null 2>&1; then
+    return
   fi
+  local status_file
+  status_file="$(mktemp)"
+  wp_eval_prod '
+    $site = trim((string) get_option("cfturnstile_key", ""));
+    $secret = trim((string) get_option("cfturnstile_secret", ""));
+    $test = class_exists("SSF_Antispam") ? SSF_Antispam::is_test_mode() : true;
+    $configured = class_exists("SSF_Antispam") ? SSF_Antispam::is_configured() : false;
+    echo wp_json_encode(array(
+      "environment" => wp_get_environment_type(),
+      "site_found" => $site !== "",
+      "secret_found" => $secret !== "",
+      "test_mode" => (bool) $test,
+      "configured" => (bool) $configured
+    ));
+  ' > "$status_file"
+  php -r '
+    $data = json_decode(file_get_contents($argv[1]), true);
+    if (!is_array($data)) { exit(10); }
+    echo "Environment: " . ($data["environment"] ?? "") . PHP_EOL;
+    echo "Site key: " . (!empty($data["site_found"]) ? "FOUND" : "MISSING") . PHP_EOL;
+    echo "Secret key: " . (!empty($data["secret_found"]) ? "FOUND" : "MISSING") . PHP_EOL;
+    echo "Test mode: " . (!empty($data["test_mode"]) ? "YES" : "NO") . PHP_EOL;
+    echo "Configured: " . (!empty($data["configured"]) ? "YES" : "NO") . PHP_EOL;
+    if (($data["environment"] ?? "") !== "production") { exit(1); }
+    if (empty($data["site_found"])) { exit(2); }
+    if (empty($data["secret_found"])) { exit(3); }
+    if (!empty($data["test_mode"])) { exit(4); }
+    if (empty($data["configured"])) { exit(5); }
+  ' "$status_file" || { rm -f "$status_file"; fail "Turnstile PROD runtime validation failed after rollback."; }
+  rm -f "$status_file"
 }
 
 public_smoke() {

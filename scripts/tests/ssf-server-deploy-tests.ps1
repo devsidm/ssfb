@@ -41,9 +41,12 @@ if ($bash) {
 Assert-Contains 'Bash shebang present' $script '#!/usr/bin/env bash'
 Assert-Contains 'Bash strict mode present' $script 'set -Eeuo pipefail'
 Assert-Contains 'maintenance grace configured' $script 'MAINTENANCE_GRACE_SECONDS="${SSF_MAINTENANCE_GRACE_SECONDS:-10}"'
-Assert-Contains 'maintenance marker created' $script 'cat > "$PROD/.maintenance"'
-Assert-Contains 'maintenance uses WordPress root syntax' $script '<?php $upgrading = time(); ?>'
+Assert-Contains 'maintenance marker created' $script 'printf ''<?php $upgrading = %s; ?>\n'' "$timestamp" > "$PROD/.maintenance"'
+Assert-Contains 'maintenance timestamp is numeric' $script '[[ "$timestamp" =~ ^[0-9]+$ ]]'
+Assert-Contains 'maintenance marker numeric validation' $script 'Production maintenance marker timestamp is malformed'
+Assert-NotContains 'maintenance marker must not call time' $script '$upgrading = time()'
 Assert-Contains 'maintenance active verified by curl' $script 'verify_maintenance_active'
+Assert-Contains 'maintenance inactive verified after deactivate' $script 'verify_maintenance_inactive'
 Assert-Contains 'maintenance grace before backup' $script 'maintenance_grace_period'
 Assert-Contains 'failure handler keeps mutated site paused' $script 'PROD_MUTATED" == "1"'
 Assert-Contains 'public smoke failure relocks site' $script 'public_smoke_failed'
@@ -86,8 +89,21 @@ Assert-Contains 'plugin activation from plan only' $script 'plugin_plan_array "a
 Assert-Contains 'touched plugin backup plan exists' $script 'plugin_plan_array "touched_plugins"'
 Assert-Contains 'post-deploy plugin parity check exists' $script 'post_deploy_plugin_parity'
 Assert-Contains 'Turnstile config check exists' $script 'validate_turnstile_prod_config'
-Assert-Contains 'Turnstile site key redacted' $script 'Site key: FOUND'
-Assert-Contains 'Turnstile secret key redacted' $script 'Secret key: FOUND'
+Assert-Contains 'Turnstile site key redacted label' $script 'Site key: '
+Assert-Contains 'Turnstile secret key redacted label' $script 'Secret key: '
+Assert-Contains 'Turnstile redacted found/missing output' $script '"FOUND" : "MISSING"'
+Assert-Contains 'Turnstile reads PROD option key' $script 'get_option("cfturnstile_key", "")'
+Assert-Contains 'Turnstile reads PROD option secret' $script 'get_option("cfturnstile_secret", "")'
+Assert-Contains 'Turnstile uses runtime test mode' $script 'SSF_Antispam::is_test_mode()'
+Assert-Contains 'Turnstile uses runtime configured state' $script 'SSF_Antispam::is_configured()'
+Assert-Contains 'Turnstile site fingerprint captured' $script 'site_fingerprint'
+Assert-Contains 'Turnstile secret fingerprint captured' $script 'secret_fingerprint'
+Assert-Contains 'Turnstile fingerprints stored before mutation' $script 'TURNSTILE_SITE_FINGERPRINT="$site_fingerprint"'
+Assert-Contains 'Turnstile post deploy fingerprint compare' $script 'Turnstile PROD configuration fingerprint changed during deployment.'
+Assert-Contains 'Turnstile unchanged pass output' $script 'Turnstile PROD configuration unchanged: PASS'
+Assert-NotContains 'Turnstile does not use plugin_status as key source' $script 'SSF_Antispam::plugin_status()'
+Assert-NotContains 'Turnstile actual key not printed' $script 'echo $site'
+Assert-NotContains 'Turnstile actual secret not printed' $script 'echo $secret'
 Assert-Contains 'no DEV options copied to PROD' $script 'wordpress_options_not_copied_from_dev=yes'
 Assert-NotContains 'no wordpress.org plugin download' $script 'wordpress.org'
 Assert-Contains 'database backup before deploy function' $script 'database_backup'
@@ -135,11 +151,13 @@ $mainOrder = [regex]::Match($script, '(?s)main\(\).*?\{(?<body>.*?)\n\}', 'Singl
 Assert-True 'database backup before file deploy in main' ($mainOrder.IndexOf('database_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('database_backup'))
 Assert-True 'file backup before file deploy in main' ($mainOrder.IndexOf('file_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('file_backup'))
 Assert-True 'confirmation before backup and deploy' ($mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('database_backup') -and $mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('deploy_files_to_prod'))
+Assert-True 'Turnstile preflight before confirmation' ($mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'maintenance starts after confirmation' ($mainOrder.IndexOf('activate_maintenance') -gt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'maintenance starts before database backup' ($mainOrder.IndexOf('activate_maintenance') -lt $mainOrder.IndexOf('database_backup'))
 Assert-True 'grace period before database backup' ($mainOrder.IndexOf('maintenance_grace_period') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('maintenance_grace_period') -lt $mainOrder.IndexOf('database_backup'))
 Assert-True 'no PROD backup before maintenance lock' ($mainOrder.IndexOf('database_backup') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('file_backup') -gt $mainOrder.IndexOf('activate_maintenance'))
 Assert-True 'internal verification while maintenance active' ($mainOrder.IndexOf('verify_prod_components') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
+Assert-True 'Turnstile post-check after deployment before opening site' ($mainOrder.IndexOf('verify_prod_components') -gt $mainOrder.IndexOf('deploy_files_to_prod') -and $mainOrder.IndexOf('verify_prod_components') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
 Assert-True 'maintenance removed before public curl smoke' ($mainOrder.IndexOf('open_site_for_public_smoke') -lt $mainOrder.IndexOf('http_prod_smoke'))
 Assert-True 'plugin activation after file deploy' ($mainOrder.IndexOf('activate_planned_plugins') -gt $mainOrder.IndexOf('deploy_files_to_prod'))
 Assert-True 'plugin parity before confirmation' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('confirm_once'))
@@ -153,6 +171,8 @@ Assert-Contains 'docs Turnstile example' $doc 'simple-cloudflare-turnstile'
 Assert-Contains 'docs no option copy' $doc 'never copied from DEV'
 Assert-Contains 'docs rollback command' $doc 'ssf-rollback'
 Assert-Contains 'docs maintenance behavior' $doc 'Production maintenance'
+Assert-Contains 'docs numeric maintenance marker' $doc 'numeric Unix timestamp'
+Assert-Contains 'docs Turnstile fingerprint protection' $doc 'Turnstile PROD configuration unchanged'
 Assert-Contains 'AGENTS server deploy guidance' $agents 'scripts/deploy/ssf-server-deploy.sh'
 Assert-Contains 'AGENTS server rollback guidance' $agents 'scripts/deploy/ssf-server-rollback.sh'
 Assert-Contains 'AGENTS read-only deploy key' $agents 'read-only'

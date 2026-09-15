@@ -47,6 +47,8 @@ PLUGINS_ACTIVATED=0
 VERIFICATION_FAILED=0
 PRE_DEPLOY_BUILD=""
 PRE_DEPLOY_VERSION=""
+TURNSTILE_SITE_FINGERPRINT=""
+TURNSTILE_SECRET_FINGERPRINT=""
 PLUGIN_PLAN=""
 
 fail() {
@@ -163,10 +165,13 @@ file_size() {
 activate_maintenance() {
   local reason="${1:-deployment}"
   section "PRODUCTION MAINTENANCE"
-  cat > "$PROD/.maintenance" <<'PHP'
-<?php $upgrading = time(); ?>
-PHP
+  local timestamp marker
+  timestamp="$(date +%s)"
+  [[ "$timestamp" =~ ^[0-9]+$ ]] || fail "Maintenance timestamp is not numeric."
+  printf '<?php $upgrading = %s; ?>\n' "$timestamp" > "$PROD/.maintenance"
   [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker was not created."
+  marker="$(cat "$PROD/.maintenance")"
+  [[ "$marker" =~ ^\<\?php[[:space:]]+\$upgrading[[:space:]]*=[[:space:]]*[0-9]+[[:space:]]*\;[[:space:]]*\?\>$ ]] || fail "Production maintenance marker is malformed or non-numeric."
   MAINTENANCE_ACTIVE=1
   MAINTENANCE_STARTED_AT="$(date +%s)"
   verify_maintenance_active
@@ -177,13 +182,16 @@ PHP
 
 deactivate_maintenance() {
   rm -f "$PROD/.maintenance"
+  [[ ! -e "$PROD/.maintenance" ]] || fail "Production maintenance marker still exists after deactivation."
   MAINTENANCE_ACTIVE=0
   MAINTENANCE_ENDED_AT="$(date +%s)"
+  verify_maintenance_inactive
   echo "Production maintenance: INACTIVE"
 }
 
 verify_maintenance_active() {
   [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker missing."
+  php -r '$c=trim(file_get_contents($argv[1])); exit(preg_match("/^<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?>$/", $c) ? 0 : 1);' "$PROD/.maintenance" || fail "Production maintenance marker timestamp is malformed."
   local status
   status="$(curl -sS -L -o /tmp/ssf-maintenance-check.html -w '%{http_code}' "$EXPECTED_PROD_URL/" || true)"
   if [[ "$status" != "503" ]] && ! rg -qi 'maintenance|underh.ll|briefly unavailable|upgrading' /tmp/ssf-maintenance-check.html; then
@@ -191,6 +199,17 @@ verify_maintenance_active() {
     fail "Production maintenance mode did not block anonymous public HTTP. Status: $status"
   fi
   rm -f /tmp/ssf-maintenance-check.html
+}
+
+verify_maintenance_inactive() {
+  [[ ! -e "$PROD/.maintenance" ]] || fail "Production maintenance marker still exists."
+  local status
+  status="$(curl -sS -L -o /tmp/ssf-maintenance-open.html -w '%{http_code}' "$EXPECTED_PROD_URL/" || true)"
+  if [[ "$status" == "503" ]] || rg -qi 'briefly unavailable|maintenance|upgrading' /tmp/ssf-maintenance-open.html; then
+    rm -f /tmp/ssf-maintenance-open.html
+    fail "Production still appears to be in maintenance after deactivation."
+  fi
+  rm -f /tmp/ssf-maintenance-open.html
 }
 
 maintenance_grace_period() {
@@ -630,23 +649,50 @@ validate_turnstile_prod_config() {
     echo "simple-cloudflare-turnstile inactive in PROD; Turnstile configuration check skipped."
     return
   fi
-  local status
-  status="$(wp_eval_prod '
-    if (! class_exists("SSF_Antispam")) { echo "Configured: NO\nReason: SSF_Antispam missing\n"; return; }
-    $plugin = SSF_Antispam::plugin_status();
-    $configured = SSF_Antispam::is_configured();
-    echo "Environment: " . wp_get_environment_type() . "\n";
-    echo "Site key: " . (! empty($plugin["site_key"]) ? "FOUND" : "MISSING") . "\n";
-    echo "Secret key: " . (! empty($plugin["secret_key"]) ? "FOUND" : "MISSING") . "\n";
-    echo "Test mode: " . (! empty($plugin["test_mode"]) ? "YES" : "NO") . "\n";
-    echo "Configured: " . ($configured ? "YES" : "NO") . "\n";
-  ')"
-  echo "$status"
-  echo "$status" | rg -q 'Environment: production' || fail "Turnstile check did not run in production."
-  echo "$status" | rg -q 'Site key: FOUND' || fail "Turnstile site key missing in PROD."
-  echo "$status" | rg -q 'Secret key: FOUND' || fail "Turnstile secret key missing in PROD."
-  echo "$status" | rg -q 'Test mode: NO' || fail "Turnstile test mode must not be enabled in PROD."
-  echo "$status" | rg -q 'Configured: YES' || fail "Turnstile/SSF antispam is not safely configured in PROD."
+  local phase="${1:-check}"
+  local status_file
+  status_file="$(mktemp)"
+  wp_eval_prod '
+    $site = trim((string) get_option("cfturnstile_key", ""));
+    $secret = trim((string) get_option("cfturnstile_secret", ""));
+    $test = class_exists("SSF_Antispam") ? SSF_Antispam::is_test_mode() : true;
+    $configured = class_exists("SSF_Antispam") ? SSF_Antispam::is_configured() : false;
+    echo wp_json_encode(array(
+      "environment" => wp_get_environment_type(),
+      "site_found" => $site !== "",
+      "secret_found" => $secret !== "",
+      "test_mode" => (bool) $test,
+      "configured" => (bool) $configured,
+      "site_fingerprint" => $site !== "" ? hash("sha256", $site) : "",
+      "secret_fingerprint" => $secret !== "" ? hash("sha256", $secret) : ""
+    ));
+  ' > "$status_file"
+  php -r '
+    $data = json_decode(file_get_contents($argv[1]), true);
+    if (!is_array($data)) { exit(10); }
+    echo "Environment: " . ($data["environment"] ?? "") . PHP_EOL;
+    echo "Site key: " . (!empty($data["site_found"]) ? "FOUND" : "MISSING") . PHP_EOL;
+    echo "Secret key: " . (!empty($data["secret_found"]) ? "FOUND" : "MISSING") . PHP_EOL;
+    echo "Test mode: " . (!empty($data["test_mode"]) ? "YES" : "NO") . PHP_EOL;
+    echo "Configured: " . (!empty($data["configured"]) ? "YES" : "NO") . PHP_EOL;
+    if (($data["environment"] ?? "") !== "production") { exit(1); }
+    if (empty($data["site_found"])) { exit(2); }
+    if (empty($data["secret_found"])) { exit(3); }
+    if (!empty($data["test_mode"])) { exit(4); }
+    if (empty($data["configured"])) { exit(5); }
+  ' "$status_file" || { rm -f "$status_file"; fail "Turnstile PROD runtime validation failed."; }
+  local site_fingerprint secret_fingerprint
+  site_fingerprint="$(php -r '$d=json_decode(file_get_contents($argv[1]), true); echo (string)($d["site_fingerprint"] ?? "");' "$status_file")"
+  secret_fingerprint="$(php -r '$d=json_decode(file_get_contents($argv[1]), true); echo (string)($d["secret_fingerprint"] ?? "");' "$status_file")"
+  [[ -n "$site_fingerprint" && -n "$secret_fingerprint" ]] || { rm -f "$status_file"; fail "Turnstile PROD fingerprints missing."; }
+  if [[ "$phase" == "preflight" ]]; then
+    TURNSTILE_SITE_FINGERPRINT="$site_fingerprint"
+    TURNSTILE_SECRET_FINGERPRINT="$secret_fingerprint"
+  elif [[ "$phase" == "post" ]]; then
+    [[ "$site_fingerprint" == "$TURNSTILE_SITE_FINGERPRINT" && "$secret_fingerprint" == "$TURNSTILE_SECRET_FINGERPRINT" ]] || { rm -f "$status_file"; fail "Turnstile PROD configuration fingerprint changed during deployment."; }
+    echo "Turnstile PROD configuration unchanged: PASS"
+  fi
+  rm -f "$status_file"
 }
 
 prod_dry_run() {
@@ -960,7 +1006,7 @@ verify_prod_components() {
   while IFS= read -r file; do [[ ! -e "$PROD/wp-content/mu-plugins/$file" ]] || fail "DEV-only MU file exists in PROD: $file"; done < <(json_array "dev_only.mu_files")
   [[ ! -e "$PROD/wp-content/plugins/ssf-promotions" ]] || fail "Excluded plugin exists in PROD: ssf-promotions"
   post_deploy_plugin_parity
-  validate_turnstile_prod_config
+  validate_turnstile_prod_config "post"
   echo "Plugin verification PASS"
   echo "Theme verification: PASS"
 }
@@ -1082,6 +1128,7 @@ main() {
   prod_target_safety
   build_plugin_parity_plan
   prod_dry_run
+  validate_turnstile_prod_config "preflight"
   record_error_log_baseline
   confirm_once
   create_backup_dir

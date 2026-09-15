@@ -99,10 +99,13 @@ The deploy script creates the standard WordPress root `.maintenance` marker in:
 $HOME/ssfb.se/public_html/.maintenance
 ```
 
-It then verifies that anonymous public HTTP is blocked, waits the configured
-grace period (`SSF_MAINTENANCE_GRACE_SECONDS`, default 10 seconds), and only
-then creates the database backup. Public HTTP smoke tests run only after all
-internal checks pass and maintenance has been deactivated.
+The marker must contain a literal numeric Unix timestamp, never a dynamic
+`time()` expression. The script verifies that the timestamp is numeric, that
+anonymous public HTTP is blocked, waits the configured grace period
+(`SSF_MAINTENANCE_GRACE_SECONDS`, default 10 seconds), and only then creates
+the database backup. Public HTTP smoke tests run only after all internal checks
+pass, maintenance has been deactivated, and the `.maintenance` file is verified
+gone.
 
 Failure behavior is deliberate:
 
@@ -191,8 +194,14 @@ secrets and WordPress options must remain per environment.
 Concrete example: `simple-cloudflare-turnstile` may be active in both DEV and
 PROD, but PROD must have its own Cloudflare Turnstile keys. DEV test keys must
 not be copied to PROD. The deployment script checks the SSF antispam integration
+before the `DEPLOY` confirmation and again after deployment while maintenance is
+still active. It reads the production WordPress runtime options directly,
 without printing keys; it reports only `FOUND`, `MISSING`, `Test mode` and
-`Configured`.
+`Configured`. It also compares in-memory SHA256 fingerprints and requires:
+
+```text
+Turnstile PROD configuration unchanged: PASS
+```
 
 ## Backups
 
