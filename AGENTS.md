@@ -63,11 +63,15 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 - Active DEV FTP root is `public_html/dev`.
 - Known wrong FTP root: `/wp-content/...` at FTP account root. Uploading there does not affect active DEV.
 - Production server deployment uses `scripts/deploy/ssf-server-deploy.sh`.
+- Production server rollback uses `scripts/deploy/ssf-server-rollback.sh`.
 - The production server GitHub deploy key is read-only.
 - Do not invent another production deploy path or deploy directly from random local files.
 - Do not bypass repository tests, PHP lint, DEV verification or production backups.
 - Do not use `rsync --delete`.
 - PROD deployment requires one exact `DEPLOY` confirmation.
+- PROD rollback requires one exact `ROLLBACK` confirmation, or `ROLLBACK WITH DATABASE` for DB rollback.
+- Deployment and rollback use full-site WordPress maintenance during the critical mutation window.
+- If a PROD deploy or rollback fails after mutation, leave maintenance active and use `ssf-rollback` or repair before reopening.
 - DEV remains the staging/prepared artifact; Git remains the code source of truth.
 
 ## Coding

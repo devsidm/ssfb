@@ -11,8 +11,9 @@ ssf-deploy
 The command updates the production server checkout, runs the repository test
 suite, validates PHP, syncs the approved runtime from Git to DEV, verifies DEV,
 performs a production dry-run, asks once for the exact word `DEPLOY`, creates
-real production backups, deploys the approved DEV artifact to production, and
-then verifies production.
+full-site Production maintenance, creates real production backups, deploys the
+approved DEV artifact to production, verifies production internally, reopens the
+site and then runs public HTTP smoke tests.
 
 ## Flow
 
@@ -82,6 +83,47 @@ ln -sf "$HOME/tools/ssf-deploy" "$HOME/bin/ssf-deploy"
 The wrapper updates the repository before executing the versioned deployment
 script. This avoids having the running script update itself midway through a
 deployment.
+
+## Production Maintenance
+
+Production maintenance starts only after every preflight check has passed and
+the operator has typed exactly:
+
+```text
+DEPLOY
+```
+
+The deploy script creates the standard WordPress root `.maintenance` marker in:
+
+```text
+$HOME/ssfb.se/public_html/.maintenance
+```
+
+It then verifies that anonymous public HTTP is blocked, waits the configured
+grace period (`SSF_MAINTENANCE_GRACE_SECONDS`, default 10 seconds), and only
+then creates the database backup. Public HTTP smoke tests run only after all
+internal checks pass and maintenance has been deactivated.
+
+Failure behavior is deliberate:
+
+- before production mutation: maintenance is removed again
+- after production mutation: maintenance stays active or is reactivated
+- after failed public smoke: maintenance is reactivated immediately
+
+If the site remains in maintenance, inspect:
+
+```bash
+ls -l "$HOME/ssfb.se/public_html/.maintenance"
+```
+
+The normal recovery path is `ssf-rollback` or a controlled repair. Manual
+removal is only an emergency action after confirming production is healthy:
+
+```bash
+rm -f "$HOME/ssfb.se/public_html/.maintenance"
+```
+
+Do not use manual removal as the ordinary workflow.
 
 ## What Is Deployed
 
@@ -170,26 +212,113 @@ The directory contains:
 
 - `database.sql.gz`
 - `prod-wp-content-targets.tar.gz`
+- `BACKUP-INFO.json`
 - `BACKUP-INFO.txt`
 - component inventory files
 
 The database backup is created with PROD WP-CLI using credentials from PROD
-`wp-config.php`. The deploy script verifies the gzip archive with `gzip -t`.
+`wp-config.php`. The deploy script verifies the gzip archive with `gzip -t`,
+checks for a non-empty SQL dump, and records size and SHA256.
 
 The file backup contains the currently deployed production components that the
 deployment may overwrite, including any plugin directories in the generated
-plugin parity plan. The deploy script verifies the tar archive with `tar -tzf`.
+plugin parity plan. The deploy script verifies the tar archive with `tar -tzf`,
+checks required paths from a complete archive listing, and records size and
+SHA256. It does not use `tar | rg -q` membership checks.
+
+`BACKUP-INFO.json` is authoritative for rollback. It records the selected build,
+previous build, production path, expected home URL, DB prefix, checksums,
+plugin/theme state, and which runtime paths existed before deployment. New
+paths may be removed during rollback only when this JSON-backed metadata marks
+them as absent before deployment.
 
 Uploads are not included because this deployment does not touch uploads.
 
 ## Rollback
 
 Rollback is manual and deliberate. The deployment script does not automatically
-roll back production.
+roll back production. Use:
+
+```bash
+ssf-rollback --list
+ssf-rollback
+ssf-rollback --backup prod-before-<BUILD>-<TIMESTAMP>
+ssf-rollback --with-db
+ssf-rollback --backup prod-before-<BUILD>-<TIMESTAMP> --with-db
+```
+
+The versioned rollback script lives at:
+
+```text
+$HOME/repos/ssfb/scripts/deploy/ssf-server-rollback.sh
+```
+
+Recommended one-time wrapper:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="$HOME/repos/ssfb"
+
+cd "$REPO"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+    echo "ERROR: Git repository is dirty."
+    exit 1
+fi
+
+git fetch origin main
+git pull --ff-only origin main
+
+exec "$REPO/scripts/deploy/ssf-server-rollback.sh" "$@"
+```
+
+Expose it:
+
+```bash
+chmod +x "$HOME/tools/ssf-rollback"
+ln -sf "$HOME/tools/ssf-rollback" "$HOME/bin/ssf-rollback"
+```
+
+`ssf-rollback --list` shows valid rollback packages separately from legacy or
+incomplete backup directories. Legacy directories without `BACKUP-INFO.json`
+are not automatically eligible.
+
+Rollback always enters full-site Production maintenance before changing files
+or database state. After maintenance is active and the grace period has elapsed,
+it creates a pre-rollback rescue backup under:
+
+```text
+$HOME/ssf-backups/pre-rollback-<TIMESTAMP>/
+```
+
+Files-only rollback restores deployment-managed runtime files, plugin files,
+theme files and previous plugin activation state. It does not import a database.
+
+Full rollback with `--with-db` also imports the exact `database.sql.gz` captured
+immediately before the selected deployment. Before doing so, it saves the
+current production database into the rescue backup so the rollback itself is
+recoverable.
+
+Database rollback can remove WordPress changes made after the selected backup,
+including applications, registrations, motions, content edits, users, settings
+and plugin options. External SharePoint data is not rolled back.
+
+The rollback script validates before confirmation:
+
+- production path is exactly `$HOME/ssfb.se/public_html`
+- environment is production
+- backup belongs to `https://ssfb.se`
+- DB prefix matches current production
+- database and file archive SHA256 values match `BACKUP-INFO.json`
+- gzip and tar integrity checks pass
+- current production can be inspected by WP-CLI
 
 ### Restore Files
 
-Use the backup directory reported by the failed deployment:
+Manual restore is not the normal workflow, but the file archive is a standard
+tar archive if emergency inspection is needed:
 
 ```bash
 BACKUP="$HOME/ssf-backups/prod-before-<BUILD>-<TIMESTAMP>"
@@ -198,7 +327,9 @@ PROD="$HOME/ssfb.se/public_html"
 tar -xzf "$BACKUP/prod-wp-content-targets.tar.gz" -C "$PROD"
 ```
 
-Then verify production:
+Prefer `ssf-rollback` so plugin state, maintenance, rescue backups and smoke
+tests are handled consistently. The internal verification uses WP-CLI while the
+site is still paused:
 
 ```bash
 php "$PROD/wp-cli.phar" --path="$PROD" core is-installed
@@ -208,13 +339,11 @@ curl -sS -I https://ssfb.se/
 
 ### Restore Database
 
-Only restore the database if the failure actually requires database rollback:
+Only restore the database if the failure actually requires database rollback,
+and prefer:
 
 ```bash
-BACKUP="$HOME/ssf-backups/prod-before-<BUILD>-<TIMESTAMP>"
-PROD="$HOME/ssfb.se/public_html"
-
-gzip -dc "$BACKUP/database.sql.gz" | php "$PROD/wp-cli.phar" --path="$PROD" db import -
+ssf-rollback --with-db
 ```
 
 WordPress database rollback does not roll back external SharePoint writes. If a
@@ -240,6 +369,7 @@ After changing the component config, run:
 ```bash
 pwsh -NoProfile -File scripts/tests/ssf-server-deploy-tests.ps1
 bash -n scripts/deploy/ssf-server-deploy.sh
+bash -n scripts/deploy/ssf-server-rollback.sh
 ```
 
 ## First Dress Rehearsal

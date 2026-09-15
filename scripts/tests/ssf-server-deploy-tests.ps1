@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scriptPath = Join-Path $repo 'scripts\deploy\ssf-server-deploy.sh'
+$rollbackPath = Join-Path $repo 'scripts\deploy\ssf-server-rollback.sh'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $docPath = Join-Path $repo 'docs\SERVER-DEPLOYMENT.md'
 $agentsPath = Join-Path $repo 'AGENTS.md'
@@ -24,6 +25,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 $bash = Get-Command bash -ErrorAction SilentlyContinue
 Assert-True 'Bash script exists' (Test-Path -LiteralPath $scriptPath)
+Assert-True 'Rollback script exists' (Test-Path -LiteralPath $rollbackPath)
 if ($bash) {
     $wslStubWithoutDistro = $bash.Source -match '\\System32\\bash\.exe$'
     if (-not $wslStubWithoutDistro) {
@@ -38,6 +40,14 @@ if ($bash) {
 }
 Assert-Contains 'Bash shebang present' $script '#!/usr/bin/env bash'
 Assert-Contains 'Bash strict mode present' $script 'set -Eeuo pipefail'
+Assert-Contains 'maintenance grace configured' $script 'MAINTENANCE_GRACE_SECONDS="${SSF_MAINTENANCE_GRACE_SECONDS:-10}"'
+Assert-Contains 'maintenance marker created' $script 'cat > "$PROD/.maintenance"'
+Assert-Contains 'maintenance uses WordPress root syntax' $script '<?php $upgrading = time(); ?>'
+Assert-Contains 'maintenance active verified by curl' $script 'verify_maintenance_active'
+Assert-Contains 'maintenance grace before backup' $script 'maintenance_grace_period'
+Assert-Contains 'failure handler keeps mutated site paused' $script 'PROD_MUTATED" == "1"'
+Assert-Contains 'public smoke failure relocks site' $script 'public_smoke_failed'
+Assert-NotContains 'no naive trap always deactivates maintenance' $script 'trap cleanup EXIT;'
 
 Assert-True 'deploy component schema version' ($config.schema_version -eq 1)
 Assert-True 'seven production plugins configured' (@($config.production.plugins).Count -eq 7)
@@ -84,6 +94,8 @@ Assert-Contains 'database backup before deploy function' $script 'database_backu
 Assert-Contains 'file backup before deploy function' $script 'file_backup'
 Assert-Contains 'database export exists' $script 'wp_prod db export "$BACKUP_DIR/database.sql" --add-drop-table'
 Assert-Contains 'gzip integrity check exists' $script 'gzip -t "$BACKUP_DIR/database.sql.gz"'
+Assert-Contains 'database backup sha256 exists' $script 'sha256_file "$BACKUP_DIR/database.sql.gz"'
+Assert-Contains 'database dump sanity validation exists' $script "rg -q 'CREATE TABLE|INSERT INTO|DROP TABLE'"
 Assert-Contains 'file archive exists' $script 'prod-wp-content-targets.tar.gz'
 Assert-Contains 'tar integrity check exists' $script 'tar -tzf "$archive" >/dev/null'
 Assert-Contains 'archive listing file exists' $script 'archive_list="$BACKUP_DIR/.prod-wp-content-targets.list"'
@@ -95,6 +107,12 @@ $archiveEntries = @('wp-content/mu-plugins/', 'wp-content/mu-plugins/ssf-antispa
 $expectedArchivePath = 'wp-content/mu-plugins'
 $archivePathFound = @($archiveEntries | Where-Object { $_ -eq $expectedArchivePath -or $_.StartsWith("$expectedArchivePath/") }).Count -gt 0
 Assert-True 'archive membership regression: directory entry with trailing slash satisfies path without slash' $archivePathFound
+Assert-Contains 'file backup sha256 exists' $script 'sha256_file "$archive"'
+Assert-Contains 'authoritative JSON backup info exists' $script 'BACKUP-INFO.json'
+Assert-Contains 'pre-deploy plugin state captured' $script 'plugins-before.json'
+Assert-Contains 'pre-deploy theme state captured' $script 'themes-before.json'
+Assert-Contains 'runtime path existence captured' $script 'runtime-paths-before.tsv'
+Assert-Contains 'deployment state records new paths reversible' $script 'exists_before=false'
 Assert-Contains 'exact DEPLOY confirmation exists' $script '[[ "$confirmation" == "DEPLOY" ]]'
 Assert-True 'only one interactive read' (([regex]::Matches($script, 'read -r confirmation')).Count -eq 1)
 Assert-NotContains 'no rsync delete' $script 'rsync --delete'
@@ -117,6 +135,12 @@ $mainOrder = [regex]::Match($script, '(?s)main\(\).*?\{(?<body>.*?)\n\}', 'Singl
 Assert-True 'database backup before file deploy in main' ($mainOrder.IndexOf('database_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('database_backup'))
 Assert-True 'file backup before file deploy in main' ($mainOrder.IndexOf('file_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('file_backup'))
 Assert-True 'confirmation before backup and deploy' ($mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('database_backup') -and $mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('deploy_files_to_prod'))
+Assert-True 'maintenance starts after confirmation' ($mainOrder.IndexOf('activate_maintenance') -gt $mainOrder.IndexOf('confirm_once'))
+Assert-True 'maintenance starts before database backup' ($mainOrder.IndexOf('activate_maintenance') -lt $mainOrder.IndexOf('database_backup'))
+Assert-True 'grace period before database backup' ($mainOrder.IndexOf('maintenance_grace_period') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('maintenance_grace_period') -lt $mainOrder.IndexOf('database_backup'))
+Assert-True 'no PROD backup before maintenance lock' ($mainOrder.IndexOf('database_backup') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('file_backup') -gt $mainOrder.IndexOf('activate_maintenance'))
+Assert-True 'internal verification while maintenance active' ($mainOrder.IndexOf('verify_prod_components') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
+Assert-True 'maintenance removed before public curl smoke' ($mainOrder.IndexOf('open_site_for_public_smoke') -lt $mainOrder.IndexOf('http_prod_smoke'))
 Assert-True 'plugin activation after file deploy' ($mainOrder.IndexOf('activate_planned_plugins') -gt $mainOrder.IndexOf('deploy_files_to_prod'))
 Assert-True 'plugin parity before confirmation' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('confirm_once'))
 
@@ -127,7 +151,10 @@ Assert-Contains 'docs backups' $doc '$HOME/ssf-backups'
 Assert-Contains 'docs active DEV plugins principle' $doc 'All active DEV plugins are production dependencies by default.'
 Assert-Contains 'docs Turnstile example' $doc 'simple-cloudflare-turnstile'
 Assert-Contains 'docs no option copy' $doc 'never copied from DEV'
+Assert-Contains 'docs rollback command' $doc 'ssf-rollback'
+Assert-Contains 'docs maintenance behavior' $doc 'Production maintenance'
 Assert-Contains 'AGENTS server deploy guidance' $agents 'scripts/deploy/ssf-server-deploy.sh'
+Assert-Contains 'AGENTS server rollback guidance' $agents 'scripts/deploy/ssf-server-rollback.sh'
 Assert-Contains 'AGENTS read-only deploy key' $agents 'read-only'
 Assert-Contains 'AGENTS exact DEPLOY' $agents 'DEPLOY'
 

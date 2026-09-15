@@ -10,6 +10,8 @@ DEV_WP_CLI="$DEV/wp-cli.phar"
 PROD_WP_CLI="$PROD/wp-cli.phar"
 ERROR_LOG="$HOME_DIR/ssfb.se/logs/error_log"
 CONFIG="$REPO/config/deploy-components.json"
+EXPECTED_PROD_URL="https://ssfb.se"
+MAINTENANCE_GRACE_SECONDS="${SSF_MAINTENANCE_GRACE_SECONDS:-10}"
 
 TEST_STATUS="NOT RUN"
 PHP_STATUS="NOT RUN"
@@ -27,19 +29,36 @@ THEME_VERIFY_STATUS="NOT RUN"
 HTTP_SMOKE_STATUS="NOT RUN"
 ERROR_LOG_STATUS="NOT RUN"
 PLUGIN_PARITY_STATUS="NOT RUN"
+MAINTENANCE_STATUS="NOT RUN"
 BACKUP_DIR=""
 BUILD=""
 VERSION=""
 MANIFEST_STATUS=""
 GIT_HEAD=""
 ERROR_LOG_LINES=0
-MAINTENANCE_ENABLED=0
+MAINTENANCE_ACTIVE=0
+MAINTENANCE_STARTED_AT=0
+MAINTENANCE_ENDED_AT=0
+PROD_MUTATED=0
+DEPLOY_SUCCESS=0
+DEPLOYMENT_STARTED=0
+FILES_DEPLOYED=0
+PLUGINS_ACTIVATED=0
+VERIFICATION_FAILED=0
+PRE_DEPLOY_BUILD=""
+PRE_DEPLOY_VERSION=""
 PLUGIN_PLAN=""
 
 fail() {
   echo "FAILURE: $*" >&2
+  VERIFICATION_FAILED=1
+  handle_failure_maintenance
   if [[ -n "$BACKUP_DIR" ]]; then
     echo "Backup directory: $BACKUP_DIR" >&2
+    if [[ "$PROD_MUTATED" == "1" ]]; then
+      echo "Public site: MAINTENANCE MODE" >&2
+      echo "Recommended command: ssf-rollback" >&2
+    fi
     echo "Rollback instructions: see docs/SERVER-DEPLOYMENT.md" >&2
   fi
   exit 1
@@ -52,12 +71,31 @@ section() {
   echo "============================================================"
 }
 
-cleanup() {
-  if [[ "$MAINTENANCE_ENABLED" == "1" && -x "$PROD_WP_CLI" ]]; then
-    php "$PROD_WP_CLI" --path="$PROD" maintenance-mode deactivate >/dev/null 2>&1 || true
+handle_failure_maintenance() {
+  if [[ "$MAINTENANCE_ACTIVE" != "1" ]]; then
+    if [[ "$PROD_MUTATED" == "1" ]]; then
+      activate_maintenance "failure after PROD mutation" >/dev/null 2>&1 || true
+    fi
+    return
+  fi
+  if [[ "$DEPLOY_SUCCESS" == "1" ]]; then
+    deactivate_maintenance >/dev/null 2>&1 || true
+  elif [[ "$PROD_MUTATED" == "1" ]]; then
+    echo "Production maintenance remains ACTIVE because PROD was mutated." >&2
+  else
+    deactivate_maintenance >/dev/null 2>&1 || true
   fi
 }
-trap cleanup EXIT
+
+cleanup() {
+  handle_failure_maintenance
+  if [[ "$MAINTENANCE_ACTIVE" == "1" ]]; then
+    echo "Final production maintenance state: ACTIVE" >&2
+  else
+    echo "Final production maintenance state: INACTIVE" >&2
+  fi
+}
+trap cleanup EXIT INT TERM
 
 json_array() {
   local path="$1"
@@ -112,10 +150,87 @@ wp_eval_prod() {
   wp_prod eval "$1"
 }
 
+sha256_file() {
+  local file="$1"
+  sha256sum "$file" | awk '{print $1}'
+}
+
+file_size() {
+  local file="$1"
+  stat -c '%s' "$file"
+}
+
+activate_maintenance() {
+  local reason="${1:-deployment}"
+  section "PRODUCTION MAINTENANCE"
+  cat > "$PROD/.maintenance" <<'PHP'
+<?php $upgrading = time(); ?>
+PHP
+  [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker was not created."
+  MAINTENANCE_ACTIVE=1
+  MAINTENANCE_STARTED_AT="$(date +%s)"
+  verify_maintenance_active
+  MAINTENANCE_STATUS="PASS"
+  echo "Production maintenance: ACTIVE"
+  echo "Reason: $reason"
+}
+
+deactivate_maintenance() {
+  rm -f "$PROD/.maintenance"
+  MAINTENANCE_ACTIVE=0
+  MAINTENANCE_ENDED_AT="$(date +%s)"
+  echo "Production maintenance: INACTIVE"
+}
+
+verify_maintenance_active() {
+  [[ -f "$PROD/.maintenance" ]] || fail "Production maintenance marker missing."
+  local status
+  status="$(curl -sS -L -o /tmp/ssf-maintenance-check.html -w '%{http_code}' "$EXPECTED_PROD_URL/" || true)"
+  if [[ "$status" != "503" ]] && ! rg -qi 'maintenance|underh.ll|briefly unavailable|upgrading' /tmp/ssf-maintenance-check.html; then
+    rm -f /tmp/ssf-maintenance-check.html
+    fail "Production maintenance mode did not block anonymous public HTTP. Status: $status"
+  fi
+  rm -f /tmp/ssf-maintenance-check.html
+}
+
+maintenance_grace_period() {
+  echo "Waiting $MAINTENANCE_GRACE_SECONDS seconds for in-flight requests..."
+  sleep "$MAINTENANCE_GRACE_SECONDS"
+}
+
+open_site_for_public_smoke() {
+  deactivate_maintenance
+}
+
+public_smoke_failed() {
+  if [[ "$PROD_MUTATED" == "1" ]]; then
+    activate_maintenance "public smoke failure" >/dev/null 2>&1 || true
+  fi
+}
+
+capture_pre_deploy_state() {
+  PRE_DEPLOY_BUILD="$(wp_eval_prod 'if (class_exists("SSF_Release_Manager")) { $status = SSF_Release_Manager::status(); echo (string)($status["build"] ?? ""); }' 2>/dev/null || true)"
+  PRE_DEPLOY_VERSION="$(wp_eval_prod 'if (class_exists("SSF_Release_Manager")) { $status = SSF_Release_Manager::status(); echo (string)($status["version"] ?? ""); }' 2>/dev/null || true)"
+  wp_prod plugin list --format=json --fields=name,status,version > "$BACKUP_DIR/plugins-before.json"
+  wp_prod theme list --format=json --fields=name,status,version > "$BACKUP_DIR/themes-before.json"
+  {
+    while IFS= read -r plugin; do printf 'wp-content/plugins/%s\n' "$plugin"; done < <(json_array "production.plugins")
+    while IFS= read -r plugin; do printf 'wp-content/plugins/%s\n' "$plugin"; done < <(plugin_plan_array "touched_plugins")
+    while IFS= read -r theme; do printf 'wp-content/themes/%s\n' "$theme"; done < <(json_array "production.themes")
+    while IFS= read -r file; do printf 'wp-content/mu-plugins/%s\n' "$file"; done < <(json_array "production.mu_files")
+  } | sort -u | while IFS= read -r path; do
+    if [[ -e "$PROD/$path" ]]; then
+      printf '%s\texists_before=true\n' "$path"
+    else
+      printf '%s\texists_before=false\n' "$path"
+    fi
+  done > "$BACKUP_DIR/runtime-paths-before.tsv"
+}
+
 require_tools() {
   section "TOOLS"
   local missing=0
-  for tool in git php curl rsync tar gzip mysqldump pwsh rg; do
+  for tool in git php curl rsync tar gzip sha256sum awk pwsh rg; do
     if command -v "$tool" >/dev/null 2>&1; then
       printf "%-12s PASS\n" "$tool"
     else
@@ -641,9 +756,12 @@ create_backup_dir() {
 database_backup() {
   section "DATABASE BACKUP"
   wp_prod db export "$BACKUP_DIR/database.sql" --add-drop-table >/dev/null
+  [[ -s "$BACKUP_DIR/database.sql" ]] || fail "Database SQL dump missing or empty."
+  rg -q 'CREATE TABLE|INSERT INTO|DROP TABLE' "$BACKUP_DIR/database.sql" || fail "Database SQL dump failed sanity validation."
   gzip "$BACKUP_DIR/database.sql"
   [[ -s "$BACKUP_DIR/database.sql.gz" ]] || fail "Database backup missing or empty."
   gzip -t "$BACKUP_DIR/database.sql.gz"
+  sha256_file "$BACKUP_DIR/database.sql.gz" > "$BACKUP_DIR/database.sql.gz.sha256"
   DB_BACKUP_STATUS="PASS"
   echo "Database backup: $BACKUP_DIR/database.sql.gz"
   du -h "$BACKUP_DIR/database.sql.gz"
@@ -671,6 +789,7 @@ file_backup() {
   for path in "${paths[@]}"; do
     awk -v expected="$path" '$0 == expected || index($0, expected "/") == 1 { found = 1; exit } END { exit found ? 0 : 1 }' "$archive_list" || fail "File backup missing expected path: $path"
   done
+  sha256_file "$archive" > "$archive.sha256"
   FILE_BACKUP_STATUS="PASS"
   echo "File backup: $archive"
 }
@@ -690,21 +809,103 @@ wp_config_not_touched=yes
 wordpress_core_not_touched=yes
 sharepoint_schema_not_touched=yes
 wordpress_options_not_copied_from_dev=yes
-maintenance_mode=omitted
+maintenance_mode=active_before_backup
 plugins_missing_before_deployment=$(plugin_plan_array "missing_before" | paste -sd "," -)
 INFO
+  local db_archive file_archive db_sha file_sha db_size file_size_bytes prod_env prod_home prod_siteurl db_prefix
+  db_archive="$BACKUP_DIR/database.sql.gz"
+  file_archive="$BACKUP_DIR/prod-wp-content-targets.tar.gz"
+  db_sha="$(sha256_file "$db_archive")"
+  file_sha="$(sha256_file "$file_archive")"
+  db_size="$(file_size "$db_archive")"
+  file_size_bytes="$(file_size "$file_archive")"
+  prod_env="$(wp_eval_prod 'echo wp_get_environment_type();')"
+  prod_home="$(wp_prod option get home)"
+  prod_siteurl="$(wp_prod option get siteurl)"
+  db_prefix="$(wp_eval_prod 'global $wpdb; echo $wpdb->prefix;')"
+  php -r '
+    $backupDir = $argv[1];
+    $data = array(
+      "schema_version" => 1,
+      "backup_timestamp" => gmdate("c"),
+      "git" => array(
+        "deployment_source_revision" => $argv[2],
+        "server_repo_head" => $argv[2]
+      ),
+      "release" => array(
+        "target_build" => $argv[3],
+        "target_version" => $argv[4],
+        "pre_deploy_build" => $argv[5],
+        "pre_deploy_version" => $argv[6]
+      ),
+      "production" => array(
+        "path" => $argv[7],
+        "expected_home_url" => $argv[8],
+        "home_url" => $argv[9],
+        "siteurl" => $argv[10],
+        "environment" => $argv[11],
+        "db_prefix" => $argv[12]
+      ),
+      "database_backup" => array(
+        "filename" => "database.sql.gz",
+        "size" => (int)$argv[13],
+        "sha256" => $argv[14],
+        "verified" => true
+      ),
+      "file_backup" => array(
+        "filename" => "prod-wp-content-targets.tar.gz",
+        "size" => (int)$argv[15],
+        "sha256" => $argv[16],
+        "verified" => true
+      ),
+      "plugins_before_deployment" => json_decode(file_get_contents($backupDir . "/plugins-before.json"), true),
+      "theme_before_deployment" => json_decode(file_get_contents($backupDir . "/themes-before.json"), true),
+      "runtime_paths_before_deployment" => file_exists($backupDir . "/runtime-paths-before.tsv") ? file($backupDir . "/runtime-paths-before.tsv", FILE_IGNORE_NEW_LINES) : array(),
+      "deployment_state" => array(
+        "backup_complete" => true,
+        "deployment_started" => false,
+        "files_deployed" => false,
+        "plugins_activated" => false,
+        "deployment_success" => false,
+        "verification_failed" => false
+      ),
+      "external_systems" => array(
+        "sharepoint_rolled_back" => false
+      )
+    );
+    file_put_contents($backupDir . "/BACKUP-INFO.json", json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+  ' "$BACKUP_DIR" "$GIT_HEAD" "$BUILD" "$VERSION" "$PRE_DEPLOY_BUILD" "$PRE_DEPLOY_VERSION" "$PROD" "$EXPECTED_PROD_URL" "$prod_home" "$prod_siteurl" "$prod_env" "$db_prefix" "$db_size" "$db_sha" "$file_size_bytes" "$file_sha"
   json_array "production.plugins" > "$BACKUP_DIR/components-plugins.txt"
   json_array "production.themes" > "$BACKUP_DIR/components-themes.txt"
   json_array "production.mu_files" > "$BACKUP_DIR/components-mu-files.txt"
   plugin_plan_array "touched_plugins" > "$BACKUP_DIR/components-plugin-parity-touched.txt"
 }
 
+update_backup_state() {
+  local key="$1"
+  local value="$2"
+  [[ -f "$BACKUP_DIR/BACKUP-INFO.json" ]] || return 0
+  php -r '
+    $file = $argv[1];
+    $key = $argv[2];
+    $value = $argv[3] === "true";
+    $data = json_decode(file_get_contents($file), true);
+    $data["deployment_state"][$key] = $value;
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+  ' "$BACKUP_DIR/BACKUP-INFO.json" "$key" "$value"
+}
+
 deploy_files_to_prod() {
   section "PROD FILE DEPLOY"
+  DEPLOYMENT_STARTED=1
+  PROD_MUTATED=1
+  update_backup_state "deployment_started" "true"
   while IFS= read -r plugin; do rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real >/dev/null; done < <(json_array "production.plugins")
   while IFS= read -r plugin; do rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real >/dev/null; done < <(plugin_plan_array "deploy_plugins")
   while IFS= read -r theme; do rsync_component "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" real >/dev/null; done < <(json_array "production.themes")
   while IFS= read -r file; do rsync_component "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
+  FILES_DEPLOYED=1
+  update_backup_state "files_deployed" "true"
   FILE_DEPLOY_STATUS="PASS"
   echo "File deployment: PASS"
 }
@@ -716,6 +917,8 @@ activate_planned_plugins() {
     wp_prod plugin activate "$plugin"
     echo "Activated: $plugin"
   done < <(plugin_plan_array "activate_plugins")
+  PLUGINS_ACTIVATED=1
+  update_backup_state "plugins_activated" "true"
 }
 
 release_registration() {
@@ -729,6 +932,7 @@ release_registration() {
   echo "$status" | rg -q "$BUILD" || fail "PROD release status does not mention expected build."
   echo "$status" | rg -qi "production" || fail "PROD release status does not resolve to production."
   echo "$status" | rg -qi "success" || fail "PROD release deployment is not success."
+  update_backup_state "deployment_started" "true"
   RELEASE_VERIFY_STATUS="PASS"
 }
 
@@ -784,15 +988,30 @@ http_prod_smoke() {
     path="${item% *}"
     expected="${item#* }"
     status="$(curl -sS -L -o /tmp/ssf-prod-smoke.html -w '%{http_code}' "https://ssfb.se$path")"
-    [[ "$status" == "$expected" ]] || fail "HTTP smoke failed for $path. Expected $expected got $status"
-    rg -qi 'Fatal error|Parse error|critical error' /tmp/ssf-prod-smoke.html && fail "Fatal output in $path"
+    if [[ "$status" != "$expected" ]]; then
+      public_smoke_failed
+      fail "HTTP smoke failed for $path. Expected $expected got $status"
+    fi
+    if rg -qi 'Fatal error|Parse error|critical error' /tmp/ssf-prod-smoke.html; then
+      public_smoke_failed
+      fail "Fatal output in $path"
+    fi
   done
   effective="$(curl -sS -I -L -o /tmp/ssf-prod-admin.headers -w '%{url_effective}' "https://ssfb.se/wp-admin/")"
-  echo "$effective" | rg -q 'wp-login\.php' || fail "Anonymous wp-admin did not redirect to login."
+  if ! echo "$effective" | rg -q 'wp-login\.php'; then
+    public_smoke_failed
+    fail "Anonymous wp-admin did not redirect to login."
+  fi
   for path in "/ansokan-status/" "/motion-status/"; do
     headers="$(curl -sS -I -L "https://ssfb.se$path")"
-    echo "$headers" | rg -qi 'X-Robots-Tag:.*noindex' || fail "Status page missing X-Robots-Tag noindex: $path"
-    echo "$headers" | rg -qi 'Cache-Control:.*(no-store|no-cache)' || fail "Status page missing no-cache/no-store: $path"
+    if ! echo "$headers" | rg -qi 'X-Robots-Tag:.*noindex'; then
+      public_smoke_failed
+      fail "Status page missing X-Robots-Tag noindex: $path"
+    fi
+    if ! echo "$headers" | rg -qi 'Cache-Control:.*(no-store|no-cache)'; then
+      public_smoke_failed
+      fail "Status page missing no-cache/no-store: $path"
+    fi
   done
   rm -f /tmp/ssf-prod-smoke.html /tmp/ssf-prod-admin.headers
   HTTP_SMOKE_STATUS="PASS"
@@ -817,6 +1036,9 @@ error_log_post_check() {
 
 success_report() {
   section "SSF DEPLOYMENT SUCCESS"
+  local maintenance_duration
+  maintenance_duration=$((MAINTENANCE_ENDED_AT - MAINTENANCE_STARTED_AT))
+  update_backup_state "deployment_success" "true"
   cat <<REPORT
 Version:             $VERSION
 Build:               $BUILD
@@ -825,6 +1047,8 @@ Git HEAD:            $GIT_HEAD
 Tests:               $TEST_STATUS
 PHP lint:            $PHP_STATUS
 DEV:                 $DEV_SMOKE_STATUS
+Production maintenance: $MAINTENANCE_STATUS
+Maintenance duration:   ${maintenance_duration}s
 Database backup:     $DB_BACKUP_STATUS
 File backup:         $FILE_BACKUP_STATUS
 File deployment:     $FILE_DEPLOY_STATUS
@@ -842,6 +1066,8 @@ $BACKUP_DIR/prod-wp-content-targets.tar.gz
 
 PROD deployment:
 SUCCESS
+
+Public site:         OPEN
 REPORT
 }
 
@@ -859,6 +1085,9 @@ main() {
   record_error_log_baseline
   confirm_once
   create_backup_dir
+  activate_maintenance "deployment"
+  maintenance_grace_period
+  capture_pre_deploy_state
   database_backup
   file_backup
   backup_manifest
@@ -866,8 +1095,10 @@ main() {
   activate_planned_plugins
   release_registration
   verify_prod_components
+  open_site_for_public_smoke
   http_prod_smoke
   error_log_post_check
+  DEPLOY_SUCCESS=1
   success_report
 }
 
