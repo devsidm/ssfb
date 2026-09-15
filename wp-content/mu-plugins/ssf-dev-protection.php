@@ -88,18 +88,7 @@ function ssf_dev_protection_is_public_status_route(): bool
 
     $request_path = ssf_dev_protection_normalize_public_status_path($request_path);
 
-    if ('ansokan-status' === $request_path) {
-        $token = isset($_GET['token']) && is_scalar($_GET['token']) ? (string) wp_unslash($_GET['token']) : '';
-        return strlen($token) >= 24;
-    }
-
-    if ('motion-status' === $request_path) {
-        $motion = isset($_GET['motion']) && is_scalar($_GET['motion']) ? (string) wp_unslash($_GET['motion']) : '';
-        $token = isset($_GET['token']) && is_scalar($_GET['token']) ? (string) wp_unslash($_GET['token']) : '';
-        return '' !== trim($motion) && strlen($token) >= 24;
-    }
-
-    return false;
+    return in_array($request_path, array('ansokan-status', 'motion-status'), true);
 }
 
 function ssf_dev_protection_normalize_public_status_path(string $request_path): string
