@@ -40,9 +40,16 @@ $inspector = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\
 Assert-True 'Formuläret ska ha sex steg' (([regex]::Matches($form, 'data-application-step=')).Count -eq 6)
 foreach ($route in @('normal', 'small_registered', 'restoration', 'new_traditional')) { Assert-Contains "Medlemsväg $route" $profile "'$route' => array(" }
 foreach ($category in @('Kategori 1', 'Kategori 2', 'Kategori 3', 'Kategori 4')) { Assert-Contains "Synlig ansökningskategori $category" $form $category }
+foreach ($categorySubtitle in @('Seglande yrkesfartyg som uppfyller måttkraven', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg')) { Assert-Contains "Synlig kategoriunderrubrik $categorySubtitle" $form $categorySubtitle }
+Assert-Contains 'Kategori 2 beskriver måttkrav mot kategori 1' $form 'ett eller båda måttkraven i kategori 1'
 foreach ($categoryAction in @('Välj kategori 1', 'Välj kategori 2', 'Välj kategori 3', 'Välj kategori 4')) { Assert-Contains "Synlig kategoriknapp $categoryAction" $form $categoryAction }
 Assert-NotContains 'Ansökningskort ska inte rendera Läs mer' $form 'Läs mer'
+Assert-NotContains 'Ansökningskort ska inte rendera Läs mindre' $form 'Läs mindre'
 Assert-NotContains 'Ansökningskort ska inte rendera details-expandering' $form '<details>'
+Assert-Contains 'Kategorikort har separat underrubrik' $form "'subtitle' =>"
+Assert-Contains 'Kategorikort renderar underrubrik' $form 'ssf-route-card__subtitle'
+Assert-Contains 'Kategorikort har rubrikstil' $styles '.ssf-route-card__title'
+Assert-Contains 'Kategorikort har underrubrikstil' $styles '.ssf-route-card__subtitle'
 foreach ($applicationPath in @('Normalfallet', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg')) { Assert-Contains "Internt ApplicationPath-värde $applicationPath" $profile $applicationPath }
 Assert-Contains 'Gemensam Vessel Profile' $form 'SSF_Medlemsfartyg_Profile::render'
 Assert-Contains 'Sektioner identifierar gemensamma fält' $profile '$section_has_shared_fields = false;'

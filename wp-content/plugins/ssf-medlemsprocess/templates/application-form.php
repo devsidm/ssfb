@@ -10,22 +10,26 @@ $routes = class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile:
 $route_presentation = array(
     'normal' => array(
         'title' => 'Kategori 1',
-        'description' => 'Seglande yrkesfartyg som uppfyller måttkraven. Segelfartyg eller segelfartyg med hjälpmotor som används eller tidigare har använts som yrkesfartyg. Längd i huvuddäck över 12 meter och bredd minst 4 meter.',
+        'subtitle' => 'Seglande yrkesfartyg som uppfyller måttkraven',
+        'description' => 'Segelfartyg eller segelfartyg med hjälpmotor som används eller tidigare har använts som yrkesfartyg. Längd i huvuddäck över 12 meter och bredd minst 4 meter.',
         'action' => 'Välj kategori 1',
     ),
     'small_registered' => array(
         'title' => 'Kategori 2',
-        'description' => 'Mindre registrerat fartyg. Fartyget understiger ett eller båda måttkraven men är registrerat i svenskt skepps- eller fartygsregister och kan därför prövas särskilt.',
+        'subtitle' => 'Mindre registrerat fartyg',
+        'description' => 'Fartyget understiger ett eller båda måttkraven i kategori 1 men är registrerat i svenskt skepps- eller fartygsregister och kan därför prövas särskilt.',
         'action' => 'Välj kategori 2',
     ),
     'restoration' => array(
         'title' => 'Kategori 3',
-        'description' => 'Fartyg under restaurering. Fartyget är av den typ stadgarna avser och restaureras med en trovärdig plan för att bevaras eller återföras som segelfartyg.',
+        'subtitle' => 'Fartyg under restaurering',
+        'description' => 'Fartyget är av den typ stadgarna avser och restaureras med en trovärdig plan för att bevaras eller återföras som segelfartyg.',
         'action' => 'Välj kategori 3',
     ),
     'new_traditional' => array(
         'title' => 'Kategori 4',
-        'description' => 'Nybyggt traditionsfartyg. Fartyget är nybyggt men byggt och utformat enligt vedertagna traditioner för äldre seglande yrkesfartyg.',
+        'subtitle' => 'Nybyggt traditionsfartyg',
+        'description' => 'Fartyget är nybyggt men byggt och utformat enligt vedertagna traditioner för äldre seglande yrkesfartyg.',
         'action' => 'Välj kategori 4',
     ),
 );
@@ -58,11 +62,12 @@ $steps = array('Medlemsväg', 'Fartygsombud', 'Fartyget', 'Historia', 'Filer', '
             <p>Välj det alternativ som bäst beskriver fartyget. Du får rätt följdfrågor i steg 4.</p>
             <div class="ssf-route-grid">
                 <?php foreach ($routes as $route => $route_data) : ?>
-                    <?php $display = $route_presentation[$route] ?? array('title' => $route_data['title'], 'description' => $route_data['description'], 'action' => 'Välj detta'); ?>
+                    <?php $display = $route_presentation[$route] ?? array('title' => $route_data['title'], 'subtitle' => $route_data['title'], 'description' => $route_data['description'], 'action' => 'Välj detta'); ?>
                     <label class="ssf-route-card">
                         <input type="radio" name="application_route" value="<?php echo esc_attr($route); ?>" required>
                         <span class="ssf-route-card__number"><?php echo esc_html((string) $route_data['number']); ?></span>
-                        <strong><?php echo esc_html($display['title']); ?></strong>
+                        <strong class="ssf-route-card__title"><?php echo esc_html($display['title']); ?></strong>
+                        <span class="ssf-route-card__subtitle"><?php echo esc_html($display['subtitle']); ?></span>
                         <span class="ssf-route-card__description"><?php echo esc_html($display['description']); ?></span>
                         <span class="ssf-route-card__action"><?php echo esc_html($display['action']); ?></span>
                     </label>
