@@ -62,6 +62,13 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 - Do not copy DEV database or `wp-config.php` to PROD.
 - Active DEV FTP root is `public_html/dev`.
 - Known wrong FTP root: `/wp-content/...` at FTP account root. Uploading there does not affect active DEV.
+- Production server deployment uses `scripts/deploy/ssf-server-deploy.sh`.
+- The production server GitHub deploy key is read-only.
+- Do not invent another production deploy path or deploy directly from random local files.
+- Do not bypass repository tests, PHP lint, DEV verification or production backups.
+- Do not use `rsync --delete`.
+- PROD deployment requires one exact `DEPLOY` confirmation.
+- DEV remains the staging/prepared artifact; Git remains the code source of truth.
 
 ## Coding
 

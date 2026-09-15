@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "production": {
+    "plugins": [
+      "ssf-calendar",
+      "ssf-medlemsfartyg",
+      "ssf-medlemsprocess",
+      "ssf-member-portal",
+      "ssf-office365-mailer",
+      "ssf-site-customizations",
+      "ssf-stadgar"
+    ],
+    "themes": [
+      "ssf"
+    ],
+    "mu_files": [
+      "ssf-admin-navigation.php",
+      "ssf-antispam.php",
+      "ssf-email-router.php",
+      "ssf-email-template.php",
+      "ssf-organization-info.php",
+      "ssf-release-controls.php",
+      "ssf-release-manifest.json"
+    ]
+  },
+  "dev_only": {
+    "mu_files": [
+      "ssf-dev-annual-meeting-registration.php",
+      "ssf-dev-login-protection.php",
+      "ssf-dev-protection.php"
+    ]
+  },
+  "excluded": {
+    "plugins": [
+      "ssf-promotions"
+    ]
+  }
+}
