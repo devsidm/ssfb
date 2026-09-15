@@ -86,6 +86,8 @@ function ssf_dev_protection_is_public_status_route(): bool
         $request_path = trim(substr($request_path, strlen($home_path)), '/');
     }
 
+    $request_path = ssf_dev_protection_normalize_public_status_path($request_path);
+
     if ('ansokan-status' === $request_path) {
         $token = isset($_GET['token']) && is_scalar($_GET['token']) ? (string) wp_unslash($_GET['token']) : '';
         return strlen($token) >= 24;
@@ -98,6 +100,20 @@ function ssf_dev_protection_is_public_status_route(): bool
     }
 
     return false;
+}
+
+function ssf_dev_protection_normalize_public_status_path(string $request_path): string
+{
+    if (in_array($request_path, array('ansokan-status', 'motion-status'), true)) {
+        return $request_path;
+    }
+
+    $parts = explode('/', trim($request_path, '/'));
+    if (count($parts) >= 2 && in_array($parts[1], array('ansokan-status', 'motion-status'), true)) {
+        return implode('/', array_slice($parts, 1));
+    }
+
+    return $request_path;
 }
 
 function ssf_dev_protection_require_login(): void
