@@ -40,14 +40,24 @@ section() {
 }
 
 cleanup() {
-  if [[ "$ROLLBACK_SUCCESS" == "1" && "$MAINTENANCE_ACTIVE" == "1" ]]; then
-    deactivate_maintenance >/dev/null 2>&1 || true
-  elif [[ "$ROLLBACK_MUTATED" == "0" && "$MAINTENANCE_ACTIVE" == "1" ]]; then
+  local status=$?
+  if [[ "$status" == "0" && "$ROLLBACK_SUCCESS" == "1" ]]; then
+    if [[ -e "$PROD/.maintenance" ]]; then
+      echo "Internal state error: successful rollback left .maintenance present." >&2
+      echo "Final production maintenance state: ACTIVE" >&2
+      exit 1
+    fi
+    MAINTENANCE_ACTIVE=0
+    echo "Final production maintenance state: INACTIVE" >&2
+    return
+  fi
+  if [[ "$ROLLBACK_MUTATED" == "0" && "$MAINTENANCE_ACTIVE" == "1" ]]; then
     deactivate_maintenance >/dev/null 2>&1 || true
   fi
-  if [[ "$MAINTENANCE_ACTIVE" == "1" ]]; then
+  if [[ -e "$PROD/.maintenance" ]]; then
     echo "Final production maintenance state: ACTIVE" >&2
   else
+    MAINTENANCE_ACTIVE=0
     echo "Final production maintenance state: INACTIVE" >&2
   fi
 }
@@ -470,6 +480,14 @@ error_log_post_check() {
   fi
 }
 
+ensure_success_maintenance_open() {
+  [[ ! -e "$PROD/.maintenance" ]] || {
+    echo "FAILURE: Successful rollback cannot finish with .maintenance present." >&2
+    exit 1
+  }
+  MAINTENANCE_ACTIVE=0
+}
+
 success_report() {
   local info restored_build restored_db
   info="$(backup_info "$SELECTED_BACKUP")"
@@ -526,6 +544,7 @@ main() {
   public_smoke
   error_log_post_check
   ROLLBACK_SUCCESS=1
+  ensure_success_maintenance_open
   success_report
 }
 

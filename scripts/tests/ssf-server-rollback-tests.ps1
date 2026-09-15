@@ -16,6 +16,12 @@ function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { F
 function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
 function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
 function Test-MaintenanceMarker([string]$Marker) { return $Marker.Trim() -match '^\<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?\>$' }
+function Invoke-RollbackCleanupModel([bool]$RollbackMutated, [bool]$RollbackSuccess, [bool]$ActualMarker, [int]$ExitStatus) {
+    if ($ExitStatus -eq 0 -and $RollbackSuccess) { return $(if ($ActualMarker) { 'ERROR_ACTIVE' } else { 'INACTIVE' }) }
+    if ($ActualMarker) { return 'ACTIVE' }
+    if ($RollbackMutated) { return 'ACTIVE' }
+    return 'INACTIVE'
+}
 
 $script = Read-RepoFile 'scripts\deploy\ssf-server-rollback.sh'
 $deploy = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
@@ -32,6 +38,17 @@ Assert-Contains 'rollback maintenance marker helper is used after create' $scrip
 Assert-NotContains 'rollback maintenance validation must not use fragile PHP preg_match' $script 'preg_match("/^<\?php\s+\$upgrading'
 Assert-NotContains 'rollback maintenance marker must not call time' $script '$upgrading = time()'
 Assert-Contains 'rollback maintenance deactivate verifies inactive' $script 'verify_maintenance_inactive'
+Assert-Contains 'rollback cleanup reads exit status' $script 'local status=$?'
+Assert-Contains 'rollback cleanup success branch uses ROLLBACK_SUCCESS' $script '[[ "$status" == "0" && "$ROLLBACK_SUCCESS" == "1" ]]'
+Assert-Contains 'rollback cleanup final state uses actual marker file' $script '[[ -e "$PROD/.maintenance" ]]'
+Assert-Contains 'successful rollback cannot finish with maintenance marker' $script 'Successful rollback cannot finish with .maintenance present.'
+Assert-Contains 'rollback success path ensures maintenance open' $script 'ensure_success_maintenance_open'
+Assert-True 'rollback success cleanup does not activate maintenance' ((Invoke-RollbackCleanupModel $true $true $false 0) -eq 'INACTIVE')
+Assert-True 'rollback repeated success cleanup stays open' ((Invoke-RollbackCleanupModel $true $true $false 0) -eq 'INACTIVE')
+Assert-True 'rollback success with marker is internal error' ((Invoke-RollbackCleanupModel $true $true $true 0) -eq 'ERROR_ACTIVE')
+Assert-True 'rollback failure after mutation keeps maintenance active' ((Invoke-RollbackCleanupModel $true $false $false 1) -eq 'ACTIVE')
+Assert-True 'rollback failure before mutation keeps maintenance inactive' ((Invoke-RollbackCleanupModel $false $false $false 1) -eq 'INACTIVE')
+Assert-True 'rollback public smoke failure keeps maintenance active' ((Invoke-RollbackCleanupModel $true $false $true 1) -eq 'ACTIVE')
 Assert-True 'rollback valid numeric maintenance marker passes' (Test-MaintenanceMarker '<?php $upgrading = 1789501000; ?>')
 Assert-True 'rollback time maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = time(); ?>'))
 Assert-True 'rollback non-numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = abc; ?>'))

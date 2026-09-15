@@ -18,6 +18,12 @@ function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { F
 function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
 function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
 function Test-MaintenanceMarker([string]$Marker) { return $Marker.Trim() -match '^\<\?php\s+\$upgrading\s*=\s*[0-9]+\s*;\s*\?\>$' }
+function Invoke-DeployCleanupModel([bool]$ProdMutated, [bool]$DeploySuccess, [bool]$ActualMarker, [int]$ExitStatus) {
+    if ($ExitStatus -eq 0 -and $DeploySuccess) { return $(if ($ActualMarker) { 'ERROR_ACTIVE' } else { 'INACTIVE' }) }
+    if ($ActualMarker) { return 'ACTIVE' }
+    if ($ProdMutated) { return 'ACTIVE' }
+    return 'INACTIVE'
+}
 
 $script = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
 $doc = Read-RepoFile 'docs\SERVER-DEPLOYMENT.md'
@@ -57,6 +63,18 @@ Assert-Contains 'failure handler keeps mutated site paused' $script 'PROD_MUTATE
 Assert-True 'failure before PROD mutation removes maintenance' ($script.Contains('elif [[ "$PROD_MUTATED" == "1" ]]; then') -and $script.Contains("else`n    deactivate_maintenance"))
 Assert-Contains 'public smoke failure relocks site' $script 'public_smoke_failed'
 Assert-NotContains 'no naive trap always deactivates maintenance' $script 'trap cleanup EXIT;'
+Assert-Contains 'cleanup reads exit status' $script 'local status=$?'
+Assert-Contains 'cleanup success branch uses DEPLOY_SUCCESS' $script '[[ "$status" == "0" && "$DEPLOY_SUCCESS" == "1" ]]'
+Assert-Contains 'cleanup final state uses actual marker file' $script '[[ -e "$PROD/.maintenance" ]]'
+Assert-Contains 'successful deploy cannot finish with maintenance marker' $script 'Successful deployment cannot finish with .maintenance present.'
+Assert-Contains 'success path ensures maintenance open' $script 'ensure_success_maintenance_open'
+Assert-Contains 'success path records inactive shell state' $script 'MAINTENANCE_ACTIVE=0'
+Assert-True 'deploy success cleanup does not activate maintenance' ((Invoke-DeployCleanupModel $true $true $false 0) -eq 'INACTIVE')
+Assert-True 'deploy repeated success cleanup stays open' ((Invoke-DeployCleanupModel $true $true $false 0) -eq 'INACTIVE')
+Assert-True 'deploy success with marker is internal error' ((Invoke-DeployCleanupModel $true $true $true 0) -eq 'ERROR_ACTIVE')
+Assert-True 'deploy failure after mutation keeps maintenance active' ((Invoke-DeployCleanupModel $true $false $false 1) -eq 'ACTIVE')
+Assert-True 'deploy failure before mutation keeps maintenance inactive' ((Invoke-DeployCleanupModel $false $false $false 1) -eq 'INACTIVE')
+Assert-True 'deploy public smoke failure keeps maintenance active' ((Invoke-DeployCleanupModel $true $false $true 1) -eq 'ACTIVE')
 Assert-True 'valid numeric maintenance marker passes' (Test-MaintenanceMarker '<?php $upgrading = 1789501000; ?>')
 Assert-True 'time maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = time(); ?>'))
 Assert-True 'non-numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = abc; ?>'))

@@ -99,10 +99,22 @@ handle_failure_maintenance() {
 }
 
 cleanup() {
+  local status=$?
+  if [[ "$status" == "0" && "$DEPLOY_SUCCESS" == "1" ]]; then
+    if [[ -e "$PROD/.maintenance" ]]; then
+      echo "Internal state error: successful deployment left .maintenance present." >&2
+      echo "Final production maintenance state: ACTIVE" >&2
+      exit 1
+    fi
+    MAINTENANCE_ACTIVE=0
+    echo "Final production maintenance state: INACTIVE" >&2
+    return
+  fi
   handle_failure_maintenance
-  if [[ "$MAINTENANCE_ACTIVE" == "1" ]]; then
+  if [[ -e "$PROD/.maintenance" ]]; then
     echo "Final production maintenance state: ACTIVE" >&2
   else
+    MAINTENANCE_ACTIVE=0
     echo "Final production maintenance state: INACTIVE" >&2
   fi
 }
@@ -1130,6 +1142,14 @@ error_log_post_check() {
   echo "ERROR LOG: PASS"
 }
 
+ensure_success_maintenance_open() {
+  [[ ! -e "$PROD/.maintenance" ]] || {
+    echo "FAILURE: Successful deployment cannot finish with .maintenance present." >&2
+    exit 1
+  }
+  MAINTENANCE_ACTIVE=0
+}
+
 success_report() {
   section "SSF DEPLOYMENT SUCCESS"
   local maintenance_duration
@@ -1196,6 +1216,7 @@ main() {
   http_prod_smoke
   error_log_post_check
   DEPLOY_SUCCESS=1
+  ensure_success_maintenance_open
   success_report
 }
 
