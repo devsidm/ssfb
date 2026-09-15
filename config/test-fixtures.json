@@ -1,0 +1,110 @@
+{
+  "config_version": 1,
+  "note": "Known state is inventory data and must be verified live before mutation.",
+  "reuse_policies": [
+    "SAFE_TO_REUSE_CAUTIOUSLY",
+    "DO_NOT_REUSE_FOR_ASPIRANT_APPROVAL",
+    "DO_NOT_REUSE_FOR_REJECTION",
+    "DO_NOT_REUSE_FOR_FRESH_FULL_FLOW",
+    "DO_NOT_REUSE_FOR_NEW_ASPIRANT_DECISION",
+    "UNKNOWN"
+  ],
+  "fixtures": [
+    {
+      "type": "membership_application",
+      "reference": "SSF-2026-0025",
+      "name": "TEST-E2E-NYBYGGT 20260914-230044",
+      "wp_id": 355,
+      "sharepoint_list_item_id": "49",
+      "sharepoint_drive_item_id": "01J2UCK7UMG35HHPAGW5BKZCX36PD2DG6X",
+      "known_state": "under_review",
+      "reuse_policy": "SAFE_TO_REUSE_CAUTIOUSLY",
+      "last_verified": "2026-09-15",
+      "notes": "Used for membership SharePoint to WordPress status sync."
+    },
+    {
+      "type": "membership_application",
+      "reference": "SSF-2026-0020",
+      "name": "DEV TEST 3 Fartyg under restaurering 20260914-094122",
+      "wp_id": 326,
+      "sharepoint_list_item_id": "37",
+      "sharepoint_drive_item_id": "01J2UCK7TGCFXN7MOKC5D2KFVMJOX6SLMN",
+      "known_state": "under_review",
+      "reuse_policy": "SAFE_TO_REUSE_CAUTIOUSLY",
+      "last_verified": "2026-09-15",
+      "notes": "Used for WordPress portal to SharePoint status sync."
+    },
+    {
+      "type": "membership_application",
+      "reference": "SSF-2026-0024",
+      "name": "TEST-E2E-RESTAURERING 20260914-230044",
+      "wp_id": 351,
+      "sharepoint_list_item_id": "57",
+      "sharepoint_drive_item_id": "01J2UCK7X2YYNUODSLH5DKIVJZPHOLK2YF",
+      "known_state": "approved_aspirant",
+      "reuse_policy": "DO_NOT_REUSE_FOR_ASPIRANT_APPROVAL",
+      "last_verified": "2026-09-15",
+      "notes": "Used for live aspirant approval idempotency test."
+    },
+    {
+      "type": "membership_application",
+      "reference": "SSF-2026-0023",
+      "name": "TEST-E2E-MINDRE 20260914-230044",
+      "wp_id": 347,
+      "sharepoint_list_item_id": "53",
+      "sharepoint_drive_item_id": "01J2UCK7TVLD4W3RHNMBGKFORZQSOZTIQU",
+      "known_state": "rejected",
+      "reuse_policy": "DO_NOT_REUSE_FOR_REJECTION",
+      "last_verified": "2026-09-15",
+      "notes": "Used for live rejection path."
+    },
+    {
+      "type": "membership_application",
+      "reference": "SSF-2026-0022",
+      "name": "TEST-E2E-NORMAL 20260914-230044",
+      "wp_id": 343,
+      "sharepoint_list_item_id": "45",
+      "sharepoint_drive_item_id": "01J2UCK7TH4FZUS7KE2RE2WMGFE6DNMCDS",
+      "known_state": "approved_aspirant",
+      "reuse_policy": "DO_NOT_REUSE_FOR_NEW_ASPIRANT_DECISION",
+      "last_verified": "2026-09-15",
+      "notes": "Already approved as aspirant; do not use for fresh decision tests."
+    },
+    {
+      "type": "motion",
+      "reference": "2026-004",
+      "name": "DEV TEST motion 20260914-095511",
+      "wp_id": 334,
+      "sharepoint_list_item_id": "46",
+      "sharepoint_drive_item_id": "01BDNZNBYC42NQ47R5G5EIHNINFAI3EL3B",
+      "known_state": "begar_komplettering",
+      "reuse_policy": "SAFE_TO_REUSE_CAUTIOUSLY",
+      "last_verified": "2026-09-15",
+      "notes": "Used for motion WordPress to SharePoint status sync."
+    },
+    {
+      "type": "motion",
+      "reference": "2026-002",
+      "name": "dafdf",
+      "wp_id": 221,
+      "sharepoint_list_item_id": "11",
+      "sharepoint_drive_item_id": "01BDNZNB46LQ7YEJL4UJDKPAVCNM2JXCB5",
+      "known_state": "under_behandling",
+      "reuse_policy": "SAFE_TO_REUSE_CAUTIOUSLY",
+      "last_verified": "2026-09-15",
+      "notes": "Used for motion SharePoint to WordPress status sync."
+    },
+    {
+      "type": "motion",
+      "reference": "2026-005",
+      "name": "TEST-E2E-MOTION 20260914-230722",
+      "wp_id": 359,
+      "sharepoint_list_item_id": "47",
+      "sharepoint_drive_item_id": "01BDNZNBZ3WUUOCKXSCZF2KMCNST5C6C6K",
+      "known_state": "avslutad",
+      "reuse_policy": "DO_NOT_REUSE_FOR_FRESH_FULL_FLOW",
+      "last_verified": "2026-09-15",
+      "notes": "Terminal state."
+    }
+  ]
+}

@@ -21,6 +21,18 @@ build/
 .env
 .env.*
 wp-config.php
+config/ssf-dev-test.env
+*.secret.env
+.ssf/
+
+# Test harness runtime artifacts
+artifacts/dev-preflight.json
+artifacts/*.cookie
+artifacts/*login*.html
+artifacts/*harness*.json
+ssf-wp-*.cookie
+ssf-login-*.html
+ssf-admin-*.html
 
 # Logs
 *.log

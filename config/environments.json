@@ -1,0 +1,174 @@
+{
+  "config_version": 1,
+  "source": "Verified SSF DEV access and test inventory",
+  "source_of_truth": {
+    "static_environment_identifiers": "config/environments.json",
+    "live_wordpress_configuration": "resolved WordPress runtime configuration; currently option ssf_member_portal_sharepoint_destinations",
+    "release_build": "wp-content/mu-plugins/ssf-release-manifest.json",
+    "credentials": "process environment, explicit SSF_SECRETS_FILE, or user-private ~/.ssf/ssf-dev-test.env",
+    "test_entity_inventory": "config/test-fixtures.json",
+    "codex_behavior": "AGENTS.md"
+  },
+  "dev": {
+    "name": "DEV",
+    "wordpress": {
+      "url": "https://ssfb.se/dev",
+      "login_url": "https://ssfb.se/dev/wp-login.php",
+      "wp_admin_url": "https://ssfb.se/dev/wp-admin/",
+      "membership_handler_url": "https://ssfb.se/dev/medlemskap/handlaggning/",
+      "public_status_routes": [
+        "/dev/ansokan-status/",
+        "/dev/motion-status/"
+      ],
+      "protected_route_examples": [
+        "/dev/wp-admin/",
+        "/dev/arbetsportal/",
+        "/dev/ansokan/"
+      ],
+      "verified_account_user": "ssfhosting",
+      "verified_account_email": "ssfhosting@gmail.com",
+      "login_transport": "curl.exe WordPress form login with cookie jar",
+      "application_password_verified": false
+    },
+    "filesystem": {
+      "active_wordpress_root": "public_html/dev",
+      "active_mu_plugins_path": "public_html/dev/wp-content/mu-plugins/",
+      "active_plugins_path": "public_html/dev/wp-content/plugins/",
+      "active_theme_path": "public_html/dev/wp-content/themes/ssf",
+      "live_release_manifest_path": "public_html/dev/wp-content/mu-plugins/ssf-release-manifest.json",
+      "repository_release_manifest_path": "wp-content/mu-plugins/ssf-release-manifest.json",
+      "known_wrong_ftp_root": "wp-content/ at FTP account root"
+    },
+    "runtime": {
+      "environment_type": "development",
+      "authoritative_sharepoint_option": "ssf_member_portal_sharepoint_destinations",
+      "wp_config_graph_overrides_last_seen": false,
+      "release_manifest": "wp-content/mu-plugins/ssf-release-manifest.json"
+    },
+    "dev_protection": {
+      "mu_plugins": [
+        "wp-content/mu-plugins/ssf-dev-protection.php",
+        "wp-content/mu-plugins/ssf-dev-login-protection.php"
+      ],
+      "anonymous_normal_pages_redirect_to_login": true,
+      "status_routes_bypass_blanket_login": true,
+      "subdirectory_normalization_required": true,
+      "noindex": true,
+      "status_routes_nocache": true,
+      "invalid_or_missing_status_token_note": "Status controllers currently answer without wp-login redirect; future P1 may review HTTP 200 versus 403/404."
+    },
+    "membership_sharepoint": {
+      "site_url": "https://tradtionsfartyg.sharepoint.com/sites/medlemsgruppen-test",
+      "site_id": "tradtionsfartyg.sharepoint.com,ef534854-7034-42c1-b857-6dfe215b87a9,c24521ca-649d-4eea-9b23-85acf504639d",
+      "drive_name": "Dokument",
+      "drive_id": "b!VEhT7zRwwUK4V23-IVuHqcohRcKdZOpOmyOFrPUEY52CivieX6-5SpeWnmBNM-0-",
+      "list_id": "9ef88a82-af5f-4ab9-9796-9e604d33ed3e",
+      "general_folder_id": "01J2UCK7WXSPFHKDML5BBJOBKH2MHSVILP",
+      "applications_folder_id": "01J2UCK7UJSK3YX334D5EY5VJZUNC3K3LQ",
+      "expected_path": "General/Medlemsansökningar",
+      "prefer_drive_item_ids": true,
+      "canonical_metadata": [
+        "ApplicationNumber",
+        "VesselName",
+        "ApplicationPath",
+        "ApplicationStatus",
+        "MembershipStatus",
+        "ReceivedDate",
+        "DecisionDate",
+        "AspirantStartDate",
+        "AspirantReviewDate",
+        "WordPressApplicationID"
+      ],
+      "additional_mapped_fields": [
+        "Fartygsombud",
+        "ExternStatuskommentar"
+      ],
+      "application_path_choices": [
+        "Normalfallet",
+        "Mindre registrerat fartyg",
+        "Fartyg under restaurering",
+        "Nybyggt traditionsfartyg"
+      ],
+      "application_status_choices": [
+        "Inkommen",
+        "Under granskning",
+        "Begär komplettering",
+        "Väntar på komplettering",
+        "Inspektion ska bokas",
+        "Inspektion bokad",
+        "Under slutbedömning",
+        "Godkänd som aspirant",
+        "Avslagen"
+      ],
+      "membership_status_choices": [
+        "Ej medlem",
+        "Aspirant",
+        "Uppföljning",
+        "Medlemsfartyg",
+        "Avslutad"
+      ],
+      "legacy_fields_not_authoritative": [
+        "Ansokningsnummer",
+        "Status",
+        "Fartyg",
+        "InkommenDatum",
+        "Ansokningsvag"
+      ]
+    },
+    "motions_sharepoint": {
+      "site_url": "https://tradtionsfartyg.sharepoint.com/sites/styrelsen-test",
+      "site_id": "tradtionsfartyg.sharepoint.com,1affd65e-e865-4a97-89c6-e733a413769f,c24521ca-649d-4eea-9b23-85acf504639d",
+      "drive_name": "Dokument",
+      "drive_id": "b!Xtb_GmXol0qJxuczpBN2n8ohRcKdZOpOmyOFrPUEY52CivieX6-5SpeWnmBNM-0-",
+      "list_id": "9ef88a82-af5f-4ab9-9796-9e604d33ed3e",
+      "general_folder_id": "01BDNZNBZPEAUAEZJNDJC2NOD6P6PJUGDM",
+      "annual_meetings_folder_id": "01BDNZNB7V3V7RCYXYMRA3FB2P2NX7TFB2",
+      "expected_path": "General/Årsmöten",
+      "status_column_internal_name": "Status",
+      "status_column_id": "d5574ae8-8bd8-4be2-a8f9-460b1ce2cb96",
+      "wordpress_motion_id_field": "WordPressMotionID",
+      "status_choices": [
+        "Inkommen",
+        "Under behandling",
+        "Begär komplettering",
+        "Färdigbehandlad av styrelsen",
+        "Till årsmötet",
+        "Beslutad på årsmötet",
+        "Avslutad"
+      ]
+    },
+    "graph": {
+      "runtime_authentication_type": "app-only",
+      "permission_model": "Sites.Selected",
+      "site_specific_role": "write",
+      "runtime_must_not_repair_schema": true,
+      "schema_work_requires_manual_admin_process": true
+    },
+    "email": {
+      "central_renderer": "wp-content/mu-plugins/ssf-email-template.php",
+      "router": "wp-content/mu-plugins/ssf-email-router.php",
+      "expected_from": "Sveriges Segelfartygsförbund <system@ssfb.se>",
+      "membership_contact_email": "medlem@ssfb.se",
+      "annual_meeting_contact_email": "styrelsen@ssfb.se",
+      "mailbox_delivery_requires_human_confirmation": true
+    },
+    "safety": {
+      "live_tests_allowed": true,
+      "requires_preflight": true,
+      "prod_requests_allowed": false,
+      "sharepoint_schema_changes_allowed": false,
+      "runtime_wp_option_changes_allowed_by_preflight": false
+    }
+  },
+  "prod": {
+    "name": "PROD",
+    "wordpress": {
+      "url": "https://ssfb.se"
+    },
+    "safety": {
+      "live_tests_allowed": false,
+      "requires_explicit_approval": true,
+      "prod_deploy_allowed_by_default": false
+    }
+  }
+}
