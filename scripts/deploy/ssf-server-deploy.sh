@@ -54,6 +54,15 @@ PLUGIN_PLAN=""
 fail() {
   echo "FAILURE: $*" >&2
   VERIFICATION_FAILED=1
+  if [[ "$DEPLOYMENT_STARTED" == "1" && "$DEPLOY_SUCCESS" != "1" ]]; then
+    if [[ "$RELEASE_VERIFY_STATUS" != "PASS" || "$PLUGIN_VERIFY_STATUS" != "PASS" || "$THEME_VERIFY_STATUS" != "PASS" || "$HTTP_SMOKE_STATUS" != "PASS" || "$ERROR_LOG_STATUS" != "PASS" ]]; then
+      mark_backup_result "verification_failed"
+    elif [[ "$FILES_DEPLOYED" == "1" ]]; then
+      mark_backup_result "deployment_failed_after_files"
+    else
+      mark_backup_result "deployment_failed_before_files"
+    fi
+  fi
   handle_failure_maintenance
   if [[ -n "$BACKUP_DIR" ]]; then
     echo "Backup directory: $BACKUP_DIR" >&2
@@ -230,6 +239,15 @@ public_smoke_failed() {
 capture_pre_deploy_state() {
   PRE_DEPLOY_BUILD="$(wp_eval_prod 'if (class_exists("SSF_Release_Manager")) { $status = SSF_Release_Manager::status(); echo (string)($status["build"] ?? ""); }' 2>/dev/null || true)"
   PRE_DEPLOY_VERSION="$(wp_eval_prod 'if (class_exists("SSF_Release_Manager")) { $status = SSF_Release_Manager::status(); echo (string)($status["version"] ?? ""); }' 2>/dev/null || true)"
+  if [[ -z "$PRE_DEPLOY_BUILD" || -z "$PRE_DEPLOY_VERSION" ]]; then
+    local prod_manifest="$PROD/wp-content/mu-plugins/ssf-release-manifest.json"
+    if [[ -f "$prod_manifest" ]]; then
+      [[ -n "$PRE_DEPLOY_BUILD" ]] || PRE_DEPLOY_BUILD="$(manifest_field "$prod_manifest" "build")"
+      [[ -n "$PRE_DEPLOY_VERSION" ]] || PRE_DEPLOY_VERSION="$(manifest_field "$prod_manifest" "version")"
+    fi
+  fi
+  [[ -n "$PRE_DEPLOY_BUILD" ]] || fail "Unable to determine current PROD release build before deployment."
+  [[ -n "$PRE_DEPLOY_VERSION" ]] || fail "Unable to determine current PROD release version before deployment."
   wp_prod plugin list --format=json --fields=name,status,version > "$BACKUP_DIR/plugins-before.json"
   wp_prod theme list --format=json --fields=name,status,version > "$BACKUP_DIR/themes-before.json"
   {
@@ -913,7 +931,8 @@ INFO
         "files_deployed" => false,
         "plugins_activated" => false,
         "deployment_success" => false,
-        "verification_failed" => false
+        "verification_failed" => false,
+        "result" => "backup_complete"
       ),
       "external_systems" => array(
         "sharepoint_rolled_back" => false
@@ -939,6 +958,31 @@ update_backup_state() {
     $data["deployment_state"][$key] = $value;
     file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
   ' "$BACKUP_DIR/BACKUP-INFO.json" "$key" "$value"
+}
+
+mark_backup_result() {
+  local result="$1"
+  [[ -f "$BACKUP_DIR/BACKUP-INFO.json" ]] || return 0
+  php -r '
+    $file = $argv[1];
+    $result = $argv[2];
+    $data = json_decode(file_get_contents($file), true);
+    if (!isset($data["deployment_state"]) || !is_array($data["deployment_state"])) {
+      $data["deployment_state"] = array();
+    }
+    $data["deployment_state"]["result"] = $result;
+    if ($result === "success") {
+      $data["deployment_state"]["deployment_success"] = true;
+      $data["deployment_state"]["verification_failed"] = false;
+    } elseif ($result === "verification_failed") {
+      $data["deployment_state"]["deployment_success"] = false;
+      $data["deployment_state"]["verification_failed"] = true;
+    } else {
+      $data["deployment_state"]["deployment_success"] = false;
+      $data["deployment_state"]["verification_failed"] = false;
+    }
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+  ' "$BACKUP_DIR/BACKUP-INFO.json" "$result"
 }
 
 deploy_files_to_prod() {
@@ -1084,7 +1128,7 @@ success_report() {
   section "SSF DEPLOYMENT SUCCESS"
   local maintenance_duration
   maintenance_duration=$((MAINTENANCE_ENDED_AT - MAINTENANCE_STARTED_AT))
-  update_backup_state "deployment_success" "true"
+  mark_backup_result "success"
   cat <<REPORT
 Version:             $VERSION
 Build:               $BUILD

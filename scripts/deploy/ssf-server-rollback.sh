@@ -74,6 +74,18 @@ json_value() {
   ' "$file" "$path"
 }
 
+json_value_or_unknown() {
+  local file="$1"
+  local path="$2"
+  local value
+  value="$(json_value "$file" "$path" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    echo "$value"
+  else
+    echo "UNKNOWN"
+  fi
+}
+
 sha256_file() {
   sha256sum "$1" | awk '{print $1}'
 }
@@ -136,12 +148,12 @@ list_backups() {
       local info
       info="$(backup_info "$backup")"
       echo "$backup"
-      echo "  Deployment target: $(json_value "$info" release.target_build)"
-      echo "  Previous build:     $(json_value "$info" release.pre_deploy_build)"
-      echo "  Created:            $(json_value "$info" backup_timestamp)"
+      echo "  Deployment target: $(json_value_or_unknown "$info" release.target_build)"
+      echo "  Previous build:     $(json_value_or_unknown "$info" release.pre_deploy_build)"
+      echo "  Created:            $(json_value_or_unknown "$info" backup_timestamp)"
       echo "  Files:              VERIFIED"
       echo "  Database:           VERIFIED"
-      echo "  Deployment result:  $(json_value "$info" deployment_state.deployment_success)"
+      echo "  Deployment result:  $(json_value_or_unknown "$info" deployment_state.result)"
     fi
   done
   section "LEGACY / NOT AUTOMATICALLY ELIGIBLE"
