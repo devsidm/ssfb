@@ -76,7 +76,7 @@ final class SSF_Medlemsprocess_Plugin
     private static function install_pages(): void
     {
         $pages = array(
-            'ansokan' => array('Ansökan', '[ssf_application_form]'),
+            'ansokan' => array('Ansökan fartyg', '[ssf_application_form]'),
             'ansokan-status' => array('Ansökan status', '[ssf_application_status]'),
             'mina-inspektioner' => array('Mina inspektioner', '[ssf_inspector_portal]'),
         );
@@ -92,6 +92,12 @@ final class SSF_Medlemsprocess_Plugin
                 ));
             } else {
                 $page_id = $existing->ID;
+                if ('ansokan' === $slug && $page[0] !== $existing->post_title) {
+                    wp_update_post(array(
+                        'ID' => $page_id,
+                        'post_title' => $page[0],
+                    ));
+                }
             }
             update_option('ssf_medlemsprocess_' . str_replace('-', '_', $slug) . '_page_id', (int) $page_id, false);
         }

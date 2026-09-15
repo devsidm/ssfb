@@ -38,6 +38,10 @@ $destinations = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugi
 $inspector = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-inspector.php')
 
 Assert-True 'Formuläret ska ha sex steg' (([regex]::Matches($form, 'data-application-step=')).Count -eq 6)
+Assert-Contains 'Ansökningsformuläret har egen H1' $form '<h1>Ansök om medlemskap för fartyg</h1>'
+Assert-NotContains 'Ansökningsformuläret ska inte rendera SSF-eyebrow' $form 'ssf-process-eyebrow'
+Assert-Contains 'Ansökans sidtitel uppdateras' $plugin "'ansokan' => array('Ansökan fartyg', '[ssf_application_form]')"
+Assert-Contains 'Temat döljer sidtitel när ansökningsformuläret har egen H1' (Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\themes\ssf\index.php')) "has_shortcode(`$page_content, 'ssf_application_form')"
 foreach ($route in @('normal', 'small_registered', 'restoration', 'new_traditional')) { Assert-Contains "Medlemsväg $route" $profile "'$route' => array(" }
 foreach ($category in @('Kategori 1', 'Kategori 2', 'Kategori 3', 'Kategori 4')) { Assert-Contains "Synlig ansökningskategori $category" $form $category }
 foreach ($categorySubtitle in @('Seglande yrkesfartyg som uppfyller måttkraven', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg')) { Assert-Contains "Synlig kategoriunderrubrik $categorySubtitle" $form $categorySubtitle }

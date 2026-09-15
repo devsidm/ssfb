@@ -3,7 +3,6 @@ if (! defined('ABSPATH')) { exit; }
 $application_content = wp_parse_args((array) ($application_content ?? array()), array(
     'image_id' => 0,
     'image_alt' => 'Traditionellt segelfartyg',
-    'eyebrow' => 'Sveriges Segelfartygsförbund',
 ));
 $image_url = function_exists('ssf_site_content_image_url') ? ssf_site_content_image_url((int) $application_content['image_id']) : '';
 $routes = class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::routes() : array();
@@ -39,7 +38,6 @@ $steps = array('Medlemsväg', 'Fartygsombud', 'Fartyget', 'Historia', 'Filer', '
 <section class="ssf-process-shell">
     <?php if ($image_url) : ?><figure class="ssf-process-page-image"><img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($application_content['image_alt']); ?>"></figure><?php endif; ?>
     <div class="ssf-process-heading">
-        <p class="ssf-process-eyebrow"><?php echo esc_html($application_content['eyebrow']); ?></p>
         <h1>Ansök om medlemskap för fartyg</h1>
         <p>Välj först den medlemsväg som beskriver fartyget bäst. Uppgifterna sparas som en strukturerad fartygsprofil och används i SSF:s medlemsprövning.</p>
     </div>
