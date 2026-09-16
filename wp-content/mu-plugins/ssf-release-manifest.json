@@ -1,12 +1,12 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.13.3",
-    "build":  "20260916.7",
-    "built_at":  "2026-09-16T19:12:13.7773878Z",
+    "version":  "0.13.4",
+    "build":  "20260916.8",
+    "built_at":  "2026-09-16T19:28:28.6974142Z",
     "source":  "codex",
-    "source_revision":  "51a5a4ea5f85af19ccfc89806e0cf31c3085dfbb",
-    "description":  "Resolve membership archive target from SharePoint path",
+    "source_revision":  "981e74d611dea59c362c94a8c84a9f463ec5df31",
+    "description":  "Simplify SharePoint archive migration admin flow",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "ssf-medlemsprocess"
