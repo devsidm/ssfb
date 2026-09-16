@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     function fallbackCopy(value) {
         var textarea = document.createElement('textarea');
         textarea.value = value;

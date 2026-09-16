@@ -1,12 +1,12 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$pluginPath = Join-Path $repo 'wp-content\plugins\ssf-microsoft-login\ssf-microsoft-login.php'
-$jsPath = Join-Path $repo 'wp-content\plugins\ssf-microsoft-login\assets\js\admin.js'
+$pluginPath = Join-Path $repo 'wp-content\plugins\microsoft-id-login\microsoft-id-login.php'
+$jsPath = Join-Path $repo 'wp-content\plugins\microsoft-id-login\assets\js\admin.js'
 $docPath = Join-Path $repo 'docs\MICROSOFT-365-LOGIN-DEV.md'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $failures = [Collections.Generic.List[string]]::new()
@@ -22,10 +22,10 @@ $doc = Get-Content -Raw -Encoding UTF8 -LiteralPath $docPath
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
-Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: SSF Microsoft 365 Login'
-Assert-Contains 'Initial plugin version' $plugin 'Version: 0.1.0'
+Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.2.0'
 
-Assert-Contains 'Disabled outside development' $plugin "'development' === wp_get_environment_type()"
+Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Tenant constant exists' $plugin "SSF_M365_LOGIN_TENANT_ID"
 Assert-Contains 'Client ID constant exists' $plugin "SSF_M365_LOGIN_CLIENT_ID"
@@ -93,7 +93,8 @@ Assert-Contains 'Callback based on home_url' $plugin "home_url('/' . self::CALLB
 Assert-Contains 'Rewrite flushed on activation' $plugin 'register_activation_hook'
 Assert-NotContains 'No hardcoded dev path in plugin' $plugin 'ssfb.se/dev'
 
-Assert-Contains 'Admin diagnostics page' $plugin 'Microsoft-inloggning'
+Assert-Contains 'Admin diagnostics page' $plugin 'Microsoft ID Login'
+Assert-Contains 'Admin subtitle exists' $plugin 'Microsoft 365 / Entra ID-inloggning'
 Assert-Contains 'Metadata diagnostic' $plugin 'OpenID'
 Assert-Contains 'JWKS diagnostic' $plugin 'JWKS'
 Assert-Contains 'Secret displayed as configured only' $plugin "Client Secret"
@@ -116,15 +117,16 @@ Assert-NotContains 'No token HTML output' $plugin 'id_token</'
 Assert-NotContains 'No raw JWT logging' $plugin 'error_log($jwt'
 Assert-NotContains 'No secret logging' $plugin 'error_log($this->config(''client_secret'')'
 
-Assert-True 'Plugin is excluded from production plugin list' (-not (@($config.production.plugins) -contains 'ssf-microsoft-login'))
-Assert-True 'Plugin is listed DEV-only' (@($config.plugin_policy.dev_only) -contains 'ssf-microsoft-login')
-Assert-True 'Plugin is production-excluded' (@($config.excluded.plugins) -contains 'ssf-microsoft-login')
+Assert-True 'New plugin is production deployable' (@($config.production.plugins) -contains 'microsoft-id-login')
+Assert-True 'New plugin is not listed DEV-only' (-not (@($config.plugin_policy.dev_only) -contains 'microsoft-id-login'))
+Assert-True 'New plugin is not production-excluded' (-not (@($config.excluded.plugins) -contains 'microsoft-id-login'))
+Assert-True 'Old plugin slug removed from deployment policy' (-not (@($config.production.plugins + $config.plugin_policy.dev_only + $config.excluded.plugins) -contains 'ssf-microsoft-login'))
 $devOnlyPolicy = @{}
 @($config.plugin_policy.dev_only) | ForEach-Object { $devOnlyPolicy[$_] = $true }
-$activeDevPilot = @{ name = 'ssf-microsoft-login'; status = 'active'; version = '0.1.0' }
+$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.2.0' }
 $missingProdPilot = $null
-$pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'DEV_ACTIVE_PROD_MISSING' } else { 'MATCH' }
-Assert-True 'Active DEV pilot does not cause PROD copy/activate action' ($pilotClassification -eq 'DEV_ONLY_ALLOWED')
+$pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'PRODUCTION_CAPABLE' } else { 'MATCH' }
+Assert-True 'Production capable plugin is not treated as missing PROD parity' ($pilotClassification -eq 'PRODUCTION_CAPABLE')
 
 Assert-Contains 'Admin menu under SSF system' $plugin 'SSF_Admin_Navigation::ROOT'
 Assert-Contains 'Admin submenu label' $plugin "__('Inloggning'"
@@ -146,7 +148,7 @@ Assert-Contains 'Admin unlink does not alter groups notice' $plugin 'WordPress-b
 Assert-Contains 'Technical connection test action' $plugin 'ssf_m365_test_config'
 Assert-Contains 'Connection checks persisted' $plugin "self::TEST_PREFIX . 'config_'"
 Assert-Contains 'Connection checks function exists' $plugin 'run_connection_checks'
-Assert-Contains 'Connection test checks DEV environment' $plugin "'DEV-miljo'"
+Assert-Contains 'Connection test checks WordPress environment' $plugin "'WordPress environment'"
 Assert-Contains 'Connection test checks issuer' $plugin "'Issuer matchar tenant'"
 Assert-Contains 'Connection test checks JWKS' $plugin "'JWKS/signeringsnycklar'"
 Assert-Contains 'Connection test states no Graph/SharePoint permissions needed' $plugin 'Inga Graph- eller SharePoint-behorigheter behovs'
@@ -158,6 +160,9 @@ Assert-Contains 'Real login test function exists' $plugin 'complete_real_login_t
 Assert-Contains 'Real login test stores transient' $plugin "self::TEST_PREFIX . 'login_'"
 Assert-Contains 'Real login test verifies linked account' $plugin 'Microsoft-identitet matchar kopplat konto'
 Assert-Contains 'Real login test records unchanged permissions' $plugin 'WordPress-behorigheter oforandrade'
+Assert-Contains 'Last test status option exists' $plugin 'microsoft_id_login_test_status'
+Assert-Contains 'Technical test status persisted' $plugin "record_test_status('technical'"
+Assert-Contains 'Real login test status persisted' $plugin "record_test_status('real_login'"
 
 Assert-Contains 'Permission group model exists' $plugin 'permission_groups'
 Assert-Contains 'Permission groups stored in user meta' $plugin '_ssf_permission_groups'
@@ -208,6 +213,7 @@ Assert-Contains 'Documentation backend profiles' $doc 'development'
 Assert-Contains 'Documentation production profile' $doc 'production'
 Assert-Contains 'Documentation secret preservation' $doc 'Leaving the secret field empty keeps the existing saved secret'
 Assert-Contains 'Documentation permission model' $doc 'Authorization stays in WordPress'
+Assert-Contains 'Documentation PROD redirect URI' $doc 'https://ssfb.se/ssf-auth/microsoft/callback/'
 Assert-Contains 'Documentation audit option' $doc 'ssf_microsoft_login_permission_audit'
 
 if ($failures.Count) {
@@ -215,4 +221,4 @@ if ($failures.Count) {
     exit 1
 }
 
-Write-Host 'PASS: DEV Microsoft 365 login pilot static security tests.'
+Write-Host 'PASS: Microsoft ID Login static security tests.'

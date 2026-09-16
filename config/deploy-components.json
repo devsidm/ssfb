@@ -1,4 +1,4 @@
-{
+﻿{
   "schema_version": 1,
   "production": {
     "plugins": [
@@ -6,6 +6,7 @@
       "ssf-medlemsfartyg",
       "ssf-medlemsprocess",
       "ssf-member-portal",
+      "microsoft-id-login",
       "ssf-office365-mailer",
       "ssf-site-customizations",
       "ssf-stadgar"
@@ -35,13 +36,11 @@
   },
   "excluded": {
     "plugins": [
-      "ssf-microsoft-login",
       "ssf-promotions"
     ]
   },
   "plugin_policy": {
     "dev_only": [
-      "ssf-microsoft-login"
     ],
     "prod_only": [],
     "ignore_version": []

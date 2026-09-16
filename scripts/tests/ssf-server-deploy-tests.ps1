@@ -88,15 +88,16 @@ Assert-True 'empty maintenance marker fails' (-not (Test-MaintenanceMarker '<?ph
 Assert-True 'quoted numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = "1789501000"; ?>'))
 
 Assert-True 'deploy component schema version' ($config.schema_version -eq 1)
-Assert-True 'seven production plugins configured' (@($config.production.plugins).Count -eq 7)
+Assert-True 'eight production plugins configured' (@($config.production.plugins).Count -eq 8)
 Assert-True 'one production theme configured' (@($config.production.themes).Count -eq 1)
 Assert-True 'seven production MU files configured' (@($config.production.mu_files).Count -eq 7)
 Assert-True 'one production MU asset directory configured' (@($config.production.mu_asset_dirs).Count -eq 1)
 Assert-True 'production MU assets includes assets directory' (@($config.production.mu_asset_dirs) -contains 'assets')
 Assert-True 'ssf-promotions excluded' (@($config.excluded.plugins) -contains 'ssf-promotions')
-Assert-True 'Microsoft login pilot excluded from production' (@($config.excluded.plugins) -contains 'ssf-microsoft-login')
+Assert-True 'Microsoft ID Login production capable' (@($config.production.plugins) -contains 'microsoft-id-login')
+Assert-True 'Old Microsoft login slug removed from production policy' (-not (@($config.production.plugins + $config.excluded.plugins + $config.plugin_policy.dev_only) -contains 'ssf-microsoft-login'))
 Assert-True 'plugin policy dev_only exists' ($null -ne $config.plugin_policy.dev_only)
-Assert-True 'Microsoft login pilot is DEV-only plugin policy' (@($config.plugin_policy.dev_only) -contains 'ssf-microsoft-login')
+Assert-True 'Microsoft ID Login is not DEV-only plugin policy' (-not (@($config.plugin_policy.dev_only) -contains 'microsoft-id-login'))
 Assert-True 'plugin policy prod_only exists' ($null -ne $config.plugin_policy.prod_only)
 Assert-True 'plugin policy ignore_version exists' ($null -ne $config.plugin_policy.ignore_version)
 foreach ($file in @('ssf-dev-annual-meeting-registration.php','ssf-dev-login-protection.php','ssf-dev-protection.php')) {
@@ -121,7 +122,7 @@ Assert-Contains 'active DEV missing PROD detected' $script 'DEV_ACTIVE_PROD_MISS
 Assert-Contains 'active DEV inactive PROD detected' $script 'DEV_ACTIVE_PROD_INACTIVE'
 Assert-Contains 'active DEV version difference detected' $script 'DEV_ACTIVE_VERSION_DIFFERS'
 Assert-Contains 'dev-only plugin config exception works' $script 'DEV_ONLY_ALLOWED'
-Assert-Contains 'Microsoft login pilot listed as not deployed' $script 'ssf-microsoft-login'
+Assert-Contains 'production plugin copy enumerates configured plugins' $script 'json_array "production.plugins"'
 Assert-Contains 'PROD-only plugin warning exists' $script 'PROD_ONLY'
 Assert-Contains 'DEV inactive PROD active warning exists' $script 'DEV_INACTIVE_PROD_ACTIVE'
 Assert-Contains 'missing active DEV plugin cannot pass silently' $script 'Active DEV plugin cannot be deployed safely'

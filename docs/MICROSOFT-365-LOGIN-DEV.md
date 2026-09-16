@@ -1,13 +1,13 @@
-# SSF Microsoft 365 Login DEV Pilot
+﻿# Microsoft ID Login
 
 ## Purpose
 
-`ssf-microsoft-login` is a DEV-only pilot for signing in to WordPress with Microsoft Entra ID. It authenticates identity only. WordPress remains authoritative for users, roles and capabilities.
+`microsoft-id-login` signs in WordPress users with Microsoft Entra ID. It authenticates identity only. WordPress remains authoritative for users, roles and capabilities.
 
 ## Architecture
 
-- Separate plugin: `wp-content/plugins/ssf-microsoft-login/`
-- Separate Entra app registration, for example `SSF Web Login DEV`
+- Separate plugin: `wp-content/plugins/microsoft-id-login/`
+- Separate Entra app registrations for DEV and PROD, for example `SSF Web Login DEV` and `SSF Web Login PROD`
 - Authorization Code Flow with PKCE
 - Scopes: `openid profile email`
 - Durable account mapping: Microsoft `tid` + `oid` stored on the WordPress user
@@ -28,7 +28,7 @@ The backend contains two separate profiles:
 
 Each profile has its own enabled flag, Tenant ID, Application ID / Client ID and Client Secret. The Client Secret is never displayed. Leaving the secret field empty keeps the existing saved secret; use the clear checkbox only when the saved secret should be removed.
 
-The current pilot remains DEV-only. A production profile may be prepared in the backend, but the plugin still refuses to enable interactive login when `wp_get_environment_type()` is `production`.
+The plugin may be installed in both DEV and PROD. Microsoft login is disabled by default and only becomes active in the current environment when that environment's profile is complete and explicitly enabled.
 
 Server constants can still be used as emergency overrides outside Git:
 
@@ -39,7 +39,7 @@ define('SSF_M365_LOGIN_CLIENT_ID', 'YOUR-LOGIN-APP-CLIENT-ID');
 define('SSF_M365_LOGIN_CLIENT_SECRET', getenv('SSF_M365_LOGIN_CLIENT_SECRET') ?: '');
 ```
 
-The feature also requires `WP_ENVIRONMENT_TYPE=development`. In production it stays disabled even if the plugin exists.
+Missing configuration or a disabled profile means no Microsoft login button, no login start and no callback authentication acceptance. Normal WordPress username/password login remains available.
 
 ## Exact DEV Redirect URI
 
@@ -50,6 +50,14 @@ https://ssfb.se/dev/ssf-auth/microsoft/callback/
 ```
 
 The plugin generates this from `home_url()` and does not hardcode `/dev`.
+
+## Exact PROD Redirect URI
+
+Register this Web redirect URI in the PROD Entra app:
+
+```text
+https://ssfb.se/ssf-auth/microsoft/callback/
+```
 
 ## Entra App Registration
 
@@ -66,23 +74,25 @@ The plugin generates this from `home_url()` and does not hardcode `/dev`.
 11. Do not add Microsoft Graph application permissions.
 12. Do not add SharePoint permissions.
 
+For production, create a separate app registration named `SSF Web Login PROD` and use the PROD redirect URI above. Do not reuse DEV Client ID or DEV Client Secret in PROD.
+
 ## Authentication Flow
 
 The login button starts Authorization Code Flow with PKCE, state and nonce. The callback exchanges the code server-side, cryptographically validates the ID token against tenant-specific Microsoft discovery/JWKS, enforces issuer/audience/tenant/expiry/nonce, then maps `tid + oid` to an existing WordPress user.
 
 ## Account Linking
 
-An already authenticated DEV WordPress user can open their profile and choose **Koppla Microsoft 365-konto**. The callback requires the original WordPress session to still be valid and links the validated `tid + oid` to the current user only if it is not already linked elsewhere.
+An already authenticated WordPress user can open their profile and choose **Koppla Microsoft 365-konto**. The callback requires the original WordPress session to still be valid and links the validated `tid + oid` to the current user only if it is not already linked elsewhere.
 
 Users can unlink from their own profile with nonce protection.
 
 ## Admin Backend
 
-Open **SSF -> System -> Inloggning** in DEV. The page title is **Microsoft-inloggning**.
+Open **SSF -> System -> Inloggning**. The page title is **Microsoft ID Login**.
 
 The backend shows:
 
-- DEV-only status and configuration overview.
+- Environment-specific status and configuration overview.
 - Callback URL with a copy button.
 - Technical connection test for tenant/client configuration, OpenID discovery and JWKS.
 - Real Microsoft login test mode that exercises the OAuth/OIDC roundtrip without changing WordPress roles or permission groups.
@@ -95,14 +105,14 @@ The backend shows:
 
 Microsoft Entra is used only for authentication. Authorization stays in WordPress.
 
-The pilot stores SSF permission groups in WordPress user meta and grants the mapped WordPress capabilities through `user_has_cap`. It does not read Entra groups, Microsoft 365 groups, SharePoint groups or app roles, and it never promotes a Microsoft user to WordPress administrator.
+The module stores SSF permission groups in WordPress user meta and grants the mapped WordPress capabilities through `user_has_cap`. It does not read Entra groups, Microsoft 365 groups, SharePoint groups or app roles, and it never promotes a Microsoft user to WordPress administrator.
 
 Admins with SSF login/permission capability can manage groups from **SSF -> System -> Inloggning** or the WordPress user profile screen. Changes are recorded in `ssf_microsoft_login_permission_audit`.
 
 ## How To Test
 
-1. Configure constants in DEV only.
-2. Activate `SSF Microsoft 365 Login` in DEV.
+1. Configure the matching environment profile.
+2. Activate `Microsoft ID Login` in the target environment.
 3. Visit `https://ssfb.se/dev/wp-login.php`.
 4. Confirm normal WordPress login remains visible.
 5. Confirm **Logga in med Microsoft 365** appears.
@@ -122,15 +132,15 @@ Set:
 define('SSF_M365_LOGIN_ENABLED', 'false');
 ```
 
-or remove the constant. The button and callback access will stop because the feature requires both development environment and explicit enablement.
+or disable the active backend profile. The button and callback access will stop because the feature requires complete configuration and explicit enablement.
 
-## Future Production Activation Checklist
+## Production Activation Checklist
 
-- Create a production Entra app registration for SSF login.
-- Register production redirect URI.
-- Configure production constants outside Git.
+- Create a production Entra app registration named `SSF Web Login PROD`.
+- Register production redirect URI `https://ssfb.se/ssf-auth/microsoft/callback/`.
+- Configure the production profile or production constants outside Git.
 - Re-review tenant and token validation.
 - Re-review account linking policy.
-- Remove `ssf-microsoft-login` from DEV-only deploy policy in a dedicated production approval task.
+- Enable Microsoft login in PROD only after explicit approval.
 - Run production readiness checks.
 - Deploy only after explicit production approval.

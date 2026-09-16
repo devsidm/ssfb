@@ -1,28 +1,28 @@
-<?php
+﻿<?php
 /**
- * Plugin Name: SSF Microsoft 365 Login
+ * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
- * Description: DEV-only Microsoft Entra ID login pilot for SSF WordPress accounts.
- * Version: 0.1.0
+ * Description: Microsoft Entra ID login for SSF WordPress accounts.
+ * Version: 0.2.0
  * Author: SIDM
- * Text Domain: ssf-microsoft-login
+ * Text Domain: microsoft-id-login
  * Requires at least: 6.0
  * Requires PHP: 7.4
  *
- * @package SSF_Microsoft_Login
+ * @package SSF_Microsoft_ID_Login
  */
 
 if (! defined('ABSPATH')) {
     exit;
 }
 
-final class SSF_Microsoft_Login
+final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.1.0';
+    private const VERSION = '0.2.0';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
-    private const MENU_SLUG = 'ssf-microsoft-login';
+    private const MENU_SLUG = 'microsoft-id-login';
     private const META_TID = '_ssf_m365_tid';
     private const META_OID = '_ssf_m365_oid';
     private const META_EMAIL = '_ssf_m365_email';
@@ -30,14 +30,15 @@ final class SSF_Microsoft_Login
     private const GROUP_META = '_ssf_permission_groups';
     private const SETTINGS_OPTION = 'ssf_microsoft_login_settings';
     private const AUDIT_OPTION = 'ssf_microsoft_login_permission_audit';
+    private const TEST_STATUS_OPTION = 'microsoft_id_login_test_status';
     private const CAP_MANAGE_LOGIN = 'ssf_manage_microsoft_login';
     private const CAP_MANAGE_PERMISSIONS = 'ssf_manage_permission_groups';
     private const QUERY_VAR = 'ssf_m365_login_callback';
     private const CALLBACK_PATH = 'ssf-auth/microsoft/callback/';
 
-    private static ?SSF_Microsoft_Login $instance = null;
+    private static ?SSF_Microsoft_ID_Login $instance = null;
 
-    public static function instance(): SSF_Microsoft_Login
+    public static function instance(): SSF_Microsoft_ID_Login
     {
         if (null === self::$instance) {
             self::$instance = new self();
@@ -217,10 +218,10 @@ final class SSF_Microsoft_Login
     public function register_admin_page(): void
     {
         if (class_exists('SSF_Admin_Navigation')) {
-            add_submenu_page(SSF_Admin_Navigation::ROOT, __('Microsoft-inloggning', 'ssf-microsoft-login'), __('Inloggning', 'ssf-microsoft-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'));
+            add_submenu_page(SSF_Admin_Navigation::ROOT, __('Microsoft ID Login', 'microsoft-id-login'), __('Inloggning', 'microsoft-id-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'));
             return;
         }
-        add_management_page(__('Microsoft-inloggning', 'ssf-microsoft-login'), __('Microsoft-inloggning', 'ssf-microsoft-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'));
+        add_management_page(__('Microsoft ID Login', 'microsoft-id-login'), __('Microsoft ID Login', 'microsoft-id-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'));
     }
 
     public function enqueue_admin_assets(string $hook): void
@@ -228,7 +229,7 @@ final class SSF_Microsoft_Login
         if (false === strpos($hook, self::MENU_SLUG)) {
             return;
         }
-        wp_enqueue_script('ssf-microsoft-login-admin', plugins_url('assets/js/admin.js', __FILE__), array(), self::VERSION, true);
+        wp_enqueue_script('microsoft-id-login-admin', plugins_url('assets/js/admin.js', __FILE__), array(), self::VERSION, true);
     }
 
     public function render_admin_page(): void
@@ -241,28 +242,29 @@ final class SSF_Microsoft_Login
         $connection_test = get_transient(self::TEST_PREFIX . 'config_' . get_current_user_id());
         $login_test = get_transient(self::TEST_PREFIX . 'login_' . get_current_user_id());
         ?>
-        <div class="wrap ssf-microsoft-login-admin">
-            <h1><?php esc_html_e('Microsoft-inloggning', 'ssf-microsoft-login'); ?></h1>
+        <div class="wrap microsoft-id-login-admin">
+            <h1><?php esc_html_e('Microsoft ID Login', 'microsoft-id-login'); ?></h1>
+            <p class="description"><?php esc_html_e('Microsoft 365 / Entra ID-inloggning', 'microsoft-id-login'); ?></p>
             <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs(self::MENU_SLUG); } ?>
-            <p><?php esc_html_e('Microsoft 365 används för att verifiera vem användaren är. Behörigheter till SSF:s funktioner styrs i WordPress.', 'ssf-microsoft-login'); ?></p>
+            <p><?php esc_html_e('Microsoft 365 används för att verifiera vem användaren är. Behörigheter till SSF:s funktioner styrs i WordPress.', 'microsoft-id-login'); ?></p>
 
             <div class="ssf-admin-grid ssf-admin-grid--system">
                 <section class="ssf-admin-card">
-                    <h2><?php esc_html_e('Översikt', 'ssf-microsoft-login'); ?></h2>
+                    <h2><?php esc_html_e('Översikt', 'microsoft-id-login'); ?></h2>
                     <dl>
-                        <div><dt><?php esc_html_e('Miljö', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html(ucfirst($status['environment'])); ?></dd></div>
-                        <div><dt><?php esc_html_e('Status', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->status_label($status)); ?></dd></div>
-                        <div><dt><?php esc_html_e('Microsoft-app', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'] && $status['client_id'] && $status['client_secret'])); ?></dd></div>
-                        <div><dt><?php esc_html_e('OpenID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($status['metadata']); ?></dd></div>
-                        <div><dt><?php esc_html_e('Callback', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($status['callback']); ?></dd></div>
-                        <div><dt><?php esc_html_e('Kopplade användare', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html((string) $linked_count); ?></dd></div>
+                        <div><dt><?php esc_html_e('Miljö', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html(ucfirst($status['environment'])); ?></dd></div>
+                        <div><dt><?php esc_html_e('Status', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->status_label($status)); ?></dd></div>
+                        <div><dt><?php esc_html_e('Microsoft-app', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'] && $status['client_id'] && $status['client_secret'])); ?></dd></div>
+                        <div><dt><?php esc_html_e('OpenID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($status['metadata']); ?></dd></div>
+                        <div><dt><?php esc_html_e('Callback', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($status['callback']); ?></dd></div>
+                        <div><dt><?php esc_html_e('Kopplade användare', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html((string) $linked_count); ?></dd></div>
                     </dl>
-                    <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_config'), 'ssf_m365_test_config')); ?>"><?php esc_html_e('Testa Microsoft-konfiguration', 'ssf-microsoft-login'); ?></a></p>
-                    <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_login'), 'ssf_m365_test_login')); ?>"><?php esc_html_e('Testa riktig Microsoft-inloggning', 'ssf-microsoft-login'); ?></a></p>
+                    <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_config'), 'ssf_m365_test_config')); ?>"><?php esc_html_e('Testa Microsoft-konfiguration', 'microsoft-id-login'); ?></a></p>
+                    <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_login'), 'ssf_m365_test_login')); ?>"><?php esc_html_e('Testa riktig Microsoft-inloggning', 'microsoft-id-login'); ?></a></p>
                 </section>
                 <?php $this->render_settings_card($status); ?>
                 <section class="ssf-admin-card">
-                    <h2><?php esc_html_e('Ditt Microsoft-konto', 'ssf-microsoft-login'); ?></h2>
+                    <h2><?php esc_html_e('Ditt Microsoft-konto', 'microsoft-id-login'); ?></h2>
                     <?php $this->render_own_account_card(); ?>
                 </section>
             </div>
@@ -281,8 +283,8 @@ final class SSF_Microsoft_Login
             return;
         }
         $redirect_to = isset($_REQUEST['redirect_to']) && is_scalar($_REQUEST['redirect_to']) ? esc_url_raw(wp_unslash($_REQUEST['redirect_to'])) : '';
-        echo '<p style="text-align:center;margin:16px 0 8px;">' . esc_html__('eller', 'ssf-microsoft-login') . '</p>';
-        echo '<p><a class="button button-secondary button-large" style="width:100%;text-align:center;" href="' . esc_url(self::login_url($redirect_to)) . '">' . esc_html__('Logga in med Microsoft 365', 'ssf-microsoft-login') . '</a></p>';
+        echo '<p style="text-align:center;margin:16px 0 8px;">' . esc_html__('eller', 'microsoft-id-login') . '</p>';
+        echo '<p><a class="button button-secondary button-large" style="width:100%;text-align:center;" href="' . esc_url(self::login_url($redirect_to)) . '">' . esc_html__('Logga in med Microsoft 365', 'microsoft-id-login') . '</a></p>';
     }
 
     private function render_settings_card(array $status): void
@@ -291,36 +293,36 @@ final class SSF_Microsoft_Login
         $active_profile = $this->active_profile_key();
         ?>
         <section class="ssf-admin-card">
-            <h2><?php esc_html_e('Microsoft / Entra', 'ssf-microsoft-login'); ?></h2>
-            <p><?php esc_html_e('Konfigurera separata Microsoft-appar för Development och Production. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'ssf-microsoft-login'); ?></p>
+            <h2><?php esc_html_e('Microsoft / Entra', 'microsoft-id-login'); ?></h2>
+            <p><?php esc_html_e('Konfigurera separata Microsoft-appar för Development och Production. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'microsoft-id-login'); ?></p>
             <dl>
-                <div><dt><?php esc_html_e('Aktiv profil', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($active_profile); ?></dd></div>
-                <div><dt><?php esc_html_e('Tenant ID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></dd></div>
-                <div><dt><?php esc_html_e('Client ID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_id'])); ?></dd></div>
-                <div><dt><?php esc_html_e('Client Secret', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_secret'])); ?></dd></div>
-                <div><dt><?php esc_html_e('Kontotyp', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Endast konton i SSF:s organisation', 'ssf-microsoft-login'); ?></dd></div>
-                <div><dt><?php esc_html_e('Scopes', 'ssf-microsoft-login'); ?></dt><dd><code>openid profile email</code></dd></div>
-                <div><dt><?php esc_html_e('SharePoint permissions', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Inga', 'ssf-microsoft-login'); ?></dd></div>
-                <div><dt><?php esc_html_e('Graph application permissions', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Inga', 'ssf-microsoft-login'); ?></dd></div>
+                <div><dt><?php esc_html_e('Aktiv profil', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($active_profile); ?></dd></div>
+                <div><dt><?php esc_html_e('Tenant ID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Client ID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_id'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Client Secret', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_secret'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Kontotyp', 'microsoft-id-login'); ?></dt><dd><?php esc_html_e('Endast konton i SSF:s organisation', 'microsoft-id-login'); ?></dd></div>
+                <div><dt><?php esc_html_e('Scopes', 'microsoft-id-login'); ?></dt><dd><code>openid profile email</code></dd></div>
+                <div><dt><?php esc_html_e('SharePoint permissions', 'microsoft-id-login'); ?></dt><dd><?php esc_html_e('Inga', 'microsoft-id-login'); ?></dd></div>
+                <div><dt><?php esc_html_e('Graph application permissions', 'microsoft-id-login'); ?></dt><dd><?php esc_html_e('Inga', 'microsoft-id-login'); ?></dd></div>
             </dl>
-            <p><label for="ssf-m365-callback"><strong><?php esc_html_e('Redirect URI', 'ssf-microsoft-login'); ?></strong></label><br><input id="ssf-m365-callback" class="regular-text code" value="<?php echo esc_attr($this->callback_url()); ?>" readonly> <button type="button" class="button" data-ssf-copy="#ssf-m365-callback"><?php esc_html_e('Kopiera callback-URL', 'ssf-microsoft-login'); ?></button></p>
+            <p><label for="ssf-m365-callback"><strong><?php esc_html_e('Redirect URI', 'microsoft-id-login'); ?></strong></label><br><input id="ssf-m365-callback" class="regular-text code" value="<?php echo esc_attr($this->callback_url()); ?>" readonly> <button type="button" class="button" data-ssf-copy="#ssf-m365-callback"><?php esc_html_e('Kopiera callback-URL', 'microsoft-id-login'); ?></button></p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_m365_save_settings">
                 <?php wp_nonce_field('ssf_m365_save_settings'); ?>
                 <?php foreach ($this->profile_keys() as $profile_key) : $profile = $settings['profiles'][$profile_key]; ?>
                     <fieldset style="border:1px solid #dcdcde;padding:12px;margin:12px 0;">
-                        <legend><strong><?php echo esc_html('development' === $profile_key ? __('Development', 'ssf-microsoft-login') : __('Production', 'ssf-microsoft-login')); ?></strong><?php if ($profile_key === $active_profile) : ?> <span class="description"><?php esc_html_e('(aktiv)', 'ssf-microsoft-login'); ?></span><?php endif; ?></legend>
+                        <legend><strong><?php echo esc_html('development' === $profile_key ? __('Development', 'microsoft-id-login') : __('Production', 'microsoft-id-login')); ?></strong><?php if ($profile_key === $active_profile) : ?> <span class="description"><?php esc_html_e('(aktiv)', 'microsoft-id-login'); ?></span><?php endif; ?></legend>
                         <?php if ('production' === $profile_key) : ?>
-                            <p class="description"><?php esc_html_e('Production kan förkonfigureras här, men denna pilot är fortfarande spärrad från att aktiveras i production.', 'ssf-microsoft-login'); ?></p>
+                            <p class="description"><?php esc_html_e('Production kan förkonfigureras här. Microsoft-login blir bara aktivt när profilen är komplett och uttryckligen aktiverad i production.', 'microsoft-id-login'); ?></p>
                         <?php endif; ?>
-                        <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="1" <?php checked(! empty($profile['enabled'])); ?>> <?php esc_html_e('Aktivera Microsoft-login för denna profil', 'ssf-microsoft-login'); ?></label></p>
-                        <p><label><?php esc_html_e('Tenant ID', 'ssf-microsoft-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]" value="<?php echo esc_attr((string) $profile['tenant_id']); ?>" autocomplete="off"></label></p>
-                        <p><label><?php esc_html_e('Application ID / Client ID', 'ssf-microsoft-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][client_id]" value="<?php echo esc_attr((string) $profile['client_id']); ?>" autocomplete="off"></label></p>
-                        <p><label><?php esc_html_e('Client Secret', 'ssf-microsoft-login'); ?><br><input class="regular-text code" type="password" name="profiles[<?php echo esc_attr($profile_key); ?>][client_secret]" value="" autocomplete="new-password" placeholder="<?php echo esc_attr(! empty($profile['client_secret']) ? __('Secret finns - lämna tomt för att behålla', 'ssf-microsoft-login') : __('Saknas', 'ssf-microsoft-login')); ?>"></label></p>
-                        <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][clear_secret]" value="1"> <?php esc_html_e('Ta bort sparad client secret', 'ssf-microsoft-login'); ?></label></p>
+                        <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="1" <?php checked(! empty($profile['enabled'])); ?>> <?php esc_html_e('Aktivera Microsoft-login för denna profil', 'microsoft-id-login'); ?></label></p>
+                        <p><label><?php esc_html_e('Tenant ID', 'microsoft-id-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]" value="<?php echo esc_attr((string) $profile['tenant_id']); ?>" autocomplete="off"></label></p>
+                        <p><label><?php esc_html_e('Application ID / Client ID', 'microsoft-id-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][client_id]" value="<?php echo esc_attr((string) $profile['client_id']); ?>" autocomplete="off"></label></p>
+                        <p><label><?php esc_html_e('Client Secret', 'microsoft-id-login'); ?><br><input class="regular-text code" type="password" name="profiles[<?php echo esc_attr($profile_key); ?>][client_secret]" value="" autocomplete="new-password" placeholder="<?php echo esc_attr(! empty($profile['client_secret']) ? __('Secret finns - lämna tomt för att behålla', 'microsoft-id-login') : __('Saknas', 'microsoft-id-login')); ?>"></label></p>
+                        <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][clear_secret]" value="1"> <?php esc_html_e('Ta bort sparad client secret', 'microsoft-id-login'); ?></label></p>
                     </fieldset>
                 <?php endforeach; ?>
-                <?php submit_button(__('Spara Microsoft-konfiguration', 'ssf-microsoft-login'), 'primary', 'submit', false); ?>
+                <?php submit_button(__('Spara Microsoft-konfiguration', 'microsoft-id-login'), 'primary', 'submit', false); ?>
             </form>
         </section>
         <?php
@@ -331,17 +333,17 @@ final class SSF_Microsoft_Login
         $user_id = get_current_user_id();
         $linked = $this->is_user_linked($user_id);
         ?>
-        <p><strong><?php esc_html_e('Status:', 'ssf-microsoft-login'); ?></strong> <?php echo esc_html($linked ? __('Kopplat', 'ssf-microsoft-login') : __('Inte kopplat', 'ssf-microsoft-login')); ?></p>
+        <p><strong><?php esc_html_e('Status:', 'microsoft-id-login'); ?></strong> <?php echo esc_html($linked ? __('Kopplat', 'microsoft-id-login') : __('Inte kopplat', 'microsoft-id-login')); ?></p>
         <?php if ($linked) : ?>
-            <p><strong><?php esc_html_e('Konto:', 'ssf-microsoft-login'); ?></strong> <?php echo esc_html($this->linked_email_label($user_id)); ?></p>
-            <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_login'), 'ssf_m365_test_login')); ?>"><?php esc_html_e('Testa inloggning', 'ssf-microsoft-login'); ?></a></p>
+            <p><strong><?php esc_html_e('Konto:', 'microsoft-id-login'); ?></strong> <?php echo esc_html($this->linked_email_label($user_id)); ?></p>
+            <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_login'), 'ssf_m365_test_login')); ?>"><?php esc_html_e('Testa inloggning', 'microsoft-id-login'); ?></a></p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_m365_unlink">
                 <?php wp_nonce_field('ssf_m365_unlink'); ?>
-                <?php submit_button(__('Koppla från konto', 'ssf-microsoft-login'), 'secondary', 'submit', false); ?>
+                <?php submit_button(__('Koppla från konto', 'microsoft-id-login'), 'secondary', 'submit', false); ?>
             </form>
         <?php else : ?>
-            <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_link_start'), 'ssf_m365_link_start')); ?>"><?php esc_html_e('Koppla Microsoft 365-konto', 'ssf-microsoft-login'); ?></a></p>
+            <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_link_start'), 'ssf_m365_link_start')); ?>"><?php esc_html_e('Koppla Microsoft 365-konto', 'microsoft-id-login'); ?></a></p>
         <?php endif; ?>
         <?php
     }
@@ -349,11 +351,11 @@ final class SSF_Microsoft_Login
     private function render_test_results($connection_test, $login_test): void
     {
         if (is_array($connection_test)) {
-            echo '<h2>' . esc_html__('Tekniskt konfigurationstest', 'ssf-microsoft-login') . '</h2>';
+            echo '<h2>' . esc_html__('Tekniskt konfigurationstest', 'microsoft-id-login') . '</h2>';
             $this->render_check_table($connection_test);
         }
         if (is_array($login_test)) {
-            echo '<h2>' . esc_html__('Riktigt Microsoft-inloggningstest', 'ssf-microsoft-login') . '</h2>';
+            echo '<h2>' . esc_html__('Riktigt Microsoft-inloggningstest', 'microsoft-id-login') . '</h2>';
             $this->render_check_table($login_test);
         }
     }
@@ -376,37 +378,37 @@ final class SSF_Microsoft_Login
         $users = get_users(array('number' => 200, 'orderby' => 'display_name', 'order' => 'ASC'));
         $groups = self::permission_groups();
         ?>
-        <h2><?php esc_html_e('Användare och behörigheter', 'ssf-microsoft-login'); ?></h2>
-        <p><a href="<?php echo esc_url(admin_url('admin.php?page=' . self::MENU_SLUG)); ?>"><?php esc_html_e('Alla användare', 'ssf-microsoft-login'); ?></a> | <a href="<?php echo esc_url(add_query_arg('ssf_m365_filter', 'linked', admin_url('admin.php?page=' . self::MENU_SLUG))); ?>"><?php esc_html_e('Kopplade användare', 'ssf-microsoft-login'); ?></a> | <a href="<?php echo esc_url(add_query_arg('ssf_m365_filter', 'unlinked', admin_url('admin.php?page=' . self::MENU_SLUG))); ?>"><?php esc_html_e('Ej kopplade användare', 'ssf-microsoft-login'); ?></a></p>
+        <h2><?php esc_html_e('Användare och behörigheter', 'microsoft-id-login'); ?></h2>
+        <p><a href="<?php echo esc_url(admin_url('admin.php?page=' . self::MENU_SLUG)); ?>"><?php esc_html_e('Alla användare', 'microsoft-id-login'); ?></a> | <a href="<?php echo esc_url(add_query_arg('ssf_m365_filter', 'linked', admin_url('admin.php?page=' . self::MENU_SLUG))); ?>"><?php esc_html_e('Kopplade användare', 'microsoft-id-login'); ?></a> | <a href="<?php echo esc_url(add_query_arg('ssf_m365_filter', 'unlinked', admin_url('admin.php?page=' . self::MENU_SLUG))); ?>"><?php esc_html_e('Ej kopplade användare', 'microsoft-id-login'); ?></a></p>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <input type="hidden" name="action" value="ssf_save_permission_groups">
             <?php wp_nonce_field('ssf_save_permission_groups'); ?>
             <table class="widefat striped">
-                <thead><tr><th><?php esc_html_e('WordPress-användare', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('Namn', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('E-post', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('Microsoft', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('Behörighetsgrupper', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('WordPress-roll', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('Senast inloggad', 'ssf-microsoft-login'); ?></th><th><?php esc_html_e('Åtgärd', 'ssf-microsoft-login'); ?></th></tr></thead>
+                <thead><tr><th><?php esc_html_e('WordPress-användare', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Namn', 'microsoft-id-login'); ?></th><th><?php esc_html_e('E-post', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Microsoft', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Behörighetsgrupper', 'microsoft-id-login'); ?></th><th><?php esc_html_e('WordPress-roll', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Senast inloggad', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Åtgärd', 'microsoft-id-login'); ?></th></tr></thead>
                 <tbody>
                 <?php foreach ($users as $user) : $linked = $this->is_user_linked((int) $user->ID); if ('linked' === $filter && ! $linked) { continue; } if ('unlinked' === $filter && $linked) { continue; } ?>
                     <tr>
                         <td><input type="hidden" name="user_ids[]" value="<?php echo esc_attr((string) $user->ID); ?>"><?php echo esc_html($user->user_login); ?></td>
                         <td><?php echo esc_html($user->display_name); ?></td>
                         <td><?php echo esc_html($user->user_email); ?></td>
-                        <td><?php echo esc_html($linked ? __('Kopplad', 'ssf-microsoft-login') : __('Inte kopplad', 'ssf-microsoft-login')); ?><?php if ($linked) : ?><br><span class="description"><?php echo esc_html($this->linked_email_label((int) $user->ID)); ?></span><?php endif; ?></td>
+                        <td><?php echo esc_html($linked ? __('Kopplad', 'microsoft-id-login') : __('Inte kopplad', 'microsoft-id-login')); ?><?php if ($linked) : ?><br><span class="description"><?php echo esc_html($this->linked_email_label((int) $user->ID)); ?></span><?php endif; ?></td>
                         <td><?php foreach ($groups as $key => $group) : ?><label style="display:block"><input type="checkbox" name="groups[<?php echo esc_attr((string) $user->ID); ?>][]" value="<?php echo esc_attr($key); ?>" <?php checked(in_array($key, $this->user_groups((int) $user->ID), true)); ?> <?php disabled((int) $user->ID === get_current_user_id() && ! current_user_can('manage_options')); ?>> <?php echo esc_html($group['label']); ?></label><?php endforeach; ?></td>
                         <td><?php echo esc_html(implode(', ', $user->roles)); ?></td>
                         <td><?php $last = (int) get_user_meta($user->ID, self::META_LAST_LOGIN, true); echo esc_html($last ? wp_date('Y-m-d H:i', $last) : ''); ?></td>
-                        <td><?php if ($linked) : ?><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_admin_unlink&user_id=' . (int) $user->ID), 'ssf_m365_admin_unlink_' . (int) $user->ID)); ?>"><?php esc_html_e('Koppla från', 'ssf-microsoft-login'); ?></a><?php endif; ?></td>
+                        <td><?php if ($linked) : ?><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_admin_unlink&user_id=' . (int) $user->ID), 'ssf_m365_admin_unlink_' . (int) $user->ID)); ?>"><?php esc_html_e('Koppla från', 'microsoft-id-login'); ?></a><?php endif; ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
-            <?php submit_button(__('Spara behörigheter', 'ssf-microsoft-login')); ?>
+            <?php submit_button(__('Spara behörigheter', 'microsoft-id-login')); ?>
         </form>
         <?php
     }
 
     private function render_permission_matrix(): void
     {
-        echo '<h2>' . esc_html__('Behörighetsmatris', 'ssf-microsoft-login') . '</h2>';
-        echo '<table class="widefat striped" style="max-width:1100px"><thead><tr><th>' . esc_html__('Grupp', 'ssf-microsoft-login') . '</th><th>' . esc_html__('Beskrivning', 'ssf-microsoft-login') . '</th><th>' . esc_html__('Faktiska WordPress-capabilities', 'ssf-microsoft-login') . '</th></tr></thead><tbody>';
+        echo '<h2>' . esc_html__('Behörighetsmatris', 'microsoft-id-login') . '</h2>';
+        echo '<table class="widefat striped" style="max-width:1100px"><thead><tr><th>' . esc_html__('Grupp', 'microsoft-id-login') . '</th><th>' . esc_html__('Beskrivning', 'microsoft-id-login') . '</th><th>' . esc_html__('Faktiska WordPress-capabilities', 'microsoft-id-login') . '</th></tr></thead><tbody>';
         foreach (self::permission_groups() as $group) {
             printf('<tr><th>%s</th><td>%s</td><td><code>%s</code></td></tr>', esc_html($group['label']), esc_html($group['description']), esc_html(implode(', ', (array) $group['capabilities'])));
         }
@@ -415,34 +417,46 @@ final class SSF_Microsoft_Login
 
     private function render_technical_details(array $status, int $linked_count): void
     {
+        $test_status = get_option(self::TEST_STATUS_OPTION, array());
+        $test_status = is_array($test_status) ? $test_status : array();
         ?>
         <details>
-            <summary><?php esc_html_e('Tekniska detaljer', 'ssf-microsoft-login'); ?></summary>
+            <summary><?php esc_html_e('Tekniska detaljer', 'microsoft-id-login'); ?></summary>
             <table class="widefat striped" style="max-width:900px"><tbody>
-                <tr><th><?php esc_html_e('Environment', 'ssf-microsoft-login'); ?></th><td><?php echo esc_html($status['environment']); ?></td></tr>
-                <tr><th><?php esc_html_e('Plugin version', 'ssf-microsoft-login'); ?></th><td><?php echo esc_html(self::VERSION); ?></td></tr>
-                <tr><th><?php esc_html_e('Callback URL', 'ssf-microsoft-login'); ?></th><td><code><?php echo esc_html($this->callback_url()); ?></code></td></tr>
-                <tr><th><?php esc_html_e('OpenID issuer', 'ssf-microsoft-login'); ?></th><td><code><?php echo esc_html($this->config('tenant_id') ? 'https://login.microsoftonline.com/' . $this->config('tenant_id') . '/v2.0' : ''); ?></code></td></tr>
-                <tr><th><?php esc_html_e('Tenant configured', 'ssf-microsoft-login'); ?></th><td><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></td></tr>
-                <tr><th><?php esc_html_e('Client configured', 'ssf-microsoft-login'); ?></th><td><?php echo esc_html($this->configured_label($status['client_id'])); ?></td></tr>
-                <tr><th><?php esc_html_e('JWKS cache status', 'ssf-microsoft-login'); ?></th><td><?php echo esc_html($status['jwks']); ?></td></tr>
-                <tr><th><?php esc_html_e('Linked users', 'ssf-microsoft-login'); ?></th><td><?php echo esc_html((string) $linked_count); ?></td></tr>
+                <tr><th><?php esc_html_e('Environment', 'microsoft-id-login'); ?></th><td><?php echo esc_html($status['environment']); ?></td></tr>
+                <tr><th><?php esc_html_e('Plugin version', 'microsoft-id-login'); ?></th><td><?php echo esc_html(self::VERSION); ?></td></tr>
+                <tr><th><?php esc_html_e('Callback URL', 'microsoft-id-login'); ?></th><td><code><?php echo esc_html($this->callback_url()); ?></code></td></tr>
+                <tr><th><?php esc_html_e('OpenID issuer', 'microsoft-id-login'); ?></th><td><code><?php echo esc_html($this->config('tenant_id') ? 'https://login.microsoftonline.com/' . $this->config('tenant_id') . '/v2.0' : ''); ?></code></td></tr>
+                <tr><th><?php esc_html_e('Tenant configured', 'microsoft-id-login'); ?></th><td><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></td></tr>
+                <tr><th><?php esc_html_e('Client configured', 'microsoft-id-login'); ?></th><td><?php echo esc_html($this->configured_label($status['client_id'])); ?></td></tr>
+                <tr><th><?php esc_html_e('JWKS cache status', 'microsoft-id-login'); ?></th><td><?php echo esc_html($status['jwks']); ?></td></tr>
+                <tr><th><?php esc_html_e('Linked users', 'microsoft-id-login'); ?></th><td><?php echo esc_html((string) $linked_count); ?></td></tr>
+                <tr><th><?php esc_html_e('Senaste konfigurationstest', 'microsoft-id-login'); ?></th><td><?php echo esc_html($this->format_test_status($test_status['technical'] ?? null)); ?></td></tr>
+                <tr><th><?php esc_html_e('Senaste riktiga inloggningstest', 'microsoft-id-login'); ?></th><td><?php echo esc_html($this->format_test_status($test_status['real_login'] ?? null)); ?></td></tr>
             </tbody></table>
         </details>
         <?php
     }
 
+    private function format_test_status($status): string
+    {
+        if (! is_array($status) || empty($status['result']) || empty($status['timestamp'])) {
+            return __('Inte kört', 'microsoft-id-login');
+        }
+        return (string) $status['result'] . ' - ' . (string) $status['timestamp'];
+    }
+
     private function status_label(array $status): string
     {
-        if ('development' !== $status['environment']) {
-            return __('Endast DEV', 'ssf-microsoft-login');
+        if (empty($status['enabled']) && ! $this->is_configured()) {
+            return __('Inte komplett', 'microsoft-id-login');
         }
-        return ! empty($status['enabled']) ? __('Aktiv', 'ssf-microsoft-login') : __('Ej aktiv', 'ssf-microsoft-login');
+        return ! empty($status['enabled']) ? __('Aktiv', 'microsoft-id-login') : __('Avstängd', 'microsoft-id-login');
     }
 
     private function configured_label(bool $configured): string
     {
-        return $configured ? __('Konfigurerad', 'ssf-microsoft-login') : __('Saknas', 'ssf-microsoft-login');
+        return $configured ? __('Konfigurerad', 'microsoft-id-login') : __('Saknas', 'microsoft-id-login');
     }
 
     private function linked_user_count(): int
@@ -464,7 +478,7 @@ final class SSF_Microsoft_Login
     private function linked_email_label(int $user_id): string
     {
         $email = (string) get_user_meta($user_id, self::META_EMAIL, true);
-        return '' !== $email ? $email : __('Microsoft-ID kopplat', 'ssf-microsoft-login');
+        return '' !== $email ? $email : __('Microsoft-ID kopplat', 'microsoft-id-login');
     }
 
     public function render_profile_connection($user): void
@@ -475,28 +489,28 @@ final class SSF_Microsoft_Login
         $is_own_profile = (int) get_current_user_id() === (int) $user->ID;
         $linked = $this->is_user_linked((int) $user->ID);
         ?>
-        <h2><?php esc_html_e('Microsoft 365-konto', 'ssf-microsoft-login'); ?></h2>
-        <table class="form-table" role="presentation"><tr><th><?php esc_html_e('Status', 'ssf-microsoft-login'); ?></th><td>
-            <p><?php echo esc_html($linked ? __('Microsoft 365-kontot är kopplat.', 'ssf-microsoft-login') : __('Inget Microsoft 365-konto är kopplat.', 'ssf-microsoft-login')); ?></p>
+        <h2><?php esc_html_e('Microsoft 365-konto', 'microsoft-id-login'); ?></h2>
+        <table class="form-table" role="presentation"><tr><th><?php esc_html_e('Status', 'microsoft-id-login'); ?></th><td>
+            <p><?php echo esc_html($linked ? __('Microsoft 365-kontot är kopplat.', 'microsoft-id-login') : __('Inget Microsoft 365-konto är kopplat.', 'microsoft-id-login')); ?></p>
             <?php if ($is_own_profile && $this->is_enabled()) : ?>
             <?php if ($linked) : ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="ssf_m365_unlink">
                     <?php wp_nonce_field('ssf_m365_unlink'); ?>
-                    <?php submit_button(__('Koppla från Microsoft 365', 'ssf-microsoft-login'), 'secondary', 'submit', false); ?>
+                    <?php submit_button(__('Koppla från Microsoft 365', 'microsoft-id-login'), 'secondary', 'submit', false); ?>
                 </form>
             <?php else : ?>
-                <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_link_start'), 'ssf_m365_link_start')); ?>"><?php esc_html_e('Koppla Microsoft 365-konto', 'ssf-microsoft-login'); ?></a></p>
+                <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_link_start'), 'ssf_m365_link_start')); ?>"><?php esc_html_e('Koppla Microsoft 365-konto', 'microsoft-id-login'); ?></a></p>
             <?php endif; ?>
             <?php endif; ?>
         </td></tr>
         <?php if ($this->can_manage_permission_groups()) : ?>
-            <tr><th><?php esc_html_e('SSF-behorighetsgrupper', 'ssf-microsoft-login'); ?></th><td>
+            <tr><th><?php esc_html_e('SSF-behorighetsgrupper', 'microsoft-id-login'); ?></th><td>
                 <?php wp_nonce_field('ssf_m365_profile_groups_' . (int) $user->ID, 'ssf_m365_profile_groups_nonce'); ?>
                 <?php foreach (self::permission_groups() as $key => $group) : ?>
                     <label style="display:block"><input type="checkbox" name="ssf_permission_groups[]" value="<?php echo esc_attr($key); ?>" <?php checked(in_array($key, $this->user_groups((int) $user->ID), true)); ?> <?php disabled((int) $user->ID === get_current_user_id() && ! current_user_can('manage_options')); ?>> <?php echo esc_html($group['label']); ?></label>
                 <?php endforeach; ?>
-                <p class="description"><?php esc_html_e('Microsoft bekraftar identitet. Dessa WordPress-grupper styr atkomst i SSF.', 'ssf-microsoft-login'); ?></p>
+                <p class="description"><?php esc_html_e('Microsoft bekraftar identitet. Dessa WordPress-grupper styr atkomst i SSF.', 'microsoft-id-login'); ?></p>
             </td></tr>
         <?php endif; ?>
         </table>
@@ -527,7 +541,7 @@ final class SSF_Microsoft_Login
     public function start_link(): void
     {
         if (! is_user_logged_in() || ! check_admin_referer('ssf_m365_link_start')) {
-            wp_die(esc_html__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'microsoft-id-login'));
         }
         $this->start_authorization('link', get_current_user_id(), admin_url('profile.php'));
     }
@@ -535,12 +549,12 @@ final class SSF_Microsoft_Login
     public function unlink_account(): void
     {
         if (! is_user_logged_in() || ! check_admin_referer('ssf_m365_unlink')) {
-            wp_die(esc_html__('Du måste vara inloggad för att koppla från Microsoft 365.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du måste vara inloggad för att koppla från Microsoft 365.', 'microsoft-id-login'));
         }
         delete_user_meta(get_current_user_id(), self::META_TID);
         delete_user_meta(get_current_user_id(), self::META_OID);
         delete_user_meta(get_current_user_id(), self::META_EMAIL);
-        $this->set_notice(get_current_user_id(), 'success', __('Microsoft 365-kontot har kopplats från.', 'ssf-microsoft-login'));
+        $this->set_notice(get_current_user_id(), 'success', __('Microsoft 365-kontot har kopplats från.', 'microsoft-id-login'));
         wp_safe_redirect(admin_url('profile.php'));
         exit;
     }
@@ -549,12 +563,12 @@ final class SSF_Microsoft_Login
     {
         $user_id = isset($_GET['user_id']) ? absint($_GET['user_id']) : 0;
         if (! $this->can_manage_login() || $user_id <= 0 || ! check_admin_referer('ssf_m365_admin_unlink_' . $user_id)) {
-            wp_die(esc_html__('Du saknar behorighet.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du saknar behorighet.', 'microsoft-id-login'));
         }
         delete_user_meta($user_id, self::META_TID);
         delete_user_meta($user_id, self::META_OID);
         delete_user_meta($user_id, self::META_EMAIL);
-        $this->set_notice(get_current_user_id(), 'success', __('Microsoft 365-kopplingen har tagits bort. WordPress-behorigheter andrades inte.', 'ssf-microsoft-login'));
+        $this->set_notice(get_current_user_id(), 'success', __('Microsoft 365-kopplingen har tagits bort. WordPress-behorigheter andrades inte.', 'microsoft-id-login'));
         wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
         exit;
     }
@@ -562,7 +576,7 @@ final class SSF_Microsoft_Login
     public function start_real_login_test(): void
     {
         if (! is_user_logged_in() || ! $this->can_manage_login() || ! check_admin_referer('ssf_m365_test_login')) {
-            wp_die(esc_html__('Du saknar behorighet.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du saknar behorighet.', 'microsoft-id-login'));
         }
         $this->start_authorization('test', get_current_user_id(), admin_url('admin.php?page=' . self::MENU_SLUG));
     }
@@ -570,7 +584,7 @@ final class SSF_Microsoft_Login
     public function save_permission_groups(): void
     {
         if (! $this->can_manage_permission_groups() || ! check_admin_referer('ssf_save_permission_groups')) {
-            wp_die(esc_html__('Du saknar behorighet.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du saknar behorighet.', 'microsoft-id-login'));
         }
         $user_ids = isset($_POST['user_ids']) && is_array($_POST['user_ids']) ? array_map('absint', wp_unslash($_POST['user_ids'])) : array();
         $posted_groups = isset($_POST['groups']) && is_array($_POST['groups']) ? wp_unslash($_POST['groups']) : array();
@@ -581,7 +595,7 @@ final class SSF_Microsoft_Login
             $groups = isset($posted_groups[$user_id]) && is_array($posted_groups[$user_id]) ? array_map('sanitize_key', $posted_groups[$user_id]) : array();
             $this->save_user_groups($user_id, $groups, get_current_user_id());
         }
-        $this->set_notice(get_current_user_id(), 'success', __('Behorigheterna har sparats.', 'ssf-microsoft-login'));
+        $this->set_notice(get_current_user_id(), 'success', __('Behorigheterna har sparats.', 'microsoft-id-login'));
         wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
         exit;
     }
@@ -589,7 +603,7 @@ final class SSF_Microsoft_Login
     public function save_settings(): void
     {
         if (! $this->can_manage_login() || ! check_admin_referer('ssf_m365_save_settings')) {
-            wp_die(esc_html__('Du saknar behörighet.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du saknar behörighet.', 'microsoft-id-login'));
         }
 
         $current = $this->settings();
@@ -612,7 +626,7 @@ final class SSF_Microsoft_Login
         $current['updated_at'] = gmdate('c');
         $current['updated_by'] = get_current_user_id();
         update_option(self::SETTINGS_OPTION, $current, false);
-        $this->set_notice(get_current_user_id(), 'success', __('Microsoft-konfigurationen har sparats.', 'ssf-microsoft-login'));
+        $this->set_notice(get_current_user_id(), 'success', __('Microsoft-konfigurationen har sparats.', 'microsoft-id-login'));
         wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
         exit;
     }
@@ -620,18 +634,19 @@ final class SSF_Microsoft_Login
     public function test_configuration(): void
     {
         if (! $this->can_manage_login() || ! check_admin_referer('ssf_m365_test_config')) {
-            wp_die(esc_html__('Du saknar behörighet.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du saknar behörighet.', 'microsoft-id-login'));
         }
         $checks = $this->run_connection_checks();
         $passed = ! in_array(false, $checks, true);
         set_transient(self::TEST_PREFIX . 'config_' . get_current_user_id(), $checks, 10 * MINUTE_IN_SECONDS);
+        $this->record_test_status('technical', $passed);
         set_transient(
             self::NOTICE_PREFIX . get_current_user_id(),
             array(
                 'type' => $passed ? 'success' : 'error',
                 'message' => $passed
-                    ? __('Microsoft-konfigurationen kunde lasas.', 'ssf-microsoft-login')
-                    : __('Microsoft-konfigurationen kunde inte verifieras.', 'ssf-microsoft-login'),
+                    ? __('Microsoft-konfigurationen kunde lasas.', 'microsoft-id-login')
+                    : __('Microsoft-konfigurationen kunde inte verifieras.', 'microsoft-id-login'),
             ),
             MINUTE_IN_SECONDS
         );
@@ -646,8 +661,8 @@ final class SSF_Microsoft_Login
         $tenant = $this->config('tenant_id');
 
         return array(
-            'DEV-miljo' => 'development' === wp_get_environment_type(),
-            'Microsoft-login aktiverad' => $this->is_enabled(),
+            'WordPress environment' => in_array(wp_get_environment_type(), array('development', 'production'), true),
+            'Feature flag' => $this->truthy($this->config('enabled')),
             'Tenant ID finns' => '' !== $tenant,
             'Client ID finns' => '' !== $this->config('client_id'),
             'Client Secret finns' => '' !== $this->config('client_secret'),
@@ -672,10 +687,10 @@ final class SSF_Microsoft_Login
     private function start_authorization(string $mode, int $user_id, string $redirect_to): void
     {
         if (! $this->is_enabled()) {
-            wp_die(esc_html__('Microsoft 365-inloggning är inte aktiverad.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Microsoft 365-inloggning är inte aktiverad.', 'microsoft-id-login'));
         }
         if (in_array($mode, array('link', 'test'), true) && $user_id <= 0) {
-            wp_die(esc_html__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'ssf-microsoft-login'));
+            wp_die(esc_html__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'microsoft-id-login'));
         }
         $state = $this->random_urlsafe(32);
         $nonce = $this->random_urlsafe(32);
@@ -715,18 +730,18 @@ final class SSF_Microsoft_Login
         $transaction = $state ? get_transient(self::STATE_PREFIX . $state) : false;
         delete_transient(self::STATE_PREFIX . $state);
         if (! is_array($transaction) || ! empty($transaction['used']) || time() - (int) ($transaction['created'] ?? 0) > 10 * MINUTE_IN_SECONDS) {
-            $this->deny(__('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            $this->deny(__('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         if (! empty($_GET['error'])) {
-            $this->deny(__('Microsoft-inloggningen avbröts eller nekades.', 'ssf-microsoft-login'));
+            $this->deny(__('Microsoft-inloggningen avbröts eller nekades.', 'microsoft-id-login'));
         }
         $code = isset($_GET['code']) && is_scalar($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
         if (! $code) {
-            $this->deny(__('Microsoft skickade ingen behörighetskod.', 'ssf-microsoft-login'));
+            $this->deny(__('Microsoft skickade ingen behörighetskod.', 'microsoft-id-login'));
         }
         $token = $this->exchange_code($code, (string) $transaction['pkce_verifier']);
         if (is_wp_error($token) || empty($token['id_token'])) {
-            $this->deny(__('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            $this->deny(__('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         $claims = $this->validate_id_token((string) $token['id_token'], (string) $transaction['nonce']);
         if (is_wp_error($claims)) {
@@ -736,7 +751,7 @@ final class SSF_Microsoft_Login
         $oid = sanitize_text_field((string) ($claims['oid'] ?? ''));
         $email = $this->claim_email($claims);
         if (! $tid || ! $oid) {
-            $this->deny(__('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            $this->deny(__('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         if ('link' === ($transaction['mode'] ?? '')) {
             $this->complete_link($transaction, $tid, $oid, $email);
@@ -751,7 +766,7 @@ final class SSF_Microsoft_Login
     {
         $users = $this->users_for_identity($tid, $oid);
         if (1 !== count($users)) {
-            $this->deny(__('Ditt Microsoft-konto är inte kopplat till ett SSF-konto.', 'ssf-microsoft-login'));
+            $this->deny(__('Ditt Microsoft-konto är inte kopplat till ett SSF-konto.', 'microsoft-id-login'));
         }
         $user_id = (int) $users[0]->ID;
         update_user_meta($user_id, self::META_LAST_LOGIN, time());
@@ -769,11 +784,11 @@ final class SSF_Microsoft_Login
     {
         $user_id = (int) ($transaction['user_id'] ?? 0);
         if (! is_user_logged_in() || $user_id <= 0 || get_current_user_id() !== $user_id) {
-            $this->deny(__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'ssf-microsoft-login'));
+            $this->deny(__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'microsoft-id-login'));
         }
         foreach ($this->users_for_identity($tid, $oid) as $user) {
             if ((int) $user->ID !== $user_id) {
-                $this->deny(__('Det här Microsoft-kontot är redan kopplat till ett annat SSF-konto.', 'ssf-microsoft-login'));
+                $this->deny(__('Det här Microsoft-kontot är redan kopplat till ett annat SSF-konto.', 'microsoft-id-login'));
             }
         }
         update_user_meta($user_id, self::META_TID, $tid);
@@ -781,7 +796,7 @@ final class SSF_Microsoft_Login
         if ('' !== $email) {
             update_user_meta($user_id, self::META_EMAIL, $email);
         }
-        $this->set_notice($user_id, 'success', __('Microsoft 365-kontot är nu kopplat.', 'ssf-microsoft-login'));
+        $this->set_notice($user_id, 'success', __('Microsoft 365-kontot är nu kopplat.', 'microsoft-id-login'));
         wp_safe_redirect(admin_url('profile.php'));
         exit;
     }
@@ -790,9 +805,10 @@ final class SSF_Microsoft_Login
     {
         $user_id = (int) ($transaction['user_id'] ?? 0);
         if (! is_user_logged_in() || $user_id <= 0 || get_current_user_id() !== $user_id) {
-            $this->deny(__('Testet maste avslutas med samma WordPress-session som startade det.', 'ssf-microsoft-login'));
+            $this->deny(__('Testet maste avslutas med samma WordPress-session som startade det.', 'microsoft-id-login'));
         }
         $linked = (string) get_user_meta($user_id, self::META_TID, true) === $tid && (string) get_user_meta($user_id, self::META_OID, true) === $oid;
+        $this->record_test_status('real_login', true);
         set_transient(
             self::TEST_PREFIX . 'login_' . $user_id,
             array(
@@ -843,38 +859,38 @@ final class SSF_Microsoft_Login
     {
         $parts = explode('.', $jwt);
         if (3 !== count($parts)) {
-            return new WP_Error('ssf_m365_jwt_format', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_jwt_format', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         $header = json_decode($this->base64url_decode($parts[0]), true);
         $claims = json_decode($this->base64url_decode($parts[1]), true);
         $signature = $this->base64url_decode($parts[2]);
         if (! is_array($header) || ! is_array($claims) || ($header['alg'] ?? '') !== 'RS256' || empty($header['kid'])) {
-            return new WP_Error('ssf_m365_jwt_header', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_jwt_header', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         $key = $this->signing_key((string) $header['kid']);
         if (is_wp_error($key) || ! openssl_verify($parts[0] . '.' . $parts[1], $signature, $key, OPENSSL_ALGO_SHA256)) {
-            return new WP_Error('ssf_m365_invalid_signature', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_invalid_signature', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         $tenant = $this->config('tenant_id');
         $issuer = 'https://login.microsoftonline.com/' . $tenant . '/v2.0';
         $now = time();
         if (($claims['iss'] ?? '') !== $issuer) {
-            return new WP_Error('ssf_m365_invalid_issuer', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_invalid_issuer', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         if (($claims['aud'] ?? '') !== $this->config('client_id')) {
-            return new WP_Error('ssf_m365_invalid_audience', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_invalid_audience', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         if ((int) ($claims['exp'] ?? 0) <= $now || ((int) ($claims['nbf'] ?? 0) && (int) $claims['nbf'] > $now)) {
-            return new WP_Error('ssf_m365_token_time', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_token_time', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         if (($claims['nonce'] ?? '') !== $expected_nonce) {
-            return new WP_Error('ssf_m365_invalid_nonce', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_invalid_nonce', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         if (($claims['tid'] ?? '') !== $tenant) {
-            return new WP_Error('ssf_m365_invalid_tenant', __('Det här Microsoft-kontot tillhör inte SSF:s Microsoft 365-miljö.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_invalid_tenant', __('Det här Microsoft-kontot tillhör inte SSF:s Microsoft 365-miljö.', 'microsoft-id-login'));
         }
         if (empty($claims['oid']) || empty($claims['tid'])) {
-            return new WP_Error('ssf_m365_missing_identity', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'ssf-microsoft-login'));
+            return new WP_Error('ssf_m365_missing_identity', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         return $claims;
     }
@@ -978,9 +994,21 @@ final class SSF_Microsoft_Login
         );
     }
 
+    private function record_test_status(string $key, bool $passed): void
+    {
+        $status = get_option(self::TEST_STATUS_OPTION, array());
+        $status = is_array($status) ? $status : array();
+        $status[$key] = array(
+            'result' => $passed ? 'PASS' : 'FAIL',
+            'timestamp' => gmdate('c'),
+            'user_id' => get_current_user_id(),
+        );
+        update_option(self::TEST_STATUS_OPTION, $status, false);
+    }
+
     private function is_enabled(): bool
     {
-        return 'development' === wp_get_environment_type() && $this->truthy($this->config('enabled')) && $this->is_configured();
+        return $this->truthy($this->config('enabled')) && $this->is_configured();
     }
 
     private function is_configured(): bool
@@ -1070,7 +1098,7 @@ final class SSF_Microsoft_Login
 
     private function deny(string $message): void
     {
-        wp_die(esc_html($message), esc_html__('Microsoft 365-inloggning', 'ssf-microsoft-login'), array('response' => 403));
+        wp_die(esc_html($message), esc_html__('Microsoft 365-inloggning', 'microsoft-id-login'), array('response' => 403));
     }
 
     private function set_notice(int $user_id, string $type, string $message): void
@@ -1099,7 +1127,7 @@ final class SSF_Microsoft_Login
     }
 }
 
-register_activation_hook(__FILE__, array('SSF_Microsoft_Login', 'activate'));
-register_deactivation_hook(__FILE__, array('SSF_Microsoft_Login', 'deactivate'));
+register_activation_hook(__FILE__, array('SSF_Microsoft_ID_Login', 'activate'));
+register_deactivation_hook(__FILE__, array('SSF_Microsoft_ID_Login', 'deactivate'));
 
-SSF_Microsoft_Login::instance();
+SSF_Microsoft_ID_Login::instance();
