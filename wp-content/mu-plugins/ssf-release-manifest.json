@@ -2,14 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260916.11",
-    "built_at":  "2026-09-16T20:09:09.6171490Z",
+    "build":  "20260916.12",
+    "built_at":  "2026-09-16T20:33:31.3383916Z",
     "source":  "codex",
-    "source_revision":  "6c00d8810879de8409cfd7fc664c9670b48ad640",
-    "description":  "Add SSF account invitation login flow",
+    "source_revision":  "ebf75040af33253fd5940287a3e17512e00e9632",
+    "description":  "Improve SharePoint migration admin UX",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "microsoft-id-login"
+                       "microsoft-id-login",
+                       "ssf-admin-navigation",
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
