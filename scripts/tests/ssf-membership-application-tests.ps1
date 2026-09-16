@@ -37,6 +37,7 @@ $admin = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-
 $destinations = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointDestinations.php')
 $inspector = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-inspector.php')
 $archiveMigration = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-archive-migration.php')
+$adminNavigation = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-admin-navigation.php')
 
 Assert-True 'Formuläret ska ha sex steg' (([regex]::Matches($form, 'data-application-step=')).Count -eq 6)
 Assert-Contains 'Ansökningsformuläret har egen H1' $form '<h1>Ansök om medlemskap för fartyg</h1>'
@@ -219,6 +220,11 @@ Assert-NotContains 'Arkivflytt får inte skicka e-post' $archiveMigration 'wp_ma
 Assert-NotContains 'Arkivflytt får inte ändra statusövergångar' $archiveMigration 'transition('
 Assert-Contains 'Cutover är explicit' $archiveMigration 'Aktivera ny katalog'
 Assert-Contains 'Gamla ärenden byter inte automatiskt vid cutover' $archiveMigration 'Befintliga ärenden byter inte automatiskt'
+
+Assert-Contains 'Archive migration appears in System tabs' $adminNavigation "'ssf-application-archive-migration' => array('label' => 'Flytta kataloger'"
+Assert-Contains 'Archive migration renders System tabs' $archiveMigration "render_system_tabs('ssf-application-archive-migration')"
+Assert-True 'Archive migration has exactly one H1' (([regex]::Matches($archiveMigration, '<h1[ >]')).Count -eq 1)
+Assert-Contains 'Archive migration uses compact admin steps' $archiveMigration 'ssf-archive-step__heading'
 
 & node --check (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')
 if ($LASTEXITCODE -ne 0) { $failures.Add('JavaScript syntaxkontroll misslyckades') }

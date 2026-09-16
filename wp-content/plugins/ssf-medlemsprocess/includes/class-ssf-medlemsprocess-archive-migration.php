@@ -45,15 +45,16 @@ class SSF_Medlemsprocess_Archive_Migration
         ?>
         <div class="wrap ssf-archive-migration">
             <h1>Flytta SharePoint-kataloger</h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-application-archive-migration'); } ?>
             <?php $this->notice(); ?>
-            <div class="ssf-process-dashboard-cards">
-                <div class="ssf-process-dashboard-card"><span>Vald katalog</span><strong>Medlemsansökningar</strong></div>
-                <div class="ssf-process-dashboard-card"><span>Nuvarande plats</span><strong>Medlemsgruppens SharePoint</strong></div>
-                <div class="ssf-process-dashboard-card"><span>Ny plats</span><strong><?php echo esc_html((string) ($target['site_url'] ?: 'Styrelsens SharePoint')); ?><br><?php echo esc_html((string) ($target['folder_path'] ?: 'Medlemskap / Ansökningar')); ?></strong></div>
-                <div class="ssf-process-dashboard-card"><span>Miljö</span><strong><?php echo esc_html(strtoupper($this->environment())); ?></strong></div>
+            <p class="ssf-archive-migration__intro">Flytta medlemsansökningarnas SharePoint-arkiv till en ny plats. Följ stegen i ordning och aktivera först när samtliga kontroller är godkända.</p>
+
+            <div class="ssf-archive-summary" aria-label="Migreringsöversikt">
+                <dl><div><dt>Katalog</dt><dd>Medlemsansökningar</dd></div><div><dt>Nuvarande plats</dt><dd>Medlemsgruppens SharePoint</dd></div><div><dt>Ny plats</dt><dd><?php echo esc_html((string) ($target['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Miljö</dt><dd><span class="ssf-archive-environment"><?php echo esc_html(strtoupper($this->environment())); ?></span></dd></div></dl>
             </div>
 
-            <h2>1. Välj katalog</h2>
+            <section class="ssf-archive-step" aria-labelledby="ssf-archive-source-heading">
+            <div class="ssf-archive-step__heading"><span>1</span><div><h2 id="ssf-archive-source-heading">Välj katalog</h2><p>Välj vilket arkiv som ska flyttas.</p></div></div>
             <table class="form-table" role="presentation">
                 <tr>
                     <th scope="row"><label for="ssf_archive_catalog">Katalog som ska flyttas</label></th>
@@ -65,9 +66,10 @@ class SSF_Medlemsprocess_Archive_Migration
                     </td>
                 </tr>
             </table>
+            </section>
 
-            <h2>2. Välj ny plats</h2>
-            <p>Ange SharePoint-siten, dokumentbiblioteket och sökvägen till den nya mappen. Knappen <strong>Testa ny katalog</strong> hämtar tekniska ID:n automatiskt när Graph-behörigheten räcker.</p>
+            <section class="ssf-archive-step" aria-labelledby="ssf-archive-target-heading">
+            <div class="ssf-archive-step__heading"><span>2</span><div><h2 id="ssf-archive-target-heading">Välj ny plats</h2><p>Ange SharePoint-siten, dokumentbiblioteket och sökvägen till den nya mappen.</p></div></div>
             <div class="notice notice-info inline"><p><strong>Viktigt:</strong> Verktyget skapar inte SharePoint-kolumner eller Choice-värden. Skapa först mappen och metadatafält i SharePoint, gärna genom att utgå från befintlig katalogs kolumnschema. Därefter kontrollerar <strong>Testa ny katalog</strong> att alla fält och val finns.</p></div>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_application_archive_save_target">
@@ -87,24 +89,27 @@ class SSF_Medlemsprocess_Archive_Migration
                 </details>
                 <?php submit_button('Spara ny plats', 'secondary'); ?>
             </form>
+            </section>
 
-            <h2>3. Testa och migrera</h2>
-            <p>Kör stegen i ordning. Ingen ny katalog aktiveras och inga ärenden flyttas automatiskt.</p>
-            <p>
+            <section class="ssf-archive-step" aria-labelledby="ssf-archive-test-heading">
+            <div class="ssf-archive-step__heading"><span>3</span><div><h2 id="ssf-archive-test-heading">Testa anslutningen</h2><p>Verifiera katalogen och skrivrättigheten innan du skapar en migreringsplan.</p></div></div>
+            <div class="ssf-archive-actions">
                 <?php $this->button('ssf_application_archive_readiness', 'Testa ny katalog'); ?>
                 <?php $this->button('ssf_application_archive_write_test', 'Testa skrivning'); ?>
                 <?php $this->button('ssf_application_archive_plan', 'Visa migreringsplan'); ?>
                 <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_application_archive_export'), 'ssf_application_archive_export')); ?>">Exportera rapport</a>
-            </p>
+            </div>
 
-            <h2>4. Status</h2>
-            <table class="widefat striped"><tbody>
+            <h3>Kontrollstatus</h3>
+            <table class="widefat striped ssf-archive-status"><tbody>
                 <?php foreach ($this->status_rows($readiness, $write, $plan) as $row) : ?>
                     <tr><th><?php echo esc_html($row[0]); ?></th><td><?php echo esc_html($row[1]); ?></td></tr>
                 <?php endforeach; ?>
             </tbody></table>
+            </section>
 
-            <h2>5. Migrera testärende</h2>
+            <section class="ssf-archive-step" aria-labelledby="ssf-archive-case-heading">
+            <div class="ssf-archive-step__heading"><span>4</span><div><h2 id="ssf-archive-case-heading">Migrera ett testärende</h2><p>Flytta ett valt ärende och kontrollera resultatet innan aktivering.</p></div></div>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_application_archive_migrate_one">
                 <?php wp_nonce_field('ssf_application_archive_migrate_one'); ?>
@@ -115,15 +120,16 @@ class SSF_Medlemsprocess_Archive_Migration
                 </select>
                 <?php submit_button('Migrera testärende', 'primary', 'submit', false); ?>
             </form>
+            </section>
 
-            <h2>6. Aktivera för nya ansökningar</h2>
-            <p>Aktiverar styrelsens SharePoint för nya medlemsansökningar först efter PASS på readiness och skrivtest. Befintliga ärenden byter inte automatiskt.</p>
+            <section class="ssf-archive-step ssf-archive-step--activation" aria-labelledby="ssf-archive-activate-heading">
+            <div class="ssf-archive-step__heading"><span>5</span><div><h2 id="ssf-archive-activate-heading">Aktivera för nya ansökningar</h2><p>Nya ansökningar börjar använda den verifierade platsen. Befintliga ärenden byter inte automatiskt.</p></div></div>
             <?php $this->button('ssf_application_archive_cutover', 'Aktivera ny katalog', 'primary'); ?>
+            </section>
 
-            <h2>Migreringsplan</h2>
-            <?php $this->render_plan($plan); ?>
+            <details class="ssf-archive-details" open><summary>Migreringsplan</summary><?php $this->render_plan($plan); ?></details>
 
-            <details><summary>Tekniska detaljer</summary><pre><?php echo esc_html(wp_json_encode(array('target' => $target, 'readiness' => $readiness, 'write_test' => $write), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre></details>
+            <details class="ssf-archive-details"><summary>Tekniska detaljer</summary><pre><?php echo esc_html(wp_json_encode(array('target' => $target, 'readiness' => $readiness, 'write_test' => $write), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre></details>
         </div>
         <?php
     }

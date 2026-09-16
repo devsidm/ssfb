@@ -1219,8 +1219,10 @@ final class SSF_Microsoft_ID_Login
         }
         $url = add_query_arg(array('action' => 'ssf_m365_invite_activate', 'token' => rawurlencode($raw_token)), admin_url('admin-post.php'));
         $subject = __('Aktivera ditt SSF-konto', 'microsoft-id-login');
-        if (class_exists('SSF_Email_Template')) {
-            return SSF_Email_Template::send(
+        if (! class_exists('SSF_Email_Template')) {
+            return false;
+        }
+        return SSF_Email_Template::send(
                 (string) $user->user_email,
                 $subject,
                 'ssf_account_invitation',
@@ -1236,18 +1238,6 @@ final class SSF_Microsoft_ID_Login
                     'notice' => __('SSF hanterar aldrig ditt Microsoft-lösenord.', 'microsoft-id-login'),
                 )
             );
-        }
-        $message = sprintf(
-            "<h1>%s</h1><p>%s</p><p>%s</p><p><a href=\"%s\">%s</a></p><p>%s</p><p>%s</p>",
-            esc_html__('Aktivera ditt SSF-konto', 'microsoft-id-login'),
-            esc_html(sprintf(__('Hej %s,', 'microsoft-id-login'), $user->display_name ?: $user->user_email)),
-            esc_html(sprintf(__('Du har fått tillgång till SSF:s administrativa system. Klicka nedan för att aktivera ditt konto med ditt %s-konto.', 'microsoft-id-login'), $user->user_email)),
-            esc_url($url),
-            esc_html__('Aktivera SSF-konto', 'microsoft-id-login'),
-            esc_html__('Inloggningen verifieras av Microsoft.', 'microsoft-id-login'),
-            esc_html__('Sveriges Segelfartygsförbund', 'microsoft-id-login')
-        );
-        return wp_mail((string) $user->user_email, $subject, $message, array('Content-Type: text/html; charset=UTF-8'));
     }
 
     private function invitation_by_token(string $raw_token): array

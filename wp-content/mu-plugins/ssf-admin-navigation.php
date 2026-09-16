@@ -24,6 +24,7 @@ final class SSF_Admin_Navigation
         'ssf-features' => array('label' => 'Funktioner', 'capability' => 'manage_ssf_features'),
         'ssf-member-portal-microsoft365' => array('label' => 'Microsoft 365', 'capability' => 'ssf_manage_motions'),
         'microsoft-id-login' => array('label' => 'Inloggning', 'capability' => 'ssf_manage_microsoft_login'),
+        'ssf-application-archive-migration' => array('label' => 'Flytta kataloger', 'capability' => 'ssf_manage_application_settings'),
         'ssf-office365-mailer' => array('label' => 'E-post', 'capability' => 'manage_options'),
         'ssf-antispam' => array('label' => 'Antispam', 'capability' => 'manage_options'),
         'ssf-release' => array('label' => 'Release', 'capability' => 'manage_ssf_releases'),
@@ -502,6 +503,7 @@ final class SSF_Admin_Navigation
             'ssf-features' => 'Styr vilka publika funktioner som är aktiva.',
             'ssf-member-portal-microsoft365' => 'E-postmottagare samt miljöseparerade SharePoint-destinationer för årsmöten och medlemsansökningar.',
             'microsoft-id-login' => 'Microsoft ID Login, Entra ID-appar och koppling mellan Microsoft-identitet och WordPress-behörigheter.',
+            'ssf-application-archive-migration' => 'Flytta medlemsansökningarnas SharePoint-katalog på ett kontrollerat och verifierbart sätt.',
             'ssf-office365-mailer' => 'Microsoft 365-transport för webbplatsens e-post.',
             'ssf-antispam' => 'Turnstile, honeypot och begränsning av formulärinlämningar.',
             'ssf-release' => 'Version, releasedatum, miljö och releasehistorik.',
@@ -512,7 +514,7 @@ final class SSF_Admin_Navigation
 
     private static function can_access_system(): bool
     {
-        foreach (array('manage_options', 'manage_ssf_features', 'manage_ssf_releases', 'ssf_manage_member_portal', 'ssf_manage_motions', 'ssf_manage_microsoft_login') as $capability) {
+        foreach (array('manage_options', 'manage_ssf_features', 'manage_ssf_releases', 'ssf_manage_member_portal', 'ssf_manage_motions', 'ssf_manage_microsoft_login', 'ssf_manage_application_settings') as $capability) {
             if (current_user_can($capability)) {
                 return true;
             }

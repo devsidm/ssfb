@@ -18,6 +18,36 @@
 .ssf-process-dashboard-card { display: grid; gap: 8px; padding: 18px; background: #fff; border: 1px solid #d9e3f0; border-radius: 6px; }
 .ssf-process-dashboard-card span { color: #66758c; }
 .ssf-process-dashboard-card strong { color: #0b2d5c; font-size: 30px; }
+
+.ssf-archive-migration { max-width: 1100px; }
+.ssf-archive-migration__intro { max-width: 760px; margin: 4px 0 18px; color: #50575e; font-size: 14px; }
+.ssf-archive-summary { margin: 0 0 16px; padding: 12px 16px; background: #fff; border: 1px solid #c3c4c7; }
+.ssf-archive-summary dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0; }
+.ssf-archive-summary dl > div { min-width: 0; padding: 2px 16px; border-left: 1px solid #dcdcde; }
+.ssf-archive-summary dl > div:first-child { padding-left: 0; border-left: 0; }
+.ssf-archive-summary dt { margin: 0 0 3px; color: #646970; font-size: 12px; font-weight: 600; }
+.ssf-archive-summary dd { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ssf-archive-environment { display: inline-block; padding: 2px 7px; background: #f0f0f1; border-radius: 3px; font-size: 11px; line-height: 1.5; }
+.ssf-archive-step { margin: 0 0 12px; padding: 16px 20px; background: #fff; border: 1px solid #c3c4c7; }
+.ssf-archive-step__heading { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.ssf-archive-step__heading > span { display: grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; background: #2271b1; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; }
+.ssf-archive-step__heading h2 { margin: 1px 0 2px; padding: 0; font-size: 16px; line-height: 1.35; }
+.ssf-archive-step__heading p { margin: 0; color: #646970; font-size: 13px; }
+.ssf-archive-step h3 { margin: 18px 0 8px; font-size: 14px; }
+.ssf-archive-step .form-table { margin: 0; }
+.ssf-archive-step .form-table th { width: 190px; padding: 12px 10px 12px 0; }
+.ssf-archive-step .form-table td { padding: 8px 10px; }
+.ssf-archive-step .submit { margin: 12px 0 0; padding: 0; }
+.ssf-archive-step form select { min-width: min(420px, 100%); }
+.ssf-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ssf-archive-actions form, .ssf-archive-actions p { margin: 0; }
+.ssf-archive-status th { width: 220px; }
+.ssf-archive-step--activation { border-left: 4px solid #2271b1; }
+.ssf-archive-details { margin: 12px 0; background: #fff; border: 1px solid #c3c4c7; }
+.ssf-archive-details summary { padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.ssf-archive-details[open] summary { border-bottom: 1px solid #dcdcde; }
+.ssf-archive-details > table, .ssf-archive-details > pre, .ssf-archive-details > p { box-sizing: border-box; margin: 16px; max-width: calc(100% - 32px); }
+.ssf-archive-details pre { overflow: auto; font-size: 12px; }
 .ssf-process-status-badge { display: inline-block; padding: 4px 8px; color: #0b2d5c; background: #f8f1df; border: 1px solid #d8b46a; border-radius: 4px; font-weight: 600; }
-@media (max-width: 782px) { .ssf-process-admin-overview, .ssf-process-admin-grid, .ssf-process-dashboard-cards { grid-template-columns: 1fr; } .ssf-process-check-row { grid-template-columns: 1fr; } }
+@media (max-width: 782px) { .ssf-process-admin-overview, .ssf-process-admin-grid, .ssf-process-dashboard-cards, .ssf-archive-summary dl { grid-template-columns: 1fr; } .ssf-process-check-row { grid-template-columns: 1fr; } .ssf-archive-summary dl > div { padding: 8px 0; border-top: 1px solid #dcdcde; border-left: 0; } .ssf-archive-summary dl > div:first-child { border-top: 0; } .ssf-archive-step { padding: 14px; } .ssf-archive-step .form-table th, .ssf-archive-step .form-table td { display: block; width: auto; padding: 6px 0; } .ssf-archive-actions { align-items: stretch; } .ssf-archive-actions .button { text-align: center; } }
 @media print { #adminmenumain, #wpadminbar, #wpfooter, #screen-meta, #postdivrich, #submitdiv, .notice, .button, .button-link, .button-link-delete, .ssf-process-note-form { display: none !important; } #wpcontent, #wpbody, #wpbody-content { margin: 0 !important; padding: 0 !important; } .postbox { border: 0 !important; box-shadow: none !important; } }
