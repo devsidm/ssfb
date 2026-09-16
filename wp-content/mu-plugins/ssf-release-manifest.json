@@ -1,15 +1,16 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.13.4",
-    "build":  "20260916.8",
-    "built_at":  "2026-09-16T19:28:28.6974142Z",
+    "version":  "0.13.5",
+    "build":  "20260916.9",
+    "built_at":  "2026-09-16T19:36:31.3272005Z",
     "source":  "codex",
-    "source_revision":  "981e74d611dea59c362c94a8c84a9f463ec5df31",
-    "description":  "Simplify SharePoint archive migration admin flow",
+    "source_revision":  "f2055bc79a7e8154e33d649ddbaac391c1ce3c5f",
+    "description":  "Move Microsoft ID Login into SSF System",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "ssf-medlemsprocess"
+                       "microsoft-id-login",
+                       "ssf-admin-navigation"
                    ],
     "status":  "development",
     "prepared_at":  ""
