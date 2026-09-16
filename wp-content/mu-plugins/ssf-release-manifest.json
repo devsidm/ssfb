@@ -1,12 +1,12 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.13.6",
-    "build":  "20260916.10",
-    "built_at":  "2026-09-16T19:50:48.1939430Z",
+    "version":  "0.14.0",
+    "build":  "20260916.11",
+    "built_at":  "2026-09-16T20:09:09.6171490Z",
     "source":  "codex",
-    "source_revision":  "9bb8acbf4a79915aba73bbcccbb11f3b6a756a9c",
-    "description":  "Improve Microsoft login test feedback",
+    "source_revision":  "6c00d8810879de8409cfd7fc664c9670b48ad640",
+    "description":  "Add SSF account invitation login flow",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "microsoft-id-login"

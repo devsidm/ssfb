@@ -1,0 +1,146 @@
+body.login,
+body.ssf-account-page {
+    background: #eef5f7;
+    color: #172b35;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body.login #login {
+    width: min(420px, calc(100% - 32px));
+    padding-top: 48px;
+}
+
+body.login h1 a {
+    display: none;
+}
+
+.ssf-account-login,
+.ssf-account-card {
+    background: #ffffff;
+    border: 1px solid #d9e5e9;
+    border-radius: 8px;
+    box-shadow: 0 18px 50px rgba(23, 43, 53, 0.12);
+    margin: 0 0 20px;
+    padding: 30px;
+    text-align: center;
+}
+
+.ssf-account-card {
+    margin: 48px auto;
+    max-width: 460px;
+}
+
+.ssf-account-logo {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+}
+
+.ssf-account-logo img {
+    height: auto;
+    max-height: 76px;
+    max-width: 180px;
+}
+
+.ssf-account-logo-fallback {
+    align-items: center;
+    background: #0b4d5e;
+    border-radius: 50%;
+    color: #ffffff;
+    display: inline-flex;
+    font-size: 22px;
+    font-weight: 700;
+    height: 72px;
+    justify-content: center;
+    letter-spacing: 0;
+    width: 72px;
+}
+
+.ssf-account-login h1,
+.ssf-account-card h1 {
+    color: #102f3b;
+    font-size: 26px;
+    line-height: 1.2;
+    margin: 0 0 12px;
+}
+
+.ssf-account-login p,
+.ssf-account-card p {
+    color: #36515b;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.ssf-account-primary,
+.login .ssf-account-primary,
+.login .ssf-account-inline-login .button {
+    background: #0b6f86;
+    border-color: #0b6f86;
+    border-radius: 6px;
+    box-shadow: none;
+    color: #ffffff;
+    display: inline-flex;
+    font-size: 16px;
+    font-weight: 700;
+    justify-content: center;
+    line-height: 1.2;
+    min-height: 46px;
+    padding: 13px 18px;
+    text-decoration: none;
+    width: 100%;
+}
+
+.ssf-account-primary:focus,
+.ssf-account-primary:hover,
+.login .ssf-account-inline-login .button:focus,
+.login .ssf-account-inline-login .button:hover {
+    background: #084f60;
+    border-color: #084f60;
+    color: #ffffff;
+}
+
+.ssf-account-domain {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.ssf-account-help,
+.ssf-account-email {
+    color: #526b74;
+}
+
+.ssf-account-reserve {
+    border-top: 1px solid #d9e5e9;
+    color: #526b74;
+    display: grid;
+    gap: 4px;
+    margin-top: 22px;
+    padding-top: 18px;
+}
+
+.ssf-account-reserve strong {
+    color: #233f49;
+}
+
+body.login form {
+    border: 1px solid #d9e5e9;
+    border-radius: 8px;
+    box-shadow: none;
+    margin-top: 0;
+}
+
+.ssf-account-inline-login {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    body.login #login {
+        padding-top: 24px;
+    }
+
+    .ssf-account-login,
+    .ssf-account-card {
+        padding: 24px 20px;
+    }
+}

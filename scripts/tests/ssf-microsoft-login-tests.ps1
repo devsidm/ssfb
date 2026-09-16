@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $pluginPath = Join-Path $repo 'wp-content\plugins\microsoft-id-login\microsoft-id-login.php'
 $jsPath = Join-Path $repo 'wp-content\plugins\microsoft-id-login\assets\js\admin.js'
+$cssPath = Join-Path $repo 'wp-content\plugins\microsoft-id-login\assets\css\ssf-account.css'
 $docPath = Join-Path $repo 'docs\MICROSOFT-365-LOGIN-DEV.md'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $failures = [Collections.Generic.List[string]]::new()
@@ -18,12 +19,13 @@ function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected
 
 $plugin = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginPath
 $js = Get-Content -Raw -Encoding UTF8 -LiteralPath $jsPath
+$css = Get-Content -Raw -Encoding UTF8 -LiteralPath $cssPath
 $doc = Get-Content -Raw -Encoding UTF8 -LiteralPath $docPath
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.2.2'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.0'
 
 Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
@@ -70,8 +72,9 @@ Assert-Contains 'Uses oid user meta' $plugin "_ssf_m365_oid"
 Assert-Contains 'Maps by tid and oid' $plugin "'relation' => 'AND'"
 Assert-Contains 'Logs mapped user in' $plugin 'wp_set_auth_cookie'
 Assert-Contains 'Unmapped Microsoft user denied' $plugin 'inte kopplat till ett SSF-konto'
-Assert-NotContains 'No automatic user creation' $plugin 'wp_create_user'
-Assert-NotContains 'No user insert' $plugin 'wp_insert_user'
+Assert-NotContains 'No automatic user creation helper' $plugin 'wp_create_user'
+Assert-Contains 'Admin invitation may prepare WordPress user' $plugin 'wp_insert_user'
+Assert-Contains 'User insert is behind invitation helper' $plugin 'find_or_create_user'
 Assert-NotContains 'No role assignment' $plugin 'set_role'
 Assert-NotContains 'Email not used in identity meta query' $plugin "'key' => 'user_email'"
 
@@ -83,7 +86,13 @@ Assert-Contains 'Unlink requires nonce' $plugin "check_admin_referer('ssf_m365_u
 Assert-Contains 'Unlink deletes tid' $plugin 'delete_user_meta(get_current_user_id(), self::META_TID)'
 Assert-Contains 'Unlink deletes oid' $plugin 'delete_user_meta(get_current_user_id(), self::META_OID)'
 
-Assert-Contains 'Login button rendered' $plugin 'Logga in med Microsoft 365'
+Assert-Contains 'Login button rendered' $plugin 'Logga in med ditt SSF-konto'
+Assert-Contains 'SSF account login button rendered' $plugin 'Logga in med ditt SSF-konto'
+Assert-Contains 'SSF account domain helper rendered' $plugin 'Använd ditt @ssfb.se-konto'
+Assert-Contains 'WordPress fallback login remains visible' $plugin 'Administratör / reservinloggning'
+Assert-Contains 'WordPress fallback label exists' $plugin 'Logga in med WordPress'
+Assert-Contains 'Login page message hook exists' $plugin 'login_message'
+Assert-Contains 'Login CSS is enqueued' $plugin 'assets/css/ssf-account.css'
 Assert-Contains 'Login button hook preserves normal login form' $plugin "add_action('login_form'"
 Assert-Contains 'Reusable login URL helper exists' $plugin 'public static function login_url'
 Assert-Contains 'Safe redirect validation' $plugin 'wp_validate_redirect'
@@ -123,7 +132,7 @@ Assert-True 'New plugin is not production-excluded' (-not (@($config.excluded.pl
 Assert-True 'Old plugin slug removed from deployment policy' (-not (@($config.production.plugins + $config.plugin_policy.dev_only + $config.excluded.plugins) -contains 'ssf-microsoft-login'))
 $devOnlyPolicy = @{}
 @($config.plugin_policy.dev_only) | ForEach-Object { $devOnlyPolicy[$_] = $true }
-$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.2.2' }
+$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.3.0' }
 $missingProdPilot = $null
 $pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'PRODUCTION_CAPABLE' } else { 'MATCH' }
 Assert-True 'Production capable plugin is not treated as missing PROD parity' ($pilotClassification -eq 'PRODUCTION_CAPABLE')
@@ -137,6 +146,34 @@ Assert-Contains 'Admin assets loaded only on plugin page' $plugin "assets/js/adm
 Assert-Contains 'Callback copy button exists' $plugin 'data-ssf-copy="#ssf-m365-callback"'
 Assert-Contains 'Own account card exists' $plugin 'render_own_account_card'
 Assert-Contains 'Linked user list exists' $plugin 'render_users_and_permissions'
+Assert-Contains 'Admin create SSF user form exists' $plugin 'Lägg till SSF-användare'
+Assert-Contains 'Admin create invitation action exists' $plugin 'ssf_m365_create_invitation'
+Assert-Contains 'Create invitation requires capability' $plugin 'can_manage_permission_groups()'
+Assert-Contains 'Create invitation requires nonce' $plugin "check_admin_referer('ssf_m365_create_invitation')"
+Assert-Contains 'Invitation option exists' $plugin 'ssf_microsoft_login_invitations'
+Assert-Contains 'Invitation token is hashed' $plugin 'invitation_token_hash'
+Assert-Contains 'Invitation token raw value is only mailed' $plugin "'raw_token' => `$raw_token"
+Assert-Contains 'Invitation token uses HMAC' $plugin "hash_hmac('sha256'"
+Assert-Contains 'Invitation is time limited' $plugin 'INVITATION_TTL'
+Assert-Contains 'Invitation has expires_at' $plugin "'expires_at'"
+Assert-Contains 'Invitation is one time use' $plugin "'used_at'"
+Assert-Contains 'Invitation can be canceled' $plugin 'ssf_m365_cancel_invitation'
+Assert-Contains 'Invitation can be resent' $plugin 'ssf_m365_resend_invitation'
+Assert-Contains 'Resend invalidates old tokens' $plugin 'invalidate_open_invitations'
+Assert-Contains 'Only SSF email addresses are invited' $plugin 'is_ssf_email'
+Assert-Contains 'SSF email domain enforced' $plugin '@ssfb\.se'
+Assert-Contains 'Invitation mail sent' $plugin 'send_invitation_email'
+Assert-Contains 'Invitation mail subject exists' $plugin 'Aktivera ditt SSF-konto'
+Assert-Contains 'Activation page exists' $plugin 'render_invitation_activation'
+Assert-Contains 'Activation starts existing OIDC flow' $plugin "start_authorization('invite'"
+Assert-Contains 'Wrong Microsoft account is blocked' $plugin 'Fel SSF-konto'
+Assert-Contains 'Invitation checks Microsoft email for pending invite' $plugin 'strtolower($email) !== $expected_email'
+Assert-Contains 'Invitation permanent identity uses tid' $plugin 'update_user_meta($user_id, self::META_TID'
+Assert-Contains 'Invitation permanent identity uses oid' $plugin 'update_user_meta($user_id, self::META_OID'
+Assert-Contains 'Invitation stores email as display metadata' $plugin 'update_user_meta($user_id, self::META_EMAIL'
+Assert-Contains 'Successful activation page exists' $plugin 'Ditt SSF-konto är aktiverat'
+Assert-Contains 'Pending invitation metric exists' $plugin 'pending_invitation_count'
+Assert-Contains 'User table status exists' $plugin 'user_status_label'
 Assert-Contains 'Linked users filter exists' $plugin 'ssf_m365_filter'
 Assert-Contains 'Admin unlink action exists' $plugin 'ssf_m365_admin_unlink'
 Assert-Contains 'Admin unlink capability protected' $plugin 'can_manage_login()'
@@ -206,6 +243,8 @@ Assert-NotContains 'No directory roles are used' $plugin "`$claims['wids']"
 Assert-NotContains 'No hasgroups claim is used' $plugin 'hasgroups'
 Assert-NotContains 'No raw tid input field' $plugin 'name="tid"'
 Assert-NotContains 'No raw oid input field' $plugin 'name="oid"'
+Assert-NotContains 'No raw token stored in invitation record' $plugin "'token' => `$raw_token"
+Assert-NotContains 'Microsoft groups do not grant SSF groups' $plugin "`$claims['groups'] ??"
 
 Assert-Contains 'Stored email is display metadata only' $plugin 'claim_email'
 Assert-Contains 'Login stores last login' $plugin 'META_LAST_LOGIN'
@@ -215,6 +254,11 @@ Assert-Contains 'JS copy handler exists' $js 'data-ssf-copy'
 Assert-Contains 'JS uses clipboard API' $js 'navigator.clipboard.writeText'
 Assert-NotContains 'JS does not fetch remote endpoints' $js 'fetch('
 Assert-NotContains 'JS does not expose secrets' $js 'client_secret'
+
+Assert-Contains 'CSS styles SSF account login' $css '.ssf-account-login'
+Assert-Contains 'CSS styles SSF activation page' $css '.ssf-account-card'
+Assert-Contains 'CSS has mobile breakpoint' $css '@media (max-width: 480px)'
+Assert-Contains 'CSS has focus hover state' $css '.ssf-account-primary:focus'
 
 Assert-Contains 'Documentation redirect URI' $doc 'https://ssfb.se/dev/ssf-auth/microsoft/callback/'
 Assert-Contains 'Documentation no SharePoint permissions' $doc 'No SharePoint permissions'

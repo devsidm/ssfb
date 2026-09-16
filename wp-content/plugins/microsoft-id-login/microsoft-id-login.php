@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.2.2
+ * Version: 0.3.0
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.2.2';
+    private const VERSION = '0.3.0';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -30,11 +30,13 @@ final class SSF_Microsoft_ID_Login
     private const GROUP_META = '_ssf_permission_groups';
     private const SETTINGS_OPTION = 'ssf_microsoft_login_settings';
     private const AUDIT_OPTION = 'ssf_microsoft_login_permission_audit';
+    private const INVITATIONS_OPTION = 'ssf_microsoft_login_invitations';
     private const TEST_STATUS_OPTION = 'microsoft_id_login_test_status';
     private const CAP_MANAGE_LOGIN = 'ssf_manage_microsoft_login';
     private const CAP_MANAGE_PERMISSIONS = 'ssf_manage_permission_groups';
     private const QUERY_VAR = 'ssf_m365_login_callback';
     private const CALLBACK_PATH = 'ssf-auth/microsoft/callback/';
+    private const INVITATION_TTL = 7 * DAY_IN_SECONDS;
 
     private static ?SSF_Microsoft_ID_Login $instance = null;
 
@@ -175,6 +177,8 @@ final class SSF_Microsoft_ID_Login
         add_action('init', array($this, 'register_rewrite'));
         add_filter('query_vars', array($this, 'query_vars'));
         add_action('template_redirect', array($this, 'maybe_handle_callback'));
+        add_action('login_enqueue_scripts', array($this, 'enqueue_login_assets'));
+        add_filter('login_message', array($this, 'render_login_message'));
         add_action('login_form', array($this, 'render_login_button'));
         add_action('admin_menu', array($this, 'register_admin_page'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
@@ -191,6 +195,13 @@ final class SSF_Microsoft_ID_Login
         add_action('admin_post_ssf_m365_save_settings', array($this, 'save_settings'));
         add_action('admin_post_ssf_m365_test_config', array($this, 'test_configuration'));
         add_action('admin_post_ssf_m365_test_login', array($this, 'start_real_login_test'));
+        add_action('admin_post_ssf_m365_create_invitation', array($this, 'create_invitation'));
+        add_action('admin_post_ssf_m365_resend_invitation', array($this, 'resend_invitation'));
+        add_action('admin_post_ssf_m365_cancel_invitation', array($this, 'cancel_invitation'));
+        add_action('admin_post_nopriv_ssf_m365_invite_activate', array($this, 'render_invitation_activation'));
+        add_action('admin_post_ssf_m365_invite_activate', array($this, 'render_invitation_activation'));
+        add_action('admin_post_nopriv_ssf_m365_invite_start', array($this, 'start_invitation_activation'));
+        add_action('admin_post_ssf_m365_invite_start', array($this, 'start_invitation_activation'));
         add_action('admin_post_ssf_save_permission_groups', array($this, 'save_permission_groups'));
         add_filter('user_has_cap', array($this, 'grant_group_capabilities'), 10, 4);
         add_action('init', array(__CLASS__, 'ensure_capabilities'), 6);
@@ -232,6 +243,35 @@ final class SSF_Microsoft_ID_Login
         wp_enqueue_script('microsoft-id-login-admin', plugins_url('assets/js/admin.js', __FILE__), array(), self::VERSION, true);
     }
 
+    public function enqueue_login_assets(): void
+    {
+        wp_enqueue_style('microsoft-id-login-ssf', plugins_url('assets/css/ssf-account.css', __FILE__), array(), self::VERSION);
+    }
+
+    public function render_login_message(string $message): string
+    {
+        if (! $this->is_enabled()) {
+            return $message;
+        }
+        $redirect_to = isset($_REQUEST['redirect_to']) && is_scalar($_REQUEST['redirect_to']) ? esc_url_raw(wp_unslash($_REQUEST['redirect_to'])) : '';
+        ob_start();
+        ?>
+        <section class="ssf-account-login" aria-labelledby="ssf-account-login-title">
+            <div class="ssf-account-logo"><?php echo wp_kses_post($this->logo_markup()); ?></div>
+            <h1 id="ssf-account-login-title"><?php esc_html_e('Välkommen till SSF', 'microsoft-id-login'); ?></h1>
+            <p><?php esc_html_e('Logga in för att komma åt SSF:s administrativa funktioner.', 'microsoft-id-login'); ?></p>
+            <p><a class="button button-primary button-large ssf-account-primary" href="<?php echo esc_url(self::login_url($redirect_to)); ?>"><?php esc_html_e('Logga in med ditt SSF-konto', 'microsoft-id-login'); ?></a></p>
+            <p class="ssf-account-domain"><?php esc_html_e('Använd ditt @ssfb.se-konto', 'microsoft-id-login'); ?></p>
+            <p class="ssf-account-help"><?php esc_html_e('Inloggningen hanteras säkert av Microsoft.', 'microsoft-id-login'); ?></p>
+            <div class="ssf-account-reserve">
+                <strong><?php esc_html_e('Administratör / reservinloggning', 'microsoft-id-login'); ?></strong>
+                <span><?php esc_html_e('Logga in med WordPress', 'microsoft-id-login'); ?></span>
+            </div>
+        </section>
+        <?php
+        return ob_get_clean() . $message;
+    }
+
     public function render_admin_page(): void
     {
         if (! $this->can_manage_login()) {
@@ -239,6 +279,7 @@ final class SSF_Microsoft_ID_Login
         }
         $status = $this->status();
         $linked_count = $this->linked_user_count();
+        $pending_count = $this->pending_invitation_count();
         $connection_test = get_transient(self::TEST_PREFIX . 'config_' . get_current_user_id());
         $login_test = get_transient(self::TEST_PREFIX . 'login_' . get_current_user_id());
         ?>
@@ -258,7 +299,9 @@ final class SSF_Microsoft_ID_Login
                         <div><dt><?php esc_html_e('OpenID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($status['metadata']); ?></dd></div>
                         <div><dt><?php esc_html_e('Callback', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($status['callback']); ?></dd></div>
                         <div><dt><?php esc_html_e('Kopplade användare', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html((string) $linked_count); ?></dd></div>
+                        <div><dt><?php esc_html_e('Väntande inbjudningar', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html((string) $pending_count); ?></dd></div>
                     </dl>
+                    <p><a class="button button-primary" href="#ssf-m365-create-user"><?php esc_html_e('Lägg till SSF-användare', 'microsoft-id-login'); ?></a></p>
                     <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_config'), 'ssf_m365_test_config')); ?>"><?php esc_html_e('Testa Microsoft-konfiguration', 'microsoft-id-login'); ?></a></p>
                     <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_login'), 'ssf_m365_test_login')); ?>"><?php esc_html_e('Testa riktig Microsoft-inloggning', 'microsoft-id-login'); ?></a></p>
                 </section>
@@ -283,8 +326,7 @@ final class SSF_Microsoft_ID_Login
             return;
         }
         $redirect_to = isset($_REQUEST['redirect_to']) && is_scalar($_REQUEST['redirect_to']) ? esc_url_raw(wp_unslash($_REQUEST['redirect_to'])) : '';
-        echo '<p style="text-align:center;margin:16px 0 8px;">' . esc_html__('eller', 'microsoft-id-login') . '</p>';
-        echo '<p><a class="button button-secondary button-large" style="width:100%;text-align:center;" href="' . esc_url(self::login_url($redirect_to)) . '">' . esc_html__('Logga in med Microsoft 365', 'microsoft-id-login') . '</a></p>';
+        echo '<p class="ssf-account-inline-login"><a class="button button-secondary button-large" href="' . esc_url(self::login_url($redirect_to)) . '">' . esc_html__('Logga in med ditt SSF-konto', 'microsoft-id-login') . '</a></p>';
     }
 
     private function render_settings_card(array $status): void
@@ -415,30 +457,61 @@ final class SSF_Microsoft_ID_Login
         $users = get_users(array('number' => 200, 'orderby' => 'display_name', 'order' => 'ASC'));
         $groups = self::permission_groups();
         ?>
+        <h2><?php esc_html_e('Användare', 'microsoft-id-login'); ?></h2>
+        <?php $this->render_invitation_form($groups); ?>
         <h2><?php esc_html_e('Användare och behörigheter', 'microsoft-id-login'); ?></h2>
         <p><a href="<?php echo esc_url(admin_url('admin.php?page=' . self::MENU_SLUG)); ?>"><?php esc_html_e('Alla användare', 'microsoft-id-login'); ?></a> | <a href="<?php echo esc_url(add_query_arg('ssf_m365_filter', 'linked', admin_url('admin.php?page=' . self::MENU_SLUG))); ?>"><?php esc_html_e('Kopplade användare', 'microsoft-id-login'); ?></a> | <a href="<?php echo esc_url(add_query_arg('ssf_m365_filter', 'unlinked', admin_url('admin.php?page=' . self::MENU_SLUG))); ?>"><?php esc_html_e('Ej kopplade användare', 'microsoft-id-login'); ?></a></p>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <input type="hidden" name="action" value="ssf_save_permission_groups">
             <?php wp_nonce_field('ssf_save_permission_groups'); ?>
             <table class="widefat striped">
-                <thead><tr><th><?php esc_html_e('WordPress-användare', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Namn', 'microsoft-id-login'); ?></th><th><?php esc_html_e('E-post', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Microsoft', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Behörighetsgrupper', 'microsoft-id-login'); ?></th><th><?php esc_html_e('WordPress-roll', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Senast inloggad', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Åtgärd', 'microsoft-id-login'); ?></th></tr></thead>
+                <thead><tr><th><?php esc_html_e('Namn', 'microsoft-id-login'); ?></th><th><?php esc_html_e('SSF-konto', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Microsoft', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Behörighetsgrupper', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Status', 'microsoft-id-login'); ?></th><th><?php esc_html_e('Åtgärder', 'microsoft-id-login'); ?></th></tr></thead>
                 <tbody>
                 <?php foreach ($users as $user) : $linked = $this->is_user_linked((int) $user->ID); if ('linked' === $filter && ! $linked) { continue; } if ('unlinked' === $filter && $linked) { continue; } ?>
+                    <?php $invitation = $this->latest_invitation_for_user((int) $user->ID); ?>
                     <tr>
-                        <td><input type="hidden" name="user_ids[]" value="<?php echo esc_attr((string) $user->ID); ?>"><?php echo esc_html($user->user_login); ?></td>
-                        <td><?php echo esc_html($user->display_name); ?></td>
+                        <td><input type="hidden" name="user_ids[]" value="<?php echo esc_attr((string) $user->ID); ?>"><?php echo esc_html($user->display_name); ?><br><span class="description"><?php echo esc_html($user->user_login); ?></span></td>
                         <td><?php echo esc_html($user->user_email); ?></td>
                         <td><?php echo esc_html($linked ? __('Kopplad', 'microsoft-id-login') : __('Inte kopplad', 'microsoft-id-login')); ?><?php if ($linked) : ?><br><span class="description"><?php echo esc_html($this->linked_email_label((int) $user->ID)); ?></span><?php endif; ?></td>
                         <td><?php foreach ($groups as $key => $group) : ?><label style="display:block"><input type="checkbox" name="groups[<?php echo esc_attr((string) $user->ID); ?>][]" value="<?php echo esc_attr($key); ?>" <?php checked(in_array($key, $this->user_groups((int) $user->ID), true)); ?> <?php disabled((int) $user->ID === get_current_user_id() && ! current_user_can('manage_options')); ?>> <?php echo esc_html($group['label']); ?></label><?php endforeach; ?></td>
-                        <td><?php echo esc_html(implode(', ', $user->roles)); ?></td>
-                        <td><?php $last = (int) get_user_meta($user->ID, self::META_LAST_LOGIN, true); echo esc_html($last ? wp_date('Y-m-d H:i', $last) : ''); ?></td>
-                        <td><?php if ($linked) : ?><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_admin_unlink&user_id=' . (int) $user->ID), 'ssf_m365_admin_unlink_' . (int) $user->ID)); ?>"><?php esc_html_e('Koppla från', 'microsoft-id-login'); ?></a><?php endif; ?></td>
+                        <td><?php echo esc_html($this->user_status_label((int) $user->ID, $linked, $invitation)); ?></td>
+                        <td>
+                            <?php if ($linked) : ?><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_admin_unlink&user_id=' . (int) $user->ID), 'ssf_m365_admin_unlink_' . (int) $user->ID)); ?>"><?php esc_html_e('Koppla från', 'microsoft-id-login'); ?></a><?php endif; ?>
+                            <?php if (! $linked) : ?>
+                                <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_resend_invitation&user_id=' . (int) $user->ID), 'ssf_m365_resend_invitation_' . (int) $user->ID)); ?>"><?php esc_html_e('Skicka inbjudan igen', 'microsoft-id-login'); ?></a>
+                            <?php endif; ?>
+                            <?php if ($invitation && empty($invitation['used_at']) && empty($invitation['canceled_at'])) : ?>
+                                <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_cancel_invitation&invite_id=' . rawurlencode((string) $invitation['id'])), 'ssf_m365_cancel_invitation_' . (string) $invitation['id'])); ?>"><?php esc_html_e('Avbryt inbjudan', 'microsoft-id-login'); ?></a>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
             <?php submit_button(__('Spara behörigheter', 'microsoft-id-login')); ?>
         </form>
+        <?php
+    }
+
+    private function render_invitation_form(array $groups): void
+    {
+        ?>
+        <section id="ssf-m365-create-user" class="ssf-admin-card" style="max-width:900px">
+            <h3><?php esc_html_e('Lägg till SSF-användare', 'microsoft-id-login'); ?></h3>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="ssf_m365_create_invitation">
+                <?php wp_nonce_field('ssf_m365_create_invitation'); ?>
+                <p><label><?php esc_html_e('Namn', 'microsoft-id-login'); ?><br><input class="regular-text" name="display_name" required autocomplete="name" placeholder="<?php esc_attr_e('Anna Andersson', 'microsoft-id-login'); ?>"></label></p>
+                <p><label><?php esc_html_e('SSF-konto / e-post', 'microsoft-id-login'); ?><br><input class="regular-text" type="email" name="email" required autocomplete="email" placeholder="<?php esc_attr_e('anna.andersson@ssfb.se', 'microsoft-id-login'); ?>"></label></p>
+                <fieldset>
+                    <legend><strong><?php esc_html_e('Behörighetsgrupper', 'microsoft-id-login'); ?></strong></legend>
+                    <?php foreach ($groups as $key => $group) : ?>
+                        <label style="display:block"><input type="checkbox" name="groups[]" value="<?php echo esc_attr($key); ?>"> <?php echo esc_html($group['label']); ?></label>
+                    <?php endforeach; ?>
+                </fieldset>
+                <?php submit_button(__('Skapa och skicka inbjudan', 'microsoft-id-login'), 'primary', 'submit', false); ?>
+            </form>
+        </section>
         <?php
     }
 
@@ -618,6 +691,93 @@ final class SSF_Microsoft_ID_Login
         $this->start_authorization('test', get_current_user_id(), admin_url('admin.php?page=' . self::MENU_SLUG));
     }
 
+    public function create_invitation(): void
+    {
+        if (! $this->can_manage_permission_groups() || ! check_admin_referer('ssf_m365_create_invitation')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'microsoft-id-login'));
+        }
+        $email = isset($_POST['email']) && is_scalar($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+        $display_name = isset($_POST['display_name']) && is_scalar($_POST['display_name']) ? sanitize_text_field(wp_unslash($_POST['display_name'])) : '';
+        $groups = isset($_POST['groups']) && is_array($_POST['groups']) ? array_map('sanitize_key', wp_unslash($_POST['groups'])) : array();
+        if (! $this->is_ssf_email($email)) {
+            $this->set_notice(get_current_user_id(), 'error', __('SSF-konto måste vara en @ssfb.se-adress.', 'microsoft-id-login'));
+            wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '#ssf-m365-create-user'));
+            exit;
+        }
+        $user_id = $this->find_or_create_user($email, $display_name);
+        if (is_wp_error($user_id)) {
+            $this->set_notice(get_current_user_id(), 'error', __('Användaren kunde inte skapas.', 'microsoft-id-login'));
+            wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '#ssf-m365-create-user'));
+            exit;
+        }
+        $this->save_user_groups((int) $user_id, $groups, get_current_user_id());
+        $invitation = $this->issue_invitation((int) $user_id, $email);
+        $sent = $this->send_invitation_email((int) $user_id, $invitation['raw_token']);
+        $this->set_notice(get_current_user_id(), $sent ? 'success' : 'error', $sent ? __('SSF-användaren skapades och inbjudan skickades.', 'microsoft-id-login') : __('SSF-användaren skapades men inbjudningsmailet kunde inte skickas.', 'microsoft-id-login'));
+        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        exit;
+    }
+
+    public function resend_invitation(): void
+    {
+        $user_id = isset($_GET['user_id']) ? (int) $_GET['user_id'] : 0;
+        if (! $this->can_manage_permission_groups() || $user_id <= 0 || ! check_admin_referer('ssf_m365_resend_invitation_' . $user_id)) {
+            wp_die(esc_html__('Du saknar behörighet.', 'microsoft-id-login'));
+        }
+        $user = get_user_by('id', $user_id);
+        if (! $user instanceof WP_User || ! $this->is_ssf_email((string) $user->user_email)) {
+            $this->set_notice(get_current_user_id(), 'error', __('Inbjudan kan bara skickas till @ssfb.se-konton.', 'microsoft-id-login'));
+            wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+            exit;
+        }
+        $this->invalidate_open_invitations($user_id);
+        $invitation = $this->issue_invitation($user_id, (string) $user->user_email);
+        $sent = $this->send_invitation_email($user_id, $invitation['raw_token']);
+        $this->set_notice(get_current_user_id(), $sent ? 'success' : 'error', $sent ? __('Ny inbjudan har skickats.', 'microsoft-id-login') : __('Inbjudan kunde inte skickas.', 'microsoft-id-login'));
+        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        exit;
+    }
+
+    public function cancel_invitation(): void
+    {
+        $invite_id = isset($_GET['invite_id']) && is_scalar($_GET['invite_id']) ? sanitize_key(wp_unslash($_GET['invite_id'])) : '';
+        if (! $this->can_manage_permission_groups() || '' === $invite_id || ! check_admin_referer('ssf_m365_cancel_invitation_' . $invite_id)) {
+            wp_die(esc_html__('Du saknar behörighet.', 'microsoft-id-login'));
+        }
+        $invitations = $this->invitations();
+        if (isset($invitations[$invite_id])) {
+            $invitations[$invite_id]['canceled_at'] = gmdate('c');
+            $this->save_invitations($invitations);
+        }
+        $this->set_notice(get_current_user_id(), 'success', __('Inbjudan har avbrutits.', 'microsoft-id-login'));
+        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        exit;
+    }
+
+    public function render_invitation_activation(): void
+    {
+        $token = isset($_GET['token']) && is_scalar($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+        $resolved = $this->invitation_by_token($token);
+        $invitation = $resolved['invitation'] ?? null;
+        if (! is_array($invitation) || ! $this->invitation_is_open($invitation)) {
+            $this->render_account_page(__('Inbjudan kan inte användas', 'microsoft-id-login'), __('Länken är använd, avbruten eller har gått ut.', 'microsoft-id-login'), '', '', __('Be administratören skicka en ny inbjudan.', 'microsoft-id-login'));
+        }
+        $email = (string) $invitation['email'];
+        $action_url = add_query_arg(array('action' => 'ssf_m365_invite_start', 'token' => rawurlencode($token)), admin_url('admin-post.php'));
+        $this->render_account_page(__('Aktivera ditt SSF-konto', 'microsoft-id-login'), __('Du har blivit inbjuden att använda SSF:s system.', 'microsoft-id-login'), $email, $action_url, __('Fortsätt med SSF-konto', 'microsoft-id-login'));
+    }
+
+    public function start_invitation_activation(): void
+    {
+        $token = isset($_GET['token']) && is_scalar($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+        $resolved = $this->invitation_by_token($token);
+        $invitation = $resolved['invitation'] ?? null;
+        if (! is_array($invitation) || ! $this->invitation_is_open($invitation)) {
+            $this->render_account_page(__('Inbjudan kan inte användas', 'microsoft-id-login'), __('Länken är använd, avbruten eller har gått ut.', 'microsoft-id-login'), '', '', __('Be administratören skicka en ny inbjudan.', 'microsoft-id-login'));
+        }
+        $this->start_authorization('invite', (int) $invitation['user_id'], '', (string) $resolved['id'], $token);
+    }
+
     public function save_permission_groups(): void
     {
         if (! $this->can_manage_permission_groups() || ! check_admin_referer('ssf_save_permission_groups')) {
@@ -763,12 +923,12 @@ final class SSF_Microsoft_ID_Login
         printf('<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>', esc_attr($notice['type']), esc_html($notice['message']));
     }
 
-    private function start_authorization(string $mode, int $user_id, string $redirect_to): void
+    private function start_authorization(string $mode, int $user_id, string $redirect_to, string $invite_id = '', string $invite_token = ''): void
     {
         if (! $this->is_enabled()) {
             wp_die(esc_html__('Microsoft 365-inloggning är inte aktiverad.', 'microsoft-id-login'));
         }
-        if (in_array($mode, array('link', 'test'), true) && $user_id <= 0) {
+        if (in_array($mode, array('link', 'test', 'invite'), true) && $user_id <= 0) {
             wp_die(esc_html__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'microsoft-id-login'));
         }
         $state = $this->random_urlsafe(32);
@@ -783,6 +943,8 @@ final class SSF_Microsoft_ID_Login
                 'pkce_verifier' => $verifier,
                 'created' => time(),
                 'redirect_to' => $this->safe_redirect($redirect_to),
+                'invite_id' => $invite_id,
+                'invite_token' => $invite_token,
                 'used' => false,
             ),
             10 * MINUTE_IN_SECONDS
@@ -837,6 +999,9 @@ final class SSF_Microsoft_ID_Login
         }
         if ('test' === ($transaction['mode'] ?? '')) {
             $this->complete_real_login_test($transaction, $tid, $oid);
+        }
+        if ('invite' === ($transaction['mode'] ?? '')) {
+            $this->complete_invitation_activation($transaction, $tid, $oid, $email);
         }
         $this->complete_login($tid, $oid, (string) ($transaction['redirect_to'] ?? ''), $email);
     }
@@ -955,6 +1120,260 @@ final class SSF_Microsoft_ID_Login
             10 * MINUTE_IN_SECONDS
         );
         wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        exit;
+    }
+
+    private function complete_invitation_activation(array $transaction, string $tid, string $oid, string $email): void
+    {
+        $invite_id = sanitize_key((string) ($transaction['invite_id'] ?? ''));
+        $invitations = $this->invitations();
+        $invitation = $invitations[$invite_id] ?? null;
+        if (! is_array($invitation) || ! $this->invitation_is_open($invitation)) {
+            $this->render_account_page(__('Inbjudan kan inte användas', 'microsoft-id-login'), __('Länken är använd, avbruten eller har gått ut.', 'microsoft-id-login'), '', '', __('Be administratören skicka en ny inbjudan.', 'microsoft-id-login'));
+        }
+        $expected_email = strtolower((string) $invitation['email']);
+        if (strtolower($email) !== $expected_email) {
+            $retry_url = add_query_arg(array('action' => 'ssf_m365_invite_activate', 'token' => rawurlencode((string) ($transaction['invite_token'] ?? ''))), admin_url('admin-post.php'));
+            $this->render_account_page(__('Fel SSF-konto', 'microsoft-id-login'), __('Du loggade in med ett annat Microsoft-konto.', 'microsoft-id-login'), $expected_email, $retry_url, __('Försök igen med rätt konto', 'microsoft-id-login'));
+        }
+        foreach ($this->users_for_identity($tid, $oid) as $user) {
+            if ((int) $user->ID !== (int) $invitation['user_id']) {
+                $this->render_account_page(__('Kontot är redan kopplat', 'microsoft-id-login'), __('Det här Microsoft-kontot är redan kopplat till en annan WordPress-användare.', 'microsoft-id-login'), $expected_email, '', __('Kontakta administratören.', 'microsoft-id-login'));
+            }
+        }
+        $user_id = (int) $invitation['user_id'];
+        update_user_meta($user_id, self::META_TID, $tid);
+        update_user_meta($user_id, self::META_OID, $oid);
+        update_user_meta($user_id, self::META_EMAIL, $email);
+        update_user_meta($user_id, self::META_LAST_LOGIN, time());
+        $invitations[$invite_id]['used_at'] = gmdate('c');
+        $this->save_invitations($invitations);
+        wp_set_current_user($user_id);
+        wp_set_auth_cookie($user_id, true);
+        $user = get_user_by('id', $user_id);
+        if ($user instanceof WP_User) {
+            do_action('wp_login', $user->user_login, $user);
+        }
+        $this->render_account_page(__('Ditt SSF-konto är aktiverat', 'microsoft-id-login'), __('Du kan nu logga in med ditt SSF-konto.', 'microsoft-id-login'), $expected_email, admin_url('/'), __('Fortsätt till SSF', 'microsoft-id-login'));
+    }
+
+    private function find_or_create_user(string $email, string $display_name)
+    {
+        $existing = get_user_by('email', $email);
+        if ($existing instanceof WP_User) {
+            if ('' !== $display_name && $existing->display_name !== $display_name) {
+                wp_update_user(array('ID' => (int) $existing->ID, 'display_name' => $display_name));
+            }
+            return (int) $existing->ID;
+        }
+        $email_parts = explode('@', $email);
+        $login = sanitize_user((string) $email_parts[0], true);
+        if (username_exists($login)) {
+            $login .= '-' . wp_generate_password(4, false, false);
+        }
+        return wp_insert_user(array(
+            'user_login' => $login,
+            'user_email' => $email,
+            'display_name' => $display_name ?: $email,
+            'user_pass' => wp_generate_password(32, true, true),
+            'role' => 'subscriber',
+        ));
+    }
+
+    private function issue_invitation(int $user_id, string $email): array
+    {
+        $this->invalidate_open_invitations($user_id);
+        $raw_token = $this->random_urlsafe(32);
+        $invite_id = sanitize_key(wp_generate_uuid4());
+        $invitations = $this->invitations();
+        $invitations[$invite_id] = array(
+            'id' => $invite_id,
+            'user_id' => $user_id,
+            'email' => strtolower($email),
+            'token_hash' => $this->invitation_token_hash($raw_token),
+            'created_at' => gmdate('c'),
+            'expires_at' => gmdate('c', time() + self::INVITATION_TTL),
+            'used_at' => '',
+            'canceled_at' => '',
+        );
+        $this->save_invitations($invitations);
+        return array('id' => $invite_id, 'raw_token' => $raw_token);
+    }
+
+    private function invalidate_open_invitations(int $user_id): void
+    {
+        $invitations = $this->invitations();
+        foreach ($invitations as $id => $invitation) {
+            if ((int) ($invitation['user_id'] ?? 0) === $user_id && $this->invitation_is_open($invitation)) {
+                $invitations[$id]['canceled_at'] = gmdate('c');
+            }
+        }
+        $this->save_invitations($invitations);
+    }
+
+    private function send_invitation_email(int $user_id, string $raw_token): bool
+    {
+        $user = get_user_by('id', $user_id);
+        if (! $user instanceof WP_User) {
+            return false;
+        }
+        $url = add_query_arg(array('action' => 'ssf_m365_invite_activate', 'token' => rawurlencode($raw_token)), admin_url('admin-post.php'));
+        $subject = __('Aktivera ditt SSF-konto', 'microsoft-id-login');
+        if (class_exists('SSF_Email_Template')) {
+            return SSF_Email_Template::send(
+                (string) $user->user_email,
+                $subject,
+                'ssf_account_invitation',
+                array(
+                    'category' => 'general',
+                    'title' => __('Aktivera ditt SSF-konto', 'microsoft-id-login'),
+                    'preheader' => __('Du har fått tillgång till SSF:s administrativa system.', 'microsoft-id-login'),
+                    'intro' => sprintf(__('Hej %s,', 'microsoft-id-login'), $user->display_name ?: $user->user_email),
+                    'body' => sprintf(__('Du har fått tillgång till SSF:s administrativa system. Klicka nedan för att aktivera ditt konto med ditt %s-konto.', 'microsoft-id-login'), $user->user_email),
+                    'button_url' => $url,
+                    'button_label' => __('Aktivera SSF-konto', 'microsoft-id-login'),
+                    'notice_title' => __('Inloggningen verifieras av Microsoft.', 'microsoft-id-login'),
+                    'notice' => __('SSF hanterar aldrig ditt Microsoft-lösenord.', 'microsoft-id-login'),
+                )
+            );
+        }
+        $message = sprintf(
+            "<h1>%s</h1><p>%s</p><p>%s</p><p><a href=\"%s\">%s</a></p><p>%s</p><p>%s</p>",
+            esc_html__('Aktivera ditt SSF-konto', 'microsoft-id-login'),
+            esc_html(sprintf(__('Hej %s,', 'microsoft-id-login'), $user->display_name ?: $user->user_email)),
+            esc_html(sprintf(__('Du har fått tillgång till SSF:s administrativa system. Klicka nedan för att aktivera ditt konto med ditt %s-konto.', 'microsoft-id-login'), $user->user_email)),
+            esc_url($url),
+            esc_html__('Aktivera SSF-konto', 'microsoft-id-login'),
+            esc_html__('Inloggningen verifieras av Microsoft.', 'microsoft-id-login'),
+            esc_html__('Sveriges Segelfartygsförbund', 'microsoft-id-login')
+        );
+        return wp_mail((string) $user->user_email, $subject, $message, array('Content-Type: text/html; charset=UTF-8'));
+    }
+
+    private function invitation_by_token(string $raw_token): array
+    {
+        if ('' === $raw_token) {
+            return array();
+        }
+        $hash = $this->invitation_token_hash($raw_token);
+        foreach ($this->invitations() as $id => $invitation) {
+            if (hash_equals((string) ($invitation['token_hash'] ?? ''), $hash)) {
+                return array('id' => (string) $id, 'invitation' => $invitation);
+            }
+        }
+        return array();
+    }
+
+    private function invitation_token_hash(string $raw_token): string
+    {
+        return hash_hmac('sha256', $raw_token, wp_salt('auth'));
+    }
+
+    private function invitations(): array
+    {
+        $stored = get_option(self::INVITATIONS_OPTION, array());
+        return is_array($stored) ? $stored : array();
+    }
+
+    private function save_invitations(array $invitations): void
+    {
+        update_option(self::INVITATIONS_OPTION, $invitations, false);
+    }
+
+    private function invitation_is_open(array $invitation): bool
+    {
+        if (! empty($invitation['used_at']) || ! empty($invitation['canceled_at'])) {
+            return false;
+        }
+        return strtotime((string) ($invitation['expires_at'] ?? '')) > time();
+    }
+
+    private function latest_invitation_for_user(int $user_id): ?array
+    {
+        $latest = null;
+        foreach ($this->invitations() as $id => $invitation) {
+            if ((int) ($invitation['user_id'] ?? 0) !== $user_id) {
+                continue;
+            }
+            $invitation['id'] = (string) $id;
+            if (null === $latest || strcmp((string) ($invitation['created_at'] ?? ''), (string) ($latest['created_at'] ?? '')) > 0) {
+                $latest = $invitation;
+            }
+        }
+        return $latest;
+    }
+
+    private function pending_invitation_count(): int
+    {
+        $count = 0;
+        foreach ($this->invitations() as $invitation) {
+            if ($this->invitation_is_open($invitation)) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    private function user_status_label(int $user_id, bool $linked, ?array $invitation): string
+    {
+        if ($linked) {
+            return __('Aktiv', 'microsoft-id-login');
+        }
+        if (is_array($invitation)) {
+            if (! empty($invitation['used_at'])) {
+                return __('Aktiv', 'microsoft-id-login');
+            }
+            if (! empty($invitation['canceled_at'])) {
+                return __('Ej aktiverad', 'microsoft-id-login');
+            }
+            if (! $this->invitation_is_open($invitation)) {
+                return __('Inbjudan utgången', 'microsoft-id-login');
+            }
+            return __('Inbjuden', 'microsoft-id-login');
+        }
+        return __('Microsoft ej kopplat', 'microsoft-id-login');
+    }
+
+    private function is_ssf_email(string $email): bool
+    {
+        return (bool) preg_match('/^[^@\s]+@ssfb\.se$/i', $email);
+    }
+
+    private function logo_markup(): string
+    {
+        if (function_exists('get_custom_logo')) {
+            $logo = get_custom_logo();
+            if ('' !== $logo) {
+                return $logo;
+            }
+        }
+        $icon = get_site_icon_url(96);
+        if ($icon) {
+            return '<img src="' . esc_url($icon) . '" alt="' . esc_attr__('SSF', 'microsoft-id-login') . '">';
+        }
+        return '<span class="ssf-account-logo-fallback">SSF</span>';
+    }
+
+    private function render_account_page(string $title, string $body, string $email, string $action_url, string $button_label): void
+    {
+        status_header(200);
+        nocache_headers();
+        echo '<!doctype html><html ' . get_language_attributes() . '><head><meta charset="' . esc_attr(get_bloginfo('charset')) . '"><meta name="viewport" content="width=device-width, initial-scale=1">';
+        echo '<title>' . esc_html($title) . '</title>';
+        echo '<link rel="stylesheet" href="' . esc_url(plugins_url('assets/css/ssf-account.css', __FILE__)) . '?ver=' . esc_attr(self::VERSION) . '">';
+        echo '</head><body class="ssf-account-page"><main class="ssf-account-card">';
+        echo '<div class="ssf-account-logo">' . wp_kses_post($this->logo_markup()) . '</div>';
+        echo '<h1>' . esc_html($title) . '</h1><p>' . esc_html($body) . '</p>';
+        if ('' !== $email) {
+            echo '<p class="ssf-account-email"><strong>' . esc_html__('Konto:', 'microsoft-id-login') . '</strong> ' . esc_html($email) . '</p>';
+        }
+        if ('' !== $action_url) {
+            echo '<p><a class="button button-primary ssf-account-primary" href="' . esc_url($action_url) . '">' . esc_html($button_label) . '</a></p>';
+            echo '<p class="ssf-account-help">' . esc_html__('Inloggningen hanteras av Microsoft.', 'microsoft-id-login') . '</p>';
+        } else {
+            echo '<p class="ssf-account-help">' . esc_html($button_label) . '</p>';
+        }
+        echo '</main></body></html>';
         exit;
     }
 
