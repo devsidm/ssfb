@@ -2,16 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.1",
-    "build":  "20260916.4",
-    "built_at":  "2026-09-16T14:33:28.1879945Z",
+    "build":  "20260916.5",
+    "built_at":  "2026-09-16T14:49:36.2288750Z",
     "source":  "codex",
-    "source_revision":  "0c1a70bf2678bbe06deb47d09d7aa5b94fd6ebd0",
-    "description":  "Add Microsoft login backend configuration",
+    "source_revision":  "0c4940726b04433dfb32aa6cc66dc524feb2fbaf",
+    "description":  "Rename Microsoft login as production-capable module",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "documentation",
-                       "release-tooling",
-                       "ssf-microsoft-login"
+                       "microsoft-id-login",
+                       "release-tooling"
                    ],
     "status":  "development",
     "prepared_at":  ""
