@@ -2,15 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.1",
-    "build":  "20260916.2",
-    "built_at":  "2026-09-16T09:02:27.8731052Z",
+    "build":  "20260916.3",
+    "built_at":  "2026-09-16T12:16:53.8655221Z",
     "source":  "codex",
-    "source_revision":  "f1f172ee8289bc4e8c207b28b7f7a38d31e69a51",
-    "description":  "Protect PROD SharePoint config and deploy MU plugin assets",
+    "source_revision":  "87e52922a2f03437d7dcafb766bbca228ff010fb",
+    "description":  "Build Microsoft login admin backend",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
+                       "documentation",
                        "release-tooling",
-                       "ssf-member-portal"
+                       "ssf-microsoft-login"
                    ],
     "status":  "development",
     "prepared_at":  ""
