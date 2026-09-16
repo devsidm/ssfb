@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.2.0';
+    private const VERSION = '0.2.1';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -218,7 +218,7 @@ final class SSF_Microsoft_ID_Login
     public function register_admin_page(): void
     {
         if (class_exists('SSF_Admin_Navigation')) {
-            add_submenu_page(SSF_Admin_Navigation::ROOT, __('Microsoft ID Login', 'microsoft-id-login'), __('Inloggning', 'microsoft-id-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'));
+            add_submenu_page(SSF_Admin_Navigation::SYSTEM, __('Microsoft ID Login', 'microsoft-id-login'), __('Inloggning', 'microsoft-id-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'), 35);
             return;
         }
         add_management_page(__('Microsoft ID Login', 'microsoft-id-login'), __('Microsoft ID Login', 'microsoft-id-login'), self::CAP_MANAGE_LOGIN, self::MENU_SLUG, array($this, 'render_admin_page'));

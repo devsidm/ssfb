@@ -23,7 +23,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.2.0'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.2.1'
 
 Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
@@ -123,12 +123,13 @@ Assert-True 'New plugin is not production-excluded' (-not (@($config.excluded.pl
 Assert-True 'Old plugin slug removed from deployment policy' (-not (@($config.production.plugins + $config.plugin_policy.dev_only + $config.excluded.plugins) -contains 'ssf-microsoft-login'))
 $devOnlyPolicy = @{}
 @($config.plugin_policy.dev_only) | ForEach-Object { $devOnlyPolicy[$_] = $true }
-$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.2.0' }
+$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.2.1' }
 $missingProdPilot = $null
 $pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'PRODUCTION_CAPABLE' } else { 'MATCH' }
 Assert-True 'Production capable plugin is not treated as missing PROD parity' ($pilotClassification -eq 'PRODUCTION_CAPABLE')
 
-Assert-Contains 'Admin menu under SSF system' $plugin 'SSF_Admin_Navigation::ROOT'
+Assert-Contains 'Admin menu under SSF system' $plugin 'SSF_Admin_Navigation::SYSTEM'
+Assert-Contains 'Admin navigation system tab includes Microsoft login' (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-admin-navigation.php')) "'microsoft-id-login' => array('label' => 'Inloggning'"
 Assert-Contains 'Admin submenu label' $plugin "__('Inloggning'"
 Assert-Contains 'Manage login capability' $plugin 'ssf_manage_microsoft_login'
 Assert-Contains 'Manage permission groups capability' $plugin 'ssf_manage_permission_groups'
