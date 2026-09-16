@@ -65,6 +65,29 @@ An already authenticated DEV WordPress user can open their profile and choose **
 
 Users can unlink from their own profile with nonce protection.
 
+## Admin Backend
+
+Open **SSF -> System -> Inloggning** in DEV. The page title is **Microsoft-inloggning**.
+
+The backend shows:
+
+- DEV-only status and configuration overview.
+- Callback URL with a copy button.
+- Technical connection test for tenant/client configuration, OpenID discovery and JWKS.
+- Real Microsoft login test mode that exercises the OAuth/OIDC roundtrip without changing WordPress roles or permission groups.
+- Current user's Microsoft account link status.
+- Linked and unlinked WordPress users.
+- Admin unlink for Microsoft mappings only.
+- WordPress permission groups and the exact capabilities each group grants.
+
+## WordPress Permission Groups
+
+Microsoft Entra is used only for authentication. Authorization stays in WordPress.
+
+The pilot stores SSF permission groups in WordPress user meta and grants the mapped WordPress capabilities through `user_has_cap`. It does not read Entra groups, Microsoft 365 groups, SharePoint groups or app roles, and it never promotes a Microsoft user to WordPress administrator.
+
+Admins with SSF login/permission capability can manage groups from **SSF -> System -> Inloggning** or the WordPress user profile screen. Changes are recorded in `ssf_microsoft_login_permission_audit`.
+
 ## How To Test
 
 1. Configure constants in DEV only.
@@ -72,10 +95,13 @@ Users can unlink from their own profile with nonce protection.
 3. Visit `https://ssfb.se/dev/wp-login.php`.
 4. Confirm normal WordPress login remains visible.
 5. Confirm **Logga in med Microsoft 365** appears.
-6. Login as an existing WordPress user and link the Microsoft account from the profile page.
-7. Log out and sign in with Microsoft 365.
-8. Confirm an unlinked Microsoft user receives a friendly denial and no WordPress user is created.
-9. Run `scripts/tests/*.ps1`.
+6. Open **SSF -> System -> Inloggning** and run **Testa Microsoft-konfiguration**.
+7. Login as an existing WordPress user and link the Microsoft account from the profile page or account card.
+8. Run **Testa riktig Microsoft-inloggning** from the admin page.
+9. Log out and sign in with Microsoft 365.
+10. Confirm an unlinked Microsoft user receives a friendly denial and no WordPress user is created.
+11. Confirm permission groups are assigned in WordPress only.
+12. Run `scripts/tests/*.ps1`.
 
 ## Disable Immediately
 

@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $pluginPath = Join-Path $repo 'wp-content\plugins\ssf-microsoft-login\ssf-microsoft-login.php'
+$jsPath = Join-Path $repo 'wp-content\plugins\ssf-microsoft-login\assets\js\admin.js'
 $docPath = Join-Path $repo 'docs\MICROSOFT-365-LOGIN-DEV.md'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $failures = [Collections.Generic.List[string]]::new()
@@ -16,6 +17,7 @@ function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { i
 function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
 
 $plugin = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginPath
+$js = Get-Content -Raw -Encoding UTF8 -LiteralPath $jsPath
 $doc = Get-Content -Raw -Encoding UTF8 -LiteralPath $docPath
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
 
@@ -71,7 +73,7 @@ Assert-Contains 'Unmapped Microsoft user denied' $plugin 'inte kopplat till ett 
 Assert-NotContains 'No automatic user creation' $plugin 'wp_create_user'
 Assert-NotContains 'No user insert' $plugin 'wp_insert_user'
 Assert-NotContains 'No role assignment' $plugin 'set_role'
-Assert-NotContains 'Email not used for identity lookup' $plugin 'user_email'
+Assert-NotContains 'Email not used in identity meta query' $plugin "'key' => 'user_email'"
 
 Assert-Contains 'Account linking requires login' $plugin 'is_user_logged_in()'
 Assert-Contains 'Linking requires nonce' $plugin "check_admin_referer('ssf_m365_link_start')"
@@ -91,10 +93,10 @@ Assert-Contains 'Callback based on home_url' $plugin "home_url('/' . self::CALLB
 Assert-Contains 'Rewrite flushed on activation' $plugin 'register_activation_hook'
 Assert-NotContains 'No hardcoded dev path in plugin' $plugin 'ssfb.se/dev'
 
-Assert-Contains 'Admin diagnostics page' $plugin 'Microsoft 365-inloggning'
-Assert-Contains 'Metadata diagnostic' $plugin 'OpenID metadata'
-Assert-Contains 'JWKS diagnostic' $plugin 'JWKS available'
-Assert-Contains 'Secret displayed as configured only' $plugin "Client secret"
+Assert-Contains 'Admin diagnostics page' $plugin 'Microsoft-inloggning'
+Assert-Contains 'Metadata diagnostic' $plugin 'OpenID'
+Assert-Contains 'JWKS diagnostic' $plugin 'JWKS'
+Assert-Contains 'Secret displayed as configured only' $plugin "Client Secret"
 Assert-NotContains 'No token HTML output' $plugin 'id_token</'
 Assert-NotContains 'No raw JWT logging' $plugin 'error_log($jwt'
 Assert-NotContains 'No secret logging' $plugin 'error_log($this->config(''client_secret'')'
@@ -109,10 +111,86 @@ $missingProdPilot = $null
 $pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'DEV_ACTIVE_PROD_MISSING' } else { 'MATCH' }
 Assert-True 'Active DEV pilot does not cause PROD copy/activate action' ($pilotClassification -eq 'DEV_ONLY_ALLOWED')
 
+Assert-Contains 'Admin menu under SSF system' $plugin 'SSF_Admin_Navigation::ROOT'
+Assert-Contains 'Admin submenu label' $plugin "__('Inloggning'"
+Assert-Contains 'Manage login capability' $plugin 'ssf_manage_microsoft_login'
+Assert-Contains 'Manage permission groups capability' $plugin 'ssf_manage_permission_groups'
+Assert-Contains 'Admin assets loaded only on plugin page' $plugin "assets/js/admin.js"
+Assert-Contains 'Callback copy button exists' $plugin 'data-ssf-copy="#ssf-m365-callback"'
+Assert-Contains 'Own account card exists' $plugin 'render_own_account_card'
+Assert-Contains 'Linked user list exists' $plugin 'render_users_and_permissions'
+Assert-Contains 'Linked users filter exists' $plugin 'ssf_m365_filter'
+Assert-Contains 'Admin unlink action exists' $plugin 'ssf_m365_admin_unlink'
+Assert-Contains 'Admin unlink capability protected' $plugin 'can_manage_login()'
+Assert-Contains 'Admin unlink nonce per user' $plugin 'ssf_m365_admin_unlink_'
+Assert-Contains 'Admin unlink deletes tid' $plugin 'delete_user_meta($user_id, self::META_TID)'
+Assert-Contains 'Admin unlink deletes oid' $plugin 'delete_user_meta($user_id, self::META_OID)'
+Assert-Contains 'Admin unlink deletes stored email label' $plugin 'delete_user_meta($user_id, self::META_EMAIL)'
+Assert-Contains 'Admin unlink does not alter groups notice' $plugin 'WordPress-behorigheter andrades inte'
+
+Assert-Contains 'Technical connection test action' $plugin 'ssf_m365_test_config'
+Assert-Contains 'Connection checks persisted' $plugin "self::TEST_PREFIX . 'config_'"
+Assert-Contains 'Connection checks function exists' $plugin 'run_connection_checks'
+Assert-Contains 'Connection test checks DEV environment' $plugin "'DEV-miljo'"
+Assert-Contains 'Connection test checks issuer' $plugin "'Issuer matchar tenant'"
+Assert-Contains 'Connection test checks JWKS' $plugin "'JWKS/signeringsnycklar'"
+Assert-Contains 'Connection test states no Graph/SharePoint permissions needed' $plugin 'Inga Graph- eller SharePoint-behorigheter behovs'
+
+Assert-Contains 'Real login test action' $plugin 'ssf_m365_test_login'
+Assert-Contains 'Real login test mode started' $plugin "start_authorization('test'"
+Assert-Contains 'Real login test callback branch' $plugin "'test' === (`$transaction['mode'] ?? '')"
+Assert-Contains 'Real login test function exists' $plugin 'complete_real_login_test'
+Assert-Contains 'Real login test stores transient' $plugin "self::TEST_PREFIX . 'login_'"
+Assert-Contains 'Real login test verifies linked account' $plugin 'Microsoft-identitet matchar kopplat konto'
+Assert-Contains 'Real login test records unchanged permissions' $plugin 'WordPress-behorigheter oforandrade'
+
+Assert-Contains 'Permission group model exists' $plugin 'permission_groups'
+Assert-Contains 'Permission groups stored in user meta' $plugin '_ssf_permission_groups'
+Assert-Contains 'Permission groups granted by user_has_cap' $plugin "add_filter('user_has_cap'"
+Assert-Contains 'Permission save action exists' $plugin 'ssf_save_permission_groups'
+Assert-Contains 'Profile permission save exists' $plugin 'save_profile_groups'
+Assert-Contains 'Permission audit option exists' $plugin 'ssf_microsoft_login_permission_audit'
+Assert-Contains 'Permission audit records actor' $plugin "'actor_user_id'"
+Assert-Contains 'Permission audit records target' $plugin "'target_user_id'"
+Assert-Contains 'Permission audit records added' $plugin "'added'"
+Assert-Contains 'Permission audit records removed' $plugin "'removed'"
+Assert-Contains 'Permission audit records timestamp' $plugin "'timestamp'"
+Assert-Contains 'Applications group includes review capability' $plugin 'ssf_review_applications'
+Assert-Contains 'Applications group includes decision capability' $plugin 'ssf_decide_applications'
+Assert-Contains 'Inspector group includes assigned applications capability' $plugin 'ssf_view_assigned_applications'
+Assert-Contains 'Motion group includes motion capability' $plugin 'ssf_manage_motions'
+Assert-Contains 'Annual meetings group includes annual meeting capability' $plugin 'manage_ssf_annual_meetings'
+Assert-Contains 'System group includes release capability' $plugin 'manage_ssf_releases'
+Assert-NotContains 'Permission groups do not assign administrator role' $plugin "set_role('administrator"
+Assert-NotContains 'Permission groups do not grant install_plugins' $plugin "'install_plugins'"
+Assert-NotContains 'Permission groups do not grant edit_plugins' $plugin "'edit_plugins'"
+Assert-NotContains 'Permission groups do not grant create_users' $plugin "'create_users'"
+Assert-NotContains 'Permission groups do not grant promote_users' $plugin "'promote_users'"
+Assert-NotContains 'No WordPress role promotion' $plugin 'add_role('
+Assert-NotContains 'No role assignment remains' $plugin 'set_role'
+Assert-NotContains 'No Microsoft app roles are used' $plugin "`$claims['roles']"
+Assert-NotContains 'No Entra group claim is used' $plugin "`$claims['groups']"
+Assert-NotContains 'No directory roles are used' $plugin "`$claims['wids']"
+Assert-NotContains 'No hasgroups claim is used' $plugin 'hasgroups'
+Assert-NotContains 'No raw tid input field' $plugin 'name="tid"'
+Assert-NotContains 'No raw oid input field' $plugin 'name="oid"'
+
+Assert-Contains 'Stored email is display metadata only' $plugin 'claim_email'
+Assert-Contains 'Login stores last login' $plugin 'META_LAST_LOGIN'
+Assert-Contains 'Login stores display email only after tid oid match' $plugin 'update_user_meta($user_id, self::META_EMAIL'
+
+Assert-Contains 'JS copy handler exists' $js 'data-ssf-copy'
+Assert-Contains 'JS uses clipboard API' $js 'navigator.clipboard.writeText'
+Assert-NotContains 'JS does not fetch remote endpoints' $js 'fetch('
+Assert-NotContains 'JS does not expose secrets' $js 'client_secret'
+
 Assert-Contains 'Documentation redirect URI' $doc 'https://ssfb.se/dev/ssf-auth/microsoft/callback/'
 Assert-Contains 'Documentation no SharePoint permissions' $doc 'No SharePoint permissions'
 Assert-Contains 'Documentation no app permissions' $doc 'Do not add Microsoft Graph application permissions'
 Assert-Contains 'Documentation disable switch' $doc "SSF_M365_LOGIN_ENABLED"
+Assert-Contains 'Documentation admin settings path' $doc 'SSF -> System -> Inloggning'
+Assert-Contains 'Documentation permission model' $doc 'Authorization stays in WordPress'
+Assert-Contains 'Documentation audit option' $doc 'ssf_microsoft_login_permission_audit'
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }
