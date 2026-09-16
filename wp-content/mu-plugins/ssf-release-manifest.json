@@ -1,13 +1,13 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.13.0",
-    "build":  "20260916.1",
-    "built_at":  "2026-09-16T08:09:09.2839028Z",
+    "version":  "0.13.1",
+    "build":  "20260916.2",
+    "built_at":  "2026-09-16T09:02:27.8731052Z",
     "source":  "codex",
-    "source_revision":  "6e8bb4298133af3223dbde6ecdfc8b19f3b175df",
-    "description":  "Fix Microsoft 365 admin asset loading",
-    "notes":  "Production readiness checklist build from current HEAD. Adds annual meetings folder parent and status readiness checks.",
+    "source_revision":  "f1f172ee8289bc4e8c207b28b7f7a38d31e69a51",
+    "description":  "Protect PROD SharePoint config and deploy MU plugin assets",
+    "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "release-tooling",
                        "ssf-member-portal"
