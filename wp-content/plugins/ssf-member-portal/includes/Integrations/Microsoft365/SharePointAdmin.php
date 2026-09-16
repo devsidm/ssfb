@@ -41,6 +41,7 @@ final class SharePointAdmin
 
     public function render(): void
     {
+        $this->enqueue('');
         $definitions = SharePointDestinations::definitions();
         $current_environment = SharePointDestinations::environment();
         $destination = sanitize_key((string) ($_GET['destination'] ?? 'annual_meetings'));
