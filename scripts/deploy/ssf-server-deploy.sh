@@ -30,6 +30,7 @@ HTTP_SMOKE_STATUS="NOT RUN"
 ERROR_LOG_STATUS="NOT RUN"
 PLUGIN_PARITY_STATUS="NOT RUN"
 MAINTENANCE_STATUS="NOT RUN"
+SHAREPOINT_CONFIG_STATUS="NOT RUN"
 BACKUP_DIR=""
 BUILD=""
 VERSION=""
@@ -49,6 +50,7 @@ PRE_DEPLOY_BUILD=""
 PRE_DEPLOY_VERSION=""
 TURNSTILE_SITE_FINGERPRINT=""
 TURNSTILE_SECRET_FINGERPRINT=""
+SHAREPOINT_CONFIG_FINGERPRINT=""
 PLUGIN_PLAN=""
 
 fail() {
@@ -174,6 +176,7 @@ wp_eval_prod() {
 }
 
 source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"
+source "$REPO/scripts/deploy/ssf-sharepoint-config-guard.sh"
 
 sha256_file() {
   local file="$1"
@@ -275,6 +278,7 @@ capture_pre_deploy_state() {
     while IFS= read -r plugin; do printf 'wp-content/plugins/%s\n' "$plugin"; done < <(plugin_plan_array "touched_plugins")
     while IFS= read -r theme; do printf 'wp-content/themes/%s\n' "$theme"; done < <(json_array "production.themes")
     while IFS= read -r file; do printf 'wp-content/mu-plugins/%s\n' "$file"; done < <(json_array "production.mu_files")
+    while IFS= read -r dir; do printf 'wp-content/mu-plugins/%s\n' "$dir"; done < <(json_array "production.mu_asset_dirs")
   } | sort -u | while IFS= read -r path; do
     if [[ -e "$PROD/$path" ]]; then
       printf '%s\texists_before=true\n' "$path"
@@ -384,6 +388,18 @@ rsync_component() {
   fi
 }
 
+sync_mu_asset_dirs() {
+  local source_root="$1"
+  local destination_root="$2"
+  local mode="$3"
+  local output
+  while IFS= read -r dir; do
+    [[ -d "$source_root/wp-content/mu-plugins/$dir" ]] || fail "Missing source MU asset directory: $dir"
+    output="$(rsync_component "$source_root/wp-content/mu-plugins/$dir/" "$destination_root/wp-content/mu-plugins/$dir/" "$mode")"
+    printf '%s\n' "$output"
+  done < <(json_array "production.mu_asset_dirs")
+}
+
 sync_to_dev() {
   section "SOURCE TO DEV SYNC"
   local changes=0 output
@@ -399,6 +415,8 @@ sync_to_dev() {
     output="$(rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" dry)"
     [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
   done < <(json_array "production.mu_files")
+  output="$(sync_mu_asset_dirs "$REPO" "$DEV" dry)"
+  [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
   while IFS= read -r file; do
     output="$(rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" dry)"
     [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
@@ -408,6 +426,7 @@ sync_to_dev() {
   while IFS= read -r plugin; do rsync_component "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/" real >/dev/null; done < <(json_array "production.plugins")
   while IFS= read -r theme; do rsync_component "$REPO/wp-content/themes/$theme/" "$DEV/wp-content/themes/$theme/" real >/dev/null; done < <(json_array "production.themes")
   while IFS= read -r file; do rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
+  sync_mu_asset_dirs "$REPO" "$DEV" real >/dev/null
   while IFS= read -r file; do rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "dev_only.mu_files")
   DEV_SYNC_STATUS="PASS"
   echo "DEV sync: PASS"
@@ -763,6 +782,12 @@ prod_dry_run() {
       echo "MU $file UPDATED"
     fi
   done < <(json_array "production.mu_files")
+  while IFS= read -r dir; do
+    local output count
+    output="$(rsync_component "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" dry)"
+    count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
+    echo "MU-ASSET-DIR $dir $count files changed / added"
+  done < <(json_array "production.mu_asset_dirs")
   echo "NOT DEPLOYED:"
   echo "ssf-promotions"
   echo "DEV-only MU files"
@@ -799,6 +824,7 @@ PHP lint:          $PHP_STATUS
 DEV sync:          $DEV_SYNC_STATUS
 DEV smoke:         $DEV_SMOKE_STATUS
 Plugin parity:     $PLUGIN_PARITY_STATUS
+SharePoint config: $SHAREPOINT_CONFIG_STATUS
 PROD DB check:     $PROD_DB_STATUS
 PROD target:       $PROD_TARGET_STATUS
 Dry run:           $DRY_RUN_STATUS
@@ -807,6 +833,7 @@ Will deploy:
 7 SSF plugins
 1 SSF theme
 7 PROD MU files
+1 PROD MU asset directory
 
 Will NOT touch:
 database contents
@@ -963,6 +990,7 @@ INFO
   json_array "production.plugins" > "$BACKUP_DIR/components-plugins.txt"
   json_array "production.themes" > "$BACKUP_DIR/components-themes.txt"
   json_array "production.mu_files" > "$BACKUP_DIR/components-mu-files.txt"
+  json_array "production.mu_asset_dirs" > "$BACKUP_DIR/components-mu-asset-dirs.txt"
   plugin_plan_array "touched_plugins" > "$BACKUP_DIR/components-plugin-parity-touched.txt"
 }
 
@@ -1014,6 +1042,7 @@ deploy_files_to_prod() {
   while IFS= read -r plugin; do rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real >/dev/null; done < <(plugin_plan_array "deploy_plugins")
   while IFS= read -r theme; do rsync_component "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" real >/dev/null; done < <(json_array "production.themes")
   while IFS= read -r file; do rsync_component "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
+  sync_mu_asset_dirs "$DEV" "$PROD" real >/dev/null
   FILES_DEPLOYED=1
   update_backup_state "files_deployed" "true"
   FILE_DEPLOY_STATUS="PASS"
@@ -1067,6 +1096,14 @@ verify_prod_components() {
   done < <(json_array "production.themes")
   THEME_VERIFY_STATUS="PASS"
   while IFS= read -r file; do [[ -f "$PROD/wp-content/mu-plugins/$file" ]] || fail "Missing PROD MU file: $file"; done < <(json_array "production.mu_files")
+  while IFS= read -r dir; do
+    [[ -d "$DEV/wp-content/mu-plugins/$dir" ]] || fail "Missing DEV MU asset directory: $dir"
+    while IFS= read -r source_file; do
+      local relative="${source_file#$DEV/}"
+      [[ -f "$PROD/$relative" ]] || fail "Missing PROD MU asset: $relative"
+      cmp -s "$source_file" "$PROD/$relative" || fail "PROD MU asset differs from DEV: $relative"
+    done < <(find "$DEV/wp-content/mu-plugins/$dir" -type f | sort)
+  done < <(json_array "production.mu_asset_dirs")
   while IFS= read -r file; do [[ ! -e "$PROD/wp-content/mu-plugins/$file" ]] || fail "DEV-only MU file exists in PROD: $file"; done < <(json_array "dev_only.mu_files")
   [[ ! -e "$PROD/wp-content/plugins/ssf-promotions" ]] || fail "Excluded plugin exists in PROD: ssf-promotions"
   post_deploy_plugin_parity
@@ -1202,11 +1239,13 @@ main() {
   prod_target_safety
   build_plugin_parity_plan
   validate_turnstile_prod_config "preflight"
+  validate_sharepoint_config "preflight"
   prod_dev_link_safety "$REPO/wp-content" "pre_deploy"
   prod_dry_run
   record_error_log_baseline
   confirm_once
   create_backup_dir
+  validate_sharepoint_config "preflight"
   activate_maintenance "deployment"
   maintenance_grace_period
   capture_pre_deploy_state
@@ -1217,6 +1256,7 @@ main() {
   activate_planned_plugins
   release_registration
   verify_prod_components
+  validate_sharepoint_config "post"
   prod_dev_link_safety "$PROD/wp-content" "post_deploy"
   open_site_for_public_smoke
   http_prod_smoke

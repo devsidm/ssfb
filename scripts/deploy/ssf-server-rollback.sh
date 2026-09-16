@@ -73,6 +73,7 @@ wp_eval_prod() {
 }
 
 source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"
+source "$REPO/scripts/deploy/ssf-sharepoint-config-guard.sh"
 
 json_value() {
   local file="$1"
@@ -531,6 +532,7 @@ main() {
   select_backup
   validate_prod_target
   validate_backup
+  validate_sharepoint_config "preflight"
   show_plan
   confirm_once
   activate_maintenance "rollback"
@@ -544,6 +546,7 @@ main() {
     restore_plugin_state
   fi
   internal_verify
+  validate_sharepoint_config "validate"
   prod_dev_link_safety "$PROD/wp-content" "post_restore"
   public_smoke
   error_log_post_check

@@ -8,6 +8,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scriptPath = Join-Path $repo 'scripts\deploy\ssf-server-rollback.sh'
 $deployPath = Join-Path $repo 'scripts\deploy\ssf-server-deploy.sh'
 $devLinkGuardPath = Join-Path $repo 'scripts\deploy\ssf-dev-link-guard.sh'
+$sharePointGuardPath = Join-Path $repo 'scripts\deploy\ssf-sharepoint-config-guard.sh'
 $docPath = Join-Path $repo 'docs\SERVER-DEPLOYMENT.md'
 $failures = [Collections.Generic.List[string]]::new()
 
@@ -27,11 +28,13 @@ function Invoke-RollbackCleanupModel([bool]$RollbackMutated, [bool]$RollbackSucc
 $script = Read-RepoFile 'scripts\deploy\ssf-server-rollback.sh'
 $deploy = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
 $devLinkGuard = Read-RepoFile 'scripts\deploy\ssf-dev-link-guard.sh'
+$sharePointGuard = Read-RepoFile 'scripts\deploy\ssf-sharepoint-config-guard.sh'
 $doc = Read-RepoFile 'docs\SERVER-DEPLOYMENT.md'
 $mainOrder = [regex]::Match($script, '(?s)main\(\).*?\{(?<body>.*?)\n\}', 'Singleline').Groups['body'].Value
 
 Assert-True 'rollback script exists' (Test-Path -LiteralPath $scriptPath)
 Assert-True 'shared DEV-link guard exists' (Test-Path -LiteralPath $devLinkGuardPath)
+Assert-True 'shared SharePoint config guard exists' (Test-Path -LiteralPath $sharePointGuardPath)
 Assert-Contains 'rollback shebang' $script '#!/usr/bin/env bash'
 Assert-Contains 'rollback strict mode' $script 'set -Eeuo pipefail'
 Assert-Contains 'rollback maintenance numeric timestamp' $script 'printf ''<?php $upgrading = %s; ?>\n'' "$timestamp" > "$PROD/.maintenance"'
@@ -110,8 +113,15 @@ Assert-Contains 'failed rollback after mutation leaves maintenance active' $scri
 Assert-Contains 'successful rollback opens site' $script 'deactivate_maintenance'
 Assert-Contains 'public smoke failure reactivates maintenance' $script 'rollback public smoke failure'
 Assert-Contains 'rollback sources shared DEV-link guard' $script 'source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"'
+Assert-Contains 'rollback sources shared SharePoint config guard' $script 'source "$REPO/scripts/deploy/ssf-sharepoint-config-guard.sh"'
 Assert-Contains 'rollback DEV-link guard checks DB' $devLinkGuard 'ssf_dev_link_database_check()'
 Assert-Contains 'rollback DEV-link guard ignores GUIDs' $devLinkGuard 'Historical posts.guid DEV references ignored'
+Assert-Contains 'rollback SharePoint guard reads PROD destinations only' $sharePointGuard 'get_option("ssf_member_portal_sharepoint_destinations"'
+Assert-Contains 'rollback SharePoint guard redacts graph secret' $sharePointGuard '"sha256:" . hash("sha256", (string) $graph["client_secret"])'
+Assert-NotContains 'rollback SharePoint guard never mutates options' $sharePointGuard 'update_option('
+Assert-NotContains 'rollback SharePoint guard never reads DEV' $sharePointGuard 'wp_eval_dev'
+Assert-True 'rollback SharePoint preflight before mutation' ($mainOrder.IndexOf('validate_sharepoint_config "preflight"') -gt $mainOrder.IndexOf('validate_backup') -and $mainOrder.IndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('activate_maintenance "rollback"'))
+Assert-True 'rollback SharePoint validates after restore before public smoke' ($mainOrder.IndexOf('validate_sharepoint_config "validate"') -gt $mainOrder.IndexOf('internal_verify') -and $mainOrder.IndexOf('validate_sharepoint_config "validate"') -lt $mainOrder.IndexOf('public_smoke'))
 Assert-True 'rollback DEV-link guard runs after restore before public smoke' ($mainOrder.IndexOf('prod_dev_link_safety "$PROD/wp-content" "post_restore"') -gt $mainOrder.IndexOf('internal_verify') -and $mainOrder.IndexOf('prod_dev_link_safety "$PROD/wp-content" "post_restore"') -lt $mainOrder.IndexOf('public_smoke'))
 Assert-Contains 'SharePoint never modified' $script 'External SharePoint data: NOT ROLLED BACK'
 Assert-Contains 'rollback Turnstile direct option key' $script 'get_option("cfturnstile_key", "")'

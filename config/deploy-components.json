@@ -21,6 +21,9 @@
       "ssf-organization-info.php",
       "ssf-release-controls.php",
       "ssf-release-manifest.json"
+    ],
+    "mu_asset_dirs": [
+      "assets"
     ]
   },
   "dev_only": {

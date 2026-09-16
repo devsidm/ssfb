@@ -8,6 +8,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scriptPath = Join-Path $repo 'scripts\deploy\ssf-server-deploy.sh'
 $rollbackPath = Join-Path $repo 'scripts\deploy\ssf-server-rollback.sh'
 $devLinkGuardPath = Join-Path $repo 'scripts\deploy\ssf-dev-link-guard.sh'
+$sharePointGuardPath = Join-Path $repo 'scripts\deploy\ssf-sharepoint-config-guard.sh'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $docPath = Join-Path $repo 'docs\SERVER-DEPLOYMENT.md'
 $agentsPath = Join-Path $repo 'AGENTS.md'
@@ -28,6 +29,7 @@ function Invoke-DeployCleanupModel([bool]$ProdMutated, [bool]$DeploySuccess, [bo
 
 $script = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
 $devLinkGuard = Read-RepoFile 'scripts\deploy\ssf-dev-link-guard.sh'
+$sharePointGuard = Read-RepoFile 'scripts\deploy\ssf-sharepoint-config-guard.sh'
 $doc = Read-RepoFile 'docs\SERVER-DEPLOYMENT.md'
 $agents = Read-RepoFile 'AGENTS.md'
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
@@ -36,6 +38,7 @@ $bash = Get-Command bash -ErrorAction SilentlyContinue
 Assert-True 'Bash script exists' (Test-Path -LiteralPath $scriptPath)
 Assert-True 'Rollback script exists' (Test-Path -LiteralPath $rollbackPath)
 Assert-True 'DEV-link guard exists' (Test-Path -LiteralPath $devLinkGuardPath)
+Assert-True 'SharePoint config guard exists' (Test-Path -LiteralPath $sharePointGuardPath)
 if ($bash) {
     $wslStubWithoutDistro = $bash.Source -match '\\System32\\bash\.exe$'
     if (-not $wslStubWithoutDistro) {
@@ -88,6 +91,8 @@ Assert-True 'deploy component schema version' ($config.schema_version -eq 1)
 Assert-True 'seven production plugins configured' (@($config.production.plugins).Count -eq 7)
 Assert-True 'one production theme configured' (@($config.production.themes).Count -eq 1)
 Assert-True 'seven production MU files configured' (@($config.production.mu_files).Count -eq 7)
+Assert-True 'one production MU asset directory configured' (@($config.production.mu_asset_dirs).Count -eq 1)
+Assert-True 'production MU assets includes assets directory' (@($config.production.mu_asset_dirs) -contains 'assets')
 Assert-True 'ssf-promotions excluded' (@($config.excluded.plugins) -contains 'ssf-promotions')
 Assert-True 'plugin policy dev_only exists' ($null -ne $config.plugin_policy.dev_only)
 Assert-True 'plugin policy prod_only exists' ($null -ne $config.plugin_policy.prod_only)
@@ -171,7 +176,16 @@ Assert-Contains 'pre-file failure gets explicit result' $script 'mark_backup_res
 Assert-Contains 'pre-deploy plugin state captured' $script 'plugins-before.json'
 Assert-Contains 'pre-deploy theme state captured' $script 'themes-before.json'
 Assert-Contains 'runtime path existence captured' $script 'runtime-paths-before.tsv'
+Assert-Contains 'runtime paths include production MU asset dirs' $script 'json_array "production.mu_asset_dirs"'
 Assert-Contains 'deployment state records new paths reversible' $script 'exists_before=false'
+Assert-Contains 'MU asset sync helper exists' $script 'sync_mu_asset_dirs()'
+Assert-Contains 'sync to DEV includes production MU asset dirs' $script 'sync_mu_asset_dirs "$REPO" "$DEV" real'
+Assert-Contains 'deploy to PROD includes production MU asset dirs' $script 'sync_mu_asset_dirs "$DEV" "$PROD" real'
+Assert-Contains 'PROD dry run reports MU asset dirs' $script 'MU-ASSET-DIR'
+Assert-Contains 'backup manifest records MU asset dirs' $script 'components-mu-asset-dirs.txt'
+Assert-Contains 'missing DEV MU asset dir blocks verification' $script 'Missing DEV MU asset directory:'
+Assert-Contains 'missing MU asset blocks verification' $script 'Missing PROD MU asset:'
+Assert-Contains 'different MU asset blocks verification' $script 'PROD MU asset differs from DEV:'
 Assert-Contains 'exact DEPLOY confirmation exists' $script '[[ "$confirmation" == "DEPLOY" ]]'
 Assert-True 'only one interactive read' (([regex]::Matches($script, 'read -r confirmation')).Count -eq 1)
 Assert-NotContains 'no rsync delete' $script 'rsync --delete'
@@ -224,6 +238,7 @@ Assert-Contains 'AGENTS read-only deploy key' $agents 'read-only'
 Assert-Contains 'AGENTS exact DEPLOY' $agents 'DEPLOY'
 
 Assert-Contains 'deploy sources shared DEV-link guard' $script 'source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"'
+Assert-Contains 'deploy sources shared SharePoint config guard' $script 'source "$REPO/scripts/deploy/ssf-sharepoint-config-guard.sh"'
 Assert-Contains 'DEV-link DB check exists' $devLinkGuard 'ssf_dev_link_database_check()'
 Assert-Contains 'DEV-link runtime source check exists' $devLinkGuard 'ssf_dev_link_source_check()'
 Assert-Contains 'post_content checked' $devLinkGuard '$scan_rows($wpdb->posts, "post_content"'
@@ -253,6 +268,22 @@ Assert-True '/dev/urandom is ignored' (-not ('/dev/urandom' -match $devLinkRegex
 Assert-True '/dev/null is ignored' (-not ('/dev/null' -match $devLinkRegex))
 Assert-True '40 historical GUIDs do not block by themselves' (40 -eq 40)
 Assert-Contains 'secrets not dumped, only safe reference is printed' $devLinkGuard 'Reference: '
+Assert-Contains 'SharePoint reads destination option' $sharePointGuard 'get_option("ssf_member_portal_sharepoint_destinations"'
+Assert-Contains 'SharePoint reads graph option' $sharePointGuard 'get_option("ssf_member_portal_graph_configuration"'
+Assert-Contains 'SharePoint requires membership production config' $sharePointGuard '"membership_applications" => array("site_id", "drive_id", "list_id", "folder_id")'
+Assert-Contains 'SharePoint requires annual meetings production config' $sharePointGuard '"annual_meetings" => array("site_id", "drive_id", "list_id", "folder_id")'
+Assert-Contains 'SharePoint requires graph secret but redacts it' $sharePointGuard '"client_secret" => isset($graph["client_secret"])'
+Assert-Contains 'SharePoint secret snapshot is hash only' $sharePointGuard '"sha256:" . hash("sha256", (string) $graph["client_secret"])'
+Assert-Contains 'SharePoint snapshot file exists' $sharePointGuard 'prod-sharepoint-config-snapshot.json'
+Assert-Contains 'SharePoint missing config blocks deploy' $sharePointGuard 'Required PROD SharePoint configuration is missing.'
+Assert-Contains 'SharePoint changed fingerprint blocks deploy' $sharePointGuard 'SharePoint PROD configuration fingerprint changed during deployment.'
+Assert-NotContains 'SharePoint guard never updates options' $sharePointGuard 'update_option('
+Assert-NotContains 'SharePoint guard never deletes options' $sharePointGuard 'delete_option('
+Assert-NotContains 'SharePoint guard never reads DEV WP' $sharePointGuard 'wp_eval_dev'
+
+Assert-True 'SharePoint preflight before confirmation' ($mainOrder.IndexOf('validate_sharepoint_config "preflight"') -gt $mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -and $mainOrder.IndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('confirm_once'))
+Assert-True 'SharePoint snapshot before PROD mutation' ($mainOrder.IndexOf('create_backup_dir') -lt $mainOrder.LastIndexOf('validate_sharepoint_config "preflight"') -and $mainOrder.LastIndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('activate_maintenance'))
+Assert-True 'SharePoint post-check after deployment before opening site' ($mainOrder.IndexOf('validate_sharepoint_config "post"') -gt $mainOrder.IndexOf('verify_prod_components') -and $mainOrder.IndexOf('validate_sharepoint_config "post"') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }
