@@ -1,17 +1,15 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.13.1",
-    "build":  "20260916.5",
-    "built_at":  "2026-09-16T14:49:36.2288750Z",
+    "version":  "0.13.2",
+    "build":  "20260916.6",
+    "built_at":  "2026-09-16T16:44:39.2553158Z",
     "source":  "codex",
-    "source_revision":  "0c4940726b04433dfb32aa6cc66dc524feb2fbaf",
-    "description":  "Rename Microsoft login as production-capable module",
+    "source_revision":  "491e7ef2026228587dd54591c8447bee64a59bd1",
+    "description":  "Add membership SharePoint archive migration",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "documentation",
-                       "microsoft-id-login",
-                       "release-tooling"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
