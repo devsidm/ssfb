@@ -23,7 +23,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.2.1'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.2.2'
 
 Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
@@ -123,7 +123,7 @@ Assert-True 'New plugin is not production-excluded' (-not (@($config.excluded.pl
 Assert-True 'Old plugin slug removed from deployment policy' (-not (@($config.production.plugins + $config.plugin_policy.dev_only + $config.excluded.plugins) -contains 'ssf-microsoft-login'))
 $devOnlyPolicy = @{}
 @($config.plugin_policy.dev_only) | ForEach-Object { $devOnlyPolicy[$_] = $true }
-$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.2.1' }
+$activeDevPilot = @{ name = 'microsoft-id-login'; status = 'active'; version = '0.2.2' }
 $missingProdPilot = $null
 $pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'PRODUCTION_CAPABLE' } else { 'MATCH' }
 Assert-True 'Production capable plugin is not treated as missing PROD parity' ($pilotClassification -eq 'PRODUCTION_CAPABLE')
@@ -149,10 +149,19 @@ Assert-Contains 'Admin unlink does not alter groups notice' $plugin 'WordPress-b
 Assert-Contains 'Technical connection test action' $plugin 'ssf_m365_test_config'
 Assert-Contains 'Connection checks persisted' $plugin "self::TEST_PREFIX . 'config_'"
 Assert-Contains 'Connection checks function exists' $plugin 'run_connection_checks'
+Assert-Contains 'Test result explains what was checked' $plugin 'Vad kontrollerades'
+Assert-Contains 'Test result summary exists' $plugin 'Samlat resultat:'
+Assert-Contains 'Test result detail column exists' $plugin "esc_html__('Detalj'"
+Assert-Contains 'Test result action column exists' $plugin "esc_html__('Åtgärd vid fel'"
+Assert-Contains 'Structured test result normalizer exists' $plugin 'normalize_check_result'
+Assert-Contains 'Structured test result pass helper exists' $plugin 'checks_passed'
 Assert-Contains 'Connection test checks WordPress environment' $plugin "'WordPress environment'"
 Assert-Contains 'Connection test checks issuer' $plugin "'Issuer matchar tenant'"
 Assert-Contains 'Connection test checks JWKS' $plugin "'JWKS/signeringsnycklar'"
 Assert-Contains 'Connection test states no Graph/SharePoint permissions needed' $plugin 'Inga Graph- eller SharePoint-behorigheter behovs'
+Assert-Contains 'Connection test explains missing secret' $plugin 'Client secret saknas'
+Assert-Contains 'Connection test explains OpenID failure' $plugin 'Microsoft OpenID metadata kunde inte läsas'
+Assert-Contains 'Connection test explains callback setup' $plugin 'Lägg in exakt callback URL i Entra app registration'
 
 Assert-Contains 'Real login test action' $plugin 'ssf_m365_test_login'
 Assert-Contains 'Real login test mode started' $plugin "start_authorization('test'"
@@ -161,6 +170,8 @@ Assert-Contains 'Real login test function exists' $plugin 'complete_real_login_t
 Assert-Contains 'Real login test stores transient' $plugin "self::TEST_PREFIX . 'login_'"
 Assert-Contains 'Real login test verifies linked account' $plugin 'Microsoft-identitet matchar kopplat konto'
 Assert-Contains 'Real login test records unchanged permissions' $plugin 'WordPress-behorigheter oforandrade'
+Assert-Contains 'Real login test explains linked account failure' $plugin 'Koppla rätt Microsoft-konto under Ditt Microsoft-konto'
+Assert-Contains 'Real login test explains no permission mutation' $plugin 'Testet ändrade inte WordPress-roll eller SSF-behörighetsgrupper'
 Assert-Contains 'Last test status option exists' $plugin 'microsoft_id_login_test_status'
 Assert-Contains 'Technical test status persisted' $plugin "record_test_status('technical'"
 Assert-Contains 'Real login test status persisted' $plugin "record_test_status('real_login'"

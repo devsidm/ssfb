@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.2.1';
+    private const VERSION = '0.2.2';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -352,21 +352,58 @@ final class SSF_Microsoft_ID_Login
     {
         if (is_array($connection_test)) {
             echo '<h2>' . esc_html__('Tekniskt konfigurationstest', 'microsoft-id-login') . '</h2>';
+            echo '<p class="description">' . esc_html__('Vad kontrollerades: lokal WordPress-miljö, aktivering, Microsoft-appens grundvärden, OpenID discovery, signeringsnycklar, callback-URL och att inga Graph-/SharePoint-behörigheter används.', 'microsoft-id-login') . '</p>';
             $this->render_check_table($connection_test);
         }
         if (is_array($login_test)) {
             echo '<h2>' . esc_html__('Riktigt Microsoft-inloggningstest', 'microsoft-id-login') . '</h2>';
+            echo '<p class="description">' . esc_html__('Vad kontrollerades: Microsofts riktiga inloggningsflöde, state/nonce/PKCE, ID-token, tenant, kopplat WordPress-konto och att WordPress-behörigheter inte ändras.', 'microsoft-id-login') . '</p>';
             $this->render_check_table($login_test);
         }
     }
 
     private function render_check_table(array $checks): void
     {
-        echo '<table class="widefat striped" style="max-width:900px"><tbody>';
+        $passed = $this->checks_passed($checks);
+        echo '<p><strong>' . esc_html__('Samlat resultat:', 'microsoft-id-login') . '</strong> ' . esc_html($passed ? 'PASS' : 'FAIL') . '</p>';
+        echo '<table class="widefat striped ssf-m365-test-result" style="max-width:1100px"><thead><tr><th>' . esc_html__('Kontroll', 'microsoft-id-login') . '</th><th>' . esc_html__('Resultat', 'microsoft-id-login') . '</th><th>' . esc_html__('Detalj', 'microsoft-id-login') . '</th><th>' . esc_html__('Åtgärd vid fel', 'microsoft-id-login') . '</th></tr></thead><tbody>';
         foreach ($checks as $label => $result) {
-            printf('<tr><th>%s</th><td>%s</td></tr>', esc_html((string) $label), esc_html(! empty($result) ? 'PASS' : 'FAIL'));
+            $check = $this->normalize_check_result($result);
+            printf(
+                '<tr><th>%s</th><td><strong>%s</strong></td><td>%s</td><td>%s</td></tr>',
+                esc_html((string) $label),
+                esc_html($check['passed'] ? 'PASS' : 'FAIL'),
+                esc_html($check['detail']),
+                esc_html($check['action'])
+            );
         }
         echo '</tbody></table>';
+    }
+
+    private function normalize_check_result($result): array
+    {
+        if (is_array($result)) {
+            return array(
+                'passed' => ! empty($result['passed']),
+                'detail' => isset($result['detail']) ? (string) $result['detail'] : '',
+                'action' => isset($result['action']) ? (string) $result['action'] : '',
+            );
+        }
+        return array(
+            'passed' => ! empty($result),
+            'detail' => ! empty($result) ? __('Kontrollen passerade.', 'microsoft-id-login') : __('Kontrollen misslyckades.', 'microsoft-id-login'),
+            'action' => '',
+        );
+    }
+
+    private function checks_passed(array $checks): bool
+    {
+        foreach ($checks as $result) {
+            if (! $this->normalize_check_result($result)['passed']) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function render_users_and_permissions(): void
@@ -637,7 +674,7 @@ final class SSF_Microsoft_ID_Login
             wp_die(esc_html__('Du saknar behörighet.', 'microsoft-id-login'));
         }
         $checks = $this->run_connection_checks();
-        $passed = ! in_array(false, $checks, true);
+        $passed = $this->checks_passed($checks);
         set_transient(self::TEST_PREFIX . 'config_' . get_current_user_id(), $checks, 10 * MINUTE_IN_SECONDS);
         $this->record_test_status('technical', $passed);
         set_transient(
@@ -659,18 +696,60 @@ final class SSF_Microsoft_ID_Login
         $metadata = $this->is_configured() ? $this->discovery_metadata(false) : new WP_Error('not_configured', 'not_configured');
         $jwks = ! is_wp_error($metadata) ? $this->jwks(false) : new WP_Error('metadata_failed', 'metadata_failed');
         $tenant = $this->config('tenant_id');
+        $metadata_error = is_wp_error($metadata) ? $metadata->get_error_code() : '';
+        $jwks_error = is_wp_error($jwks) ? $jwks->get_error_code() : '';
 
         return array(
-            'WordPress environment' => in_array(wp_get_environment_type(), array('development', 'production'), true),
-            'Feature flag' => $this->truthy($this->config('enabled')),
-            'Tenant ID finns' => '' !== $tenant,
-            'Client ID finns' => '' !== $this->config('client_id'),
-            'Client Secret finns' => '' !== $this->config('client_secret'),
-            'OpenID discovery' => ! is_wp_error($metadata),
-            'Issuer matchar tenant' => ! is_wp_error($metadata) && (($metadata['issuer'] ?? '') === 'https://login.microsoftonline.com/' . $tenant . '/v2.0'),
-            'JWKS/signeringsnycklar' => ! is_wp_error($jwks) && ! empty($jwks['keys']),
-            'Callback URL' => false !== strpos($this->callback_url(), self::CALLBACK_PATH),
-            'Inga Graph- eller SharePoint-behorigheter behovs' => true,
+            'WordPress environment' => array(
+                'passed' => in_array(wp_get_environment_type(), array('development', 'production'), true),
+                'detail' => sprintf(__('Aktiv WordPress-miljö: %s.', 'microsoft-id-login'), wp_get_environment_type()),
+                'action' => __('Kontrollera WP_ENVIRONMENT_TYPE om miljön är oväntad.', 'microsoft-id-login'),
+            ),
+            'Feature flag' => array(
+                'passed' => $this->truthy($this->config('enabled')),
+                'detail' => $this->truthy($this->config('enabled')) ? __('Microsoft-login är aktiverat för aktiv profil.', 'microsoft-id-login') : __('Microsoft-login är inte aktiverat för aktiv profil.', 'microsoft-id-login'),
+                'action' => __('Aktivera profilen under SSF -> System -> Inloggning.', 'microsoft-id-login'),
+            ),
+            'Tenant ID finns' => array(
+                'passed' => '' !== $tenant,
+                'detail' => '' !== $tenant ? __('Tenant ID är sparat.', 'microsoft-id-login') : __('Tenant ID saknas.', 'microsoft-id-login'),
+                'action' => __('Lägg in Directory/Tenant ID för rätt miljö.', 'microsoft-id-login'),
+            ),
+            'Client ID finns' => array(
+                'passed' => '' !== $this->config('client_id'),
+                'detail' => '' !== $this->config('client_id') ? __('Application ID / Client ID är sparat.', 'microsoft-id-login') : __('Application ID / Client ID saknas.', 'microsoft-id-login'),
+                'action' => __('Lägg in Application ID från Entra app registration.', 'microsoft-id-login'),
+            ),
+            'Client Secret finns' => array(
+                'passed' => '' !== $this->config('client_secret'),
+                'detail' => '' !== $this->config('client_secret') ? __('Client secret finns sparad men visas inte.', 'microsoft-id-login') : __('Client secret saknas.', 'microsoft-id-login'),
+                'action' => __('Skapa eller lägg in client secret. Lämna fältet tomt senare för att behålla befintlig secret.', 'microsoft-id-login'),
+            ),
+            'OpenID discovery' => array(
+                'passed' => ! is_wp_error($metadata),
+                'detail' => ! is_wp_error($metadata) ? __('Microsoft OpenID metadata kunde läsas.', 'microsoft-id-login') : sprintf(__('Microsoft OpenID metadata kunde inte läsas (%s).', 'microsoft-id-login'), $metadata_error),
+                'action' => __('Kontrollera tenant ID och att servern kan nå login.microsoftonline.com.', 'microsoft-id-login'),
+            ),
+            'Issuer matchar tenant' => array(
+                'passed' => ! is_wp_error($metadata) && (($metadata['issuer'] ?? '') === 'https://login.microsoftonline.com/' . $tenant . '/v2.0'),
+                'detail' => ! is_wp_error($metadata) ? __('Issuer i Microsoft metadata matchar aktiv tenant.', 'microsoft-id-login') : __('Issuer kunde inte kontrolleras när metadata saknas.', 'microsoft-id-login'),
+                'action' => __('Kontrollera att tenant ID hör till SSF:s Entra tenant.', 'microsoft-id-login'),
+            ),
+            'JWKS/signeringsnycklar' => array(
+                'passed' => ! is_wp_error($jwks) && ! empty($jwks['keys']),
+                'detail' => ! is_wp_error($jwks) && ! empty($jwks['keys']) ? __('Microsofts signeringsnycklar kunde läsas.', 'microsoft-id-login') : sprintf(__('Signeringsnycklar kunde inte läsas (%s).', 'microsoft-id-login'), $jwks_error),
+                'action' => __('Kontrollera nätverk/DNS från webbservern och OpenID metadata.', 'microsoft-id-login'),
+            ),
+            'Callback URL' => array(
+                'passed' => false !== strpos($this->callback_url(), self::CALLBACK_PATH),
+                'detail' => sprintf(__('Callback URL är %s.', 'microsoft-id-login'), $this->callback_url()),
+                'action' => __('Lägg in exakt callback URL i Entra app registration.', 'microsoft-id-login'),
+            ),
+            'Inga Graph- eller SharePoint-behorigheter behovs' => array(
+                'passed' => true,
+                'detail' => __('Loginmodulen använder bara openid profile email och inga Graph-/SharePoint-rättigheter.', 'microsoft-id-login'),
+                'action' => __('Ingen åtgärd.', 'microsoft-id-login'),
+            ),
         );
     }
 
@@ -812,18 +891,66 @@ final class SSF_Microsoft_ID_Login
         set_transient(
             self::TEST_PREFIX . 'login_' . $user_id,
             array(
-                'Microsoft-inloggning' => true,
-                'State' => true,
-                'Nonce' => true,
-                'PKCE' => true,
-                'ID-token signatur' => true,
-                'Issuer' => true,
-                'Audience' => true,
-                'Tenant' => true,
-                'tid mottaget' => '' !== $tid,
-                'oid mottaget' => '' !== $oid,
-                'Microsoft-identitet matchar kopplat konto' => $linked,
-                'WordPress-behorigheter oforandrade' => true,
+                'Microsoft-inloggning' => array(
+                    'passed' => true,
+                    'detail' => __('Microsoft skickade tillbaka användaren via callback.', 'microsoft-id-login'),
+                    'action' => __('Ingen åtgärd.', 'microsoft-id-login'),
+                ),
+                'State' => array(
+                    'passed' => true,
+                    'detail' => __('State matchade startad WordPress-session och användes bara en gång.', 'microsoft-id-login'),
+                    'action' => __('Starta om testet om sessionen hinner löpa ut.', 'microsoft-id-login'),
+                ),
+                'Nonce' => array(
+                    'passed' => true,
+                    'detail' => __('Nonce i ID-token matchade testets nonce.', 'microsoft-id-login'),
+                    'action' => __('Starta om testet om webbläsarsessionen byts mitt i flödet.', 'microsoft-id-login'),
+                ),
+                'PKCE' => array(
+                    'passed' => true,
+                    'detail' => __('PKCE-verifieringen accepterades av Microsoft token endpoint.', 'microsoft-id-login'),
+                    'action' => __('Ingen åtgärd.', 'microsoft-id-login'),
+                ),
+                'ID-token signatur' => array(
+                    'passed' => true,
+                    'detail' => __('ID-token verifierades med Microsofts signeringsnycklar.', 'microsoft-id-login'),
+                    'action' => __('Kontrollera JWKS om detta börjar fallera.', 'microsoft-id-login'),
+                ),
+                'Issuer' => array(
+                    'passed' => true,
+                    'detail' => __('Token issuer matchade aktiv tenant.', 'microsoft-id-login'),
+                    'action' => __('Kontrollera tenant ID i aktiv profil.', 'microsoft-id-login'),
+                ),
+                'Audience' => array(
+                    'passed' => true,
+                    'detail' => __('Token audience matchade Application ID / Client ID.', 'microsoft-id-login'),
+                    'action' => __('Kontrollera Application ID i aktiv profil.', 'microsoft-id-login'),
+                ),
+                'Tenant' => array(
+                    'passed' => true,
+                    'detail' => __('Microsoft-kontot kom från den konfigurerade tenant:en.', 'microsoft-id-login'),
+                    'action' => __('Använd ett konto i SSF:s organisation.', 'microsoft-id-login'),
+                ),
+                'tid mottaget' => array(
+                    'passed' => '' !== $tid,
+                    'detail' => '' !== $tid ? __('Tenant claim mottogs.', 'microsoft-id-login') : __('Tenant claim saknas.', 'microsoft-id-login'),
+                    'action' => __('Kontrollera app registration och token claims.', 'microsoft-id-login'),
+                ),
+                'oid mottaget' => array(
+                    'passed' => '' !== $oid,
+                    'detail' => '' !== $oid ? __('Object ID claim mottogs.', 'microsoft-id-login') : __('Object ID claim saknas.', 'microsoft-id-login'),
+                    'action' => __('Kontrollera app registration och token claims.', 'microsoft-id-login'),
+                ),
+                'Microsoft-identitet matchar kopplat konto' => array(
+                    'passed' => $linked,
+                    'detail' => $linked ? __('Microsoft-kontot matchar den WordPress-användare som startade testet.', 'microsoft-id-login') : __('Microsoft-kontot är inte kopplat till den WordPress-användare som startade testet.', 'microsoft-id-login'),
+                    'action' => __('Koppla rätt Microsoft-konto under Ditt Microsoft-konto.', 'microsoft-id-login'),
+                ),
+                'WordPress-behorigheter oforandrade' => array(
+                    'passed' => true,
+                    'detail' => __('Testet ändrade inte WordPress-roll eller SSF-behörighetsgrupper.', 'microsoft-id-login'),
+                    'action' => __('Ingen åtgärd.', 'microsoft-id-login'),
+                ),
             ),
             10 * MINUTE_IN_SECONDS
         );
