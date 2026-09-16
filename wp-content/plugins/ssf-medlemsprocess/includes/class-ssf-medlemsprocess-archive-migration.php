@@ -44,34 +44,52 @@ class SSF_Medlemsprocess_Archive_Migration
         $plan = $this->plan(false);
         ?>
         <div class="wrap ssf-archive-migration">
-            <h1>Flytta medlemsansökningar</h1>
+            <h1>Flytta SharePoint-kataloger</h1>
             <?php $this->notice(); ?>
             <div class="ssf-process-dashboard-cards">
+                <div class="ssf-process-dashboard-card"><span>Vald katalog</span><strong>Medlemsansökningar</strong></div>
                 <div class="ssf-process-dashboard-card"><span>Nuvarande plats</span><strong>Medlemsgruppens SharePoint</strong></div>
-                <div class="ssf-process-dashboard-card"><span>Ny plats</span><strong>Styrelsens SharePoint<br>Medlemskap / Ansökningar</strong></div>
+                <div class="ssf-process-dashboard-card"><span>Ny plats</span><strong><?php echo esc_html((string) ($target['site_url'] ?: 'Styrelsens SharePoint')); ?><br><?php echo esc_html((string) ($target['folder_path'] ?: 'Medlemskap / Ansökningar')); ?></strong></div>
                 <div class="ssf-process-dashboard-card"><span>Miljö</span><strong><?php echo esc_html(strtoupper($this->environment())); ?></strong></div>
             </div>
 
-            <h2>Status</h2>
-            <table class="widefat striped"><tbody>
-                <?php foreach ($this->status_rows($readiness, $write, $plan) as $row) : ?>
-                    <tr><th><?php echo esc_html($row[0]); ?></th><td><?php echo esc_html($row[1]); ?></td></tr>
-                <?php endforeach; ?>
-            </tbody></table>
+            <h2>1. Välj katalog</h2>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><label for="ssf_archive_catalog">Katalog som ska flyttas</label></th>
+                    <td>
+                        <select id="ssf_archive_catalog" disabled>
+                            <option>Medlemsansökningar</option>
+                        </select>
+                        <p class="description">I den här versionen flyttas endast medlemsansökningarnas arkiv. Motioner och årsmöten lämnas oförändrade.</p>
+                    </td>
+                </tr>
+            </table>
 
-            <h2>Målkatalog</h2>
+            <h2>2. Välj ny plats</h2>
+            <p>Ange SharePoint-siten, dokumentbiblioteket och sökvägen till den nya mappen. Knappen <strong>Testa ny katalog</strong> hämtar tekniska ID:n automatiskt när Graph-behörigheten räcker.</p>
+            <div class="notice notice-info inline"><p><strong>Viktigt:</strong> Verktyget skapar inte SharePoint-kolumner eller Choice-värden. Skapa först mappen och metadatafält i SharePoint, gärna genom att utgå från befintlig katalogs kolumnschema. Därefter kontrollerar <strong>Testa ny katalog</strong> att alla fält och val finns.</p></div>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_application_archive_save_target">
                 <?php wp_nonce_field('ssf_application_archive_save_target'); ?>
                 <table class="form-table">
-                    <?php foreach ($this->target_fields() as $key => $label) : ?>
-                        <tr><th><label for="ssf_archive_<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></label></th><td><input class="regular-text" id="ssf_archive_<?php echo esc_attr($key); ?>" name="target[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($target[$key] ?? '')); ?>"></td></tr>
+                    <?php foreach (array('site_url', 'drive_name', 'folder_path') as $key) : ?>
+                        <tr><th><label for="ssf_archive_<?php echo esc_attr($key); ?>"><?php echo esc_html($this->target_fields()[$key]); ?></label></th><td><input class="regular-text" id="ssf_archive_<?php echo esc_attr($key); ?>" name="target[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($target[$key] ?? '')); ?>"></td></tr>
                     <?php endforeach; ?>
                 </table>
-                <?php submit_button('Spara målkatalog', 'secondary'); ?>
+                <details>
+                    <summary>Avancerade tekniska uppgifter</summary>
+                    <table class="form-table">
+                        <?php foreach (array('site_id', 'drive_id', 'list_id', 'folder_name', 'folder_id', 'folder_web_url') as $key) : ?>
+                            <tr><th><label for="ssf_archive_<?php echo esc_attr($key); ?>"><?php echo esc_html($this->target_fields()[$key]); ?></label></th><td><input class="regular-text" id="ssf_archive_<?php echo esc_attr($key); ?>" name="target[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($target[$key] ?? '')); ?>"></td></tr>
+                        <?php endforeach; ?>
+                    </table>
+                </details>
+                <?php submit_button('Spara ny plats', 'secondary'); ?>
             </form>
 
-            <h2>Åtgärder</h2>
+            <h2>3. Testa och migrera</h2>
+            <p>Kör stegen i ordning. Ingen ny katalog aktiveras och inga ärenden flyttas automatiskt.</p>
             <p>
                 <?php $this->button('ssf_application_archive_readiness', 'Testa ny katalog'); ?>
                 <?php $this->button('ssf_application_archive_write_test', 'Testa skrivning'); ?>
@@ -79,7 +97,14 @@ class SSF_Medlemsprocess_Archive_Migration
                 <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_application_archive_export'), 'ssf_application_archive_export')); ?>">Exportera rapport</a>
             </p>
 
-            <h2>Migrera testärende</h2>
+            <h2>4. Status</h2>
+            <table class="widefat striped"><tbody>
+                <?php foreach ($this->status_rows($readiness, $write, $plan) as $row) : ?>
+                    <tr><th><?php echo esc_html($row[0]); ?></th><td><?php echo esc_html($row[1]); ?></td></tr>
+                <?php endforeach; ?>
+            </tbody></table>
+
+            <h2>5. Migrera testärende</h2>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_application_archive_migrate_one">
                 <?php wp_nonce_field('ssf_application_archive_migrate_one'); ?>
@@ -91,7 +116,7 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php submit_button('Migrera testärende', 'primary', 'submit', false); ?>
             </form>
 
-            <h2>Cutover</h2>
+            <h2>6. Aktivera för nya ansökningar</h2>
             <p>Aktiverar styrelsens SharePoint för nya medlemsansökningar först efter PASS på readiness och skrivtest. Befintliga ärenden byter inte automatiskt.</p>
             <?php $this->button('ssf_application_archive_cutover', 'Aktivera ny katalog', 'primary'); ?>
 
@@ -486,7 +511,7 @@ class SSF_Medlemsprocess_Archive_Migration
                 return new WP_Error('migration_target_folder_path_missing', 'Ange mappsökvägen till Medlemskap / Ansökningar.');
             }
             $folder = $this->request('GET', $this->drive_base($target) . '/root:/' . $folder_path . '?$select=id,name,folder,webUrl,parentReference');
-            if (is_wp_error($folder)) { return $folder; }
+            if (is_wp_error($folder)) { return $this->friendly_folder_error($folder, $target); }
             if (empty($folder['folder'])) {
                 return new WP_Error('migration_target_not_folder', 'Målplatsen är inte en SharePoint-mapp.');
             }
@@ -669,6 +694,20 @@ class SSF_Medlemsprocess_Archive_Migration
     {
         $segments = array_filter(array_map('trim', explode('/', trim($path, '/'))), static function ($segment): bool { return '' !== $segment; });
         return implode('/', array_map('rawurlencode', $segments));
+    }
+
+    private function friendly_folder_error(WP_Error $error, array $target): WP_Error
+    {
+        $data = (array) $error->get_error_data();
+        $status = (int) ($data['http_status'] ?? $data['status'] ?? 0);
+        if (404 === $status || 'itemnotfound' === strtolower((string) ($data['graph_code'] ?? ''))) {
+            return new WP_Error(
+                'migration_target_folder_missing',
+                'Målmappen hittades inte. Skapa mappen i SharePoint först: ' . (string) ($target['folder_path'] ?? '') . '. Verktyget skapar inte katalogstruktur, kolumner eller Choice-värden automatiskt.',
+                $data
+            );
+        }
+        return $error;
     }
 
     private function error_details(WP_Error $error): array

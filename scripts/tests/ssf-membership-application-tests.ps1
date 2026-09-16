@@ -197,9 +197,14 @@ Assert-Contains 'Arkivflytt kan slå upp bibliotek via namn' $archiveMigration '
 Assert-Contains 'Arkivflytt kan slå upp list-ID via drive' $archiveMigration '/list?$select=id,displayName,webUrl'
 Assert-Contains 'Arkivflytt kan slå upp mapp via path' $archiveMigration '/root:/'
 Assert-Contains 'Cutover sparar verifierad upplöst profil' $archiveMigration 'resolve_target(true)'
+Assert-Contains 'Arkivflytt förklarar manuell katalog och metadata' $archiveMigration 'Verktyget skapar inte SharePoint-kolumner eller Choice-värden'
+Assert-Contains 'Arkivflytt har begripligt fel för saknad målmapp' $archiveMigration 'Målmappen hittades inte'
+Assert-Contains 'Arkivflytt säger att katalogstruktur inte skapas automatiskt' $archiveMigration 'Verktyget skapar inte katalogstruktur, kolumner eller Choice-värden automatiskt'
 Assert-Contains 'Arkivflytt kräver capability' $archiveMigration "current_user_can('ssf_manage_application_settings')"
 Assert-Contains 'Arkivflytt kräver nonce' $archiveMigration 'check_admin_referer($nonce)'
 Assert-Contains 'Readiness kontrollerar metadata' $archiveMigration '$this->metadata($target)'
+Assert-NotContains 'Arkivflytt får inte skapa SharePoint-kolumner' $archiveMigration ".'/columns'"
+Assert-NotContains 'Arkivflytt får inte POST:a SharePoint-kolumner' $archiveMigration "POST', 'sites/' . rawurlencode((string) `$target['site_id']) . '/lists/' . rawurlencode((string) `$target['list_id']) . '/columns"
 Assert-Contains 'Skrivtest skapar temporär SSF-mapp' $archiveMigration 'SSF-TEST-'
 Assert-Contains 'Skrivtest tar bort testmapp' $archiveMigration '$this->request(''DELETE'''
 Assert-Contains 'Migrering blockerad utan readiness' $archiveMigration 'MIGRERING BLOCKERAD'

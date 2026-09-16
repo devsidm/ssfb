@@ -317,7 +317,7 @@ class SSF_Medlemsprocess_Admin
         if (class_exists('SSF_Admin_Navigation')) {
             add_submenu_page(null, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
             add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Aspiranter', 'Aspiranter', 'ssf_view_applications', 'ssf-medlemsprocess-aspirants', array($this, 'render_aspirants'), 30);
-            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Flytta medlemsansökningar', 'SharePoint-arkiv', 'ssf_manage_application_settings', 'ssf-application-archive-migration', array(SSF_Medlemsprocess_Plugin::instance()->archive_migration, 'render_page'), 70);
+            add_submenu_page(SSF_Admin_Navigation::SYSTEM, 'Flytta SharePoint-kataloger', 'Flytta kataloger', 'ssf_manage_application_settings', 'ssf-application-archive-migration', array(SSF_Medlemsprocess_Plugin::instance()->archive_migration, 'render_page'), 45);
             add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Inställningar för medlemsprocessen', 'Processinställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'), 80);
             return;
         }
