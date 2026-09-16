@@ -17,9 +17,20 @@
 - No SharePoint permissions
 - No reuse of `ssf_member_portal_graph_configuration`
 
-## Required Constants
+## Backend Configuration
 
-Configure these outside Git, preferably in DEV `wp-config.php` or environment:
+Open **SSF -> System -> Inloggning** and configure the Microsoft login profiles.
+
+The backend contains two separate profiles:
+
+- `development`
+- `production`
+
+Each profile has its own enabled flag, Tenant ID, Application ID / Client ID and Client Secret. The Client Secret is never displayed. Leaving the secret field empty keeps the existing saved secret; use the clear checkbox only when the saved secret should be removed.
+
+The current pilot remains DEV-only. A production profile may be prepared in the backend, but the plugin still refuses to enable interactive login when `wp_get_environment_type()` is `production`.
+
+Server constants can still be used as emergency overrides outside Git:
 
 ```php
 define('SSF_M365_LOGIN_ENABLED', 'true');
@@ -50,8 +61,8 @@ The plugin generates this from `home_url()` and does not hardcode `/dev`.
 6. Platform: Web.
 7. Redirect URI: `https://ssfb.se/dev/ssf-auth/microsoft/callback/`.
 8. Create a client secret and store it outside Git.
-9. Copy Application Client ID to `SSF_M365_LOGIN_CLIENT_ID`.
-10. Use SSF Directory Tenant ID as `SSF_M365_LOGIN_TENANT_ID`.
+9. Copy Application Client ID to the matching backend profile.
+10. Use SSF Directory Tenant ID as Tenant ID in the matching backend profile.
 11. Do not add Microsoft Graph application permissions.
 12. Do not add SharePoint permissions.
 

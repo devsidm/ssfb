@@ -28,6 +28,7 @@ final class SSF_Microsoft_Login
     private const META_EMAIL = '_ssf_m365_email';
     private const META_LAST_LOGIN = '_ssf_m365_last_login';
     private const GROUP_META = '_ssf_permission_groups';
+    private const SETTINGS_OPTION = 'ssf_microsoft_login_settings';
     private const AUDIT_OPTION = 'ssf_microsoft_login_permission_audit';
     private const CAP_MANAGE_LOGIN = 'ssf_manage_microsoft_login';
     private const CAP_MANAGE_PERMISSIONS = 'ssf_manage_permission_groups';
@@ -186,6 +187,7 @@ final class SSF_Microsoft_Login
         add_action('admin_post_ssf_m365_link_start', array($this, 'start_link'));
         add_action('admin_post_ssf_m365_unlink', array($this, 'unlink_account'));
         add_action('admin_post_ssf_m365_admin_unlink', array($this, 'admin_unlink_account'));
+        add_action('admin_post_ssf_m365_save_settings', array($this, 'save_settings'));
         add_action('admin_post_ssf_m365_test_config', array($this, 'test_configuration'));
         add_action('admin_post_ssf_m365_test_login', array($this, 'start_real_login_test'));
         add_action('admin_post_ssf_save_permission_groups', array($this, 'save_permission_groups'));
@@ -258,20 +260,7 @@ final class SSF_Microsoft_Login
                     <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_config'), 'ssf_m365_test_config')); ?>"><?php esc_html_e('Testa Microsoft-konfiguration', 'ssf-microsoft-login'); ?></a></p>
                     <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_test_login'), 'ssf_m365_test_login')); ?>"><?php esc_html_e('Testa riktig Microsoft-inloggning', 'ssf-microsoft-login'); ?></a></p>
                 </section>
-                <section class="ssf-admin-card">
-                    <h2><?php esc_html_e('Microsoft / Entra', 'ssf-microsoft-login'); ?></h2>
-                    <dl>
-                        <div><dt><?php esc_html_e('Tenant ID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></dd></div>
-                        <div><dt><?php esc_html_e('Client ID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_id'])); ?></dd></div>
-                        <div><dt><?php esc_html_e('Client Secret', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_secret'])); ?></dd></div>
-                        <div><dt><?php esc_html_e('Appnamn', 'ssf-microsoft-login'); ?></dt><dd>SSF Web Login DEV</dd></div>
-                        <div><dt><?php esc_html_e('Kontotyp', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Endast konton i SSF:s organisation', 'ssf-microsoft-login'); ?></dd></div>
-                        <div><dt><?php esc_html_e('Scopes', 'ssf-microsoft-login'); ?></dt><dd><code>openid profile email</code></dd></div>
-                        <div><dt><?php esc_html_e('SharePoint permissions', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Inga', 'ssf-microsoft-login'); ?></dd></div>
-                        <div><dt><?php esc_html_e('Graph application permissions', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Inga', 'ssf-microsoft-login'); ?></dd></div>
-                    </dl>
-                    <p><label for="ssf-m365-callback"><strong><?php esc_html_e('Redirect URI', 'ssf-microsoft-login'); ?></strong></label><br><input id="ssf-m365-callback" class="regular-text code" value="<?php echo esc_attr($this->callback_url()); ?>" readonly> <button type="button" class="button" data-ssf-copy="#ssf-m365-callback"><?php esc_html_e('Kopiera callback-URL', 'ssf-microsoft-login'); ?></button></p>
-                </section>
+                <?php $this->render_settings_card($status); ?>
                 <section class="ssf-admin-card">
                     <h2><?php esc_html_e('Ditt Microsoft-konto', 'ssf-microsoft-login'); ?></h2>
                     <?php $this->render_own_account_card(); ?>
@@ -294,6 +283,47 @@ final class SSF_Microsoft_Login
         $redirect_to = isset($_REQUEST['redirect_to']) && is_scalar($_REQUEST['redirect_to']) ? esc_url_raw(wp_unslash($_REQUEST['redirect_to'])) : '';
         echo '<p style="text-align:center;margin:16px 0 8px;">' . esc_html__('eller', 'ssf-microsoft-login') . '</p>';
         echo '<p><a class="button button-secondary button-large" style="width:100%;text-align:center;" href="' . esc_url(self::login_url($redirect_to)) . '">' . esc_html__('Logga in med Microsoft 365', 'ssf-microsoft-login') . '</a></p>';
+    }
+
+    private function render_settings_card(array $status): void
+    {
+        $settings = $this->settings();
+        $active_profile = $this->active_profile_key();
+        ?>
+        <section class="ssf-admin-card">
+            <h2><?php esc_html_e('Microsoft / Entra', 'ssf-microsoft-login'); ?></h2>
+            <p><?php esc_html_e('Konfigurera separata Microsoft-appar för Development och Production. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'ssf-microsoft-login'); ?></p>
+            <dl>
+                <div><dt><?php esc_html_e('Aktiv profil', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($active_profile); ?></dd></div>
+                <div><dt><?php esc_html_e('Tenant ID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Client ID', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_id'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Client Secret', 'ssf-microsoft-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_secret'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Kontotyp', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Endast konton i SSF:s organisation', 'ssf-microsoft-login'); ?></dd></div>
+                <div><dt><?php esc_html_e('Scopes', 'ssf-microsoft-login'); ?></dt><dd><code>openid profile email</code></dd></div>
+                <div><dt><?php esc_html_e('SharePoint permissions', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Inga', 'ssf-microsoft-login'); ?></dd></div>
+                <div><dt><?php esc_html_e('Graph application permissions', 'ssf-microsoft-login'); ?></dt><dd><?php esc_html_e('Inga', 'ssf-microsoft-login'); ?></dd></div>
+            </dl>
+            <p><label for="ssf-m365-callback"><strong><?php esc_html_e('Redirect URI', 'ssf-microsoft-login'); ?></strong></label><br><input id="ssf-m365-callback" class="regular-text code" value="<?php echo esc_attr($this->callback_url()); ?>" readonly> <button type="button" class="button" data-ssf-copy="#ssf-m365-callback"><?php esc_html_e('Kopiera callback-URL', 'ssf-microsoft-login'); ?></button></p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="ssf_m365_save_settings">
+                <?php wp_nonce_field('ssf_m365_save_settings'); ?>
+                <?php foreach ($this->profile_keys() as $profile_key) : $profile = $settings['profiles'][$profile_key]; ?>
+                    <fieldset style="border:1px solid #dcdcde;padding:12px;margin:12px 0;">
+                        <legend><strong><?php echo esc_html('development' === $profile_key ? __('Development', 'ssf-microsoft-login') : __('Production', 'ssf-microsoft-login')); ?></strong><?php if ($profile_key === $active_profile) : ?> <span class="description"><?php esc_html_e('(aktiv)', 'ssf-microsoft-login'); ?></span><?php endif; ?></legend>
+                        <?php if ('production' === $profile_key) : ?>
+                            <p class="description"><?php esc_html_e('Production kan förkonfigureras här, men denna pilot är fortfarande spärrad från att aktiveras i production.', 'ssf-microsoft-login'); ?></p>
+                        <?php endif; ?>
+                        <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="1" <?php checked(! empty($profile['enabled'])); ?>> <?php esc_html_e('Aktivera Microsoft-login för denna profil', 'ssf-microsoft-login'); ?></label></p>
+                        <p><label><?php esc_html_e('Tenant ID', 'ssf-microsoft-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]" value="<?php echo esc_attr((string) $profile['tenant_id']); ?>" autocomplete="off"></label></p>
+                        <p><label><?php esc_html_e('Application ID / Client ID', 'ssf-microsoft-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][client_id]" value="<?php echo esc_attr((string) $profile['client_id']); ?>" autocomplete="off"></label></p>
+                        <p><label><?php esc_html_e('Client Secret', 'ssf-microsoft-login'); ?><br><input class="regular-text code" type="password" name="profiles[<?php echo esc_attr($profile_key); ?>][client_secret]" value="" autocomplete="new-password" placeholder="<?php echo esc_attr(! empty($profile['client_secret']) ? __('Secret finns - lämna tomt för att behålla', 'ssf-microsoft-login') : __('Saknas', 'ssf-microsoft-login')); ?>"></label></p>
+                        <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][clear_secret]" value="1"> <?php esc_html_e('Ta bort sparad client secret', 'ssf-microsoft-login'); ?></label></p>
+                    </fieldset>
+                <?php endforeach; ?>
+                <?php submit_button(__('Spara Microsoft-konfiguration', 'ssf-microsoft-login'), 'primary', 'submit', false); ?>
+            </form>
+        </section>
+        <?php
     }
 
     private function render_own_account_card(): void
@@ -552,6 +582,37 @@ final class SSF_Microsoft_Login
             $this->save_user_groups($user_id, $groups, get_current_user_id());
         }
         $this->set_notice(get_current_user_id(), 'success', __('Behorigheterna har sparats.', 'ssf-microsoft-login'));
+        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        exit;
+    }
+
+    public function save_settings(): void
+    {
+        if (! $this->can_manage_login() || ! check_admin_referer('ssf_m365_save_settings')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'ssf-microsoft-login'));
+        }
+
+        $current = $this->settings();
+        $posted = isset($_POST['profiles']) && is_array($_POST['profiles']) ? wp_unslash($_POST['profiles']) : array();
+
+        foreach ($this->profile_keys() as $profile_key) {
+            $profile = isset($posted[$profile_key]) && is_array($posted[$profile_key]) ? $posted[$profile_key] : array();
+            $current['profiles'][$profile_key]['enabled'] = ! empty($profile['enabled']);
+            $current['profiles'][$profile_key]['tenant_id'] = $this->sanitize_guid((string) ($profile['tenant_id'] ?? ''));
+            $current['profiles'][$profile_key]['client_id'] = $this->sanitize_guid((string) ($profile['client_id'] ?? ''));
+
+            if (! empty($profile['clear_secret'])) {
+                $current['profiles'][$profile_key]['client_secret'] = '';
+            } elseif (isset($profile['client_secret']) && '' !== trim((string) $profile['client_secret'])) {
+                $current['profiles'][$profile_key]['client_secret'] = sanitize_text_field((string) $profile['client_secret']);
+            }
+        }
+
+        $current['schema_version'] = 1;
+        $current['updated_at'] = gmdate('c');
+        $current['updated_by'] = get_current_user_id();
+        update_option(self::SETTINGS_OPTION, $current, false);
+        $this->set_notice(get_current_user_id(), 'success', __('Microsoft-konfigurationen har sparats.', 'ssf-microsoft-login'));
         wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
         exit;
     }
@@ -940,7 +1001,55 @@ final class SSF_Microsoft_Login
             return '';
         }
         $value = defined($constant) ? constant($constant) : getenv($constant);
-        return is_string($value) ? trim($value) : (is_bool($value) ? ($value ? 'true' : 'false') : '');
+        if (is_string($value) && '' !== trim($value)) {
+            return trim($value);
+        }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        $settings = $this->settings();
+        $profile = $settings['profiles'][$this->active_profile_key()] ?? array();
+        if ('enabled' === $key) {
+            return ! empty($profile['enabled']) ? 'true' : 'false';
+        }
+        return is_string($profile[$key] ?? null) ? trim((string) $profile[$key]) : '';
+    }
+
+    private function profile_keys(): array
+    {
+        return array('development', 'production');
+    }
+
+    private function active_profile_key(): string
+    {
+        return 'production' === wp_get_environment_type() ? 'production' : 'development';
+    }
+
+    private function settings(): array
+    {
+        $stored = get_option(self::SETTINGS_OPTION, array());
+        $settings = is_array($stored) ? $stored : array();
+        $settings['schema_version'] = 1;
+        $settings['profiles'] = is_array($settings['profiles'] ?? null) ? $settings['profiles'] : array();
+
+        foreach ($this->profile_keys() as $profile_key) {
+            $profile = is_array($settings['profiles'][$profile_key] ?? null) ? $settings['profiles'][$profile_key] : array();
+            $settings['profiles'][$profile_key] = array(
+                'enabled' => ! empty($profile['enabled']),
+                'tenant_id' => is_string($profile['tenant_id'] ?? null) ? trim((string) $profile['tenant_id']) : '',
+                'client_id' => is_string($profile['client_id'] ?? null) ? trim((string) $profile['client_id']) : '',
+                'client_secret' => is_string($profile['client_secret'] ?? null) ? (string) $profile['client_secret'] : '',
+            );
+        }
+
+        return $settings;
+    }
+
+    private function sanitize_guid(string $value): string
+    {
+        $value = trim($value);
+        return preg_match('/^[A-Za-z0-9._:-]+$/', $value) ? $value : sanitize_text_field($value);
     }
 
     private function authority_url(string $path): string

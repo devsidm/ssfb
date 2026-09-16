@@ -97,6 +97,21 @@ Assert-Contains 'Admin diagnostics page' $plugin 'Microsoft-inloggning'
 Assert-Contains 'Metadata diagnostic' $plugin 'OpenID'
 Assert-Contains 'JWKS diagnostic' $plugin 'JWKS'
 Assert-Contains 'Secret displayed as configured only' $plugin "Client Secret"
+Assert-Contains 'Backend settings option exists' $plugin 'ssf_microsoft_login_settings'
+Assert-Contains 'Backend save action exists' $plugin 'ssf_m365_save_settings'
+Assert-Contains 'Backend save action registered' $plugin "admin_post_ssf_m365_save_settings"
+Assert-Contains 'Settings save requires login management capability' $plugin 'save_settings'
+Assert-Contains 'Settings save requires nonce' $plugin "check_admin_referer('ssf_m365_save_settings')"
+Assert-Contains 'Development profile exists' $plugin "'development'"
+Assert-Contains 'Production profile exists' $plugin "'production'"
+Assert-Contains 'Active profile selected from WP environment' $plugin 'active_profile_key'
+Assert-Contains 'Production profile editable in UI' $plugin "__('Production'"
+Assert-Contains 'Client ID editable in UI' $plugin 'Application ID / Client ID'
+Assert-Contains 'Client secret password field' $plugin 'type="password"'
+Assert-Contains 'Secret blank preserves existing value' $plugin 'Secret finns -'
+Assert-Contains 'Secret can be cleared explicitly' $plugin 'clear_secret'
+Assert-Contains 'Settings update does not autoload secrets' $plugin 'update_option(self::SETTINGS_OPTION, $current, false)'
+Assert-Contains 'Server constants remain emergency override' $plugin 'SSF_M365_LOGIN_CLIENT_ID'
 Assert-NotContains 'No token HTML output' $plugin 'id_token</'
 Assert-NotContains 'No raw JWT logging' $plugin 'error_log($jwt'
 Assert-NotContains 'No secret logging' $plugin 'error_log($this->config(''client_secret'')'
@@ -189,6 +204,9 @@ Assert-Contains 'Documentation no SharePoint permissions' $doc 'No SharePoint pe
 Assert-Contains 'Documentation no app permissions' $doc 'Do not add Microsoft Graph application permissions'
 Assert-Contains 'Documentation disable switch' $doc "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Documentation admin settings path' $doc 'SSF -> System -> Inloggning'
+Assert-Contains 'Documentation backend profiles' $doc 'development'
+Assert-Contains 'Documentation production profile' $doc 'production'
+Assert-Contains 'Documentation secret preservation' $doc 'Leaving the secret field empty keeps the existing saved secret'
 Assert-Contains 'Documentation permission model' $doc 'Authorization stays in WordPress'
 Assert-Contains 'Documentation audit option' $doc 'ssf_microsoft_login_permission_audit'
 
