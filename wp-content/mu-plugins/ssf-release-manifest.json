@@ -2,16 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.13.0",
-    "build":  "20260915.8",
-    "built_at":  "2026-09-15T20:05:18.4466559Z",
+    "build":  "20260916.1",
+    "built_at":  "2026-09-16T08:09:09.2839028Z",
     "source":  "codex",
-    "source_revision":  "60911b98f7801b9664c51c5b1a75c39ee1b61c04",
-    "description":  "Fix application page heading hierarchy",
+    "source_revision":  "6e8bb4298133af3223dbde6ecdfc8b19f3b175df",
+    "description":  "Fix Microsoft 365 admin asset loading",
     "notes":  "Production readiness checklist build from current HEAD. Adds annual meetings folder parent and status readiness checks.",
     "components":  [
                        "release-tooling",
-                       "ssf",
-                       "ssf-medlemsprocess"
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
