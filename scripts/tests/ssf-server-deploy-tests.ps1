@@ -94,7 +94,9 @@ Assert-True 'seven production MU files configured' (@($config.production.mu_file
 Assert-True 'one production MU asset directory configured' (@($config.production.mu_asset_dirs).Count -eq 1)
 Assert-True 'production MU assets includes assets directory' (@($config.production.mu_asset_dirs) -contains 'assets')
 Assert-True 'ssf-promotions excluded' (@($config.excluded.plugins) -contains 'ssf-promotions')
+Assert-True 'Microsoft login pilot excluded from production' (@($config.excluded.plugins) -contains 'ssf-microsoft-login')
 Assert-True 'plugin policy dev_only exists' ($null -ne $config.plugin_policy.dev_only)
+Assert-True 'Microsoft login pilot is DEV-only plugin policy' (@($config.plugin_policy.dev_only) -contains 'ssf-microsoft-login')
 Assert-True 'plugin policy prod_only exists' ($null -ne $config.plugin_policy.prod_only)
 Assert-True 'plugin policy ignore_version exists' ($null -ne $config.plugin_policy.ignore_version)
 foreach ($file in @('ssf-dev-annual-meeting-registration.php','ssf-dev-login-protection.php','ssf-dev-protection.php')) {
@@ -119,6 +121,7 @@ Assert-Contains 'active DEV missing PROD detected' $script 'DEV_ACTIVE_PROD_MISS
 Assert-Contains 'active DEV inactive PROD detected' $script 'DEV_ACTIVE_PROD_INACTIVE'
 Assert-Contains 'active DEV version difference detected' $script 'DEV_ACTIVE_VERSION_DIFFERS'
 Assert-Contains 'dev-only plugin config exception works' $script 'DEV_ONLY_ALLOWED'
+Assert-Contains 'Microsoft login pilot listed as not deployed' $script 'ssf-microsoft-login'
 Assert-Contains 'PROD-only plugin warning exists' $script 'PROD_ONLY'
 Assert-Contains 'DEV inactive PROD active warning exists' $script 'DEV_INACTIVE_PROD_ACTIVE'
 Assert-Contains 'missing active DEV plugin cannot pass silently' $script 'Active DEV plugin cannot be deployed safely'

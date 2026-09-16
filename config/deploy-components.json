@@ -35,11 +35,14 @@
   },
   "excluded": {
     "plugins": [
+      "ssf-microsoft-login",
       "ssf-promotions"
     ]
   },
   "plugin_policy": {
-    "dev_only": [],
+    "dev_only": [
+      "ssf-microsoft-login"
+    ],
     "prod_only": [],
     "ignore_version": []
   }

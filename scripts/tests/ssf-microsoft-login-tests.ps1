@@ -1,0 +1,122 @@
+[CmdletBinding()]
+param()
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$pluginPath = Join-Path $repo 'wp-content\plugins\ssf-microsoft-login\ssf-microsoft-login.php'
+$docPath = Join-Path $repo 'docs\MICROSOFT-365-LOGIN-DEV.md'
+$configPath = Join-Path $repo 'config\deploy-components.json'
+$failures = [Collections.Generic.List[string]]::new()
+
+function Fail([string]$Message) { $failures.Add($Message) | Out-Null }
+function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { Fail $Name } }
+function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
+function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
+
+$plugin = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginPath
+$doc = Get-Content -Raw -Encoding UTF8 -LiteralPath $docPath
+$config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
+
+Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
+Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: SSF Microsoft 365 Login'
+Assert-Contains 'Initial plugin version' $plugin 'Version: 0.1.0'
+
+Assert-Contains 'Disabled outside development' $plugin "'development' === wp_get_environment_type()"
+Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
+Assert-Contains 'Tenant constant exists' $plugin "SSF_M365_LOGIN_TENANT_ID"
+Assert-Contains 'Client ID constant exists' $plugin "SSF_M365_LOGIN_CLIENT_ID"
+Assert-Contains 'Client secret constant exists' $plugin "SSF_M365_LOGIN_CLIENT_SECRET"
+Assert-NotContains 'No SharePoint option reuse' $plugin 'ssf_member_portal_graph_configuration'
+Assert-NotContains 'No SharePoint client constants' $plugin 'SSF_GRAPH_CLIENT_SECRET'
+
+Assert-Contains 'Tenant specific authorize endpoint' $plugin "login.microsoftonline.com/"
+Assert-Contains 'Authorization Code Flow response type' $plugin "'response_type' => 'code'"
+Assert-Contains 'Authorization Code token grant' $plugin "'grant_type' => 'authorization_code'"
+Assert-Contains 'Only identity scopes requested' $plugin "'scope' => 'openid profile email'"
+Assert-NotContains 'No User.Read scope' $plugin 'User.Read'
+Assert-NotContains 'No offline_access scope' $plugin 'offline_access'
+Assert-NotContains 'No Sites permissions' $plugin 'Sites.'
+Assert-NotContains 'No Files permissions' $plugin 'Files.'
+Assert-NotContains 'No Mail permissions' $plugin 'Mail.'
+Assert-Contains 'PKCE verifier stored' $plugin "'pkce_verifier'"
+Assert-Contains 'PKCE challenge method S256' $plugin "'code_challenge_method' => 'S256'"
+Assert-Contains 'State generated' $plugin '$state = $this->random_urlsafe(32)'
+Assert-Contains 'Nonce generated' $plugin '$nonce = $this->random_urlsafe(32)'
+Assert-Contains 'State transient one-time delete' $plugin 'delete_transient(self::STATE_PREFIX . $state)'
+Assert-Contains 'Short transaction expiry' $plugin '10 * MINUTE_IN_SECONDS'
+Assert-Contains 'Expired transaction rejected' $plugin 'time() - (int) ($transaction[''created''] ?? 0) > 10 * MINUTE_IN_SECONDS'
+
+Assert-Contains 'ID token has three JWT parts' $plugin "3 !== count(`$parts)"
+Assert-Contains 'RS256 required' $plugin "!== 'RS256'"
+Assert-Contains 'JWKS discovery used' $plugin 'openid-configuration'
+Assert-Contains 'JWKS URI used' $plugin '$metadata[''jwks_uri'']'
+Assert-Contains 'OpenSSL signature verification' $plugin 'openssl_verify'
+Assert-Contains 'Invalid signature rejected' $plugin 'ssf_m365_invalid_signature'
+Assert-Contains 'Issuer validated' $plugin '$claims[''iss'']'
+Assert-Contains 'Audience validated' $plugin '$claims[''aud'']'
+Assert-Contains 'Expiration validated' $plugin '$claims[''exp'']'
+Assert-Contains 'Not-before validated' $plugin '$claims[''nbf'']'
+Assert-Contains 'Nonce validated' $plugin '$claims[''nonce'']'
+Assert-Contains 'Tenant validated' $plugin '$claims[''tid'']'
+Assert-Contains 'OID required' $plugin 'empty($claims[''oid''])'
+Assert-Contains 'TID required' $plugin 'empty($claims[''tid''])'
+
+Assert-Contains 'Uses tid user meta' $plugin "_ssf_m365_tid"
+Assert-Contains 'Uses oid user meta' $plugin "_ssf_m365_oid"
+Assert-Contains 'Maps by tid and oid' $plugin "'relation' => 'AND'"
+Assert-Contains 'Logs mapped user in' $plugin 'wp_set_auth_cookie'
+Assert-Contains 'Unmapped Microsoft user denied' $plugin 'inte kopplat till ett SSF-konto'
+Assert-NotContains 'No automatic user creation' $plugin 'wp_create_user'
+Assert-NotContains 'No user insert' $plugin 'wp_insert_user'
+Assert-NotContains 'No role assignment' $plugin 'set_role'
+Assert-NotContains 'Email not used for identity lookup' $plugin 'user_email'
+
+Assert-Contains 'Account linking requires login' $plugin 'is_user_logged_in()'
+Assert-Contains 'Linking requires nonce' $plugin "check_admin_referer('ssf_m365_link_start')"
+Assert-Contains 'Linking preserves current user' $plugin 'get_current_user_id() !== $user_id'
+Assert-Contains 'Duplicate identity blocked' $plugin 'redan kopplat till ett annat SSF-konto'
+Assert-Contains 'Unlink requires nonce' $plugin "check_admin_referer('ssf_m365_unlink')"
+Assert-Contains 'Unlink deletes tid' $plugin 'delete_user_meta(get_current_user_id(), self::META_TID)'
+Assert-Contains 'Unlink deletes oid' $plugin 'delete_user_meta(get_current_user_id(), self::META_OID)'
+
+Assert-Contains 'Login button rendered' $plugin 'Logga in med Microsoft 365'
+Assert-Contains 'Login button hook preserves normal login form' $plugin "add_action('login_form'"
+Assert-Contains 'Reusable login URL helper exists' $plugin 'public static function login_url'
+Assert-Contains 'Safe redirect validation' $plugin 'wp_validate_redirect'
+Assert-Contains 'Safe redirect execution' $plugin 'wp_safe_redirect'
+Assert-Contains 'Clean callback rewrite' $plugin 'ssf-auth/microsoft/callback'
+Assert-Contains 'Callback based on home_url' $plugin "home_url('/' . self::CALLBACK_PATH)"
+Assert-Contains 'Rewrite flushed on activation' $plugin 'register_activation_hook'
+Assert-NotContains 'No hardcoded dev path in plugin' $plugin 'ssfb.se/dev'
+
+Assert-Contains 'Admin diagnostics page' $plugin 'Microsoft 365-inloggning'
+Assert-Contains 'Metadata diagnostic' $plugin 'OpenID metadata'
+Assert-Contains 'JWKS diagnostic' $plugin 'JWKS available'
+Assert-Contains 'Secret displayed as configured only' $plugin "Client secret"
+Assert-NotContains 'No token HTML output' $plugin 'id_token</'
+Assert-NotContains 'No raw JWT logging' $plugin 'error_log($jwt'
+Assert-NotContains 'No secret logging' $plugin 'error_log($this->config(''client_secret'')'
+
+Assert-True 'Plugin is excluded from production plugin list' (-not (@($config.production.plugins) -contains 'ssf-microsoft-login'))
+Assert-True 'Plugin is listed DEV-only' (@($config.plugin_policy.dev_only) -contains 'ssf-microsoft-login')
+Assert-True 'Plugin is production-excluded' (@($config.excluded.plugins) -contains 'ssf-microsoft-login')
+$devOnlyPolicy = @{}
+@($config.plugin_policy.dev_only) | ForEach-Object { $devOnlyPolicy[$_] = $true }
+$activeDevPilot = @{ name = 'ssf-microsoft-login'; status = 'active'; version = '0.1.0' }
+$missingProdPilot = $null
+$pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'DEV_ACTIVE_PROD_MISSING' } else { 'MATCH' }
+Assert-True 'Active DEV pilot does not cause PROD copy/activate action' ($pilotClassification -eq 'DEV_ONLY_ALLOWED')
+
+Assert-Contains 'Documentation redirect URI' $doc 'https://ssfb.se/dev/ssf-auth/microsoft/callback/'
+Assert-Contains 'Documentation no SharePoint permissions' $doc 'No SharePoint permissions'
+Assert-Contains 'Documentation no app permissions' $doc 'Do not add Microsoft Graph application permissions'
+Assert-Contains 'Documentation disable switch' $doc "SSF_M365_LOGIN_ENABLED"
+
+if ($failures.Count) {
+    $failures | ForEach-Object { Write-Error $_ }
+    exit 1
+}
+
+Write-Host 'PASS: DEV Microsoft 365 login pilot static security tests.'

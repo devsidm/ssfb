@@ -789,6 +789,7 @@ prod_dry_run() {
     echo "MU-ASSET-DIR $dir $count files changed / added"
   done < <(json_array "production.mu_asset_dirs")
   echo "NOT DEPLOYED:"
+  echo "ssf-microsoft-login"
   echo "ssf-promotions"
   echo "DEV-only MU files"
   echo "wp-config.php"
