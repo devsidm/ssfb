@@ -25,7 +25,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.0'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.1'
 
 Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
@@ -259,6 +259,10 @@ Assert-Contains 'CSS styles SSF account login' $css '.ssf-account-login'
 Assert-Contains 'CSS styles SSF activation page' $css '.ssf-account-card'
 Assert-Contains 'CSS has mobile breakpoint' $css '@media (max-width: 480px)'
 Assert-Contains 'CSS has focus hover state' $css '.ssf-account-primary:focus'
+Assert-Contains 'Activation page uses SSF theme logo' $plugin "get_theme_file_uri('/assets/images/ssf-logo.svg')"
+Assert-Contains 'Activation button has content width' $css '.ssf-account-card .ssf-account-primary'
+Assert-Contains 'Connection test exposes safe transport detail' $plugin 'safe_http_error'
+Assert-Contains 'Connection diagnostics redact client secret' $plugin "`$this->config('client_secret')"
 
 Assert-Contains 'Documentation redirect URI' $doc 'https://ssfb.se/dev/ssf-auth/microsoft/callback/'
 Assert-Contains 'Documentation no SharePoint permissions' $doc 'No SharePoint permissions'

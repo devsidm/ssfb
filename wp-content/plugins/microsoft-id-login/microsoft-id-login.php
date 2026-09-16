@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.3.0';
+    private const VERSION = '0.3.1';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -856,8 +856,8 @@ final class SSF_Microsoft_ID_Login
         $metadata = $this->is_configured() ? $this->discovery_metadata(false) : new WP_Error('not_configured', 'not_configured');
         $jwks = ! is_wp_error($metadata) ? $this->jwks(false) : new WP_Error('metadata_failed', 'metadata_failed');
         $tenant = $this->config('tenant_id');
-        $metadata_error = is_wp_error($metadata) ? $metadata->get_error_code() : '';
-        $jwks_error = is_wp_error($jwks) ? $jwks->get_error_code() : '';
+        $metadata_error = is_wp_error($metadata) ? $metadata->get_error_message() : '';
+        $jwks_error = is_wp_error($jwks) ? $jwks->get_error_message() : '';
 
         return array(
             'WordPress environment' => array(
@@ -1331,6 +1331,10 @@ final class SSF_Microsoft_ID_Login
 
     private function logo_markup(): string
     {
+        $theme_logo_path = function_exists('get_theme_file_path') ? get_theme_file_path('/assets/images/ssf-logo.svg') : '';
+        if ($theme_logo_path && is_readable($theme_logo_path)) {
+            return '<img class="ssf-account-logo-image" src="' . esc_url(get_theme_file_uri('/assets/images/ssf-logo.svg')) . '" alt="' . esc_attr__('Sveriges Segelfartygsförbund', 'microsoft-id-login') . '">';
+        }
         if (function_exists('get_custom_logo')) {
             $logo = get_custom_logo();
             if ('' !== $logo) {
@@ -1342,6 +1346,17 @@ final class SSF_Microsoft_ID_Login
             return '<img src="' . esc_url($icon) . '" alt="' . esc_attr__('SSF', 'microsoft-id-login') . '">';
         }
         return '<span class="ssf-account-logo-fallback">SSF</span>';
+    }
+
+    private function safe_http_error(WP_Error $error): string
+    {
+        $message = sanitize_text_field($error->get_error_message());
+        foreach (array($this->config('tenant_id'), $this->config('client_id'), $this->config('client_secret')) as $protected) {
+            if ('' !== $protected) {
+                $message = str_replace($protected, '[skyddat]', $message);
+            }
+        }
+        return sprintf('Transportfel %s: %s', sanitize_key($error->get_error_code()), $message ?: 'Ingen felbeskrivning returnerades.');
     }
 
     private function render_account_page(string $title, string $body, string $email, string $action_url, string $button_label): void
@@ -1465,8 +1480,12 @@ final class SSF_Microsoft_ID_Login
             }
         }
         $response = wp_remote_get($this->authority_url('/v2.0/.well-known/openid-configuration'), array('timeout' => 20));
-        if (is_wp_error($response) || 200 !== (int) wp_remote_retrieve_response_code($response)) {
-            return new WP_Error('ssf_m365_discovery_failed', 'discovery_failed');
+        if (is_wp_error($response)) {
+            return new WP_Error('ssf_m365_discovery_failed', $this->safe_http_error($response));
+        }
+        $status = (int) wp_remote_retrieve_response_code($response);
+        if (200 !== $status) {
+            return new WP_Error('ssf_m365_discovery_failed', sprintf('HTTP %d från Microsoft OpenID.', $status));
         }
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if (! is_array($data) || empty($data['jwks_uri'])) {
@@ -1490,8 +1509,12 @@ final class SSF_Microsoft_ID_Login
             return $metadata;
         }
         $response = wp_remote_get((string) $metadata['jwks_uri'], array('timeout' => 20));
-        if (is_wp_error($response) || 200 !== (int) wp_remote_retrieve_response_code($response)) {
-            return new WP_Error('ssf_m365_jwks_failed', 'jwks_failed');
+        if (is_wp_error($response)) {
+            return new WP_Error('ssf_m365_jwks_failed', $this->safe_http_error($response));
+        }
+        $status = (int) wp_remote_retrieve_response_code($response);
+        if (200 !== $status) {
+            return new WP_Error('ssf_m365_jwks_failed', sprintf('HTTP %d från Microsofts signeringsnycklar.', $status));
         }
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if (! is_array($data) || empty($data['keys'])) {

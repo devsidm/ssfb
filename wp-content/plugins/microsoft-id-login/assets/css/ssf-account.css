@@ -100,6 +100,12 @@ body.login h1 a {
     color: #ffffff;
 }
 
+.ssf-account-card .ssf-account-primary {
+    max-width: 100%;
+    min-width: 230px;
+    width: auto;
+}
+
 .ssf-account-domain {
     font-weight: 700;
     margin-bottom: 4px;

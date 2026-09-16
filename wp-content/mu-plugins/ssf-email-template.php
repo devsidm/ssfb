@@ -43,6 +43,7 @@ final class SSF_Email_Template
             'annual_meeting_registration' => array('label' => 'Årsmötesanmälan', 'title' => 'Din anmälan är bekräftad', 'preheader' => 'Din anmälan till aktiviteter under SSF:s årsmöteshelg är registrerad.', 'category' => 'annual_meeting'),
             'annual_meeting_registration_updated' => array('label' => 'Ändrad årsmötesanmälan', 'title' => 'Din anmälan har uppdaterats', 'preheader' => 'Dina aktuella val för årsmöteshelgen finns i detta meddelande.', 'category' => 'annual_meeting'),
             'contact_confirmation' => array('label' => 'Kontaktbekräftelse', 'title' => 'Vi har tagit emot ditt meddelande', 'preheader' => 'Tack för att du kontaktat Sveriges Segelfartygsförbund.', 'category' => 'general'),
+            'ssf_account_invitation' => array('label' => 'Inbjudan till SSF-konto', 'title' => 'Aktivera ditt SSF-konto', 'preheader' => 'Du har fått tillgång till SSF:s administrativa system.', 'category' => 'general'),
             'vessel_update_invitation' => array('label' => 'Begäran om fartygsuppgifter', 'title' => 'Uppdatera uppgifter om ditt fartyg', 'preheader' => 'SSF behöver aktuella uppgifter om ditt fartyg.', 'category' => 'membership'),
             'vessel_update_received' => array('label' => 'Fartygsuppgifter mottagna', 'title' => 'Vi har tagit emot dina fartygsuppgifter', 'preheader' => 'Uppgifterna granskas före publicering.', 'category' => 'membership'),
             'inspector_assignment' => array('label' => 'Inspektörsuppdrag', 'title' => 'Du har fått ett nytt inspektörsuppdrag', 'preheader' => 'Ett nytt inspektionsärende har tilldelats dig.', 'category' => 'membership'),
@@ -430,7 +431,11 @@ final class SSF_Email_Template
         if (! current_user_can('manage_options')) {
             return;
         }
-        $unknown_types = (array) get_option(self::UNKNOWN_TYPES_OPTION, array());
+        $stored_unknown_types = (array) get_option(self::UNKNOWN_TYPES_OPTION, array());
+        $unknown_types = array_diff_key($stored_unknown_types, self::templates());
+        if ($unknown_types !== $stored_unknown_types) {
+            update_option(self::UNKNOWN_TYPES_OPTION, $unknown_types, false);
+        }
         if ($unknown_types) {
             printf('<div class="notice notice-warning"><p>%s</p></div>', esc_html('SSF har använt kategorin Allmänt för okända e-posttyper: ' . implode(', ', array_keys($unknown_types)) . '. Kontrollera den centrala typmappningen.'));
         }

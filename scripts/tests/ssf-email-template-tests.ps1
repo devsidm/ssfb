@@ -22,7 +22,7 @@ $vesselTokens = Read-RepoFile 'wp-content\plugins\ssf-medlemsfartyg\includes\cla
 $sendMethod = [regex]::Match($template, '(?s)public static function send\(.*?(?=public static function render_admin_section)').Value
 $headerMethod = [regex]::Match($template, '(?s)private static function render_header\(.*?(?=public static function render_text)').Value
 
-foreach ($type in @('motion_received','motion_status','application_received','application_admin_notice','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
+foreach ($type in @('motion_received','motion_status','application_received','application_admin_notice','application_status','application_completion','annual_meeting_registration','annual_meeting_registration_updated','contact_confirmation','ssf_account_invitation','vessel_update_invitation','vessel_update_received','inspector_assignment')) {
     Assert-Contains "Malltyp $type" $template "'$type' =>"
 }
 foreach ($mapping in @(
@@ -34,7 +34,8 @@ foreach ($mapping in @(
     @('application_status', "'category' => 'membership'"),
     @('application_completion', "'category' => 'membership'"),
     @('inspector_assignment', "'category' => 'membership'"),
-    @('contact_confirmation', "'category' => 'general'")
+    @('contact_confirmation', "'category' => 'general'"),
+    @('ssf_account_invitation', "'category' => 'general'")
 )) {
     $line = ($template -split "`n" | Where-Object { $_.Contains("'$($mapping[0])' =>") } | Select-Object -First 1)
     Assert-Contains "Kategori för $($mapping[0])" $line $mapping[1]
