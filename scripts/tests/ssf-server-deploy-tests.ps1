@@ -272,6 +272,12 @@ Assert-Contains 'SharePoint reads destination option' $sharePointGuard 'get_opti
 Assert-Contains 'SharePoint reads graph option' $sharePointGuard 'get_option("ssf_member_portal_graph_configuration"'
 Assert-Contains 'SharePoint requires membership production config' $sharePointGuard '"membership_applications" => array("site_id", "drive_id", "list_id", "folder_id")'
 Assert-Contains 'SharePoint requires annual meetings production config' $sharePointGuard '"annual_meetings" => array("site_id", "drive_id", "list_id", "folder_id")'
+Assert-Contains 'SharePoint guard uses wrapped runtime destinations container' $sharePointGuard '$storedDestinations["destinations"] ?? null'
+Assert-Contains 'SharePoint guard reads production profile directly under destination' $sharePointGuard '$destinations[$destination]["production"] ?? null'
+Assert-Contains 'SharePoint guard snapshot keeps runtime wrapper' $sharePointGuard '"sharepoint_destinations" => array('
+Assert-Contains 'SharePoint guard snapshot keeps schema version metadata' $sharePointGuard '"schema_version" => $storedDestinations["schema_version"] ?? null'
+Assert-Contains 'SharePoint guard fingerprint uses corrected production destinations' $sharePointGuard '"destinations" => $snapshot["sharepoint_destinations"]["destinations"]'
+Assert-NotContains 'SharePoint guard must not use obsolete environments wrapper' $sharePointGuard '["environments"]["production"]'
 Assert-Contains 'SharePoint requires graph secret but redacts it' $sharePointGuard '"client_secret" => isset($graph["client_secret"])'
 Assert-Contains 'SharePoint secret snapshot is hash only' $sharePointGuard '"sha256:" . hash("sha256", (string) $graph["client_secret"])'
 Assert-Contains 'SharePoint snapshot file exists' $sharePointGuard 'prod-sharepoint-config-snapshot.json'
@@ -280,6 +286,50 @@ Assert-Contains 'SharePoint changed fingerprint blocks deploy' $sharePointGuard 
 Assert-NotContains 'SharePoint guard never updates options' $sharePointGuard 'update_option('
 Assert-NotContains 'SharePoint guard never deletes options' $sharePointGuard 'delete_option('
 Assert-NotContains 'SharePoint guard never reads DEV WP' $sharePointGuard 'wp_eval_dev'
+
+$realWrappedSharePointOption = @{
+    destinations = @{
+        annual_meetings = @{
+            production = @{ site_id = 'annual-site'; drive_id = 'annual-drive'; list_id = 'annual-list'; folder_id = 'annual-folder' }
+            development = @{ site_id = 'dev-annual-site' }
+        }
+        membership_applications = @{
+            production = @{ site_id = 'member-site'; drive_id = 'member-drive'; list_id = 'member-list'; folder_id = 'member-folder' }
+            development = @{ site_id = 'dev-member-site' }
+        }
+    }
+    schema_version = 2
+    migrated_environment = 'production'
+    migrated_at = '2026-09-16T09:00:00+00:00'
+}
+$requiredSharePointProfiles = @{
+    annual_meetings = @('site_id', 'drive_id', 'list_id', 'folder_id')
+    membership_applications = @('site_id', 'drive_id', 'list_id', 'folder_id')
+}
+function Get-CorrectWrappedSharePointMissing([hashtable]$Option, [hashtable]$Required) {
+    $missing = @()
+    $destinations = $Option.destinations
+    foreach ($destination in $Required.Keys) {
+        if (-not $destinations.ContainsKey($destination)) { $missing += "destinations.$destination"; continue }
+        $production = $destinations[$destination].production
+        if (-not $production) { $missing += "destinations.$destination.production"; continue }
+        foreach ($field in $Required[$destination]) {
+            if (-not $production.ContainsKey($field) -or [string]::IsNullOrWhiteSpace([string]$production[$field])) {
+                $missing += "destinations.$destination.production.$field"
+            }
+        }
+    }
+    return @($missing)
+}
+function Get-OldFlatSharePointMissing([hashtable]$Option, [hashtable]$Required) {
+    $missing = @()
+    foreach ($destination in $Required.Keys) {
+        if (-not $Option.ContainsKey($destination)) { $missing += "destinations.$destination"; continue }
+    }
+    return @($missing)
+}
+Assert-True 'real wrapped SharePoint option schema passes corrected validation' (@(Get-CorrectWrappedSharePointMissing $realWrappedSharePointOption $requiredSharePointProfiles).Count -eq 0)
+Assert-True 'old flat SharePoint assumption fails against real wrapped schema' (@(Get-OldFlatSharePointMissing $realWrappedSharePointOption $requiredSharePointProfiles).Count -eq 2)
 
 Assert-True 'SharePoint preflight before confirmation' ($mainOrder.IndexOf('validate_sharepoint_config "preflight"') -gt $mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -and $mainOrder.IndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'SharePoint snapshot before PROD mutation' ($mainOrder.IndexOf('create_backup_dir') -lt $mainOrder.LastIndexOf('validate_sharepoint_config "preflight"') -and $mainOrder.LastIndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('activate_maintenance'))

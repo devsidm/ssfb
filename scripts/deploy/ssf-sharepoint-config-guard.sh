@@ -5,7 +5,8 @@ SHAREPOINT_CONFIG_FINGERPRINT="${SHAREPOINT_CONFIG_FINGERPRINT:-}"
 
 sharepoint_config_report() {
   wp_eval_prod '
-    $destinations = get_option("ssf_member_portal_sharepoint_destinations", array());
+    $storedDestinations = get_option("ssf_member_portal_sharepoint_destinations", array());
+    $destinations = is_array($storedDestinations["destinations"] ?? null) ? $storedDestinations["destinations"] : array();
     $graph = get_option("ssf_member_portal_graph_configuration", array());
     $missing = array();
     $requiredDestinations = array(
@@ -18,14 +19,14 @@ sharepoint_config_report() {
         $missing[] = "destinations." . $destination;
         continue;
       }
-      $production = $destinations[$destination]["environments"]["production"] ?? null;
+      $production = $destinations[$destination]["production"] ?? null;
       if (!is_array($production)) {
-        $missing[] = "destinations." . $destination . ".environments.production";
+        $missing[] = "destinations." . $destination . ".production";
         continue;
       }
       foreach ($fields as $field) {
         if (!isset($production[$field]) || trim((string) $production[$field]) === "") {
-          $missing[] = "destinations." . $destination . ".environments.production." . $field;
+          $missing[] = "destinations." . $destination . ".production." . $field;
         }
       }
     }
@@ -37,7 +38,12 @@ sharepoint_config_report() {
     }
 
     $snapshot = array(
-      "destinations" => array(),
+      "sharepoint_destinations" => array(
+        "schema_version" => $storedDestinations["schema_version"] ?? null,
+        "migrated_environment" => $storedDestinations["migrated_environment"] ?? null,
+        "migrated_at" => $storedDestinations["migrated_at"] ?? null,
+        "destinations" => array(),
+      ),
       "graph" => array(
         "tenant_id" => (string) ($graph["tenant_id"] ?? ""),
         "client_id" => (string) ($graph["client_id"] ?? ""),
@@ -47,10 +53,15 @@ sharepoint_config_report() {
       ),
     );
     foreach (array_keys($requiredDestinations) as $destination) {
-      $snapshot["destinations"][$destination] = $destinations[$destination]["environments"]["production"] ?? array();
+      $snapshot["sharepoint_destinations"]["destinations"][$destination] = array(
+        "production" => $destinations[$destination]["production"] ?? array(),
+      );
     }
 
-    $fingerprintPayload = json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $fingerprintPayload = json_encode(array(
+      "destinations" => $snapshot["sharepoint_destinations"]["destinations"],
+      "graph" => $snapshot["graph"],
+    ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     echo json_encode(array(
       "ok" => count($missing) === 0,
       "missing" => $missing,
