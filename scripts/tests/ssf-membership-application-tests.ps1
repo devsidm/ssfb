@@ -191,7 +191,12 @@ Assert-Contains 'Arkivflytt använder server-till-server Graph' $archiveMigratio
 Assert-NotContains 'Arkivflytt får inte använda Microsoft ID Login-token' $archiveMigration 'microsoft-id-login'
 Assert-Contains 'Arkivflytt har separat målkonfiguration' $archiveMigration "ssf_medlemsprocess_archive_migration"
 Assert-Contains 'Arkivflytt mål är styrelsens SharePoint' $archiveMigration 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9'
-Assert-Contains 'Arkivflytt målväg Medlemskap/Ansökningar' $archiveMigration 'Medlemskap/Ansökningar'
+Assert-Contains 'Arkivflytt målväg Medlemskap/Ansökningar' $archiveMigration 'General/Medlemskap/Ansökningar'
+Assert-Contains 'Arkivflytt kan slå upp site via URL' $archiveMigration 'site_lookup_path'
+Assert-Contains 'Arkivflytt kan slå upp bibliotek via namn' $archiveMigration '/drives?$select=id,name,webUrl'
+Assert-Contains 'Arkivflytt kan slå upp list-ID via drive' $archiveMigration '/list?$select=id,displayName,webUrl'
+Assert-Contains 'Arkivflytt kan slå upp mapp via path' $archiveMigration '/root:/'
+Assert-Contains 'Cutover sparar verifierad upplöst profil' $archiveMigration 'resolve_target(true)'
 Assert-Contains 'Arkivflytt kräver capability' $archiveMigration "current_user_can('ssf_manage_application_settings')"
 Assert-Contains 'Arkivflytt kräver nonce' $archiveMigration 'check_admin_referer($nonce)'
 Assert-Contains 'Readiness kontrollerar metadata' $archiveMigration '$this->metadata($target)'

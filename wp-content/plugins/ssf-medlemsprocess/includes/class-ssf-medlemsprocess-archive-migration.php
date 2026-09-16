@@ -172,7 +172,11 @@ class SSF_Medlemsprocess_Archive_Migration
         if (empty($readiness['ok']) || empty($write['ok']) || ! class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')) {
             $this->redirect('AKTIVERING BLOCKERAD: readiness och skrivtest måste vara PASS.', 'error');
         }
-        \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::save('membership_applications', $this->environment(), $this->target());
+        $target = $this->resolve_target(true);
+        if (is_wp_error($target)) {
+            $this->redirect($target->get_error_message(), 'error');
+        }
+        \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::save('membership_applications', $this->environment(), $target);
         $settings = $this->settings();
         $settings['cutover'][$this->environment()] = array('activated_at' => gmdate('c'), 'by' => get_current_user_id());
         update_option(self::OPTION, $settings, false);
@@ -213,7 +217,10 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function readiness(): array
     {
-        $target = $this->target();
+        $target = $this->resolve_target();
+        if (is_wp_error($target)) {
+            return array('ok' => false, 'checked_at' => gmdate('c'), 'steps' => array('target' => $this->step('Målkatalog', $target)));
+        }
         $auth = $this->graph ? $this->graph->authentication()->test() : new WP_Error('graph_unavailable', 'Microsoft Graph-klienten är inte tillgänglig.');
         $site = is_wp_error($auth) ? new WP_Error('auth_required', 'Autentisering måste fungera först.') : $this->request('GET', 'sites/' . rawurlencode((string) $target['site_id']) . '?$select=id,displayName,webUrl');
         $drive = is_wp_error($site) ? new WP_Error('site_required', 'Site måste fungera först.') : $this->request('GET', $this->drive_base($target) . '?$select=id,name,webUrl');
@@ -228,7 +235,10 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function write_test(): array
     {
-        $target = $this->target();
+        $target = $this->resolve_target();
+        if (is_wp_error($target)) {
+            return array('ok' => false, 'tested_at' => gmdate('c'), 'steps' => array('target' => $this->step('Målkatalog', $target)));
+        }
         $name = 'SSF-TEST-' . gmdate('Ymd-His') . '-' . wp_generate_password(4, false, false);
         $created = $this->request('POST', $this->children_path($target, (string) $target['folder_id']), array('name' => $name, 'folder' => new stdClass(), '@microsoft.graph.conflictBehavior' => 'fail'));
         $id = is_wp_error($created) ? '' : (string) ($created['id'] ?? '');
@@ -249,7 +259,10 @@ class SSF_Medlemsprocess_Archive_Migration
             update_post_meta($application_id, '_ssf_sp_migration_old_refs', $this->current_refs($application_id));
         }
         update_post_meta($application_id, '_ssf_sp_migration_status', 'running');
-        $target = $this->target();
+        $target = $this->resolve_target(true);
+        if (is_wp_error($target)) {
+            return $this->migration_error($application_id, $target);
+        }
         $folders = $this->create_target_folders($application_id, $target);
         if (is_wp_error($folders)) { return $this->migration_error($application_id, $folders); }
         $items = $this->upload_wordpress_files($application_id, $target, $folders);
@@ -427,13 +440,66 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function default_target(): array
     {
-        return array('site_url' => 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9', 'site_id' => '', 'drive_name' => 'Dokument', 'drive_id' => '', 'list_id' => '', 'folder_path' => 'Medlemskap/Ansökningar', 'folder_name' => 'Ansökningar', 'folder_id' => '', 'folder_web_url' => '');
+        return array('site_url' => 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9', 'site_id' => '', 'drive_name' => 'Dokument', 'drive_id' => '', 'list_id' => '', 'folder_path' => 'General/Medlemskap/Ansökningar', 'folder_name' => 'Ansökningar', 'folder_id' => '', 'folder_web_url' => '');
     }
 
     private function target(): array
     {
         $settings = $this->settings();
         return array_merge($this->default_target(), (array) ($settings['targets'][$this->environment()] ?? array()));
+    }
+
+    private function resolve_target(bool $save = false)
+    {
+        $target = $this->target();
+        if (empty($target['site_id'])) {
+            $site_path = $this->site_lookup_path((string) ($target['site_url'] ?? ''));
+            if (! $site_path) {
+                return new WP_Error('migration_target_site_url_missing', 'Ange en giltig SharePoint Site URL.');
+            }
+            $site = $this->request('GET', $site_path . '?$select=id,displayName,webUrl');
+            if (is_wp_error($site)) { return $site; }
+            $target['site_id'] = sanitize_text_field((string) ($site['id'] ?? ''));
+            $target['site_url'] = esc_url_raw((string) ($site['webUrl'] ?? $target['site_url']));
+        }
+        if (empty($target['drive_id'])) {
+            $drives = $this->request('GET', 'sites/' . rawurlencode((string) $target['site_id']) . '/drives?$select=id,name,webUrl');
+            if (is_wp_error($drives)) { return $drives; }
+            foreach ((array) ($drives['value'] ?? array()) as $drive) {
+                if (0 === strcasecmp((string) ($target['drive_name'] ?: 'Dokument'), (string) ($drive['name'] ?? ''))) {
+                    $target['drive_id'] = sanitize_text_field((string) ($drive['id'] ?? ''));
+                    break;
+                }
+            }
+            if (empty($target['drive_id'])) {
+                return new WP_Error('migration_target_drive_missing', 'Dokumentbiblioteket kunde inte hittas.');
+            }
+        }
+        if (empty($target['list_id'])) {
+            $list = $this->request('GET', $this->drive_base($target) . '/list?$select=id,displayName,webUrl');
+            if (is_wp_error($list)) { return $list; }
+            $target['list_id'] = sanitize_text_field((string) ($list['id'] ?? ''));
+        }
+        if (empty($target['folder_id'])) {
+            $folder_path = $this->encode_drive_path((string) ($target['folder_path'] ?? ''));
+            if (! $folder_path) {
+                return new WP_Error('migration_target_folder_path_missing', 'Ange mappsökvägen till Medlemskap / Ansökningar.');
+            }
+            $folder = $this->request('GET', $this->drive_base($target) . '/root:/' . $folder_path . '?$select=id,name,folder,webUrl,parentReference');
+            if (is_wp_error($folder)) { return $folder; }
+            if (empty($folder['folder'])) {
+                return new WP_Error('migration_target_not_folder', 'Målplatsen är inte en SharePoint-mapp.');
+            }
+            $target['folder_id'] = sanitize_text_field((string) ($folder['id'] ?? ''));
+            $target['folder_name'] = sanitize_text_field((string) ($folder['name'] ?? $target['folder_name']));
+            $target['folder_web_url'] = esc_url_raw((string) ($folder['webUrl'] ?? ''));
+        }
+        if ($save) {
+            $settings = $this->settings();
+            $settings['targets'][$this->environment()] = $target;
+            update_option(self::OPTION, $settings, false);
+        }
+        return $target;
     }
 
     private function settings(): array
@@ -588,6 +654,21 @@ class SSF_Medlemsprocess_Archive_Migration
     private function children_path(array $target, string $folder_id): string
     {
         return $this->item_path($target, $folder_id) . '/children';
+    }
+
+    private function site_lookup_path(string $site_url): string
+    {
+        $parts = wp_parse_url($site_url);
+        if (empty($parts['host']) || empty($parts['path'])) {
+            return '';
+        }
+        return 'sites/' . rawurlencode(strtolower((string) $parts['host'])) . ':/' . ltrim((string) $parts['path'], '/');
+    }
+
+    private function encode_drive_path(string $path): string
+    {
+        $segments = array_filter(array_map('trim', explode('/', trim($path, '/'))), static function ($segment): bool { return '' !== $segment; });
+        return implode('/', array_map('rawurlencode', $segments));
     }
 
     private function error_details(WP_Error $error): array
