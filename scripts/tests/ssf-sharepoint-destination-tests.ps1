@@ -34,6 +34,11 @@ Assert-Contains 'Separat development-profil' $destinations "'development'"
 Assert-Contains 'Separat production-profil' $destinations "'production'"
 Assert-Contains 'Idempotent migration' $destinations "schema_version"
 Assert-Contains 'Migration till aktiv miljö' $destinations '$environment = self::environment();'
+Assert-Contains 'SharePoint migration fill missing only helper' $destinations 'merge_missing_profile'
+Assert-NotContains 'SharePoint migration must not skip partial active profiles' $destinations 'if (! empty($stored[''destinations''][$destination][$environment]))'
+Assert-Contains 'SharePoint migration preserves existing fields' $destinations 'array_key_exists($key, $existing)'
+Assert-Contains 'SharePoint migration fills empty fields only' $destinations "'' === trim((string) `$existing[`$key])"
+Assert-Contains 'SharePoint migration fills metadata recursively' $destinations '$existing[''metadata''] = self::merge_missing_profile'
 Assert-Contains 'DEV-skrivspärr' $destinations 'write_allowed_for_profile'
 Assert-Contains 'Central delegation' $configuration 'SharePointDestinations::value'
 Assert-Contains 'Publikt destinations-API' $configuration 'public static function destination(string $destination): array'

@@ -242,9 +242,6 @@ final class SharePointDestinations
         }
         $environment = self::environment();
         foreach (self::definitions() as $destination => $definition) {
-            if (! empty($stored['destinations'][$destination][$environment])) {
-                continue;
-            }
             $profile = self::profile_defaults($definition);
             foreach ((array) $definition['legacy'] as $field => $legacy_key) {
                 $profile[$field] = Configuration::legacy_value($legacy_key);
@@ -252,12 +249,28 @@ final class SharePointDestinations
             foreach ((array) $definition['metadata'] as $key => $metadata) {
                 $profile['metadata'][$key] = Configuration::legacy_value((string) $metadata['legacy']);
             }
-            $stored['destinations'][$destination][$environment] = self::sanitize_profile($profile, $definition);
+            $existing = (array) ($stored['destinations'][$destination][$environment] ?? array());
+            $merged = self::merge_missing_profile($existing, $profile);
+            $stored['destinations'][$destination][$environment] = self::sanitize_profile($merged, $definition);
         }
         $stored['schema_version'] = self::SCHEMA_VERSION;
         $stored['migrated_environment'] = $environment;
         $stored['migrated_at'] = gmdate('c');
         update_option(self::OPTION, $stored, false);
+    }
+
+    private static function merge_missing_profile(array $existing, array $fallback): array
+    {
+        foreach ($fallback as $key => $value) {
+            if ('metadata' === $key && is_array($value)) {
+                $existing['metadata'] = self::merge_missing_profile((array) ($existing['metadata'] ?? array()), $value);
+                continue;
+            }
+            if (! array_key_exists($key, $existing) || '' === trim((string) $existing[$key])) {
+                $existing[$key] = $value;
+            }
+        }
+        return $existing;
     }
 
     private static function profile_defaults(array $definition): array
