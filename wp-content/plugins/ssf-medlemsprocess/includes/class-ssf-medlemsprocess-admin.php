@@ -191,6 +191,7 @@ class SSF_Medlemsprocess_Admin
         if ($warning) { echo '<div class="notice notice-warning inline"><p>' . esc_html($warning) . '</p></div>'; }
         if ($web_url && (! $site_id || ! $drive_id || ! $list_item_id)) { echo '<div class="notice notice-warning inline"><p>Äldre ärende saknar en fullständig ID-koppling. Använd Synka filer igen för att komplettera SharePoint-kopplingen.</p></div>'; }
         if ($site_id || $drive_id || $list_item_id) { echo '<details><summary>SharePoint-ID:n</summary><dl><dt>Site ID</dt><dd>' . esc_html($site_id ?: '–') . '</dd><dt>Drive ID</dt><dd>' . esc_html($drive_id ?: '–') . '</dd><dt>Mappens ListItem ID</dt><dd>' . esc_html($list_item_id ?: '–') . '</dd></dl></details>'; }
+        SSF_Medlemsprocess_Plugin::instance()->archive_migration->render_application_box($post->ID);
         echo '<p><a class="button" href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_retry_application_sharepoint&application_id=' . $post->ID), 'ssf_retry_application_sharepoint_' . $post->ID)) . '">Synka filer igen</a></p>';
         if ($web_url) { echo '<p><a class="button" href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_poll_application_sharepoint&application_id=' . $post->ID), 'ssf_poll_application_sharepoint_' . $post->ID)) . '">Synka status nu</a></p>'; }
     }
@@ -316,12 +317,14 @@ class SSF_Medlemsprocess_Admin
         if (class_exists('SSF_Admin_Navigation')) {
             add_submenu_page(null, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
             add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Aspiranter', 'Aspiranter', 'ssf_view_applications', 'ssf-medlemsprocess-aspirants', array($this, 'render_aspirants'), 30);
+            add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Flytta medlemsansökningar', 'SharePoint-arkiv', 'ssf_manage_application_settings', 'ssf-application-archive-migration', array(SSF_Medlemsprocess_Plugin::instance()->archive_migration, 'render_page'), 70);
             add_submenu_page(SSF_Admin_Navigation::MEMBERSHIP, 'Inställningar för medlemsprocessen', 'Processinställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'), 80);
             return;
         }
 
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Översikt', 'Översikt', 'ssf_view_applications', 'ssf-medlemsprocess-overview', array($this, 'render_dashboard'));
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Aspiranter', 'Aspiranter', 'ssf_view_applications', 'ssf-medlemsprocess-aspirants', array($this, 'render_aspirants'));
+        add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Flytta medlemsansökningar', 'SharePoint-arkiv', 'ssf_manage_application_settings', 'ssf-application-archive-migration', array(SSF_Medlemsprocess_Plugin::instance()->archive_migration, 'render_page'));
         add_submenu_page('edit.php?post_type=' . SSF_Medlemsprocess_Application::POST_TYPE, 'Inställningar', 'Inställningar', 'ssf_manage_application_settings', 'ssf-medlemsprocess-settings', array($this, 'render_settings'));
     }
 
@@ -367,7 +370,7 @@ class SSF_Medlemsprocess_Admin
 
     public function enqueue_assets(string $hook): void
     {
-        $screen = get_current_screen(); if (! $screen || SSF_Medlemsprocess_Application::POST_TYPE !== $screen->post_type) { return; }
+        $screen = get_current_screen(); if ((! $screen || SSF_Medlemsprocess_Application::POST_TYPE !== $screen->post_type) && false === strpos($hook, 'ssf-application-archive-migration')) { return; }
         wp_enqueue_style('ssf-medlemsprocess-admin', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-medlemsprocess-admin.css', array(), SSF_MEDLEMSPROCESS_VERSION);
         wp_enqueue_script('ssf-medlemsprocess-admin', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-medlemsprocess-admin.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
     }

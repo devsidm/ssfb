@@ -21,6 +21,7 @@ final class SSF_Medlemsprocess_Plugin
     public SSF_Medlemsprocess_Portal $portal;
     public SSF_Medlemsprocess_PDF $pdf;
     public SSF_Medlemsprocess_SharePoint $sharepoint;
+    public SSF_Medlemsprocess_Archive_Migration $archive_migration;
 
     public static function instance(): SSF_Medlemsprocess_Plugin
     {
@@ -33,7 +34,7 @@ final class SSF_Medlemsprocess_Plugin
 
     private function __construct()
     {
-        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'public', 'admin', 'inspector', 'portal') as $file) {
+        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'archive-migration', 'public', 'admin', 'inspector', 'portal') as $file) {
             require_once SSF_MEDLEMSPROCESS_PATH . 'includes/class-ssf-medlemsprocess-' . $file . '.php';
         }
 
@@ -41,6 +42,7 @@ final class SSF_Medlemsprocess_Plugin
         $this->emails = new SSF_Medlemsprocess_Emails();
         $this->pdf = new SSF_Medlemsprocess_PDF();
         $this->sharepoint = new SSF_Medlemsprocess_SharePoint();
+        $this->archive_migration = new SSF_Medlemsprocess_Archive_Migration();
         $this->public = new SSF_Medlemsprocess_Public();
         $this->admin = new SSF_Medlemsprocess_Admin();
         $this->inspector = new SSF_Medlemsprocess_Inspector();
@@ -61,6 +63,7 @@ final class SSF_Medlemsprocess_Plugin
     public static function deactivate(): void
     {
         SSF_Medlemsprocess_SharePoint::unschedule();
+        SSF_Medlemsprocess_Archive_Migration::unschedule();
         SSF_Medlemsprocess_Application::unschedule();
         flush_rewrite_rules();
     }

@@ -36,6 +36,7 @@ $portalScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugi
 $admin = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-admin.php')
 $destinations = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointDestinations.php')
 $inspector = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-inspector.php')
+$archiveMigration = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-archive-migration.php')
 
 Assert-True 'Formuläret ska ha sex steg' (([regex]::Matches($form, 'data-application-step=')).Count -eq 6)
 Assert-Contains 'Ansökningsformuläret har egen H1' $form '<h1>Ansök om medlemskap för fartyg</h1>'
@@ -182,6 +183,32 @@ Assert-True 'Inspektören använder inte äldre slutförd-status' (-not $inspect
 foreach ($step in @('Autentisering', 'Site access', 'Drive access', 'List access', 'Läs kolumner', 'Hitta ärendemapp', 'Läs mappmetadata', 'Skriv mappmetadata')) { Assert-Contains "Diagnostik $step" $sharepoint "'$step'" }
 Assert-Contains 'Teknisk HTTP-detalj' $sharepoint "'http_status'"
 Assert-Contains 'Teknisk Graph-felkod' $sharepoint "'graph_code'"
+
+Assert-Contains 'Arkivflytt klass laddas' $plugin "'archive-migration'"
+Assert-Contains 'Arkivflytt adminmeny finns' $admin 'ssf-application-archive-migration'
+Assert-Contains 'Arkivflytt visas på ärendet' $admin 'render_application_box($post->ID)'
+Assert-Contains 'Arkivflytt använder server-till-server Graph' $archiveMigration 'GraphClient(new \SSF\MemberPortal\Integrations\Microsoft365\Authentication())'
+Assert-NotContains 'Arkivflytt får inte använda Microsoft ID Login-token' $archiveMigration 'microsoft-id-login'
+Assert-Contains 'Arkivflytt har separat målkonfiguration' $archiveMigration "ssf_medlemsprocess_archive_migration"
+Assert-Contains 'Arkivflytt mål är styrelsens SharePoint' $archiveMigration 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9'
+Assert-Contains 'Arkivflytt målväg Medlemskap/Ansökningar' $archiveMigration 'Medlemskap/Ansökningar'
+Assert-Contains 'Arkivflytt kräver capability' $archiveMigration "current_user_can('ssf_manage_application_settings')"
+Assert-Contains 'Arkivflytt kräver nonce' $archiveMigration 'check_admin_referer($nonce)'
+Assert-Contains 'Readiness kontrollerar metadata' $archiveMigration '$this->metadata($target)'
+Assert-Contains 'Skrivtest skapar temporär SSF-mapp' $archiveMigration 'SSF-TEST-'
+Assert-Contains 'Skrivtest tar bort testmapp' $archiveMigration '$this->request(''DELETE'''
+Assert-Contains 'Migrering blockerad utan readiness' $archiveMigration 'MIGRERING BLOCKERAD'
+Assert-Contains 'Copy-before-switch sparar gamla referenser' $archiveMigration '_ssf_sp_migration_old_refs'
+Assert-Contains 'Aktiva referenser byts efter verifiering' $archiveMigration '$verified = $this->verify_items'
+Assert-True 'Verifiering ska ske före Site ID byts' ($archiveMigration.IndexOf('$verified = $this->verify_items') -lt $archiveMigration.IndexOf("update_post_meta(`$application_id, '_ssf_sp_site_id'"))
+Assert-Contains 'Gamla arkivet markeras bevarat' $archiveMigration 'Gamla arkivet'
+Assert-Contains 'Återställning raderar inga filer' $archiveMigration 'Inga filer raderades'
+Assert-NotContains 'Arkivflytt får inte ändra e-postmottagare medlem' $archiveMigration 'medlem@ssfb.se'
+Assert-NotContains 'Arkivflytt får inte ändra e-postmottagare styrelsen' $archiveMigration 'styrelsen@ssfb.se'
+Assert-NotContains 'Arkivflytt får inte skicka e-post' $archiveMigration 'wp_mail('
+Assert-NotContains 'Arkivflytt får inte ändra statusövergångar' $archiveMigration 'transition('
+Assert-Contains 'Cutover är explicit' $archiveMigration 'Aktivera ny katalog'
+Assert-Contains 'Gamla ärenden byter inte automatiskt vid cutover' $archiveMigration 'Befintliga ärenden byter inte automatiskt'
 
 & node --check (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')
 if ($LASTEXITCODE -ne 0) { $failures.Add('JavaScript syntaxkontroll misslyckades') }
