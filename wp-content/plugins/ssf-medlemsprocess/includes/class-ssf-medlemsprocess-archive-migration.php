@@ -282,14 +282,14 @@ class SSF_Medlemsprocess_Archive_Migration
         return $this->generic_core ?: new WP_Error('migration_core_unavailable', 'Den generella SharePoint-migreringen är inte tillgänglig.');
     }
 
-    private function generic_save_mode(): void
+    public function generic_save_mode(): void
     {
         $this->require_manage(); check_admin_referer('ssf_folder_migration_mode');
         $state = $this->generic_state(); $state['mode'] = 'membership' === sanitize_key((string) ($_POST['mode'] ?? 'generic')) ? 'membership' : 'generic';
         update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect('archive-source', 'Läge uppdaterat.', 'success');
     }
 
-    private function generic_save_location(): void
+    public function generic_save_location(): void
     {
         $this->require_manage(); check_admin_referer('ssf_folder_migration_location');
         $kind = 'target' === sanitize_key((string) ($_POST['location_kind'] ?? 'source')) ? 'target' : 'source';
@@ -302,7 +302,7 @@ class SSF_Medlemsprocess_Archive_Migration
         $this->generic_redirect('archive-' . $kind, ucfirst($kind) . ' verifierad och sparad.', 'success');
     }
 
-    private function generic_save_destination(): void
+    public function generic_save_destination(): void
     {
         $this->require_manage(); check_admin_referer('ssf_folder_migration_destination'); $state = $this->generic_state();
         $keep = '0' !== (string) ($_POST['keep_name'] ?? '1'); $source_name = (string) ($state['source']['folder_name'] ?? '');
@@ -312,11 +312,11 @@ class SSF_Medlemsprocess_Archive_Migration
         $this->generic_redirect('archive-target', 'Resultatet har uppdaterats.', 'success');
     }
 
-    private function generic_inventory(): void { $this->generic_execute('ssf_folder_migration_inventory', 'archive-inventory', function ($core, &$state) { return $core->inventory((array) $state['source']); }, 'inventory', 'Källan är inventerad.'); }
-    private function generic_dry_run(): void { $this->generic_execute('ssf_folder_migration_dry_run', 'archive-plan', function ($core, &$state) { return $core->dry_run((array) $state['source'], (array) $state['target'], (array) $state['inventory']); }, 'dry_run', 'Torrkörningen är klar; inga SharePoint-skrivningar gjordes.'); }
-    private function generic_prepare(): void { $this->generic_execute('ssf_folder_migration_prepare', 'archive-prepare', function ($core, &$state) { return $core->prepare((array) $state['target'], (array) $state['dry_run']); }, 'prepared', 'Målroot och schema är förberedda.'); }
-    private function generic_write_test(): void { $this->generic_execute('ssf_folder_migration_write_test', 'archive-write-test', function ($core, &$state) { return $core->write_test((array) $state['target'], (string) ($state['prepared']['target_folder_id'] ?? ''), (array) $state['inventory']); }, 'write_test', 'Skrivtestet är klart.'); }
-    private function generic_run(): void
+    public function generic_inventory(): void { $this->generic_execute('ssf_folder_migration_inventory', 'archive-inventory', function ($core, &$state) { return $core->inventory((array) $state['source']); }, 'inventory', 'Källan är inventerad.'); }
+    public function generic_dry_run(): void { $this->generic_execute('ssf_folder_migration_dry_run', 'archive-plan', function ($core, &$state) { return $core->dry_run((array) $state['source'], (array) $state['target'], (array) $state['inventory']); }, 'dry_run', 'Torrkörningen är klar; inga SharePoint-skrivningar gjordes.'); }
+    public function generic_prepare(): void { $this->generic_execute('ssf_folder_migration_prepare', 'archive-prepare', function ($core, &$state) { return $core->prepare((array) $state['target'], (array) $state['dry_run']); }, 'prepared', 'Målroot och schema är förberedda.'); }
+    public function generic_write_test(): void { $this->generic_execute('ssf_folder_migration_write_test', 'archive-write-test', function ($core, &$state) { return $core->write_test((array) $state['target'], (string) ($state['prepared']['target_folder_id'] ?? ''), (array) $state['inventory']); }, 'write_test', 'Skrivtestet är klart.'); }
+    public function generic_run(): void
     {
         $this->require_manage(); check_admin_referer('ssf_folder_migration_run'); $state = $this->generic_state(); $core = $this->generic_core();
         if (is_wp_error($core)) $this->generic_redirect('archive-run', $core->get_error_message(), 'error');
@@ -326,7 +326,7 @@ class SSF_Medlemsprocess_Archive_Migration
         $this->generic_redirect('archive-reconcile', 'Migreringen är klar och slutkontrollerad.', 'success');
     }
 
-    private function generic_test_case(): void
+    public function generic_test_case(): void
     {
         $this->require_manage(); check_admin_referer('ssf_folder_migration_test_case'); $state = $this->generic_state(); $core = $this->generic_core();
         if (is_wp_error($core) || empty($state['write_test']['ok']) || empty($state['prepared']['target_folder_id'])) $this->generic_redirect('archive-test-case', 'Skrivtest och förberedd målroot krävs före testärendet.', 'error');
