@@ -16,6 +16,8 @@ $authentication = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\I
 $destinations = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointDestinations.php'
 $discovery = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointDiscovery.php'
 $admin = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\Admin\Controller.php'
+$sharepointAdmin = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointAdmin.php'
+$mailer = Read-RepoFile 'wp-content\plugins\ssf-office365-mailer\ssf-office365-mailer.php'
 $deploy = Read-RepoFile 'config\deploy-components.json'
 $expectedOrganisation = 'Sveriges Segelfartygsf' + [char]0x00f6 + 'rbund'
 $expectedOrganisationHeading = 'Microsoft 365 ' + [char]0x2013 + ' organisation'
@@ -72,6 +74,12 @@ Assert-Contains 'SharePoint Client ID remains integration specific' $sharepoint 
 Assert-Contains 'SharePoint Client Secret remains integration specific' $sharepoint "'client_secret' => 'SSF_GRAPH_CLIENT_SECRET'"
 Assert-Contains 'SharePoint permissions remain Sites.Selected' $discovery "'grantedToIdentities'"
 Assert-Contains 'SharePoint destinations remain unchanged' $destinations 'ssf_member_portal_sharepoint_destinations'
+Assert-Contains 'Mailer runtime reads central tenant' $mailer 'SSF_Microsoft365_Config::get_tenant_id()'
+Assert-Contains 'Mailer authority delegates centrally' $mailer 'SSF_Microsoft365_Config::get_authority_url($path)'
+Assert-NotContains 'Mailer UI has no editable tenant' $mailer 'name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[tenant_id]"'
+Assert-Contains 'Mailer Client ID remains integration specific' $mailer "'client_id' => sanitize_text_field"
+Assert-Contains 'Mailer Client Secret remains integration specific' $mailer "'client_secret' => `$current['client_secret']"
+Assert-NotContains 'Mailer secret value is never rendered' $mailer 'esc_attr($settings[''client_secret''])'
 
 Assert-Contains 'Legacy SharePoint tenant candidate detected' $central 'SSF_GRAPH_TENANT_ID'
 Assert-Contains 'Legacy Login tenant candidate detected' $central 'SSF_M365_LOGIN_TENANT_ID'
@@ -84,6 +92,12 @@ Assert-Contains 'Login renders legacy tenant warnings' $login 'legacy_tenant_war
 Assert-Contains 'Central non-empty tenant is preserved' $central "'' !== (string) (`$settings['profiles'][`$environment]['tenant_id'] ?? '')"
 Assert-Contains 'Microsoft 365 admin renders central section' $admin 'SSF_Microsoft365_Config::render_admin_section()'
 Assert-NotContains 'SharePoint UI no longer edits tenant' $admin 'name="graph[tenant_id]"'
+foreach ($tab in @('overview', 'directory', 'integrations', 'diagnostics')) { Assert-Contains "Central tab $tab" $central "'$tab'" }
+Assert-Contains 'Environment banner derives from WordPress' $central 'self::environment()'
+Assert-Contains 'Login saves active environment only' $login 'foreach (array($this->active_profile_key()) as $profile_key)'
+Assert-NotContains 'Login no longer offers production preconfiguration' $login 'Production kan förkonfigureras här.'
+Assert-Contains 'SharePoint edits active environment only' $sharepointAdmin '$profile_environment = $current_environment;'
+Assert-NotContains 'SharePoint has no environment selector tabs' $sharepointAdmin 'aria-label="Miljöprofil"'
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }

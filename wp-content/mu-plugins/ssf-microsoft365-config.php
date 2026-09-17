@@ -62,6 +62,65 @@ final class SSF_Microsoft365_Config
         return function_exists('wp_get_environment_type') && 'production' === wp_get_environment_type() ? 'production' : 'development';
     }
 
+    public static function render_environment_banner(): void
+    {
+        $production = 'production' === self::environment();
+        echo '<div class="notice ' . esc_attr($production ? 'notice-warning' : 'notice-info') . ' inline"><p><strong>' . esc_html($production ? 'PRODUCTION' : 'DEVELOPMENT') . '</strong><br>';
+        echo esc_html($production ? 'Du ändrar den aktiva produktionsmiljön.' : 'Inställningarna gäller endast utvecklingsmiljön.') . '</p></div>';
+    }
+
+    public static function render_tabs(string $active): void
+    {
+        echo '<nav class="nav-tab-wrapper" aria-label="Microsoft 365">';
+        foreach (array('overview' => 'Översikt', 'directory' => 'Microsoft-katalog', 'integrations' => 'Integrationer', 'diagnostics' => 'Diagnostik') as $key => $label) {
+            $url = add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => $key), admin_url('admin.php'));
+            echo '<a class="nav-tab ' . esc_attr($active === $key ? 'nav-tab-active' : '') . '" href="' . esc_url($url) . '">' . esc_html($label) . '</a>';
+        }
+        echo '</nav>';
+    }
+
+    public static function render_overview(): void
+    {
+        $graph = class_exists('SSF\\MemberPortal\\Integrations\\Microsoft365\\Configuration') ? \SSF\MemberPortal\Integrations\Microsoft365\Configuration::public_status() : array();
+        $login = (array) get_option('ssf_microsoft_login_settings', array());
+        $login_profile = (array) ($login['profiles'][self::environment()] ?? array());
+        $mailer = (array) get_option('ssf_office365_mailer_settings', array());
+        $tokens = (array) get_option('ssf_office365_mailer_tokens', array());
+        $items = array(
+            array('Microsoft ID Login', 'Inloggning med SSF-konto', ! empty($login_profile['enabled']) && ! empty($login_profile['client_id']) && ! empty($login_profile['client_secret']), ! empty($login_profile['client_id']), ! empty($login_profile['client_secret']), 'microsoft-id-login'),
+            array('SharePoint', 'Dokument, medlemsansökningar, motioner och årsmöten', ! empty($graph['client_id']['configured']) && ! empty($graph['client_secret']['configured']), ! empty($graph['client_id']['configured']), ! empty($graph['client_secret']['configured']), add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations'), admin_url('admin.php'))),
+            array('E-post', 'Systemmail och notifieringar', 'yes' === ($mailer['enabled'] ?? 'no') && ! empty($tokens['refresh_token']), ! empty($mailer['client_id']), ! empty($mailer['client_secret']), 'ssf-office365-mailer'),
+        );
+        echo '<section class="postbox" style="max-width:1100px;padding:20px"><h2>Microsoft-katalog</h2><p><strong>' . esc_html(self::is_tenant_configured() ? '✓ Verifierad' : 'Saknas') . '</strong></p></section><div class="ssf-sp-overview">';
+        foreach ($items as $item) {
+            $url = 0 === strpos((string) $item[5], 'http') ? (string) $item[5] : admin_url('admin.php?page=' . $item[5]);
+            echo '<article class="ssf-sp-destination"><h3>' . esc_html($item[0]) . '</h3><p><strong>' . esc_html($item[2] ? '✓ Aktiv/ansluten' : 'Ej komplett') . '</strong></p><p>' . esc_html($item[1]) . '</p><dl><div><dt>Microsoft-katalog</dt><dd>✓ Central</dd></div><div><dt>Application ID</dt><dd>' . esc_html($item[3] ? '✓ Konfigurerad' : 'Saknas') . '</dd></div><div><dt>Client Secret</dt><dd>' . esc_html($item[4] ? '✓ Konfigurerad' : 'Saknas') . '</dd></div></dl><p><a class="button" href="' . esc_url($url) . '">Hantera</a></p></article>';
+        }
+        echo '</div>';
+    }
+
+    public static function render_diagnostics(): void
+    {
+        $tenant = self::test_tenant();
+        $graph = class_exists('SSF\\MemberPortal\\Integrations\\Microsoft365\\Configuration') ? \SSF\MemberPortal\Integrations\Microsoft365\Configuration::public_status() : array();
+        $login = (array) get_option('ssf_microsoft_login_settings', array());
+        $login_profile = (array) ($login['profiles'][self::environment()] ?? array());
+        $mailer = (array) get_option('ssf_office365_mailer_settings', array());
+        echo '<section class="postbox" style="max-width:1100px;padding:20px"><h2>Microsoft-katalog</h2>';
+        self::render_test_result($tenant);
+        echo '<h2>Konfigurationskällor</h2><table class="widefat striped"><tbody>';
+        foreach (array(
+            array('Tenant ID', self::is_tenant_configured(), '' !== self::server_value(self::TENANT_CONSTANT) ? 'Serverkonfiguration (SSF_MICROSOFT365_TENANT_ID)' : 'Central Microsoft 365-konfiguration'),
+            array('Microsoft ID Login Client ID', ! empty($login_profile['client_id']), defined('SSF_M365_LOGIN_CLIENT_ID') ? 'Serverkonfiguration (SSF_M365_LOGIN_CLIENT_ID)' : 'Microsoft ID Login'),
+            array('Microsoft ID Login Client Secret', ! empty($login_profile['client_secret']) || defined('SSF_M365_LOGIN_CLIENT_SECRET'), defined('SSF_M365_LOGIN_CLIENT_SECRET') ? 'Serverkonfiguration (SSF_M365_LOGIN_CLIENT_SECRET)' : 'Microsoft ID Login'),
+            array('SharePoint Client ID', ! empty($graph['client_id']['configured']), 'server' === ($graph['client_id']['source'] ?? '') ? 'Serverkonfiguration (SSF_GRAPH_CLIENT_ID)' : 'SharePoint'),
+            array('SharePoint Client Secret', ! empty($graph['client_secret']['configured']), 'server' === ($graph['client_secret']['source'] ?? '') ? 'Serverkonfiguration (SSF_GRAPH_CLIENT_SECRET)' : 'SharePoint'),
+            array('Mailer Client ID', ! empty($mailer['client_id']), 'E-postintegration'),
+            array('Mailer Client Secret', ! empty($mailer['client_secret']), 'E-postintegration'),
+        ) as $row) { echo '<tr><th>' . esc_html($row[0]) . '</th><td>' . esc_html($row[1] ? 'PASS' : 'FAIL') . '</td><td>Källa: ' . esc_html($row[2]) . '</td></tr>'; }
+        echo '</tbody></table></section>';
+    }
+
     public static function render_admin_section(): void
     {
         self::maybe_migrate_legacy_tenant();
@@ -203,6 +262,8 @@ final class SSF_Microsoft365_Config
         $login = (array) get_option('ssf_microsoft_login_settings', array());
         $login_profile = (array) ($login['profiles'][$environment] ?? array());
         if (self::valid_tenant_id((string) ($login_profile['tenant_id'] ?? ''))) { $candidates[] = array('source' => 'Microsoft ID Login WordPress-inställning', 'value' => (string) $login_profile['tenant_id']); }
+        $mailer = (array) get_option('ssf_office365_mailer_settings', array());
+        if (self::valid_tenant_id((string) ($mailer['tenant_id'] ?? ''))) { $candidates[] = array('source' => 'E-postintegration WordPress-inställning', 'value' => (string) $mailer['tenant_id']); }
         return $candidates;
     }
 

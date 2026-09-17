@@ -340,8 +340,10 @@ final class SSF_Microsoft_ID_Login
         ?>
         <section class="ssf-admin-card">
             <h2><?php esc_html_e('Microsoft / Entra', 'microsoft-id-login'); ?></h2>
-            <p><?php esc_html_e('Konfigurera separata Microsoft-appar för Development och Production. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'microsoft-id-login'); ?></p>
+            <p><?php esc_html_e('Konfigurera Microsoft-appen för den aktiva WordPress-installationen. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'microsoft-id-login'); ?></p>
             <?php if ($force_off) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Avstängd av serverkonfiguration', 'microsoft-id-login'); ?></strong></p></div><?php endif; ?>
+            <?php if (defined('SSF_M365_LOGIN_CLIENT_ID')) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Serverkonfiguration överstyr WordPress', 'microsoft-id-login'); ?></strong><br><code>SSF_M365_LOGIN_CLIENT_ID</code></p></div><?php endif; ?>
+            <?php if (defined('SSF_M365_LOGIN_CLIENT_SECRET')) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Serverkonfiguration överstyr WordPress', 'microsoft-id-login'); ?></strong><br><code>SSF_M365_LOGIN_CLIENT_SECRET</code></p></div><?php endif; ?>
             <?php if (class_exists('SSF_Microsoft365_Config')) : ?>
                 <div class="notice notice-info inline"><p><strong><?php esc_html_e('Tenant', 'microsoft-id-login'); ?></strong><br><?php esc_html_e('Central Microsoft 365 configuration', 'microsoft-id-login'); ?><br><?php echo esc_html(SSF_Microsoft365_Config::get_organisation_name()); ?><br><?php echo esc_html(SSF_Microsoft365_Config::get_primary_domain()); ?><br><?php echo esc_html($central_tenant_configured ? 'CONFIGURED' : 'MISSING'); ?></p><p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-member-portal-microsoft365')); ?>">Hantera Microsoft 365-inställningar</a></p></div>
             <?php else : ?>
@@ -363,18 +365,14 @@ final class SSF_Microsoft_ID_Login
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_m365_save_settings">
                 <?php wp_nonce_field('ssf_m365_save_settings'); ?>
-                <?php foreach ($this->profile_keys() as $profile_key) : $profile = $settings['profiles'][$profile_key]; ?>
+                <?php $profile_key = $active_profile; $profile = $settings['profiles'][$profile_key]; ?>
                     <fieldset style="border:1px solid #dcdcde;padding:12px;margin:12px 0;">
-                        <legend><strong><?php echo esc_html('development' === $profile_key ? __('Development', 'microsoft-id-login') : __('Production', 'microsoft-id-login')); ?></strong><?php if ($profile_key === $active_profile) : ?> <span class="description"><?php esc_html_e('(aktiv)', 'microsoft-id-login'); ?></span><?php endif; ?></legend>
-                        <?php if ('production' === $profile_key) : ?>
-                            <p class="description"><?php esc_html_e('Production kan förkonfigureras här. Microsoft-login blir bara aktivt när profilen är komplett och uttryckligen aktiverad i production.', 'microsoft-id-login'); ?></p>
-                        <?php endif; ?>
-                        <p><label><?php if ($force_off) : ?><input type="hidden" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="<?php echo ! empty($profile['enabled']) ? '1' : '0'; ?>"><?php endif; ?><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="1" <?php checked(! $force_off && ! empty($profile['enabled'])); ?> <?php disabled($force_off); ?>> <?php esc_html_e('Aktivera Microsoft-login för denna profil', 'microsoft-id-login'); ?></label></p>
+                        <legend><strong><?php echo esc_html(strtoupper($profile_key)); ?></strong> <span class="description"><?php esc_html_e('(aktiv WordPress-miljö)', 'microsoft-id-login'); ?></span></legend>
+                        <p><label><?php if ($force_off) : ?><input type="hidden" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="<?php echo ! empty($profile['enabled']) ? '1' : '0'; ?>"><?php endif; ?><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="1" <?php checked(! $force_off && ! empty($profile['enabled'])); ?> <?php disabled($force_off); ?>> <?php esc_html_e('Aktivera Microsoft-login', 'microsoft-id-login'); ?></label></p>
                         <p><label><?php esc_html_e('Application ID / Client ID', 'microsoft-id-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][client_id]" value="<?php echo esc_attr((string) $profile['client_id']); ?>" autocomplete="off"></label></p>
                         <p><label><?php esc_html_e('Client Secret', 'microsoft-id-login'); ?><br><input class="regular-text code" type="password" name="profiles[<?php echo esc_attr($profile_key); ?>][client_secret]" value="" autocomplete="new-password" placeholder="<?php echo esc_attr(! empty($profile['client_secret']) ? __('Secret finns - lämna tomt för att behålla', 'microsoft-id-login') : __('Saknas', 'microsoft-id-login')); ?>"></label></p>
                         <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][clear_secret]" value="1"> <?php esc_html_e('Ta bort sparad client secret', 'microsoft-id-login'); ?></label></p>
                     </fieldset>
-                <?php endforeach; ?>
                 <?php submit_button(__('Spara Microsoft-konfiguration', 'microsoft-id-login'), 'primary', 'submit', false); ?>
             </form>
         </section>
@@ -823,7 +821,7 @@ final class SSF_Microsoft_ID_Login
         $current = $this->settings();
         $posted = isset($_POST['profiles']) && is_array($_POST['profiles']) ? wp_unslash($_POST['profiles']) : array();
 
-        foreach ($this->profile_keys() as $profile_key) {
+        foreach (array($this->active_profile_key()) as $profile_key) {
             $profile = isset($posted[$profile_key]) && is_array($posted[$profile_key]) ? $posted[$profile_key] : array();
             $current['profiles'][$profile_key]['enabled'] = ! empty($profile['enabled']);
             $current['profiles'][$profile_key]['client_id'] = $this->sanitize_guid((string) ($profile['client_id'] ?? ''));

@@ -48,8 +48,7 @@ final class SharePointAdmin
         if (! isset($definitions[$destination])) {
             $destination = 'annual_meetings';
         }
-        $requested_environment = (string) ($_GET['profile_environment'] ?? $current_environment);
-        $profile_environment = 'production' === $requested_environment ? 'production' : 'development';
+        $profile_environment = $current_environment;
         $profile = SharePointDestinations::get($destination, $profile_environment);
         $definition = $definitions[$destination];
         ?>
@@ -74,9 +73,7 @@ final class SharePointAdmin
 
             <div class="ssf-sp-config">
                 <div class="ssf-sp-config__title"><div><h3><?php echo esc_html($definition['label']); ?></h3><p><strong>Används av:</strong> <?php echo esc_html(implode(', ', $definition['uses'])); ?></p></div></div>
-                <nav class="nav-tab-wrapper" aria-label="Miljöprofil">
-                    <?php foreach (array('development' => 'Development', 'production' => 'Production') as $environment => $label) : ?><a class="nav-tab <?php echo $environment === $profile_environment ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'destination' => $destination, 'profile_environment' => $environment), admin_url('admin.php'))); ?>"><?php echo esc_html($label); ?><?php echo $environment === $current_environment ? ' (aktiv)' : ''; ?></a><?php endforeach; ?>
-                </nav>
+                <p class="ssf-sp-environment ssf-sp-environment--<?php echo esc_attr($current_environment); ?>"><?php echo esc_html(strtoupper($current_environment)); ?> - <?php esc_html_e('endast den aktiva WordPress-miljön kan redigeras.', 'ssf-member-portal'); ?></p>
 
                 <form class="ssf-sp-wizard" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="ssf_save_sharepoint_destination">
@@ -152,7 +149,7 @@ final class SharePointAdmin
     public function save(): void
     {
         $destination = sanitize_key((string) ($_POST['destination'] ?? ''));
-        $environment = 'production' === ($_POST['profile_environment'] ?? '') ? 'production' : 'development';
+        $environment = SharePointDestinations::environment();
         if (! $this->can_configure() || ! check_admin_referer('ssf_save_sharepoint_destination_' . $destination . '_' . $environment)) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
         }
@@ -183,7 +180,7 @@ final class SharePointAdmin
             wp_send_json_error(array('message' => 'Du saknar behörighet.'), 403);
         }
         $destination = sanitize_key((string) ($_POST['destination'] ?? ''));
-        $environment = 'production' === ($_POST['environment'] ?? '') ? 'production' : 'development';
+        $environment = SharePointDestinations::environment();
         if (! isset(SharePointDestinations::definitions()[$destination])) {
             wp_send_json_error(array('message' => 'Okänd SharePoint-destination.'), 400);
         }

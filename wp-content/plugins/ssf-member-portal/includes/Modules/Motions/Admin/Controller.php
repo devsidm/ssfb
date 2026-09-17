@@ -192,14 +192,21 @@ final class Controller
         }
         $poll = $this->service->sharepoint_status_poll_diagnostics();
         $next_poll = wp_next_scheduled('ssf_motion_sharepoint_status_poll');
+        $tab = sanitize_key((string) ($_GET['m365_tab'] ?? 'overview'));
+        if (! in_array($tab, array('overview', 'directory', 'integrations', 'diagnostics'), true)) {
+            $tab = 'overview';
+        }
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('Microsoft 365', 'ssf-member-portal'); ?></h1>
             <?php if (class_exists('SSF_Admin_Navigation')) { \SSF_Admin_Navigation::render_system_tabs('ssf-member-portal-microsoft365'); } ?>
-            <p><?php esc_html_e('Central konfiguration för interna e-postmottagare och SharePoint-integrationerna för motioner och medlemsansökningar.', 'ssf-member-portal'); ?></p>
+            <?php if (class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_environment_banner(); \SSF_Microsoft365_Config::render_tabs($tab); } ?>
+            <p><?php esc_html_e('Central administration för Microsoft-katalogen och installationens separata integrationer.', 'ssf-member-portal'); ?></p>
             <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr($notice['type']); ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?></p></div><?php endif; ?>
 
-            <?php if (class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_admin_section(); } ?>
+            <?php if ('overview' === $tab && class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_overview(); echo '</div>'; return; } ?>
+            <?php if ('directory' === $tab && class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_admin_section(); echo '</div>'; return; } ?>
+            <?php if ('diagnostics' === $tab && class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_diagnostics(); echo '</div>'; return; } ?>
 
             <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
 

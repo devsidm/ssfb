@@ -60,6 +60,8 @@ Assert-Contains '429-förklaring' $discovery 'Microsoft Graph begränsar'
 
 Assert-Contains 'Admin capability' $admin 'current_user_can(Capabilities::MANAGE)'
 Assert-Contains 'Admin nonce' $admin "check_ajax_referer('ssf_sharepoint_admin'"
+Assert-Contains 'Admin edits active environment only' $admin '$profile_environment = $current_environment;'
+Assert-NotContains 'Admin has no DEV PROD profile tabs' $admin 'aria-label="Miljöprofil"'
 Assert-Contains 'Microsoft 365-sidan köar sina admin-assets från render' $admin '$this->enqueue('''');'
 Assert-Contains 'SharePoint admin-JS köas' $admin "assets/js/sharepoint-admin.js"
 Assert-Contains 'SharePoint admin nonce lokaliseras' $admin "wp_create_nonce('ssf_sharepoint_admin')"

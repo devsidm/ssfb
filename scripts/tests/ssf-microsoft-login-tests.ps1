@@ -148,7 +148,8 @@ Assert-Contains 'Settings save requires nonce' $plugin "check_admin_referer('ssf
 Assert-Contains 'Development profile exists' $plugin "'development'"
 Assert-Contains 'Production profile exists' $plugin "'production'"
 Assert-Contains 'Active profile selected from WP environment' $plugin 'active_profile_key'
-Assert-Contains 'Production profile editable in UI' $plugin "__('Production'"
+Assert-Contains 'Only active profile saved from UI' $plugin 'foreach (array($this->active_profile_key()) as $profile_key)'
+Assert-NotContains 'Production profile not editable from DEV UI' $plugin 'Production kan förkonfigureras här.'
 Assert-Contains 'Client ID editable in UI' $plugin 'Application ID / Client ID'
 Assert-Contains 'Client secret password field' $plugin 'type="password"'
 Assert-NotContains 'Client secret value is never rendered' $plugin 'value="<?php echo esc_attr((string) $profile[''client_secret''])'

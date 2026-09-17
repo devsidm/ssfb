@@ -131,7 +131,7 @@ final class SSF_Office365_Mailer
         $settings = array(
             'enabled' => ! empty($input['enabled']) ? 'yes' : 'no',
             'client_id' => sanitize_text_field($input['client_id'] ?? ''),
-            'tenant_id' => sanitize_text_field($input['tenant_id'] ?? 'organizations'),
+            'tenant_id' => (string) ($current['tenant_id'] ?? ''),
             'client_secret' => $current['client_secret'],
         );
 
@@ -140,10 +140,6 @@ final class SSF_Office365_Mailer
             if ($encrypted) {
                 $settings['client_secret'] = $encrypted;
             }
-        }
-
-        if (! $settings['tenant_id']) {
-            $settings['tenant_id'] = 'organizations';
         }
 
         return $settings;
@@ -180,8 +176,8 @@ final class SSF_Office365_Mailer
                         <td><input class="regular-text code" id="ssf-office365-client-id" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[client_id]" value="<?php echo esc_attr($settings['client_id']); ?>" autocomplete="off"></td>
                     </tr>
                     <tr>
-                        <th scope="row"><label for="ssf-office365-tenant-id"><?php esc_html_e('Microsoft Entra Tenant ID', 'ssf-office365-mailer'); ?></label></th>
-                        <td><input class="regular-text code" id="ssf-office365-tenant-id" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[tenant_id]" value="<?php echo esc_attr($settings['tenant_id']); ?>" autocomplete="off"><p class="description"><?php esc_html_e('Använd Directory (tenant) ID från Microsoft Entra. Värdet "organizations" fungerar också för arbetskonton.', 'ssf-office365-mailer'); ?></p></td>
+                        <th scope="row"><?php esc_html_e('Microsoft-katalog', 'ssf-office365-mailer'); ?></th>
+                        <td><strong><?php echo esc_html($this->tenant_id() ? __('Central och konfigurerad', 'ssf-office365-mailer') : __('Saknas', 'ssf-office365-mailer')); ?></strong><p class="description"><?php esc_html_e('Tenant konfigureras centralt under SSF > System > Microsoft 365.', 'ssf-office365-mailer'); ?></p></td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="ssf-office365-client-secret"><?php esc_html_e('Azure Client Secret', 'ssf-office365-mailer'); ?></label></th>
@@ -273,7 +269,7 @@ final class SSF_Office365_Mailer
             'state' => $state,
             'prompt' => 'select_account',
         );
-        $authorization_url = sprintf('https://login.microsoftonline.com/%s/oauth2/v2.0/authorize', rawurlencode($settings['tenant_id']));
+        $authorization_url = $this->authority_url('/oauth2/v2.0/authorize');
 
         wp_redirect(add_query_arg($query, $authorization_url));
         exit;
@@ -504,7 +500,7 @@ final class SSF_Office365_Mailer
             array(
                 'enabled' => 'no',
                 'client_id' => '',
-                'tenant_id' => 'organizations',
+                'tenant_id' => '',
                 'client_secret' => '',
             )
         );
@@ -527,12 +523,38 @@ final class SSF_Office365_Mailer
     {
         $settings = $this->settings();
         $tokens = $this->tokens();
-        return 'yes' === $settings['enabled'] && ! empty($settings['client_id']) && ! empty($settings['client_secret']) && ! empty($tokens['refresh_token']) && ! empty($tokens['email']);
+        return 'yes' === $settings['enabled'] && '' !== $this->tenant_id() && ! empty($settings['client_id']) && ! empty($settings['client_secret']) && ! empty($tokens['refresh_token']) && ! empty($tokens['email']);
     }
 
     private function callback_url(): string
     {
         return rest_url('ssf-office365-mailer/v1/oauth/callback');
+    }
+
+    private function tenant_id(): string
+    {
+        $this->ensure_central_config_loaded();
+        return class_exists('SSF_Microsoft365_Config') ? SSF_Microsoft365_Config::get_tenant_id() : '';
+    }
+
+    private function authority_url(string $path): string
+    {
+        $this->ensure_central_config_loaded();
+        return class_exists('SSF_Microsoft365_Config')
+            ? SSF_Microsoft365_Config::get_authority_url($path)
+            : 'https://login.microsoftonline.com/' . rawurlencode($this->tenant_id()) . $path;
+    }
+
+    private function ensure_central_config_loaded(): void
+    {
+        if (class_exists('SSF_Microsoft365_Config')) {
+            return;
+        }
+        $base = defined('WPMU_PLUGIN_DIR') ? WPMU_PLUGIN_DIR : (defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR . '/mu-plugins' : '');
+        $file = $base ? rtrim((string) $base, '/\\') . '/ssf-microsoft365-config.php' : '';
+        if ($file && is_readable($file)) {
+            require_once $file;
+        }
     }
 
     private function request_token(array $grant)
@@ -550,7 +572,7 @@ final class SSF_Office365_Mailer
             ),
             $grant
         );
-        $url = sprintf('https://login.microsoftonline.com/%s/oauth2/v2.0/token', rawurlencode($settings['tenant_id']));
+        $url = $this->authority_url('/oauth2/v2.0/token');
         $response = wp_remote_post($url, array('timeout' => 25, 'body' => $body));
         if (is_wp_error($response)) {
             return new WP_Error('ssf_office365_token_request', __('Kunde inte kontakta Microsoft 365 för en åtkomsttoken.', 'ssf-office365-mailer'));
