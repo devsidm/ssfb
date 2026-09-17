@@ -69,9 +69,11 @@ try {
     }
 
     $php = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-release-controls.php')
+    $deploy = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts\ssf-release-deploy.ps1')
     Assert-Equal 'Miljö använder WordPress' $true ($php.Contains('wp_get_environment_type()'))
     Assert-Equal 'Ingen URL- eller sökvägsgissning' $false ($php.Contains('installation_environment'))
     Assert-Equal 'Deploymenthistorik finns' $true ($php.Contains("DEPLOYMENTS_OPTION = 'ssf_release_deployments'"))
+    Assert-Equal 'Absolute FTP root preserved' $true ($deploy.Contains("if (`$remoteRootIsAbsolute) { '//' } else { '/' }"))
 
     $scripts = @('ssf-release-build.ps1', 'ssf-release-prepare.ps1', 'ssf-release-deploy.ps1')
     foreach ($script in $scripts) {

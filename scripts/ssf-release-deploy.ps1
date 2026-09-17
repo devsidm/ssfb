@@ -42,6 +42,7 @@ $trackedFiles = @(git -C $repo ls-files -- 'wp-content')
 if ($trackedFiles.Count -eq 0) { throw 'Inga versionsstyrda wp-content-filer hittades.' }
 
 $BaseUrl = $BaseUrl.TrimEnd('/')
+$remoteRootIsAbsolute = $RemoteRoot.StartsWith('/')
 $RemoteRoot = $RemoteRoot.Trim('/')
 $cookiePath = [IO.Path]::GetTempFileName()
 $pagePath = [IO.Path]::GetTempFileName()
@@ -69,7 +70,8 @@ try {
         $local = Join-Path $repo ($file -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (-not (Test-Path -LiteralPath $local)) { throw "Versionsstyrd fil saknas lokalt: $file" }
         $remotePath = if ($RemoteRoot) { "$RemoteRoot/$file" } else { $file }
-        $url = 'ftp://' + $FtpHost.TrimEnd('/') + '/' + $remotePath
+        $ftpPathPrefix = if ($remoteRootIsAbsolute) { '//' } else { '/' }
+        $url = 'ftp://' + $FtpHost.TrimEnd('/') + $ftpPathPrefix + $remotePath
         & curl.exe -sS --fail --ftp-pasv --ftp-create-dirs -u ($FtpUser + ':' + $ftpPassword) -T $local $url
         if ($LASTEXITCODE -ne 0) { throw "FTP-uppladdning misslyckades: $file" }
     }
