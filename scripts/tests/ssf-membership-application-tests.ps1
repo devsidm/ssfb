@@ -205,6 +205,9 @@ Assert-Contains 'Arkivflytt kräver capability' $archiveMigration "current_user_
 Assert-Contains 'Arkivflytt kräver nonce' $archiveMigration 'check_admin_referer($nonce)'
 Assert-Contains 'Readiness kontrollerar metadata' $archiveMigration '$this->metadata($target)'
 Assert-Contains 'Arkivflytt inventerar fullständigt kolumnschema' $archiveMigration '$expand=sourceColumn'
+Assert-NotContains 'Arkivflytt skickar inte ogiltig multiChoice-facet' $archiveMigration 'choice,multiChoice,number'
+Assert-Contains 'Arkivflytt bevarar Choice displayAs' $archiveMigration "'displayAs' => `$display_as"
+Assert-Contains 'Arkivflytt blockerar tvetydigt Choice-schema' $archiveMigration "`$schema_status = 'AMBIGUOUS'"
 Assert-Contains 'Arkivflytt jämför på internt namn' $archiveMigration 'internal_name'
 Assert-Contains 'Arkivflytt kan skapa saknade kolumner' $archiveMigration "`$this->request('POST', `$this->columns_path(`$target), `$payload)"
 Assert-Contains 'Arkivflytt läser tillbaka skapad kolumn' $archiveMigration 'Read the created column back from SharePoint'

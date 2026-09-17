@@ -19,6 +19,7 @@ class SSF_Medlemsprocess_Archive_Migration
     private const SCHEMA_COMPARE_OPTION = 'ssf_medlemsprocess_archive_schema_compare';
     private const SCHEMA_SYNC_OPTION = 'ssf_medlemsprocess_archive_schema_sync';
     private const BATCH_OPTION = 'ssf_medlemsprocess_archive_batch';
+    private const SCHEMA_ERROR_PREFIX = 'ssf_archive_schema_error_';
 
     private $graph;
 
@@ -260,7 +261,10 @@ class SSF_Medlemsprocess_Archive_Migration
         $this->guard('ssf_application_archive_read_source_schema');
         $source = $this->resolve_location('source', true);
         $schema = is_wp_error($source) ? $source : $this->column_schema($source);
-        if (is_wp_error($schema)) { $this->redirect($schema->get_error_message(), 'error'); }
+        if (is_wp_error($schema)) {
+            set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($schema), 10 * MINUTE_IN_SECONDS);
+            $this->redirect('Källans kolumnschema kunde inte läsas.', 'error');
+        }
         update_option(self::SOURCE_SCHEMA_OPTION, array('read_at' => gmdate('c'), 'columns' => $schema), false);
         $this->redirect('Källans fullständiga kolumnschema har lästs.', 'success');
     }
@@ -773,7 +777,7 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function column_schema(array $location)
     {
-        $result = $this->request('GET', $this->columns_path($location) . '?$expand=sourceColumn&$select=id,name,displayName,description,columnGroup,required,hidden,readOnly,indexed,enforceUniqueValues,defaultValue,text,choice,multiChoice,number,currency,boolean,dateTime,personOrGroup,lookup,hyperlinkOrPicture,calculated,term,sourceColumn');
+        $result = $this->request('GET', $this->columns_path($location) . '?$expand=sourceColumn&$select=id,name,displayName,description,columnGroup,required,hidden,readOnly,indexed,enforceUniqueValues,defaultValue,text,choice,number,currency,boolean,dateTime,personOrGroup,lookup,hyperlinkOrPicture,calculated,term,sourceColumn');
         if (is_wp_error($result)) { return $result; }
         $columns = array();
         foreach ((array) ($result['value'] ?? array()) as $column) { $columns[] = $this->normalize_column((array) $column); }
@@ -782,7 +786,7 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function normalize_column(array $column): array
     {
-        $types = array('text', 'choice', 'multiChoice', 'number', 'currency', 'boolean', 'dateTime', 'personOrGroup', 'lookup', 'hyperlinkOrPicture', 'calculated', 'term');
+        $types = array('text', 'choice', 'number', 'currency', 'boolean', 'dateTime', 'personOrGroup', 'lookup', 'hyperlinkOrPicture', 'calculated', 'term');
         $type = 'unknown';
         foreach ($types as $candidate) { if (array_key_exists($candidate, $column)) { $type = $candidate; break; } }
         $system_names = array('id', 'created', 'modified', 'author', 'editor', 'contenttype', '_uiversionstring', 'attachments', 'edit', 'linktitle');
@@ -790,8 +794,22 @@ class SSF_Medlemsprocess_Archive_Migration
         $source_column = (array) ($column['sourceColumn'] ?? array());
         $classification = in_array(strtolower($name), $system_names, true) || ! empty($column['readOnly']) || ! empty($column['hidden']) ? 'SYSTEM' : (! empty($source_column) ? 'CONTENT TYPE' : 'CUSTOM');
         $settings = (array) ($column[$type] ?? array());
+        $schema_status = 'SUPPORTED';
+        if ('choice' === $type) {
+            $display_as = (string) ($settings['displayAs'] ?? '');
+            $settings = array(
+                'choices' => array_values(array_map('strval', (array) ($settings['choices'] ?? array()))),
+                'allowTextEntry' => ! empty($settings['allowTextEntry']),
+                'displayAs' => $display_as,
+            );
+            if ('checkBoxes' === $display_as) {
+                $type = 'multiChoice';
+            } elseif (! in_array($display_as, array('dropDownMenu', 'radioButtons'), true)) {
+                $schema_status = 'AMBIGUOUS';
+            }
+        }
         foreach (array('required', 'indexed', 'enforceUniqueValues', 'defaultValue', 'description', 'columnGroup') as $key) { if (array_key_exists($key, $column)) { $settings[$key] = $column[$key]; } }
-        return array('id' => (string) ($column['id'] ?? ''), 'name' => $name, 'display_name' => (string) ($column['displayName'] ?? $name), 'type' => $type, 'classification' => $classification, 'settings' => $settings, 'raw' => $column);
+        return array('id' => (string) ($column['id'] ?? ''), 'name' => $name, 'display_name' => (string) ($column['displayName'] ?? $name), 'type' => $type, 'classification' => $classification, 'schema_status' => $schema_status, 'settings' => $settings, 'raw' => $column);
     }
 
     private function schema_comparison()
@@ -810,7 +828,7 @@ class SSF_Medlemsprocess_Archive_Migration
         foreach ($source_state['columns'] as $source) {
             $status = 'SYSTEM'; $label = 'SYSTEM / NO ACTION'; $action = 'Ingen'; $target_column = null;
             if ('CUSTOM' === $source['classification']) {
-                if (! in_array($source['type'], $supported, true)) { $status = 'UNSUPPORTED'; $label = 'UNSUPPORTED / MANUELL KONTROLL'; $action = 'Manuell kontroll'; }
+                if ('SUPPORTED' !== ($source['schema_status'] ?? 'SUPPORTED') || ! in_array($source['type'], $supported, true)) { $status = 'UNSUPPORTED'; $label = 'UNSUPPORTED / MANUELL KONTROLL'; $action = 'Manuell kontroll'; }
                 elseif (! isset($by_name[strtolower($source['name'])]) && isset($by_display_name[strtolower($source['display_name'])])) { $status = 'CONFLICT'; $label = 'CONFLICT - INTERNAL-NAME MISMATCH - MANUELL KONTROLL KRÄVS'; $action = 'Blockerad'; }
                 elseif (! isset($by_name[strtolower($source['name'])])) { $status = 'MISSING'; $label = 'MISSING'; $action = 'Skapa'; }
                 else {
@@ -835,9 +853,11 @@ class SSF_Medlemsprocess_Archive_Migration
     private function column_create_payload(array $column)
     {
         if ('CUSTOM' !== ($column['classification'] ?? '') || ! in_array($column['type'] ?? '', array('text', 'choice', 'multiChoice', 'number', 'currency', 'boolean', 'dateTime'), true)) { return new WP_Error('unsupported_column', 'Kolumntypen kräver manuell kontroll.'); }
+        if ('SUPPORTED' !== ($column['schema_status'] ?? 'SUPPORTED')) { return new WP_Error('ambiguous_column', 'Kolumnschemat är tvetydigt och kräver manuell kontroll.'); }
         $raw = (array) ($column['raw'] ?? array());
         $type = (string) $column['type'];
-        $payload = array('name' => (string) $column['name'], 'displayName' => (string) $column['display_name'], 'description' => (string) ($raw['description'] ?? ''), 'required' => ! empty($raw['required']), $type => (object) ((array) ($raw[$type] ?? array())));
+        $facet = 'multiChoice' === $type ? 'choice' : $type;
+        $payload = array('name' => (string) $column['name'], 'displayName' => (string) $column['display_name'], 'description' => (string) ($raw['description'] ?? ''), 'required' => ! empty($raw['required']), $facet => (object) ((array) ($raw[$facet] ?? array())));
         if (isset($raw['defaultValue'])) { $payload['defaultValue'] = $raw['defaultValue']; }
         if (! empty($raw['indexed'])) { $payload['indexed'] = true; }
         if (! empty($raw['enforceUniqueValues'])) { $payload['enforceUniqueValues'] = true; }
@@ -1212,5 +1232,21 @@ class SSF_Medlemsprocess_Archive_Migration
         if (! $message) { return; }
         $type = 'error' === sanitize_key((string) ($_GET['ssf_archive_type'] ?? '')) ? 'error' : 'success';
         echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
+        $diagnostic = get_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id());
+        if ('error' === $type && is_array($diagnostic)) {
+            delete_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id());
+            echo '<details><summary>Tekniska detaljer</summary><p><code>' . esc_html((string) ($diagnostic['code'] ?? 'graph_error')) . '</code></p><p>' . esc_html((string) ($diagnostic['message'] ?? 'Microsoft Graph returnerade ett fel.')) . '</p></details>';
+        }
+    }
+
+    private function safe_schema_error(WP_Error $error): array
+    {
+        $message = sanitize_text_field($error->get_error_message());
+        $message = preg_replace('/Bearer\s+[A-Za-z0-9._~+\/-]+=*/i', 'Bearer [REDACTED]', $message);
+        $message = preg_replace('/(client_secret|access_token|refresh_token)\s*[=:]\s*[^\s,;]+/i', '$1=[REDACTED]', $message);
+        return array(
+            'code' => sanitize_key((string) $error->get_error_code()),
+            'message' => $message ?: 'Microsoft Graph returnerade ett fel.',
+        );
     }
 }
