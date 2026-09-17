@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.16",
-    "built_at":  "2026-09-17T21:13:58.7029961Z",
+    "build":  "20260917.17",
+    "built_at":  "2026-09-17T21:32:46.1302829Z",
     "source":  "codex",
-    "source_revision":  "1cc871f33f7b046569c7909137eaaa0191320a42",
-    "description":  "Fix enabled generic migration actions",
+    "source_revision":  "a68f0c667e367b251684682e2491a43a246e73fa",
+    "description":  "Restructure generic SharePoint folder migration flow",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "ssf-medlemsprocess"

@@ -7,6 +7,7 @@ $failures = [Collections.Generic.List[string]]::new()
 
 function Read-RepoFile([string]$Path) { Get-Content -Raw -LiteralPath (Join-Path $repo $Path) -Encoding UTF8 }
 function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { $failures.Add("$Name saknar: $Expected") } }
+function Assert-Matches([string]$Name, [string]$Content, [string]$Pattern) { if ($Content -notmatch $Pattern) { $failures.Add("$Name matchar inte: $Pattern") } }
 function Assert-NotContains([string]$Name, [string]$Content, [string]$Expected) { if ($Content.Contains($Expected)) { $failures.Add("$Name innehåller otillåtet: $Expected") } }
 
 $core = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\FolderMigrationCore.php'
@@ -17,9 +18,16 @@ $graph = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Integratio
 Assert-Contains 'Shared discovery migration profile' $archive 'data-destination="folder_migration"'
 Assert-Contains 'Generic core is separate' $archive 'FolderMigrationCore'
 Assert-Contains 'Generic source stable IDs' $archive "array('site_id','drive_id','list_id','folder_id')"
-Assert-Contains 'Keep or rename' $archive 'Flytta och byt namn'
+Assert-Contains 'Keep source name option' $archive 'name="keep_name" value="1"'
+Assert-Contains 'Rename destination option' $archive 'name="keep_name" value="0"'
+Assert-Contains 'Rename field disabled with keep mode' $archive 'name="destination_folder_name" value="<?php echo esc_attr($custom_name); ?>" <?php disabled($keep_name); ?>'
 Assert-Contains 'Intermediate structure' $archive 'Extra struktur'
 Assert-Contains 'Live preview' $archive 'data-ssf-migration-preview'
+Assert-Contains 'Source selector stays in source step' $archive "render_generic_discovery_form('source', `$source)"
+Assert-Contains 'Target selector stays in target step' $archive "render_generic_discovery_form('target', `$target)"
+Assert-Contains 'Target preview only reads target selector' $archive 'data-location-kind="target"] [data-sp-field="folder_path"]'
+Assert-Contains 'Mode change explains no migration starts' $archive 'Ingen migrering har startats.'
+Assert-Matches 'Generic core retries Graph after plugin load' $archive 'private function generic_core\(\)\s*\{\s*\$this->ensure_graph\(\);'
 Assert-Contains 'Root-only prepare wording' $archive 'Skapade migreringsundermapppar: 0'
 Assert-Contains 'Incremental migration' $core 'Incremental, resumable source-to-source SharePoint copy'
 Assert-Contains 'No arbitrary depth cutoff' $core 'while ($queue)'
