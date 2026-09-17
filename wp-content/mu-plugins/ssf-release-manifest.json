@@ -2,15 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.7",
-    "built_at":  "2026-09-17T17:03:14.6445738Z",
+    "build":  "20260917.8",
+    "built_at":  "2026-09-17T18:31:45.8702344Z",
     "source":  "codex",
-    "source_revision":  "7b2dabf6f4146608eb86112db6c69bfcc01a12d6",
-    "description":  "Clarify automatic archive target creation",
+    "source_revision":  "31d209e5a89e6664665aad4dc17cb13e535345be",
+    "description":  "Generic SharePoint folder migration",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "release-tooling",
-                       "ssf-medlemsprocess"
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
