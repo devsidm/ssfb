@@ -345,6 +345,34 @@ final class Configuration
         return $status;
     }
 
+    /**
+     * Safe presentation data for the single SharePoint/Graph credential UI.
+     * Deliberately never returns the encrypted value or its decrypted secret.
+     */
+    public static function sharepoint_credentials_status(): array
+    {
+        $status = self::public_status();
+        $stored = self::stored();
+        $client_id = (array) ($status['client_id'] ?? array());
+        $client_secret = (array) ($status['client_secret'] ?? array());
+
+        return array(
+            'tenant' => (array) ($status['tenant_id'] ?? array()),
+            'client_id' => array(
+                'configured' => ! empty($client_id['configured']),
+                'source' => (string) ($client_id['source'] ?? 'missing'),
+                'value' => self::value('client_id'),
+                'editable' => 'server' !== ($client_id['source'] ?? ''),
+            ),
+            'client_secret' => array(
+                'configured' => ! empty($client_secret['configured']),
+                'source' => (string) ($client_secret['source'] ?? 'missing'),
+                'stored' => ! empty($stored['client_secret']),
+                'server_authoritative' => 'server' === ($client_secret['source'] ?? ''),
+            ),
+        );
+    }
+
     private static function stored(): array
     {
         return (array) get_option(self::OPTION, array());

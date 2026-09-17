@@ -174,8 +174,6 @@ final class Controller
             return;
         }
 
-        $config = Configuration::public_status();
-        $values = Configuration::editable_values();
         $notice = get_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
         if ($notice) {
             delete_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id());
@@ -211,32 +209,6 @@ final class Controller
             <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
 
             <?php if (class_exists('SSF_Email_Template')) { \SSF_Email_Template::render_admin_section(); } ?>
-
-            <div class="postbox" style="max-width:980px;padding:20px">
-                <h2><?php esc_html_e('Microsoft Entra-anslutning', 'ssf-member-portal'); ?></h2>
-                <table class="widefat striped"><tbody>
-                <?php foreach (array('tenant_id' => 'Tenant ID', 'client_id' => 'Client ID', 'client_secret' => 'Client secret') as $key => $label) : ?>
-                    <tr><th><?php echo esc_html($label); ?></th><td><?php echo esc_html($config[$key]['configured'] ? __('Konfigurerad', 'ssf-member-portal') : __('Saknas', 'ssf-member-portal')); ?><?php if ($config[$key]['configured']) : ?> <span class="description">(<?php echo esc_html('server' === $config[$key]['source'] ? __('server', 'ssf-member-portal') : ('default' === $config[$key]['source'] ? __('SSF-standard', 'ssf-member-portal') : __('admin', 'ssf-member-portal'))); ?>)</span><?php endif; ?></td></tr>
-                <?php endforeach; ?>
-                </tbody></table>
-                <p class="description"><?php esc_html_e('Client secret visas aldrig igen och skickas aldrig till webbläsarens discovery-funktioner.', 'ssf-member-portal'); ?></p>
-            </div>
-
-            <?php if (current_user_can(Capabilities::MANAGE)) : ?>
-                <div class="postbox" style="max-width:980px;padding:20px">
-                    <h2><?php esc_html_e('Konfigurera Microsoft Entra', 'ssf-member-portal'); ?></h2>
-                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                        <input type="hidden" name="action" value="ssf_member_portal_save_microsoft365_configuration">
-                        <?php wp_nonce_field('ssf_member_portal_save_microsoft365_configuration'); ?>
-                        <table class="form-table" role="presentation"><tbody>
-                        <tr><th><label for="ssf-graph-client-id"><?php esc_html_e('Application (client) ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-id" class="regular-text code" name="graph[client_id]" value="<?php echo esc_attr($values['client_id']); ?>"></td></tr>
-                        <tr><th><label for="ssf-graph-client-secret"><?php esc_html_e('Client secret value', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-secret" class="regular-text" type="password" name="graph[client_secret]" value="" autocomplete="new-password"><p class="description"><?php esc_html_e('Lämna tomt för att behålla ett sparat secret. Secret ID fungerar inte här.', 'ssf-member-portal'); ?></p><label><input type="checkbox" name="graph[clear_client_secret]" value="1"> <?php esc_html_e('Ta bort sparat client secret', 'ssf-member-portal'); ?></label></td></tr>
-                        </tbody></table>
-                        <?php submit_button(__('Spara Microsoft Entra', 'ssf-member-portal')); ?>
-                    </form>
-                    <?php $this->microsoft365_button('ssf_member_portal_reset_microsoft365_configuration', 'ssf_member_portal_reset_microsoft365_configuration', __('Återställ Entra-standardvärden', 'ssf-member-portal'), 'secondary'); ?>
-                </div>
-            <?php endif; ?>
 
             <?php if (current_user_can(Capabilities::MANAGE)) { $this->sharepoint_admin->render(); } ?>
 

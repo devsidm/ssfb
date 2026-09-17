@@ -15,6 +15,13 @@
 .ssf-sp-status--missing { color: #8a2424; background: #fbeaea; }
 .ssf-sp-status--unknown { color: #50575e; background: #f0f0f1; }
 .ssf-sp-config { padding: 20px; margin-top: 20px; background: #fff; border: 1px solid #c3c4c7; }
+.ssf-sp-credentials { padding: 20px; margin: 18px 0; background: #fff; border: 1px solid #c3c4c7; }
+.ssf-sp-credentials__heading h3 { margin: 0 0 5px; }
+.ssf-sp-credentials__heading p { margin-top: 0; color: #50575e; }
+.ssf-sp-credentials__status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.ssf-sp-credentials__status div { padding: 10px 12px; background: #f6f7f7; border-left: 4px solid #00a32a; }
+.ssf-sp-credentials__status dt { color: #50575e; font-weight: 600; }
+.ssf-sp-credentials__status dd { margin: 5px 0 0; font-weight: 700; }
 .ssf-sp-config .nav-tab-wrapper { margin: 16px -20px 0; padding-left: 20px; }
 .ssf-sp-wizard { margin-top: 20px; }
 .ssf-sp-step { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 0 12px; padding: 20px 0; border-bottom: 1px solid #dcdcde; }
@@ -45,7 +52,7 @@
 .ssf-sp-policy { padding-top: 18px; border-top: 1px solid #dcdcde; }
 .ssf-sp-policy label { display: block; margin-bottom: 12px; font-weight: 600; }
 @media (max-width: 782px) {
-  .ssf-sp-overview, .ssf-sp-fields, .ssf-sp-metadata { grid-template-columns: 1fr; }
+  .ssf-sp-overview, .ssf-sp-fields, .ssf-sp-metadata, .ssf-sp-credentials__status { grid-template-columns: 1fr; }
   .ssf-sp-admin__header, .ssf-sp-config__title { align-items: flex-start; flex-direction: column; }
   .ssf-sp-step { grid-template-columns: 32px minmax(0, 1fr); }
   .ssf-sp-folder-list li { align-items: flex-start; flex-direction: column; }

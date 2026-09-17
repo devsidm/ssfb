@@ -18,6 +18,7 @@ final class SharePointAdmin
         $this->discovery = new SharePointDiscovery($graph);
         add_action('admin_post_ssf_save_sharepoint_destination', array($this, 'save'));
         add_action('admin_post_ssf_save_sharepoint_policy', array($this, 'save_policy'));
+        add_action('admin_post_ssf_save_sharepoint_credentials', array($this, 'save_credentials'));
         add_action('wp_ajax_ssf_sharepoint_admin', array($this, 'ajax'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue'));
     }
@@ -58,6 +59,8 @@ final class SharePointAdmin
                 <span class="ssf-sp-environment ssf-sp-environment--<?php echo esc_attr($current_environment); ?>"><?php echo esc_html(strtoupper($current_environment)); ?></span>
             </header>
             <?php if (class_exists('SSF_Admin_Feedback')) { \SSF_Admin_Feedback::render_inline('sharepoint'); } ?>
+
+            <?php $this->render_credentials(); ?>
 
             <div class="ssf-sp-overview">
                 <?php foreach ($definitions as $key => $item) : $active = SharePointDestinations::get($key); $missing = SharePointDestinations::missing($key); $health = SharePointDestinations::health($key); ?>
@@ -171,6 +174,27 @@ final class SharePointAdmin
         $this->redirect_with_notice($destination, SharePointDestinations::environment(), 'DEV-skyddet har sparats.', 'success');
     }
 
+    /** Save the one application credential pair used by all SharePoint destinations. */
+    public function save_credentials(): void
+    {
+        if (! $this->can_configure() || ! check_admin_referer('ssf_save_sharepoint_credentials')) {
+            wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
+        }
+        $input = (array) wp_unslash($_POST['graph'] ?? array());
+        $status = Configuration::sharepoint_credentials_status();
+        if (empty($status['client_id']['editable'])) {
+            unset($input['client_id']);
+        }
+        if (! empty($input['clear_client_secret']) && empty($input['confirm_clear_client_secret'])) {
+            $this->redirect_with_notice('annual_meetings', SharePointDestinations::environment(), 'Bekräfta att det WordPress-sparade client secret ska tas bort.', 'error', 'sharepoint-credentials');
+        }
+        $result = Configuration::save_admin($input);
+        $message = is_wp_error($result)
+            ? $result->get_error_message()
+            : (! empty($input['clear_client_secret']) ? 'Det WordPress-sparade client secret har tagits bort.' : 'SharePoint-appens inställningar har sparats.');
+        $this->redirect_with_notice('annual_meetings', SharePointDestinations::environment(), $message, is_wp_error($result) ? 'error' : 'success', 'sharepoint-credentials');
+    }
+
     public function ajax(): void
     {
         if (! check_ajax_referer('ssf_sharepoint_admin', 'nonce', false)) {
@@ -250,6 +274,47 @@ final class SharePointAdmin
         ?><label><?php echo esc_html($label); ?><span class="ssf-sp-field-control"><input class="<?php echo $is_identifier ? 'large-text code' : 'regular-text'; ?>" type="<?php echo esc_attr($type); ?>" name="profile[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($profile[$key] ?? '')); ?>" placeholder="<?php echo esc_attr($placeholder); ?>" data-sp-field="<?php echo esc_attr($key); ?>"><?php if ($is_identifier) : ?><button type="button" class="button ssf-sp-copy" data-sp-copy-field="<?php echo esc_attr($key); ?>" title="Kopiera <?php echo esc_attr($label); ?>"><span class="dashicons dashicons-clipboard" aria-hidden="true"></span><span class="screen-reader-text">Kopiera <?php echo esc_html($label); ?></span></button><?php endif; ?></span></label><?php
     }
 
+    private function render_credentials(): void
+    {
+        $credentials = Configuration::sharepoint_credentials_status();
+        $replace = 'replace' === sanitize_key((string) ($_GET['sharepoint_secret'] ?? ''));
+        $secret = (array) ($credentials['client_secret'] ?? array());
+        $client_id = (array) ($credentials['client_id'] ?? array());
+        ?>
+        <section id="sharepoint-credentials" class="ssf-sp-credentials" aria-labelledby="sharepoint-credentials-heading">
+            <div class="ssf-sp-credentials__heading"><div><h3 id="sharepoint-credentials-heading">Microsoft Entra-app för SharePoint</h3><p>Den här appen används av WordPress för att läsa och skriva data i SharePoint via Microsoft Graph.</p></div></div>
+            <dl class="ssf-sp-credentials__status">
+                <div><dt>Microsoft 365-tenant</dt><dd>✓ Centralt konfigurerad</dd></div>
+                <div><dt>Application (client) ID</dt><dd><?php echo ! empty($client_id['configured']) ? ('server' === ($client_id['source'] ?? '') ? '✓ Konfigurerat via server' : '✓ Konfigurerat') : 'Saknas'; ?></dd></div>
+                <div><dt>Client secret</dt><dd><?php echo ! empty($secret['configured']) ? ('server' === ($secret['source'] ?? '') ? '✓ Konfigurerat via server' : '✓ Konfigurerat') : 'Saknas'; ?></dd></div>
+            </dl>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="ssf_save_sharepoint_credentials">
+                <?php wp_nonce_field('ssf_save_sharepoint_credentials'); ?>
+                <p><label for="ssf-sharepoint-client-id"><strong>Application (client) ID</strong></label><br><input id="ssf-sharepoint-client-id" class="regular-text code" name="graph[client_id]" value="<?php echo esc_attr((string) ($client_id['value'] ?? '')); ?>" <?php disabled(empty($client_id['editable'])); ?>><?php if (empty($client_id['editable'])) : ?> <span class="description">Konfigurerat via server och kan inte ändras här.</span><?php endif; ?></p>
+                <?php if (! $replace) : ?>
+                    <p><a class="button" href="<?php echo esc_url(add_query_arg('sharepoint_secret', 'replace') . '#sharepoint-credentials'); ?>">Byt client secret</a></p>
+                <?php else : ?>
+                    <p><label for="ssf-sharepoint-client-secret"><strong>Nytt client secret value</strong></label><br><input id="ssf-sharepoint-client-secret" class="regular-text" type="password" name="graph[client_secret]" value="" autocomplete="new-password"><span class="description">Ange Client secret VALUE från Microsoft Entra. Secret ID fungerar inte.</span></p>
+                    <p><?php submit_button('Spara nytt secret', 'primary', 'submit', false); ?> <a class="button" href="<?php echo esc_url(remove_query_arg('sharepoint_secret') . '#sharepoint-credentials'); ?>">Avbryt</a></p>
+                <?php endif; ?>
+                <?php if (! $replace && ! empty($client_id['editable'])) : submit_button('Spara client ID', 'secondary', 'submit', false); endif; ?>
+            </form>
+            <?php if (! empty($secret['stored'])) : ?>
+                <details class="ssf-sp-advanced"><summary>Avancerat</summary>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                        <input type="hidden" name="action" value="ssf_save_sharepoint_credentials"><input type="hidden" name="graph[clear_client_secret]" value="1"><?php wp_nonce_field('ssf_save_sharepoint_credentials'); ?>
+                        <p>Detta tar endast bort det client secret som är sparat i WordPress. Om inget client secret finns konfigurerat på servern kommer SharePoint-integrationen därefter inte att kunna autentisera.</p>
+                        <?php if (! empty($secret['server_authoritative'])) : ?><p class="description">Client secret är också konfigurerat via server. Borttagning här ändrar inte serverkonfigurationen.</p><?php endif; ?>
+                        <p><label><input type="checkbox" name="graph[confirm_clear_client_secret]" value="1"> Jag bekräftar att det WordPress-sparade client secret ska tas bort.</label></p>
+                        <?php submit_button('Ta bort sparat client secret', 'delete', 'submit', false); ?>
+                    </form>
+                </details>
+            <?php endif; ?>
+        </section>
+        <?php
+    }
+
     private function can_manage(): bool
     {
         return current_user_can(Capabilities::MANAGE)
@@ -288,7 +353,7 @@ final class SharePointAdmin
         ));
     }
 
-    private function redirect_with_notice(string $destination, string $environment, string $message, string $type): void
+    private function redirect_with_notice(string $destination, string $environment, string $message, string $type, string $anchor = 'sharepoint'): void
     {
         if (class_exists('SSF_Admin_Feedback')) {
             \SSF_Admin_Feedback::redirect(
@@ -300,7 +365,7 @@ final class SharePointAdmin
             );
         }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), array('type' => $type, 'message' => $message), MINUTE_IN_SECONDS);
-        wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'destination' => $destination, 'profile_environment' => $environment), admin_url('admin.php')));
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations', 'destination' => $destination, 'profile_environment' => $environment), admin_url('admin.php')) . '#' . rawurlencode($anchor));
         exit;
     }
 }
