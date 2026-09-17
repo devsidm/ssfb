@@ -2,15 +2,17 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.5",
-    "built_at":  "2026-09-17T12:35:02.2664874Z",
+    "build":  "20260917.6",
+    "built_at":  "2026-09-17T13:40:09.2723387Z",
     "source":  "codex",
-    "source_revision":  "e6bf730e07bb6300e0a96ea2ff525d09b8cc8f34",
-    "description":  "Improve archive migration target folder step",
+    "source_revision":  "296cf76d5d2efc891ff3c7bcf963e2ae7a1beace",
+    "description":  "Improve SSF admin action feedback and return-to-section UX",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
+                       "microsoft-id-login",
                        "release-tooling",
-                       "ssf-medlemsprocess"
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
