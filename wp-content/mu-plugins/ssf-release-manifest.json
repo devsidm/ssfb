@@ -2,16 +2,18 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.1",
-    "built_at":  "2026-09-17T05:33:20.7529298Z",
+    "build":  "20260917.2",
+    "built_at":  "2026-09-17T07:12:56.8274248Z",
     "source":  "codex",
-    "source_revision":  "c4ec855be6d12c555a4868b5601404d8a0a8c4f8",
-    "description":  "SharePoint archive migration wizard and unified Microsoft login enable state",
+    "source_revision":  "5062cc3c94b0040881277f515e7366e6437aea8a",
+    "description":  "Central Microsoft 365 tenant configuration shared by Login and SharePoint",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "microsoft-id-login",
                        "release-tooling",
-                       "ssf-medlemsprocess"
+                       "ssf-admin-navigation",
+                       "ssf-member-portal",
+                       "ssf-microsoft365-config"
                    ],
     "status":  "development",
     "prepared_at":  ""
