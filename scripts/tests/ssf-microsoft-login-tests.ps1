@@ -25,10 +25,28 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.1'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.2'
 
 Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
+Assert-Contains 'One structured enable resolver exists' $plugin 'private function enable_state()'
+Assert-Contains 'Backend enable state comes from active DB profile' $plugin "`$admin_enabled = ! empty(`$profile['enabled'])"
+Assert-Contains 'Effective state combines backend config and force-off' $plugin '$active = $admin_enabled && $configured && ! $force_off'
+Assert-NotContains 'Enabled state is not read through generic config overrides' $plugin "config('enabled')"
+Assert-Contains 'Normal login uses effective enable resolver' $plugin 'if (! $this->is_enabled())'
+Assert-Contains 'Invitation uses shared OAuth initiation' $plugin "start_authorization('invite'"
+Assert-Contains 'Account linking uses shared OAuth initiation' $plugin "start_authorization('link'"
+Assert-Contains 'OAuth initiation uses structured enable resolver' $plugin '$enable_state = $this->enable_state()'
+Assert-Contains 'OAuth initiation blocks inactive state' $plugin "empty(`$enable_state['active'])"
+Assert-True 'Callback uses same resolver as OAuth start' (([regex]::Matches($plugin, [regex]::Escape('$enable_state = $this->enable_state()'))).Count -ge 3)
+Assert-Contains 'Enabled and configured permits active state' $plugin '$admin_enabled && $configured && ! $force_off'
+Assert-Contains 'Effective config includes OpenID issuer validation' $plugin '$configured = $local_configured && $openid_valid'
+Assert-Contains 'Incomplete configuration has clear error' $plugin 'Microsoft-inloggningen är inte färdigkonfigurerad.'
+Assert-Contains 'Administrator disabled has clear error' $plugin 'Microsoft-inloggningen är avstängd av en administratör.'
+Assert-Contains 'Server force-off has clear error' $plugin 'Microsoft-inloggningen är avstängd av serverkonfiguration.'
+Assert-Contains 'Force-off is shown in backend' $plugin 'Avstängd av serverkonfiguration'
+Assert-Contains 'Force-off disables backend checkbox' $plugin 'disabled($force_off)'
+Assert-Contains 'Effective ACTIVE requires complete status' $plugin "return __('AKTIV'"
 Assert-Contains 'Tenant constant exists' $plugin "SSF_M365_LOGIN_TENANT_ID"
 Assert-Contains 'Client ID constant exists' $plugin "SSF_M365_LOGIN_CLIENT_ID"
 Assert-Contains 'Client secret constant exists' $plugin "SSF_M365_LOGIN_CLIENT_SECRET"
@@ -118,6 +136,7 @@ Assert-Contains 'Active profile selected from WP environment' $plugin 'active_pr
 Assert-Contains 'Production profile editable in UI' $plugin "__('Production'"
 Assert-Contains 'Client ID editable in UI' $plugin 'Application ID / Client ID'
 Assert-Contains 'Client secret password field' $plugin 'type="password"'
+Assert-NotContains 'Client secret value is never rendered' $plugin 'value="<?php echo esc_attr((string) $profile[''client_secret''])'
 Assert-Contains 'Secret blank preserves existing value' $plugin 'Secret finns -'
 Assert-Contains 'Secret can be cleared explicitly' $plugin 'clear_secret'
 Assert-Contains 'Settings update does not autoload secrets' $plugin 'update_option(self::SETTINGS_OPTION, $current, false)'

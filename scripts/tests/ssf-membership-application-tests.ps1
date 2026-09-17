@@ -198,14 +198,31 @@ Assert-Contains 'Arkivflytt kan slå upp bibliotek via namn' $archiveMigration '
 Assert-Contains 'Arkivflytt kan slå upp list-ID via drive' $archiveMigration '/list?$select=id,displayName,webUrl'
 Assert-Contains 'Arkivflytt kan slå upp mapp via path' $archiveMigration '/root:/'
 Assert-Contains 'Cutover sparar verifierad upplöst profil' $archiveMigration 'resolve_target(true)'
-Assert-Contains 'Arkivflytt förklarar manuell katalog och metadata' $archiveMigration 'Verktyget skapar inte SharePoint-kolumner eller Choice-värden'
+Assert-Contains 'Arkivflytt har guidad källväljare' $archiveMigration 'Välj källa'
 Assert-Contains 'Arkivflytt har begripligt fel för saknad målmapp' $archiveMigration 'Målmappen hittades inte'
 Assert-Contains 'Arkivflytt säger att katalogstruktur inte skapas automatiskt' $archiveMigration 'Verktyget skapar inte katalogstruktur, kolumner eller Choice-värden automatiskt'
 Assert-Contains 'Arkivflytt kräver capability' $archiveMigration "current_user_can('ssf_manage_application_settings')"
 Assert-Contains 'Arkivflytt kräver nonce' $archiveMigration 'check_admin_referer($nonce)'
 Assert-Contains 'Readiness kontrollerar metadata' $archiveMigration '$this->metadata($target)'
-Assert-NotContains 'Arkivflytt får inte skapa SharePoint-kolumner' $archiveMigration ".'/columns'"
-Assert-NotContains 'Arkivflytt får inte POST:a SharePoint-kolumner' $archiveMigration "POST', 'sites/' . rawurlencode((string) `$target['site_id']) . '/lists/' . rawurlencode((string) `$target['list_id']) . '/columns"
+Assert-Contains 'Arkivflytt inventerar fullständigt kolumnschema' $archiveMigration '$expand=sourceColumn'
+Assert-Contains 'Arkivflytt jämför på internt namn' $archiveMigration 'internal_name'
+Assert-Contains 'Arkivflytt kan skapa saknade kolumner' $archiveMigration "`$this->request('POST', `$this->columns_path(`$target), `$payload)"
+Assert-Contains 'Arkivflytt läser tillbaka skapad kolumn' $archiveMigration 'Read the created column back from SharePoint'
+Assert-Contains 'Arkivflytt markerar konflikter för manuell kontroll' $archiveMigration 'CONFLICT - MANUELL KONTROLL KRÄVS'
+Assert-Contains 'Arkivflytt upptäcker internt namnmismatch' $archiveMigration 'INTERNAL-NAME MISMATCH'
+Assert-Contains 'Arkivflytt migrerar Choice-schema' $archiveMigration "'choice', 'multiChoice'"
+Assert-Contains 'Komplexa kolumner blockeras' $archiveMigration "`$status = 'UNSUPPORTED'"
+Assert-Contains 'Schema gate före datamigrering' $archiveMigration "get_option(self::SCHEMA_SYNC_OPTION, array())['verified']"
+Assert-Contains 'Testärende gate före batch' $archiveMigration 'migrera och verifiera ett testärende först'
+Assert-Contains 'Batch är begränsad' $archiveMigration '$count >= 5'
+Assert-Contains 'Batch kan pausas' $archiveMigration "'paused'"
+Assert-Contains 'Batch kan försöka fel igen' $archiveMigration "'retry'"
+Assert-Contains 'Förhandsvisning skriver inte' $archiveMigration "'mode' => 'FÖRHANDSVISNING'"
+Assert-Contains 'Förhandsvisning inspekterar faktisk källdata' $archiveMigration 'inspect_source_data'
+Assert-Contains 'Förhandsvisning läser källfiler rekursivt' $archiveMigration 'count_source_files'
+Assert-Contains 'Extra källfiler upptäcks' $archiveMigration 'EXTRA FILER'
+Assert-Contains 'Avstämning kan exporteras' $archiveMigration 'Exportera avstämningsrapport'
+foreach ($step in @('Graph authentication', 'Site access', 'Library access', 'Folder access', 'Create temporary test folder', 'Create small temporary test file', 'Write representative metadata using the migrated schema', 'Read file back', 'Read metadata back', 'Compare values', 'Delete test file', 'Delete test folder')) { Assert-Contains "Migreringsskrivtest $step" $archiveMigration $step }
 Assert-Contains 'Skrivtest skapar temporär SSF-mapp' $archiveMigration 'SSF-TEST-'
 Assert-Contains 'Skrivtest tar bort testmapp' $archiveMigration '$this->request(''DELETE'''
 Assert-Contains 'Migrering blockerad utan readiness' $archiveMigration 'MIGRERING BLOCKERAD'
@@ -218,7 +235,7 @@ Assert-NotContains 'Arkivflytt får inte ändra e-postmottagare medlem' $archive
 Assert-NotContains 'Arkivflytt får inte ändra e-postmottagare styrelsen' $archiveMigration 'styrelsen@ssfb.se'
 Assert-NotContains 'Arkivflytt får inte skicka e-post' $archiveMigration 'wp_mail('
 Assert-NotContains 'Arkivflytt får inte ändra statusövergångar' $archiveMigration 'transition('
-Assert-Contains 'Cutover är explicit' $archiveMigration 'Aktivera ny katalog'
+Assert-Contains 'Cutover är explicit' $archiveMigration 'Använd nya katalogen för nya medlemsansökningar'
 Assert-Contains 'Gamla ärenden byter inte automatiskt vid cutover' $archiveMigration 'Befintliga ärenden byter inte automatiskt'
 
 Assert-Contains 'Archive migration appears in System tabs' $adminNavigation "'ssf-application-archive-migration' => array('label' => 'Flytta kataloger'"

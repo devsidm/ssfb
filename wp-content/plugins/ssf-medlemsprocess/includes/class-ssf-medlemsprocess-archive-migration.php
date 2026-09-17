@@ -15,17 +15,29 @@ class SSF_Medlemsprocess_Archive_Migration
     private const READINESS_OPTION = 'ssf_medlemsprocess_archive_migration_readiness';
     private const WRITE_TEST_OPTION = 'ssf_medlemsprocess_archive_migration_write_test';
     private const PLAN_OPTION = 'ssf_medlemsprocess_archive_migration_plan';
+    private const SOURCE_SCHEMA_OPTION = 'ssf_medlemsprocess_archive_source_schema';
+    private const SCHEMA_COMPARE_OPTION = 'ssf_medlemsprocess_archive_schema_compare';
+    private const SCHEMA_SYNC_OPTION = 'ssf_medlemsprocess_archive_schema_sync';
+    private const BATCH_OPTION = 'ssf_medlemsprocess_archive_batch';
 
     private $graph;
 
     public function __construct()
     {
         $this->ensure_graph();
+        add_action('admin_post_ssf_application_archive_save_source', array($this, 'save_source'));
+        add_action('admin_post_ssf_application_archive_read_source_schema', array($this, 'read_source_schema'));
         add_action('admin_post_ssf_application_archive_save_target', array($this, 'save_target'));
+        add_action('admin_post_ssf_application_archive_compare_schema', array($this, 'compare_schema'));
+        add_action('admin_post_ssf_application_archive_preview_schema', array($this, 'preview_schema_sync'));
+        add_action('admin_post_ssf_application_archive_create_columns', array($this, 'create_missing_columns'));
+        add_action('admin_post_ssf_application_archive_verify_schema', array($this, 'verify_schema'));
         add_action('admin_post_ssf_application_archive_readiness', array($this, 'run_readiness'));
         add_action('admin_post_ssf_application_archive_write_test', array($this, 'run_write_test'));
         add_action('admin_post_ssf_application_archive_plan', array($this, 'refresh_plan'));
         add_action('admin_post_ssf_application_archive_migrate_one', array($this, 'migrate_selected'));
+        add_action('admin_post_ssf_application_archive_batch', array($this, 'run_batch'));
+        add_action('admin_post_ssf_application_archive_batch_control', array($this, 'control_batch'));
         add_action('admin_post_ssf_application_archive_cutover', array($this, 'activate_target'));
         add_action('admin_post_ssf_application_archive_export', array($this, 'export_plan'));
         add_action('admin_post_ssf_application_archive_restore_refs', array($this, 'restore_old_refs'));
@@ -38,13 +50,15 @@ class SSF_Medlemsprocess_Archive_Migration
     public function render_page(): void
     {
         $this->require_manage();
+        $this->render_wizard();
+        return;
         $target = $this->target();
         $readiness = (array) get_option(self::READINESS_OPTION, array());
         $write = (array) get_option(self::WRITE_TEST_OPTION, array());
         $plan = $this->plan(false);
         ?>
         <div class="wrap ssf-archive-migration">
-            <h1>Flytta SharePoint-kataloger</h1>
+            <h2>Flytta SharePoint-kataloger</h2>
             <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-application-archive-migration'); } ?>
             <?php $this->notice(); ?>
             <p class="ssf-archive-migration__intro">Flytta medlemsansökningarnas SharePoint-arkiv till en ny plats. Följ stegen i ordning och aktivera först när samtliga kontroller är godkända.</p>
@@ -134,6 +148,81 @@ class SSF_Medlemsprocess_Archive_Migration
         <?php
     }
 
+    private function render_wizard(): void
+    {
+        $source = $this->source();
+        $target = $this->target();
+        $source_schema = (array) get_option(self::SOURCE_SCHEMA_OPTION, array());
+        $comparison = (array) get_option(self::SCHEMA_COMPARE_OPTION, array());
+        $schema_sync = (array) get_option(self::SCHEMA_SYNC_OPTION, array());
+        $write = (array) get_option(self::WRITE_TEST_OPTION, array());
+        $readiness = (array) get_option(self::READINESS_OPTION, array());
+        $batch = (array) get_option(self::BATCH_OPTION, array());
+        $plan = $this->plan(false);
+        ?>
+        <div class="wrap ssf-archive-migration">
+            <h1>Migrera medlemsansökningarnas SharePoint-arkiv</h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-application-archive-migration'); } ?>
+            <?php $this->notice(); ?>
+            <p class="ssf-archive-migration__intro">Guidad migrering enbart för medlemsansökningar. Motioner, årsmöten, arbetsflöden och e-post lämnas oförändrade.</p>
+            <div class="ssf-archive-summary"><dl><div><dt>Källa</dt><dd><?php echo esc_html((string) ($source['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Mål</dt><dd><?php echo esc_html((string) ($target['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Miljö</dt><dd><?php echo esc_html(strtoupper($this->environment())); ?></dd></div></dl></div>
+
+            <?php $this->render_location_step(1, 'Välj källa', 'Källan hämtas normalt från medlemsansökningarnas aktiva SharePoint-konfiguration.', 'source', $source); ?>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>2</span><div><h2>Läs källans schema</h2><p>Inventera alla kolumndefinitioner och klassificera system-, innehållstyp- och anpassade kolumner.</p></div></div>
+                <?php $this->button('ssf_application_archive_read_source_schema', 'Läs källans kolumnschema'); ?>
+                <?php $this->render_schema_inventory($source_schema); ?>
+            </section>
+
+            <?php $this->render_location_step(3, 'Välj mål', 'Välj SharePoint-site, dokumentbibliotek och katalog. Tekniska ID:n upptäcks och visas för kontroll.', 'target', $target); ?>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4</span><div><h2>Jämför schema</h2><p>Matchning sker på internt kolumnnamn. Konflikter och typer som inte stöds kräver manuell kontroll.</p></div></div>
+                <?php $this->button('ssf_application_archive_compare_schema', 'Jämför schema'); ?>
+                <?php $this->render_schema_comparison($comparison); ?>
+            </section>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>5</span><div><h2>Migrera/verifiera schema</h2><p>Endast saknade, stödda anpassade kolumner skapas. Befintliga kolumner ändras aldrig.</p></div></div>
+                <?php $this->button('ssf_application_archive_preview_schema', 'Förhandsgranska schemasynk'); ?>
+                <?php $this->button('ssf_application_archive_create_columns', 'Skapa saknade kolumner', 'primary'); ?>
+                <?php $this->button('ssf_application_archive_verify_schema', 'Verifiera schema'); ?>
+                <p><strong>Status:</strong> <?php echo esc_html($this->status_label($schema_sync['verified'] ?? null)); ?><?php if (! empty($schema_sync['mode'])) { echo ' (' . esc_html((string) $schema_sync['mode']) . ')'; } ?></p>
+            </section>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>6</span><div><h2>Skrivtest</h2><p>Skapa, metadata-sätt, läs tillbaka, jämför och radera en temporär testfil och testkatalog.</p></div></div>
+                <?php $this->button('ssf_application_archive_write_test', 'Kör skrivtest'); ?>
+                <?php $this->render_check_steps($write); ?>
+            </section>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>7</span><div><h2>Förhandsgranska ansökningar</h2><p>Torrkörning: inga filer eller referenser ändras.</p></div></div>
+                <?php $this->button('ssf_application_archive_plan', 'Förhandsgranska migrering'); ?>
+                <?php $this->render_plan($plan); ?>
+            </section>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>8</span><div><h2>Migrera ett testärende</h2><p>Kopiera och verifiera ett valt ärende innan dess aktiva referenser byts.</p></div></div>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_application_archive_migrate_one"><?php wp_nonce_field('ssf_application_archive_migrate_one'); ?>
+                    <select name="application_id"><?php foreach ((array) ($plan['rows'] ?? array()) as $row) : ?><option value="<?php echo esc_attr((string) $row['id']); ?>"><?php echo esc_html($row['number'] . ' - ' . $row['vessel'] . ' (' . $row['status'] . ')'); ?></option><?php endforeach; ?></select>
+                    <?php submit_button('Migrera testärende', 'primary', 'submit', false); ?>
+                </form>
+            </section>
+
+            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>9</span><div><h2>Migrera resterande</h2><p>Kör en liten återupptagbar batch. Fel isoleras per ansökan.</p></div></div>
+                <?php $this->button('ssf_application_archive_batch', 'Migrera resterande', 'primary'); ?>
+                <?php $this->batch_button('pause', 'Pausa'); $this->batch_button('resume', 'Återuppta'); $this->batch_button('retry', 'Försök igen för fel'); ?>
+                <p><strong>Batchstatus:</strong> <?php echo esc_html((string) ($batch['status'] ?? 'ej startad')); ?></p>
+            </section>
+
+            <section class="ssf-archive-step ssf-archive-step--activation"><div class="ssf-archive-step__heading"><span>10</span><div><h2>Slutkontroll</h2><p>Stäm av resultatet och gör ett explicit byte för framtida medlemsansökningar. Befintliga ärenden byter inte automatiskt.</p></div></div>
+                <?php $this->button('ssf_application_archive_readiness', 'Kör slutkontroll'); ?>
+                <?php $this->button('ssf_application_archive_cutover', 'Använd nya katalogen för nya medlemsansökningar', 'primary'); ?>
+                <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_application_archive_export'), 'ssf_application_archive_export')); ?>">Exportera avstämningsrapport</a>
+                <table class="widefat striped ssf-archive-status"><tbody><?php foreach ($this->status_rows($readiness, $write, $plan) as $row) : ?><tr><th><?php echo esc_html($row[0]); ?></th><td><?php echo esc_html($row[1]); ?></td></tr><?php endforeach; ?></tbody></table>
+            </section>
+
+            <details class="ssf-archive-details"><summary>Tekniska detaljer</summary><pre><?php echo esc_html(wp_json_encode(array('source' => $source, 'target' => $target, 'schema' => $schema_sync, 'write_test' => $write, 'batch' => $batch), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre></details>
+        </div>
+        <?php
+    }
+
     public function render_application_box(int $application_id): void
     {
         $status = (string) get_post_meta($application_id, '_ssf_sp_migration_status', true);
@@ -148,6 +237,91 @@ class SSF_Medlemsprocess_Archive_Migration
             submit_button('Återställ gamla SharePoint-referenser', 'secondary', 'submit', false, array('onclick' => "return confirm('Peka tillbaka ärendet till gamla SharePoint-referenser? Inga filer raderas.');"));
             echo '</form>';
         }
+    }
+
+    public function save_source(): void
+    {
+        $this->guard('ssf_application_archive_save_source');
+        $input = (array) wp_unslash($_POST['source'] ?? array());
+        $source = array();
+        foreach ($this->target_fields() as $key => $label) {
+            $source[$key] = 'site_url' === $key || 'folder_web_url' === $key ? esc_url_raw((string) ($input[$key] ?? '')) : sanitize_text_field((string) ($input[$key] ?? ''));
+        }
+        $source['folder_path'] = trim((string) ($source['folder_path'] ?? ''), '/');
+        $settings = $this->settings();
+        $settings['sources'][$this->environment()] = array_merge($this->default_source(), $source);
+        update_option(self::OPTION, $settings, false);
+        $resolved = $this->resolve_location('source', true);
+        $this->redirect(is_wp_error($resolved) ? $resolved->get_error_message() : 'Källan har sparats och kontrollerats.', is_wp_error($resolved) ? 'error' : 'success');
+    }
+
+    public function read_source_schema(): void
+    {
+        $this->guard('ssf_application_archive_read_source_schema');
+        $source = $this->resolve_location('source', true);
+        $schema = is_wp_error($source) ? $source : $this->column_schema($source);
+        if (is_wp_error($schema)) { $this->redirect($schema->get_error_message(), 'error'); }
+        update_option(self::SOURCE_SCHEMA_OPTION, array('read_at' => gmdate('c'), 'columns' => $schema), false);
+        $this->redirect('Källans fullständiga kolumnschema har lästs.', 'success');
+    }
+
+    public function compare_schema(): void
+    {
+        $this->guard('ssf_application_archive_compare_schema');
+        $comparison = $this->schema_comparison();
+        if (is_wp_error($comparison)) { $this->redirect($comparison->get_error_message(), 'error'); }
+        update_option(self::SCHEMA_COMPARE_OPTION, $comparison, false);
+        $this->redirect('Kolumnschemana har jämförts på internt namn.', 'success');
+    }
+
+    public function preview_schema_sync(): void
+    {
+        $this->guard('ssf_application_archive_preview_schema');
+        $comparison = $this->schema_comparison();
+        if (is_wp_error($comparison)) { $this->redirect($comparison->get_error_message(), 'error'); }
+        update_option(self::SCHEMA_COMPARE_OPTION, $comparison, false);
+        update_option(self::SCHEMA_SYNC_OPTION, array('mode' => 'FÖRHANDSVISNING', 'verified' => false, 'planned' => array_values(array_filter($comparison['columns'], static function ($row) { return 'MISSING' === $row['status']; }))), false);
+        $this->redirect('Schemasynken har förhandsgranskats. Inga ändringar gjordes.', 'success');
+    }
+
+    public function create_missing_columns(): void
+    {
+        $this->guard('ssf_application_archive_create_columns');
+        $comparison = $this->schema_comparison();
+        $target = $this->resolve_target(true);
+        if (is_wp_error($comparison) || is_wp_error($target)) { $error = is_wp_error($comparison) ? $comparison : $target; $this->redirect($error->get_error_message(), 'error'); }
+        if (! $this->target_write_allowed($target)) { $this->redirect('Skrivning blockerad: DEV får inte använda produktionsmålet.', 'error'); }
+        $created = array();
+        $errors = array();
+        foreach ($comparison['columns'] as $row) {
+            if ('MISSING' !== $row['status']) { continue; }
+            $payload = $this->column_create_payload((array) $row['source']);
+            if (is_wp_error($payload)) { $errors[] = $payload->get_error_message(); continue; }
+            $result = $this->request('POST', $this->columns_path($target), $payload);
+            if (is_wp_error($result)) { $errors[] = $result->get_error_message(); continue; }
+            // Read the created column back from SharePoint before considering it created.
+            $read_back = $this->request('GET', $this->columns_path($target) . '/' . rawurlencode((string) ($result['id'] ?? '')));
+            if (is_wp_error($read_back)) { $errors[] = $read_back->get_error_message(); continue; }
+            $created[] = (string) ($read_back['name'] ?? $row['internal_name']);
+        }
+        update_option(self::SCHEMA_SYNC_OPTION, array('mode' => 'UTFÖRD', 'verified' => false, 'created' => $created, 'errors' => $errors, 'run_at' => gmdate('c')), false);
+        $this->redirect($errors ? 'Schemasynken slutfördes med fel.' : 'Saknade stödda kolumner skapades och lästes tillbaka.', $errors ? 'error' : 'success');
+    }
+
+    public function verify_schema(): void
+    {
+        $this->guard('ssf_application_archive_verify_schema');
+        $comparison = $this->schema_comparison();
+        if (is_wp_error($comparison)) { $this->redirect($comparison->get_error_message(), 'error'); }
+        update_option(self::SCHEMA_COMPARE_OPTION, $comparison, false);
+        $blocking = array_filter($comparison['columns'], static function ($row) { return in_array($row['status'], array('MISSING', 'CONFLICT', 'UNSUPPORTED'), true); });
+        $state = (array) get_option(self::SCHEMA_SYNC_OPTION, array());
+        $state['mode'] = 'VERIFIERAD';
+        $state['verified'] = ! $blocking;
+        $state['verified_at'] = gmdate('c');
+        $state['blocking'] = array_values($blocking);
+        update_option(self::SCHEMA_SYNC_OPTION, $state, false);
+        $this->redirect($blocking ? 'Schema verifierades med blockerande avvikelser.' : 'Målets schema matchar källans stödda anpassade kolumner.', $blocking ? 'error' : 'success');
     }
 
     public function save_target(): void
@@ -195,12 +369,51 @@ class SSF_Medlemsprocess_Archive_Migration
         $this->redirect(is_wp_error($result) ? $result->get_error_message() : 'Testärendet migrerades och verifierades.', is_wp_error($result) ? 'error' : 'success');
     }
 
+    public function run_batch(): void
+    {
+        $this->guard('ssf_application_archive_batch');
+        $plan = $this->plan(true);
+        $completed_test = array_filter((array) ($plan['rows'] ?? array()), static function ($row) { return 'MIGRATED' === $row['status']; });
+        if (! $completed_test) { $this->redirect('BATCH BLOCKERAD: migrera och verifiera ett testärende först.', 'error'); }
+        $state = (array) get_option(self::BATCH_OPTION, array('status' => 'running', 'processed' => array(), 'errors' => array()));
+        if ('paused' === ($state['status'] ?? '')) { $this->redirect('Batchen är pausad.', 'error'); }
+        $state['status'] = 'running';
+        $count = 0;
+        foreach ((array) ($plan['rows'] ?? array()) as $row) {
+            if ($count >= 5 || 'MIGRATED' === $row['status'] || in_array((int) $row['id'], (array) ($state['processed'] ?? array()), true)) { continue; }
+            $result = $this->migrate_one((int) $row['id']);
+            if (is_wp_error($result)) { $state['errors'][(int) $row['id']] = $result->get_error_message(); }
+            else { $state['processed'][] = (int) $row['id']; unset($state['errors'][(int) $row['id']]); }
+            ++$count;
+        }
+        $remaining = array_filter($this->plan(true)['rows'], static function ($row) { return 'MIGRATED' !== $row['status']; });
+        $state['status'] = $remaining ? 'ready_for_next_batch' : 'completed';
+        $state['updated_at'] = gmdate('c');
+        update_option(self::BATCH_OPTION, $state, false);
+        $this->redirect($remaining ? 'Batchen körde högst fem ansökningar och kan fortsättas.' : 'Alla återstående ansökningar är migrerade.', empty($state['errors']) ? 'success' : 'error');
+    }
+
+    public function control_batch(): void
+    {
+        $this->guard('ssf_application_archive_batch_control');
+        $command = sanitize_key((string) ($_GET['command'] ?? ''));
+        $state = (array) get_option(self::BATCH_OPTION, array());
+        if ('pause' === $command) { $state['status'] = 'paused'; }
+        elseif ('resume' === $command) { $state['status'] = 'ready_for_next_batch'; }
+        elseif ('retry' === $command) { $state['status'] = 'ready_for_next_batch'; $state['processed'] = array_values(array_diff((array) ($state['processed'] ?? array()), array_map('intval', array_keys((array) ($state['errors'] ?? array()))))); $state['errors'] = array(); }
+        else { $this->redirect('Okänt batchkommando.', 'error'); }
+        $state['updated_at'] = gmdate('c');
+        update_option(self::BATCH_OPTION, $state, false);
+        $this->redirect('Batchstatusen har uppdaterats.', 'success');
+    }
+
     public function activate_target(): void
     {
         $this->guard('ssf_application_archive_cutover');
         $readiness = (array) get_option(self::READINESS_OPTION, array());
         $write = (array) get_option(self::WRITE_TEST_OPTION, array());
-        if (empty($readiness['ok']) || empty($write['ok']) || ! class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')) {
+        $schema = (array) get_option(self::SCHEMA_SYNC_OPTION, array());
+        if (empty($readiness['ok']) || empty($write['ok']) || empty($schema['verified']) || ! class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')) {
             $this->redirect('AKTIVERING BLOCKERAD: readiness och skrivtest måste vara PASS.', 'error');
         }
         $target = $this->resolve_target(true);
@@ -266,6 +479,8 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function write_test(): array
     {
+        return $this->diagnostic_write_test();
+        /* Legacy folder-only probe retained below for upgrade traceability. */
         $target = $this->resolve_target();
         if (is_wp_error($target)) {
             return array('ok' => false, 'tested_at' => gmdate('c'), 'steps' => array('target' => $this->step('Målkatalog', $target)));
@@ -279,11 +494,45 @@ class SSF_Medlemsprocess_Archive_Migration
         return array('ok' => ! in_array(false, array_column($steps, 'ok'), true), 'tested_at' => gmdate('c'), 'folder_name' => $name, 'steps' => $steps);
     }
 
+    private function diagnostic_write_test(): array
+    {
+        $target = $this->resolve_target();
+        if (is_wp_error($target)) { return array('ok' => false, 'tested_at' => gmdate('c'), 'steps' => array($this->step('Folder access', $target))); }
+        if (! $this->target_write_allowed($target)) { return array('ok' => false, 'tested_at' => gmdate('c'), 'steps' => array(array('label' => 'Environment write policy', 'ok' => false, 'message' => 'DEV får inte skriva till produktionsmålet.'))); }
+        $schema = (array) get_option(self::SCHEMA_SYNC_OPTION, array());
+        if (empty($schema['verified'])) { return array('ok' => false, 'tested_at' => gmdate('c'), 'steps' => array(array('label' => 'Migrated schema', 'ok' => false, 'message' => 'Verifiera schemat först.'))); }
+        $auth = $this->graph ? $this->graph->authentication()->test() : new WP_Error('graph_unavailable', 'Graph saknas.');
+        $site = is_wp_error($auth) ? new WP_Error('auth_required', 'Autentisering krävs.') : $this->request('GET', 'sites/' . rawurlencode((string) $target['site_id']));
+        $drive = is_wp_error($site) ? new WP_Error('site_required', 'Site access krävs.') : $this->request('GET', $this->drive_base($target));
+        $folder = is_wp_error($drive) ? new WP_Error('drive_required', 'Library access krävs.') : $this->request('GET', $this->item_path($target, (string) $target['folder_id']));
+        $name = 'SSF-TEST-' . gmdate('Ymd-His') . '-' . wp_generate_password(4, false, false);
+        $created_folder = is_wp_error($folder) ? $folder : $this->request('POST', $this->children_path($target, (string) $target['folder_id']), array('name' => $name, 'folder' => new stdClass(), '@microsoft.graph.conflictBehavior' => 'fail'));
+        $folder_id = is_wp_error($created_folder) ? '' : (string) ($created_folder['id'] ?? '');
+        $file = $folder_id ? $this->request('PUT', $this->item_path($target, $folder_id) . ':/diagnostic.txt:/content', 'SSF migration diagnostic', array('Content-Type' => 'text/plain')) : new WP_Error('test_folder_required', 'Testkatalog saknas.');
+        $file_id = is_wp_error($file) ? '' : (string) ($file['id'] ?? '');
+        $list_item = $file_id ? $this->list_item($target, $file_id) : new WP_Error('test_file_required', 'Testfil saknas.');
+        $sample_fields = array_filter($this->metadata_fields(array('wordpress_id' => 'SSF-TEST', 'number' => $name, 'vessel' => 'Diagnostiskt skrivtest')), static function ($value, $key) { return '' !== $key && '' !== $value; }, ARRAY_FILTER_USE_BOTH);
+        $metadata = is_wp_error($list_item) ? $list_item : $this->request('PATCH', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/items/' . rawurlencode((string) ($list_item['id'] ?? '')) . '/fields', $sample_fields);
+        $read_file = $file_id ? $this->request('GET', $this->item_path($target, $file_id) . '?$select=id,name,size') : new WP_Error('test_file_required', 'Testfil saknas.');
+        $read_metadata = is_wp_error($list_item) ? $list_item : $this->request('GET', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/items/' . rawurlencode((string) ($list_item['id'] ?? '')) . '/fields');
+        $matches = ! is_wp_error($read_metadata);
+        foreach ($sample_fields as $key => $value) { if ((string) ($read_metadata[$key] ?? '') !== (string) $value) { $matches = false; } }
+        $delete_file = $file_id ? $this->request('DELETE', $this->item_path($target, $file_id)) : new WP_Error('test_file_required', 'Testfil saknas.');
+        $delete_folder = $folder_id ? $this->request('DELETE', $this->item_path($target, $folder_id)) : new WP_Error('test_folder_required', 'Testkatalog saknas.');
+        $steps = array(
+            $this->step('Graph authentication', $auth), $this->step('Site access', $site), $this->step('Library access', $drive), $this->step('Folder access', $folder),
+            $this->step('Create temporary test folder', $created_folder), $this->step('Create small temporary test file', $file), $this->step('Write representative metadata using the migrated schema', $metadata),
+            $this->step('Read file back', $read_file, $file_id), $this->step('Read metadata back', $read_metadata), array('label' => 'Compare values', 'ok' => $matches, 'message' => $matches ? '' : 'Metadata matchar inte.'),
+            $this->step('Delete test file', $delete_file), $this->step('Delete test folder', $delete_folder),
+        );
+        return array('ok' => ! in_array(false, array_column($steps, 'ok'), true), 'tested_at' => gmdate('c'), 'steps' => $steps);
+    }
+
     private function migrate_one(int $application_id)
     {
         $post = get_post($application_id);
         if (! $post || SSF_Medlemsprocess_Application::POST_TYPE !== $post->post_type) { return new WP_Error('application_missing', 'Ansökan kunde inte hittas.'); }
-        if (empty(get_option(self::READINESS_OPTION, array())['ok']) || empty(get_option(self::WRITE_TEST_OPTION, array())['ok'])) {
+        if (empty(get_option(self::READINESS_OPTION, array())['ok']) || empty(get_option(self::WRITE_TEST_OPTION, array())['ok']) || empty(get_option(self::SCHEMA_SYNC_OPTION, array())['verified'])) {
             return new WP_Error('migration_blocked', 'MIGRERING BLOCKERAD: ny katalog, metadata och skrivtest måste vara PASS.');
         }
         if (! get_post_meta($application_id, '_ssf_sp_migration_old_refs', true)) {
@@ -294,6 +543,7 @@ class SSF_Medlemsprocess_Archive_Migration
         if (is_wp_error($target)) {
             return $this->migration_error($application_id, $target);
         }
+        if (! $this->target_write_allowed($target)) { return $this->migration_error($application_id, new WP_Error('migration_write_blocked', 'DEV får inte skriva till produktionsmålet.')); }
         $folders = $this->create_target_folders($application_id, $target);
         if (is_wp_error($folders)) { return $this->migration_error($application_id, $folders); }
         $items = $this->upload_wordpress_files($application_id, $target, $folders);
@@ -388,7 +638,7 @@ class SSF_Medlemsprocess_Archive_Migration
         }
         $ids = get_posts(array('post_type' => SSF_Medlemsprocess_Application::POST_TYPE, 'post_status' => 'private', 'fields' => 'ids', 'posts_per_page' => -1, 'orderby' => 'date', 'order' => 'ASC'));
         $rows = array();
-        foreach ($ids as $id) { $rows[] = $this->plan_row((int) $id); }
+        foreach ($ids as $id) { $rows[] = $this->plan_row((int) $id, $refresh); }
         $summary = array('wordpress' => count($rows), 'old_found' => 0, 'migrated' => 0, 'waiting' => 0, 'errors' => 0, 'unverified' => 0);
         foreach ($rows as $row) {
             if ($row['old_found']) { ++$summary['old_found']; }
@@ -400,7 +650,7 @@ class SSF_Medlemsprocess_Archive_Migration
         return array('generated_at' => gmdate('c'), 'summary' => $summary, 'rows' => $rows);
     }
 
-    private function plan_row(int $application_id): array
+    private function plan_row(int $application_id, bool $inspect_source = false): array
     {
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $migration_status = (string) get_post_meta($application_id, '_ssf_sp_migration_status', true);
@@ -409,7 +659,33 @@ class SSF_Medlemsprocess_Archive_Migration
         $verified_at = (string) get_post_meta($application_id, '_ssf_sp_migration_verified_at', true);
         $error = (string) get_post_meta($application_id, '_ssf_sp_migration_error', true);
         $status = $error ? 'ERROR' : ($new_found && $verified_at ? 'MIGRATED' : ($new_found ? 'VERIFY TARGET' : ($old_found ? 'READY' : 'READY FROM WORDPRESS')));
-        return array('id' => $application_id, 'number' => (string) get_post_meta($application_id, '_ssf_application_number', true), 'vessel' => (string) ($data['ship_name'] ?? get_the_title($application_id)), 'status' => $status, 'old_found' => $old_found, 'new_found' => $new_found, 'old_files' => count((array) get_post_meta($application_id, '_ssf_sp_items', true)), 'new_files' => $new_found ? count((array) get_post_meta($application_id, '_ssf_sp_items', true)) : 0, 'verified_at' => $verified_at, 'error' => $error);
+        $known_files = count((array) get_post_meta($application_id, '_ssf_sp_items', true));
+        $inspection = $inspect_source && $old_found ? $this->inspect_source_data($application_id) : array('count' => $known_files, 'inspected' => false, 'error' => '');
+        $extra_files = ! empty($inspection['inspected']) && (int) $inspection['count'] > $known_files;
+        $diagnosis = $error ? 'SCHEMAFEL' : ($extra_files ? 'EXTRA FILER' : (! $old_found ? 'KÄLLA SAKNAS' : ($new_found && ! $verified_at ? 'MÅL FINNS - VERIFIERA' : ($new_found ? 'KLAR' : 'MANUELL KONTROLL'))));
+        return array('id' => $application_id, 'number' => (string) get_post_meta($application_id, '_ssf_application_number', true), 'vessel' => (string) ($data['ship_name'] ?? get_the_title($application_id)), 'status' => $status, 'diagnosis' => $diagnosis, 'old_found' => $old_found, 'new_found' => $new_found, 'old_files' => (int) $inspection['count'], 'new_files' => $new_found ? $known_files : 0, 'extra_files' => $extra_files, 'source_inspected' => ! empty($inspection['inspected']), 'verified_at' => $verified_at, 'error' => $error ?: (string) ($inspection['error'] ?? ''));
+    }
+
+    private function inspect_source_data(int $application_id): array
+    {
+        $location = array_merge($this->source(), array('site_id' => (string) get_post_meta($application_id, '_ssf_sp_site_id', true), 'drive_id' => (string) get_post_meta($application_id, '_ssf_sp_drive_id', true)));
+        $folder_id = (string) get_post_meta($application_id, '_ssf_sp_application_folder_id', true);
+        if (empty($location['drive_id']) || ! $folder_id) { return array('count' => 0, 'inspected' => true, 'error' => 'Källreferens saknas.'); }
+        $result = $this->count_source_files($location, $folder_id, 0);
+        return is_wp_error($result) ? array('count' => 0, 'inspected' => true, 'error' => $result->get_error_message()) : array('count' => $result, 'inspected' => true, 'error' => '');
+    }
+
+    private function count_source_files(array $location, string $folder_id, int $depth)
+    {
+        if ($depth > 3) { return 0; }
+        $children = $this->request('GET', $this->children_path($location, $folder_id) . '?$select=id,name,file,folder,size');
+        if (is_wp_error($children)) { return $children; }
+        $count = 0;
+        foreach ((array) ($children['value'] ?? array()) as $child) {
+            if (! empty($child['file'])) { ++$count; continue; }
+            if (! empty($child['folder']) && ! empty($child['id'])) { $nested = $this->count_source_files($location, (string) $child['id'], $depth + 1); if (is_wp_error($nested)) { return $nested; } $count += $nested; }
+        }
+        return $count;
     }
 
     private function render_plan(array $plan): void
@@ -444,6 +720,135 @@ class SSF_Medlemsprocess_Archive_Migration
         return $missing ? new WP_Error('migration_metadata_incomplete', 'MIGRERING BLOCKERAD: metadatafält saknas eller har fel val: ' . implode(', ', $missing) . '.', $result) : $result;
     }
 
+    private function render_location_step(int $number, string $title, string $description, string $kind, array $location): void
+    {
+        $action = 'ssf_application_archive_save_' . $kind;
+        echo '<section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>' . esc_html((string) $number) . '</span><div><h2>' . esc_html($title) . '</h2><p>' . esc_html($description) . '</p></div></div>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="' . esc_attr($action) . '">';
+        wp_nonce_field($action);
+        echo '<table class="form-table"><tr><th>SharePoint-site</th><td><input class="regular-text" name="' . esc_attr($kind) . '[site_url]" value="' . esc_attr((string) ($location['site_url'] ?? '')) . '"></td></tr><tr><th>Dokumentbibliotek</th><td><input class="regular-text" name="' . esc_attr($kind) . '[drive_name]" value="' . esc_attr((string) ($location['drive_name'] ?? '')) . '"></td></tr><tr><th>Katalog</th><td><input class="regular-text" name="' . esc_attr($kind) . '[folder_path]" value="' . esc_attr((string) ($location['folder_path'] ?? '')) . '"></td></tr></table>';
+        echo '<details><summary>Tekniska detaljer</summary><table class="form-table">';
+        foreach (array('site_id', 'drive_id', 'list_id', 'folder_name', 'folder_id', 'folder_web_url') as $key) {
+            echo '<tr><th>' . esc_html($this->target_fields()[$key]) . '</th><td><input class="regular-text" name="' . esc_attr($kind) . '[' . esc_attr($key) . ']" value="' . esc_attr((string) ($location[$key] ?? '')) . '"></td></tr>';
+        }
+        echo '</table></details>';
+        submit_button('source' === $kind ? 'Kontrollera källan' : 'Spara och kontrollera målet', 'secondary');
+        echo '</form></section>';
+    }
+
+    private function render_schema_inventory(array $inventory): void
+    {
+        if (empty($inventory['columns'])) { echo '<p>Status: EJ TESTAD</p>'; return; }
+        echo '<p><strong>Läst:</strong> ' . esc_html((string) ($inventory['read_at'] ?? '')) . ' · <strong>Kolumner:</strong> ' . esc_html((string) count($inventory['columns'])) . '</p>';
+        echo '<table class="widefat striped"><thead><tr><th>Internt namn</th><th>Visningsnamn</th><th>Typ</th><th>Klass</th><th>Inställningar</th></tr></thead><tbody>';
+        foreach ($inventory['columns'] as $column) {
+            echo '<tr><td><code>' . esc_html((string) $column['name']) . '</code></td><td>' . esc_html((string) $column['display_name']) . '</td><td>' . esc_html((string) $column['type']) . '</td><td>' . esc_html((string) $column['classification']) . '</td><td><code>' . esc_html(wp_json_encode($column['settings'], JSON_UNESCAPED_UNICODE)) . '</code></td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    private function render_schema_comparison(array $comparison): void
+    {
+        if (empty($comparison['columns'])) { echo '<p>Status: EJ TESTAD</p>'; return; }
+        echo '<table class="widefat striped"><thead><tr><th>Internt namn</th><th>Typ</th><th>Resultat</th><th>Åtgärd</th></tr></thead><tbody>';
+        foreach ($comparison['columns'] as $row) {
+            echo '<tr><td><code>' . esc_html((string) $row['internal_name']) . '</code></td><td>' . esc_html((string) $row['type']) . '</td><td>' . esc_html((string) $row['label']) . '</td><td>' . esc_html((string) $row['action']) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    private function render_check_steps(array $result): void
+    {
+        if (empty($result['steps'])) { echo '<p>Status: EJ TESTAD</p>'; return; }
+        echo '<table class="widefat striped"><tbody>';
+        foreach ($result['steps'] as $step) { echo '<tr><th>' . esc_html((string) ($step['label'] ?? 'Kontroll')) . '</th><td>' . esc_html($this->status_label($step['ok'] ?? null)) . '</td><td>' . esc_html((string) ($step['message'] ?? '')) . '</td></tr>'; }
+        echo '</tbody></table>';
+    }
+
+    private function batch_button(string $command, string $label): void
+    {
+        $url = wp_nonce_url(admin_url('admin-post.php?action=ssf_application_archive_batch_control&command=' . rawurlencode($command)), 'ssf_application_archive_batch_control');
+        echo '<a class="button" href="' . esc_url($url) . '">' . esc_html($label) . '</a> ';
+    }
+
+    private function column_schema(array $location)
+    {
+        $result = $this->request('GET', $this->columns_path($location) . '?$expand=sourceColumn&$select=id,name,displayName,description,columnGroup,required,hidden,readOnly,indexed,enforceUniqueValues,defaultValue,text,choice,multiChoice,number,currency,boolean,dateTime,personOrGroup,lookup,hyperlinkOrPicture,calculated,term,sourceColumn');
+        if (is_wp_error($result)) { return $result; }
+        $columns = array();
+        foreach ((array) ($result['value'] ?? array()) as $column) { $columns[] = $this->normalize_column((array) $column); }
+        return $columns;
+    }
+
+    private function normalize_column(array $column): array
+    {
+        $types = array('text', 'choice', 'multiChoice', 'number', 'currency', 'boolean', 'dateTime', 'personOrGroup', 'lookup', 'hyperlinkOrPicture', 'calculated', 'term');
+        $type = 'unknown';
+        foreach ($types as $candidate) { if (array_key_exists($candidate, $column)) { $type = $candidate; break; } }
+        $system_names = array('id', 'created', 'modified', 'author', 'editor', 'contenttype', '_uiversionstring', 'attachments', 'edit', 'linktitle');
+        $name = (string) ($column['name'] ?? '');
+        $source_column = (array) ($column['sourceColumn'] ?? array());
+        $classification = in_array(strtolower($name), $system_names, true) || ! empty($column['readOnly']) || ! empty($column['hidden']) ? 'SYSTEM' : (! empty($source_column) ? 'CONTENT TYPE' : 'CUSTOM');
+        $settings = (array) ($column[$type] ?? array());
+        foreach (array('required', 'indexed', 'enforceUniqueValues', 'defaultValue', 'description', 'columnGroup') as $key) { if (array_key_exists($key, $column)) { $settings[$key] = $column[$key]; } }
+        return array('id' => (string) ($column['id'] ?? ''), 'name' => $name, 'display_name' => (string) ($column['displayName'] ?? $name), 'type' => $type, 'classification' => $classification, 'settings' => $settings, 'raw' => $column);
+    }
+
+    private function schema_comparison()
+    {
+        $source_state = (array) get_option(self::SOURCE_SCHEMA_OPTION, array());
+        if (empty($source_state['columns'])) { return new WP_Error('source_schema_missing', 'Läs källans kolumnschema först.'); }
+        $target = $this->resolve_target(true);
+        if (is_wp_error($target)) { return $target; }
+        $target_columns = $this->column_schema($target);
+        if (is_wp_error($target_columns)) { return $target_columns; }
+        $by_name = array();
+        $by_display_name = array();
+        foreach ($target_columns as $column) { $by_name[strtolower($column['name'])] = $column; $by_display_name[strtolower($column['display_name'])] = $column; }
+        $supported = array('text', 'choice', 'multiChoice', 'number', 'currency', 'boolean', 'dateTime');
+        $rows = array();
+        foreach ($source_state['columns'] as $source) {
+            $status = 'SYSTEM'; $label = 'SYSTEM / NO ACTION'; $action = 'Ingen'; $target_column = null;
+            if ('CUSTOM' === $source['classification']) {
+                if (! in_array($source['type'], $supported, true)) { $status = 'UNSUPPORTED'; $label = 'UNSUPPORTED / MANUELL KONTROLL'; $action = 'Manuell kontroll'; }
+                elseif (! isset($by_name[strtolower($source['name'])]) && isset($by_display_name[strtolower($source['display_name'])])) { $status = 'CONFLICT'; $label = 'CONFLICT - INTERNAL-NAME MISMATCH - MANUELL KONTROLL KRÄVS'; $action = 'Blockerad'; }
+                elseif (! isset($by_name[strtolower($source['name'])])) { $status = 'MISSING'; $label = 'MISSING'; $action = 'Skapa'; }
+                else {
+                    $target_column = $by_name[strtolower($source['name'])];
+                    if ($source['type'] === $target_column['type'] && $this->comparable_settings($source) === $this->comparable_settings($target_column)) { $status = 'EXACT'; $label = 'EXACT MATCH'; $action = 'Ingen'; }
+                    else { $status = 'CONFLICT'; $label = 'CONFLICT - MANUELL KONTROLL KRÄVS'; $action = 'Blockerad'; }
+                }
+            }
+            $rows[] = array('internal_name' => $source['name'], 'type' => $source['type'], 'status' => $status, 'label' => $label, 'action' => $action, 'source' => $source, 'target' => $target_column);
+        }
+        return array('compared_at' => gmdate('c'), 'columns' => $rows);
+    }
+
+    private function comparable_settings(array $column): string
+    {
+        $settings = (array) ($column['settings'] ?? array());
+        unset($settings['description'], $settings['columnGroup']);
+        ksort($settings);
+        return wp_json_encode($settings);
+    }
+
+    private function column_create_payload(array $column)
+    {
+        if ('CUSTOM' !== ($column['classification'] ?? '') || ! in_array($column['type'] ?? '', array('text', 'choice', 'multiChoice', 'number', 'currency', 'boolean', 'dateTime'), true)) { return new WP_Error('unsupported_column', 'Kolumntypen kräver manuell kontroll.'); }
+        $raw = (array) ($column['raw'] ?? array());
+        $type = (string) $column['type'];
+        $payload = array('name' => (string) $column['name'], 'displayName' => (string) $column['display_name'], 'description' => (string) ($raw['description'] ?? ''), 'required' => ! empty($raw['required']), $type => (object) ((array) ($raw[$type] ?? array())));
+        if (isset($raw['defaultValue'])) { $payload['defaultValue'] = $raw['defaultValue']; }
+        if (! empty($raw['indexed'])) { $payload['indexed'] = true; }
+        if (! empty($raw['enforceUniqueValues'])) { $payload['enforceUniqueValues'] = true; }
+        return $payload;
+    }
+
+    private function columns_path(array $location): string
+    {
+        return 'sites/' . rawurlencode((string) $location['site_id']) . '/lists/' . rawurlencode((string) $location['list_id']) . '/columns';
+    }
+
     private function status_rows(array $readiness, array $write, array $plan): array
     {
         $steps = (array) ($readiness['steps'] ?? array());
@@ -472,6 +877,23 @@ class SSF_Medlemsprocess_Archive_Migration
     private function default_target(): array
     {
         return array('site_url' => 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9', 'site_id' => '', 'drive_name' => 'Dokument', 'drive_id' => '', 'list_id' => '', 'folder_path' => 'General/Medlemskap/Ansökningar', 'folder_name' => 'Ansökningar', 'folder_id' => '', 'folder_web_url' => '');
+    }
+
+    private function default_source(): array
+    {
+        $source = array('site_url' => '', 'site_id' => '', 'drive_name' => 'Dokument', 'drive_id' => '', 'list_id' => '', 'folder_path' => 'Medlemsansökningar', 'folder_name' => 'Medlemsansökningar', 'folder_id' => '', 'folder_web_url' => '');
+        if (class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')) {
+            $profile = (array) \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::get('membership_applications', $this->environment());
+            foreach (array_keys($source) as $key) { if (isset($profile[$key])) { $source[$key] = $profile[$key]; } }
+            if (empty($source['site_url']) && ! empty($profile['hostname'])) { $source['site_url'] = 'https://' . trim((string) $profile['hostname'], '/') . '/' . ltrim((string) ($profile['site_path'] ?? ''), '/'); }
+        }
+        return $source;
+    }
+
+    private function source(): array
+    {
+        $settings = $this->settings();
+        return array_merge($this->default_source(), (array) ($settings['sources'][$this->environment()] ?? array()));
     }
 
     private function target(): array
@@ -531,6 +953,40 @@ class SSF_Medlemsprocess_Archive_Migration
             update_option(self::OPTION, $settings, false);
         }
         return $target;
+    }
+
+    private function resolve_location(string $kind, bool $save = false)
+    {
+        if ('target' === $kind) { return $this->resolve_target($save); }
+        $location = $this->source();
+        if (empty($location['site_id'])) {
+            $path = $this->site_lookup_path((string) ($location['site_url'] ?? ''));
+            if (! $path) { return new WP_Error('migration_source_site_url_missing', 'Ange en giltig SharePoint Site URL för källan.'); }
+            $site = $this->request('GET', $path . '?$select=id,displayName,webUrl');
+            if (is_wp_error($site)) { return $site; }
+            $location['site_id'] = sanitize_text_field((string) ($site['id'] ?? ''));
+            $location['site_url'] = esc_url_raw((string) ($site['webUrl'] ?? $location['site_url']));
+        }
+        if (empty($location['drive_id'])) {
+            $drives = $this->request('GET', 'sites/' . rawurlencode((string) $location['site_id']) . '/drives?$select=id,name,webUrl');
+            if (is_wp_error($drives)) { return $drives; }
+            foreach ((array) ($drives['value'] ?? array()) as $drive) { if (0 === strcasecmp((string) $location['drive_name'], (string) ($drive['name'] ?? ''))) { $location['drive_id'] = sanitize_text_field((string) ($drive['id'] ?? '')); break; } }
+            if (empty($location['drive_id'])) { return new WP_Error('migration_source_drive_missing', 'Källans dokumentbibliotek kunde inte hittas.'); }
+        }
+        if (empty($location['list_id'])) {
+            $list = $this->request('GET', $this->drive_base($location) . '/list?$select=id,displayName,webUrl');
+            if (is_wp_error($list)) { return $list; }
+            $location['list_id'] = sanitize_text_field((string) ($list['id'] ?? ''));
+        }
+        if (empty($location['folder_id'])) {
+            $folder = $this->request('GET', $this->drive_base($location) . '/root:/' . $this->encode_drive_path((string) $location['folder_path']) . '?$select=id,name,folder,webUrl,parentReference');
+            if (is_wp_error($folder)) { return $folder; }
+            $location['folder_id'] = sanitize_text_field((string) ($folder['id'] ?? ''));
+            $location['folder_name'] = sanitize_text_field((string) ($folder['name'] ?? ''));
+            $location['folder_web_url'] = esc_url_raw((string) ($folder['webUrl'] ?? ''));
+        }
+        if ($save) { $settings = $this->settings(); $settings['sources'][$this->environment()] = $location; update_option(self::OPTION, $settings, false); }
+        return $location;
     }
 
     private function settings(): array
@@ -652,6 +1108,12 @@ class SSF_Medlemsprocess_Archive_Migration
     private function status_labels(): array
     {
         return array('received' => 'Inkommen', 'under_review' => 'Under granskning', 'needs_completion' => 'Begär komplettering', 'awaiting_completion' => 'Väntar på komplettering', 'inspection_planned' => 'Inspektion ska bokas', 'inspection_booked' => 'Inspektion bokad', 'awaiting_decision' => 'Under slutbedömning', 'approved_aspirant' => 'Godkänd som aspirant', 'rejected' => 'Avslagen');
+    }
+
+    private function target_write_allowed(array $target): bool
+    {
+        if (! class_exists('SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations')) { return false; }
+        return \SSF\MemberPortal\Integrations\Microsoft365\SharePointDestinations::write_allowed_for_profile('membership_applications', $this->environment(), $target);
     }
 
     private function environment(): string
