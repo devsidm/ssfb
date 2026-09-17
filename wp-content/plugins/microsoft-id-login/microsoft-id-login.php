@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.3.2
+ * Version: 0.3.3
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.3.2';
+    private const VERSION = '0.3.3';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -339,6 +339,9 @@ final class SSF_Microsoft_ID_Login
             <h2><?php esc_html_e('Microsoft / Entra', 'microsoft-id-login'); ?></h2>
             <p><?php esc_html_e('Konfigurera separata Microsoft-appar för Development och Production. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'microsoft-id-login'); ?></p>
             <?php if ($force_off) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Avstängd av serverkonfiguration', 'microsoft-id-login'); ?></strong></p></div><?php endif; ?>
+            <?php if (class_exists('SSF_Microsoft365_Config')) : ?>
+                <div class="notice notice-info inline"><p><strong>Tenant:</strong><br><?php echo esc_html(SSF_Microsoft365_Config::get_organisation_name()); ?><br><?php echo esc_html(SSF_Microsoft365_Config::get_primary_domain()); ?><br>Central tenant: <?php echo esc_html(SSF_Microsoft365_Config::is_tenant_configured() ? 'CONFIGURED' : 'NOT CONFIGURED'); ?></p><p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-member-portal-microsoft365')); ?>">Hantera Microsoft 365-inställningar</a></p></div>
+            <?php endif; ?>
             <dl>
                 <div><dt><?php esc_html_e('Aktiv profil', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($active_profile); ?></dd></div>
                 <div><dt><?php esc_html_e('Tenant ID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></dd></div>
@@ -360,7 +363,6 @@ final class SSF_Microsoft_ID_Login
                             <p class="description"><?php esc_html_e('Production kan förkonfigureras här. Microsoft-login blir bara aktivt när profilen är komplett och uttryckligen aktiverad i production.', 'microsoft-id-login'); ?></p>
                         <?php endif; ?>
                         <p><label><?php if ($force_off) : ?><input type="hidden" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="<?php echo ! empty($profile['enabled']) ? '1' : '0'; ?>"><?php endif; ?><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][enabled]" value="1" <?php checked(! $force_off && ! empty($profile['enabled'])); ?> <?php disabled($force_off); ?>> <?php esc_html_e('Aktivera Microsoft-login för denna profil', 'microsoft-id-login'); ?></label></p>
-                        <p><label><?php esc_html_e('Tenant ID', 'microsoft-id-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]" value="<?php echo esc_attr((string) $profile['tenant_id']); ?>" autocomplete="off"></label></p>
                         <p><label><?php esc_html_e('Application ID / Client ID', 'microsoft-id-login'); ?><br><input class="regular-text code" name="profiles[<?php echo esc_attr($profile_key); ?>][client_id]" value="<?php echo esc_attr((string) $profile['client_id']); ?>" autocomplete="off"></label></p>
                         <p><label><?php esc_html_e('Client Secret', 'microsoft-id-login'); ?><br><input class="regular-text code" type="password" name="profiles[<?php echo esc_attr($profile_key); ?>][client_secret]" value="" autocomplete="new-password" placeholder="<?php echo esc_attr(! empty($profile['client_secret']) ? __('Secret finns - lämna tomt för att behålla', 'microsoft-id-login') : __('Saknas', 'microsoft-id-login')); ?>"></label></p>
                         <p><label><input type="checkbox" name="profiles[<?php echo esc_attr($profile_key); ?>][clear_secret]" value="1"> <?php esc_html_e('Ta bort sparad client secret', 'microsoft-id-login'); ?></label></p>
@@ -538,7 +540,7 @@ final class SSF_Microsoft_ID_Login
                 <tr><th><?php esc_html_e('Environment', 'microsoft-id-login'); ?></th><td><?php echo esc_html($status['environment']); ?></td></tr>
                 <tr><th><?php esc_html_e('Plugin version', 'microsoft-id-login'); ?></th><td><?php echo esc_html(self::VERSION); ?></td></tr>
                 <tr><th><?php esc_html_e('Callback URL', 'microsoft-id-login'); ?></th><td><code><?php echo esc_html($this->callback_url()); ?></code></td></tr>
-                <tr><th><?php esc_html_e('OpenID issuer', 'microsoft-id-login'); ?></th><td><code><?php echo esc_html($this->config('tenant_id') ? 'https://login.microsoftonline.com/' . $this->config('tenant_id') . '/v2.0' : ''); ?></code></td></tr>
+                <tr><th><?php esc_html_e('OpenID issuer', 'microsoft-id-login'); ?></th><td><code><?php echo esc_html($this->config('tenant_id') ? $this->expected_issuer() : ''); ?></code></td></tr>
                 <tr><th><?php esc_html_e('Tenant configured', 'microsoft-id-login'); ?></th><td><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></td></tr>
                 <tr><th><?php esc_html_e('Client configured', 'microsoft-id-login'); ?></th><td><?php echo esc_html($this->configured_label($status['client_id'])); ?></td></tr>
                 <tr><th><?php esc_html_e('JWKS cache status', 'microsoft-id-login'); ?></th><td><?php echo esc_html($status['jwks']); ?></td></tr>
@@ -817,7 +819,6 @@ final class SSF_Microsoft_ID_Login
         foreach ($this->profile_keys() as $profile_key) {
             $profile = isset($posted[$profile_key]) && is_array($posted[$profile_key]) ? $posted[$profile_key] : array();
             $current['profiles'][$profile_key]['enabled'] = ! empty($profile['enabled']);
-            $current['profiles'][$profile_key]['tenant_id'] = $this->sanitize_guid((string) ($profile['tenant_id'] ?? ''));
             $current['profiles'][$profile_key]['client_id'] = $this->sanitize_guid((string) ($profile['client_id'] ?? ''));
 
             if (! empty($profile['clear_secret'])) {
@@ -900,7 +901,7 @@ final class SSF_Microsoft_ID_Login
                 'action' => __('Kontrollera tenant ID och att servern kan nå login.microsoftonline.com.', 'microsoft-id-login'),
             ),
             'Issuer matchar tenant' => array(
-                'passed' => ! is_wp_error($metadata) && (($metadata['issuer'] ?? '') === 'https://login.microsoftonline.com/' . $tenant . '/v2.0'),
+                'passed' => ! is_wp_error($metadata) && (($metadata['issuer'] ?? '') === $this->expected_issuer()),
                 'detail' => ! is_wp_error($metadata) ? __('Issuer i Microsoft metadata matchar aktiv tenant.', 'microsoft-id-login') : __('Issuer kunde inte kontrolleras när metadata saknas.', 'microsoft-id-login'),
                 'action' => __('Kontrollera att tenant ID hör till SSF:s Entra tenant.', 'microsoft-id-login'),
             ),
@@ -1437,7 +1438,7 @@ final class SSF_Microsoft_ID_Login
             return new WP_Error('ssf_m365_invalid_signature', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
         }
         $tenant = $this->config('tenant_id');
-        $issuer = 'https://login.microsoftonline.com/' . $tenant . '/v2.0';
+        $issuer = $this->expected_issuer();
         $now = time();
         if (($claims['iss'] ?? '') !== $issuer) {
             return new WP_Error('ssf_m365_invalid_issuer', __('Microsoft-inloggningen kunde inte verifieras. Försök igen.', 'microsoft-id-login'));
@@ -1595,7 +1596,7 @@ final class SSF_Microsoft_ID_Login
         $admin_enabled = ! empty($profile['enabled']);
         $local_configured = $this->is_configured();
         $metadata = $local_configured ? $this->discovery_metadata() : new WP_Error('not_configured', 'not_configured');
-        $openid_valid = ! is_wp_error($metadata) && (($metadata['issuer'] ?? '') === 'https://login.microsoftonline.com/' . $this->config('tenant_id') . '/v2.0');
+        $openid_valid = ! is_wp_error($metadata) && (($metadata['issuer'] ?? '') === $this->expected_issuer());
         $configured = $local_configured && $openid_valid;
         $force_off = $this->is_force_disabled();
         $active = $admin_enabled && $configured && ! $force_off;
@@ -1636,8 +1637,10 @@ final class SSF_Microsoft_ID_Login
 
     private function config(string $key): string
     {
+        if ('tenant_id' === $key && class_exists('SSF_Microsoft365_Config')) {
+            return SSF_Microsoft365_Config::get_tenant_id();
+        }
         $map = array(
-            'tenant_id' => 'SSF_M365_LOGIN_TENANT_ID',
             'client_id' => 'SSF_M365_LOGIN_CLIENT_ID',
             'client_secret' => 'SSF_M365_LOGIN_CLIENT_SECRET',
         );
@@ -1696,7 +1699,15 @@ final class SSF_Microsoft_ID_Login
 
     private function authority_url(string $path): string
     {
-        return 'https://login.microsoftonline.com/' . rawurlencode($this->config('tenant_id')) . $path;
+        return class_exists('SSF_Microsoft365_Config')
+            ? SSF_Microsoft365_Config::get_authority_url($path)
+            : 'https://login.microsoftonline.com/' . rawurlencode($this->config('tenant_id')) . $path;
+    }
+
+    private function expected_issuer(): string
+    {
+        $host = class_exists('SSF_Microsoft365_Config') ? SSF_Microsoft365_Config::get_authority_host() : 'login.microsoftonline.com';
+        return 'https://' . $host . '/' . $this->config('tenant_id') . '/v2.0';
     }
 
     private function callback_url(): string

@@ -30,7 +30,9 @@ final class Authentication
             );
         }
 
-        $endpoint = 'https://login.microsoftonline.com/' . rawurlencode($config['tenant_id']) . '/oauth2/v2.0/token';
+        $endpoint = class_exists('SSF_Microsoft365_Config')
+            ? \SSF_Microsoft365_Config::get_authority_url('/oauth2/v2.0/token')
+            : 'https://login.microsoftonline.com/' . rawurlencode($config['tenant_id']) . '/oauth2/v2.0/token';
         $response = wp_remote_post(
             $endpoint,
             array(

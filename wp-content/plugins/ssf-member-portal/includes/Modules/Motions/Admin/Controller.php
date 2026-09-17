@@ -199,6 +199,8 @@ final class Controller
             <p><?php esc_html_e('Central konfiguration för interna e-postmottagare och SharePoint-integrationerna för motioner och medlemsansökningar.', 'ssf-member-portal'); ?></p>
             <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr($notice['type']); ?> is-dismissible"><p><?php echo esc_html($notice['message']); ?></p></div><?php endif; ?>
 
+            <?php if (class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_admin_section(); } ?>
+
             <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
 
             <?php if (class_exists('SSF_Email_Template')) { \SSF_Email_Template::render_admin_section(); } ?>
@@ -220,7 +222,6 @@ final class Controller
                         <input type="hidden" name="action" value="ssf_member_portal_save_microsoft365_configuration">
                         <?php wp_nonce_field('ssf_member_portal_save_microsoft365_configuration'); ?>
                         <table class="form-table" role="presentation"><tbody>
-                        <tr><th><label for="ssf-graph-tenant-id"><?php esc_html_e('Tenant ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-tenant-id" class="regular-text code" name="graph[tenant_id]" value="<?php echo esc_attr($values['tenant_id']); ?>"></td></tr>
                         <tr><th><label for="ssf-graph-client-id"><?php esc_html_e('Application (client) ID', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-id" class="regular-text code" name="graph[client_id]" value="<?php echo esc_attr($values['client_id']); ?>"></td></tr>
                         <tr><th><label for="ssf-graph-client-secret"><?php esc_html_e('Client secret value', 'ssf-member-portal'); ?></label></th><td><input id="ssf-graph-client-secret" class="regular-text" type="password" name="graph[client_secret]" value="" autocomplete="new-password"><p class="description"><?php esc_html_e('Lämna tomt för att behålla ett sparat secret. Secret ID fungerar inte här.', 'ssf-member-portal'); ?></p><label><input type="checkbox" name="graph[clear_client_secret]" value="1"> <?php esc_html_e('Ta bort sparat client secret', 'ssf-member-portal'); ?></label></td></tr>
                         </tbody></table>

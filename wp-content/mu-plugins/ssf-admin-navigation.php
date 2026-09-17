@@ -501,7 +501,7 @@ final class SSF_Admin_Navigation
     {
         $descriptions = array(
             'ssf-features' => 'Styr vilka publika funktioner som är aktiva.',
-            'ssf-member-portal-microsoft365' => 'E-postmottagare samt miljöseparerade SharePoint-destinationer för årsmöten och medlemsansökningar.',
+            'ssf-member-portal-microsoft365' => 'Central Microsoft 365-organisation, appstatus och miljöseparerade SharePoint-destinationer.',
             'microsoft-id-login' => 'Microsoft ID Login, Entra ID-appar och koppling mellan Microsoft-identitet och WordPress-behörigheter.',
             'ssf-application-archive-migration' => 'Flytta medlemsansökningarnas SharePoint-katalog på ett kontrollerat och verifierbart sätt.',
             'ssf-office365-mailer' => 'Microsoft 365-transport för webbplatsens e-post.',

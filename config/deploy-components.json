@@ -19,6 +19,7 @@
       "ssf-antispam.php",
       "ssf-email-router.php",
       "ssf-email-template.php",
+      "ssf-microsoft365-config.php",
       "ssf-organization-info.php",
       "ssf-release-controls.php",
       "ssf-release-manifest.json"

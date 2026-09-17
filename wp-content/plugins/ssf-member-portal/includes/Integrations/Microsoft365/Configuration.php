@@ -89,7 +89,7 @@ final class Configuration
     );
 
     private const DEFAULTS = array(
-        'tenant_id' => 'ad928e8c-b976-4c84-a0b1-931341b5a512',
+        'tenant_id' => '',
         'client_id' => '8a3bfdb3-6b8c-4982-b562-eaf43be7f39a',
         'site_id' => 'tradtionsfartyg.sharepoint.com,fcb7d0b0-8986-4dbc-a97c-e85297880b7e,5041e290-138c-442f-a20d-3e5a7918c810',
         'drive_id' => 'b!sNC3_IaJvE2pfOhSl4gLfpDiQVCMEy9Eog0-WnkYyBDVxq_wiIU3Tbpm3lUPgSuc',
@@ -129,6 +129,10 @@ final class Configuration
     {
         if (! isset(self::KEYS[$key])) {
             return '';
+        }
+
+        if ('tenant_id' === $key && class_exists('SSF_Microsoft365_Config')) {
+            return \SSF_Microsoft365_Config::get_tenant_id();
         }
 
         $destination = SharePointDestinations::legacy_mapping($key);
@@ -219,6 +223,9 @@ final class Configuration
     {
         $settings = self::stored();
         foreach (self::TEXT_KEYS as $key) {
+            if ('tenant_id' === $key) {
+                continue;
+            }
             unset($settings[$key]);
         }
         update_option(self::OPTION, $settings, false);
@@ -297,7 +304,7 @@ final class Configuration
         $labels = array('tenant_id' => 'Tenant ID', 'client_id' => 'Client ID', 'client_secret' => 'Client secret');
         $missing = array();
         foreach ($labels as $key => $label) {
-            if (! self::legacy_value($key)) {
+            if (! self::value($key)) {
                 $missing[] = $label;
             }
         }
@@ -308,6 +315,10 @@ final class Configuration
     {
         $status = array();
         foreach (self::KEYS as $key => $constant) {
+            if ('tenant_id' === $key && class_exists('SSF_Microsoft365_Config')) {
+                $status[$key] = array('constant' => 'SSF_MICROSOFT365_TENANT_ID', 'configured' => \SSF_Microsoft365_Config::is_tenant_configured(), 'source' => 'central');
+                continue;
+            }
             $server_value = self::server_value($key);
             $value = self::value($key);
             $stored = self::stored();

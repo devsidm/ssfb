@@ -25,6 +25,7 @@ $meetingRegistration = Read-RepoFile 'wp-content\plugins\ssf-member-portal\inclu
 $controller = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Modules\Motions\Admin\Controller.php'
 $javascript = Read-RepoFile 'wp-content\plugins\ssf-member-portal\assets\js\sharepoint-admin.js'
 $system = Read-RepoFile 'wp-content\plugins\ssf-member-portal\includes\Core\Plugin.php'
+$tenantConfig = Read-RepoFile 'wp-content\mu-plugins\ssf-microsoft365-config.php'
 
 Assert-Contains 'Central option' $destinations "ssf_member_portal_sharepoint_destinations"
 foreach ($destination in @('annual_meetings', 'membership_applications')) { Assert-Contains "Destination $destination" $destinations "'$destination' => array(" }
@@ -41,6 +42,9 @@ Assert-Contains 'SharePoint migration fills empty fields only' $destinations "''
 Assert-Contains 'SharePoint migration fills metadata recursively' $destinations '$existing[''metadata''] = self::merge_missing_profile'
 Assert-Contains 'DEV-skrivspärr' $destinations 'write_allowed_for_profile'
 Assert-Contains 'Central delegation' $configuration 'SharePointDestinations::value'
+Assert-Contains 'SharePoint tenant delegates to central service' $configuration 'SSF_Microsoft365_Config::get_tenant_id()'
+Assert-Contains 'SharePoint authority delegates to central service' $authentication 'SSF_Microsoft365_Config::get_authority_url'
+Assert-Contains 'Central tenant is environment separated' $tenantConfig "'production' === wp_get_environment_type() ? 'production' : 'development'"
 Assert-Contains 'Publikt destinations-API' $configuration 'public static function destination(string $destination): array'
 Assert-Contains 'Discovery-list-ID sparas centralt' $configuration "SharePointDestinations::save_field('annual_meetings', 'list_id'"
 Assert-Contains 'Autentisering kräver endast credentials' $authentication 'Configuration::credential_missing()'

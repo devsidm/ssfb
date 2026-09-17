@@ -25,7 +25,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.2'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.3'
 
 Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
@@ -47,7 +47,9 @@ Assert-Contains 'Server force-off has clear error' $plugin 'Microsoft-inloggning
 Assert-Contains 'Force-off is shown in backend' $plugin 'Avstängd av serverkonfiguration'
 Assert-Contains 'Force-off disables backend checkbox' $plugin 'disabled($force_off)'
 Assert-Contains 'Effective ACTIVE requires complete status' $plugin "return __('AKTIV'"
-Assert-Contains 'Tenant constant exists' $plugin "SSF_M365_LOGIN_TENANT_ID"
+Assert-Contains 'Tenant comes from central Microsoft 365 service' $plugin 'SSF_Microsoft365_Config::get_tenant_id()'
+Assert-NotContains 'No duplicate Tenant ID input in Login UI' $plugin 'name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]"'
+Assert-Contains 'Central tenant management link exists' $plugin 'Hantera Microsoft 365-inställningar'
 Assert-Contains 'Client ID constant exists' $plugin "SSF_M365_LOGIN_CLIENT_ID"
 Assert-Contains 'Client secret constant exists' $plugin "SSF_M365_LOGIN_CLIENT_SECRET"
 Assert-NotContains 'No SharePoint option reuse' $plugin 'ssf_member_portal_graph_configuration'
