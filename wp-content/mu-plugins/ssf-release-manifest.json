@@ -2,15 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260916.13",
-    "built_at":  "2026-09-16T20:49:29.4538274Z",
+    "build":  "20260917.1",
+    "built_at":  "2026-09-17T05:33:20.7529298Z",
     "source":  "codex",
-    "source_revision":  "a24d54d429c420d1cf502cbd7e1380abd7f9d69c",
-    "description":  "Fix SSF account activation diagnostics and UX",
+    "source_revision":  "c4ec855be6d12c555a4868b5601404d8a0a8c4f8",
+    "description":  "SharePoint archive migration wizard and unified Microsoft login enable state",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "microsoft-id-login",
-                       "ssf-email-template"
+                       "release-tooling",
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
