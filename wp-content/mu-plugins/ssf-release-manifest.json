@@ -2,17 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.3",
-    "built_at":  "2026-09-17T11:41:48.4163979Z",
+    "build":  "20260917.4",
+    "built_at":  "2026-09-17T11:54:38.9637880Z",
     "source":  "codex",
-    "source_revision":  "a1b6ea6a28b7400ddea0d6a58abfab62524ff939",
-    "description":  "Refactor central Microsoft 365 administration",
+    "source_revision":  "e8bf64e87e984ff9d09dd4875afff76b7bf37e86",
+    "description":  "Fix archive migration column schema reader",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "microsoft-id-login",
-                       "ssf-member-portal",
-                       "ssf-microsoft365-config",
-                       "ssf-office365-mailer"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
