@@ -356,7 +356,7 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function generic_notice(): void { $notice = get_transient('ssf_folder_migration_notice_' . get_current_user_id()); if ($notice) { delete_transient('ssf_folder_migration_notice_' . get_current_user_id()); echo '<div class="notice notice-' . esc_attr('error' === ($notice['type'] ?? '') ? 'error' : 'success') . ' is-dismissible"><p>' . esc_html((string) $notice['message']) . '</p></div>'; } }
 
-    private function generic_button(string $action, string $label, string $section, bool $disabled = false, string $class = 'secondary'): void { echo '<form method="post" class="ssf-archive-inline-form" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="' . esc_attr($action) . '">'; wp_nonce_field($action); submit_button($label, $class, 'submit', false, array('disabled' => $disabled)); echo '</form>'; }
+    private function generic_button(string $action, string $label, string $section, bool $disabled = false, string $class = 'secondary'): void { echo '<form method="post" class="ssf-archive-inline-form" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="' . esc_attr($action) . '">'; wp_nonce_field($action); submit_button($label, $class, 'submit', false, $disabled ? array('disabled' => 'disabled') : array()); echo '</form>'; }
 
     private function render_generic_discovery_form(string $kind, array $profile): void
     {
