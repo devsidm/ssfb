@@ -38,6 +38,17 @@ Assert-Contains 'Navigator lists children' $archive 'target_browser_children'
 Assert-Contains 'Navigator create child folder' $archive 'ssf_application_archive_create_browser_folder'
 Assert-Contains 'Create new folder conflict fail' $archive '@microsoft.graph.conflictBehavior'
 Assert-Contains 'Preview section' $archive 'ssf-archive-preview'
+Assert-Contains 'Selected location wording' $archive 'Vald plats'
+Assert-Contains 'Automatic final target wording' $archive 'Mapp som skapas automatiskt'
+Assert-Contains 'Automatic target action wording' $archive 'Skapa och verifiera'
+Assert-Contains 'Automatic creation explanation' $archive 'Mappen skapas automatiskt i SharePoint och verifieras'
+Assert-Contains 'Final verified target wording' $archive 'Slutligt '
+Assert-Contains 'Existing target remains explicit' $archive 'Mappen finns redan:'
+Assert-Contains 'Manual browser folder stays available' $archive '+ Skapa ny mapp'
+Assert-Contains 'Manual folder distinction' $archive 'Skapa en manuell mellanliggande mapp'
+Assert-Contains 'Target return section stays stable' $archive "'ssf_application_archive_create_target_folder' => 'archive-target'"
+Assert-NotContains 'No confusing parent wording' $archive 'överordnade mapp'
+Assert-NotContains 'No confusing missing target wording' $archive 'Målmappen saknas'
 Assert-Contains 'Helpful parent error code' $archive 'migration_parent_folder_missing'
 Assert-Contains 'Helpful create error code' $archive 'migration_target_create_failed'
 Assert-Contains 'Helpful verify error code' $archive 'migration_target_verify_failed'
@@ -48,6 +59,7 @@ Assert-Contains 'Migration preserves old references' $archive '_ssf_sp_migration
 Assert-Contains 'No source delete helper added' $archive '_ssf_sp_migration_old_refs'
 Assert-NotContains 'No generic saved success' $archive 'Målkatalogen har sparats.'
 Assert-Contains 'Target browser styling' $css '.ssf-archive-folder-list'
+Assert-Contains 'Verified target styling' $css '.ssf-archive-verified-state'
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }

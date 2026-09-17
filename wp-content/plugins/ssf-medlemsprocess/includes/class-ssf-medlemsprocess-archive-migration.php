@@ -358,7 +358,7 @@ class SSF_Medlemsprocess_Archive_Migration
             set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($state), 10 * MINUTE_IN_SECONDS);
             $this->redirect($state->get_error_message(), 'error');
         }
-        $message = 'final_destination_exists' === ($state['target_state'] ?? '') ? 'Mappen finns redan.' : 'Målets överordnade mapp är vald och verifierad. Målmappen saknas.';
+        $message = 'final_destination_exists' === ($state['target_state'] ?? '') ? 'Mappen finns redan.' : 'Platsen är vald och verifierad. Målet kan nu skapas automatiskt.';
         $this->redirect($message, 'final_destination_exists' === ($state['target_state'] ?? '') ? 'error' : 'success');
     }
 
@@ -385,7 +385,7 @@ class SSF_Medlemsprocess_Archive_Migration
         if (is_wp_error($target)) { $this->redirect($target->get_error_message(), 'error'); }
         $existing = $this->find_final_target($target);
         if (is_wp_error($existing)) { $this->redirect($existing->get_error_message(), 'error'); }
-        if (empty($existing)) { $this->redirect('Målmappen saknas. Skapa den eller välj en annan plats.', 'error'); }
+        if (empty($existing)) { $this->redirect('Den befintliga mappen kunde inte längre hittas. Välj platsen igen.', 'error'); }
         $verified = $this->verify_folder_item($target, (string) ($existing['id'] ?? ''));
         if (is_wp_error($verified)) { $this->redirect($verified->get_error_message(), 'error'); }
         $this->persist_verified_target(array_merge($target, $this->target_folder_reference($verified, (string) $target['folder_path'])), 'final_destination_verified');
@@ -893,7 +893,7 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function render_target_create_parent_form(array $target): void
     {
-        echo '<details class="ssf-archive-create-folder"><summary>+ Skapa ny mapp</summary><p><strong>Skapa mapp under:</strong><br>' . esc_html($this->display_drive_path($target, (string) ($target['parent_folder_path'] ?? ''))) . '</p>';
+        echo '<details class="ssf-archive-create-folder"><summary>+ Skapa ny mapp</summary><p>Skapa en manuell mellanliggande mapp medan du bläddrar.</p><p><strong>Skapa mapp under:</strong><br>' . esc_html($this->display_drive_path($target, (string) ($target['parent_folder_path'] ?? ''))) . '</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_application_archive_create_browser_folder">';
         wp_nonce_field('ssf_application_archive_create_browser_folder');
         $this->render_target_hidden_fields($target);
@@ -904,17 +904,24 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function render_target_preview(array $source, array $target, string $final_path): void
     {
-        echo '<div class="ssf-archive-preview"><h3>SÅ KOMMER FLYTTEN ATT SE UT</h3><dl><div><dt>Från</dt><dd>' . esc_html((string) ($source['site_url'] ?? '')) . '<br>' . esc_html((string) ($source['drive_name'] ?? '')) . '<br>' . esc_html('/' . trim((string) ($source['folder_path'] ?? ''), '/')) . '</dd></div><div><dt>Till</dt><dd>' . esc_html((string) ($target['site_url'] ?? '')) . '<br>' . esc_html((string) ($target['drive_name'] ?? '')) . '<br>' . esc_html('/' . trim($final_path, '/')) . '</dd></div></dl>';
-        echo '<p><strong>' . esc_html($this->target_state_label((string) ($target['target_state'] ?? 'destination_parent_selected'))) . '</strong></p>';
-        if ('final_destination_missing' === ($target['target_state'] ?? '')) {
-            $this->button('ssf_application_archive_create_target_folder', 'Skapa och verifiera målmapp', 'primary');
-        } elseif ('final_destination_exists' === ($target['target_state'] ?? '')) {
-            echo '<p>Mappen finns redan.</p><div class="ssf-archive-actions">';
+        $state = (string) ($target['target_state'] ?? 'destination_parent_selected');
+        $selected_path = '/' . trim((string) ($target['parent_folder_path'] ?? ''), '/');
+        $display_final_path = '/' . trim($final_path, '/');
+        echo '<div class="ssf-archive-preview">';
+        if (in_array($state, array('destination_parent_selected', 'final_destination_missing'), true)) {
+            echo '<h3>Vald plats</h3><p><code>' . esc_html($selected_path) . '</code></p><p class="ssf-archive-verified-state"><span aria-hidden="true">✓</span> Verifierad</p>';
+            echo '<h3>Mapp som skapas automatiskt</h3><p><code>' . esc_html($display_final_path) . '</code></p>';
+        }
+        if ('final_destination_missing' === $state) {
+            $this->button('ssf_application_archive_create_target_folder', 'Skapa och verifiera mål', 'primary');
+            echo '<p class="description">Mappen skapas automatiskt i SharePoint och verifieras innan du går vidare.</p>';
+        } elseif ('final_destination_exists' === $state) {
+            echo '<h3>Mappen finns redan:</h3><p><code>' . esc_html($display_final_path) . '</code></p><div class="ssf-archive-actions">';
             $this->button('ssf_application_archive_use_existing_target', 'Använd befintlig mapp', 'primary');
             echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=ssf-application-archive-migration')) . '">Välj annan plats</a>';
             echo '<a class="button" href="#ssf-archive-target-name">Ändra mappnamn</a></div>';
-        } elseif (in_array(($target['target_state'] ?? ''), array('final_destination_created', 'final_destination_verified'), true)) {
-            echo '<ul class="ssf-archive-verified"><li>Målmappen skapades eller valdes</li><li>Målmappen kunde läsas tillbaka från SharePoint</li><li>Målet är verifierat</li></ul><p><strong>Final destination:</strong><br>' . esc_html('/' . trim($final_path, '/')) . '</p>';
+        } elseif (in_array($state, array('final_destination_created', 'final_destination_verified'), true)) {
+            echo '<h3>Slutligt mål</h3><p><code>' . esc_html($display_final_path) . '</code></p><p class="ssf-archive-verified-state"><span aria-hidden="true">✓</span> Mappen finns och är verifierad i SharePoint</p>';
         }
         echo '</div>';
     }
@@ -1610,11 +1617,11 @@ class SSF_Medlemsprocess_Archive_Migration
     private function target_state_label(string $state): string
     {
         $labels = array(
-            'destination_parent_selected' => 'Destination parent vald',
-            'final_destination_missing' => 'MÅLMAPP SAKNAS',
-            'final_destination_exists' => 'MÅLMAPP FINNS REDAN',
-            'final_destination_created' => 'Målmappen skapades och verifierades',
-            'final_destination_verified' => 'Målet är verifierat',
+            'destination_parent_selected' => 'Platsen är vald',
+            'final_destination_missing' => 'Målet är redo att skapas automatiskt',
+            'final_destination_exists' => 'Mappen finns redan',
+            'final_destination_created' => 'Slutligt mål är verifierat i SharePoint',
+            'final_destination_verified' => 'Slutligt mål är verifierat i SharePoint',
         );
         return $labels[$state] ?? 'Inte verifierad';
     }
