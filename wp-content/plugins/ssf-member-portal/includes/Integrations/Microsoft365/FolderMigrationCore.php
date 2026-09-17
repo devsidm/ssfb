@@ -140,6 +140,21 @@ final class FolderMigrationCore
                 return new \WP_Error('migration_schema_create_failed', 'En nödvändig målkolumn kunde inte skapas: ' . $column['name'], $created->get_error_data());
             }
         }
+        // Re-read the library schema; a successful POST alone is not proof
+        // that a field is usable by the target list.
+        $verified_columns = $this->columns($target);
+        if (is_wp_error($verified_columns)) {
+            return $verified_columns;
+        }
+        $verified_names = array();
+        foreach ((array) ($verified_columns['value'] ?? array()) as $column) {
+            $verified_names[(string) ($column['name'] ?? '')] = true;
+        }
+        foreach ((array) ($dry_run['schema']['create'] ?? array()) as $column) {
+            if (empty($verified_names[(string) $column['name']])) {
+                return new \WP_Error('migration_schema_verify_failed', 'Den skapade målkolumnen kunde inte läsas tillbaka: ' . $column['name']);
+            }
+        }
         $read = $this->item((string) $target['drive_id'], $parent);
         if (is_wp_error($read) || empty($read['folder'])) {
             return is_wp_error($read) ? $read : new \WP_Error('migration_prepare_verify_failed', 'Målroten kunde inte läsas tillbaka.');

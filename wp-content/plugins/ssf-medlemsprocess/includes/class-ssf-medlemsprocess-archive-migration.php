@@ -242,6 +242,24 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php if ($final) : ?><p>Verifierade objekt: <?php echo esc_html((string) ($final['verified_items'] ?? 0)); ?> / <?php echo esc_html((string) ($final['expected_items'] ?? 0)); ?>. Källa: <?php echo ! empty($final['source_untouched']) ? '✓ kvar och orörd' : 'okänd'; ?>.</p><?php endif; ?>
             </section>
         </div>
+        <script>
+        (function () {
+            var preview = document.querySelector('[data-ssf-migration-preview]');
+            if (!preview) return;
+            var sourceName = <?php echo wp_json_encode((string) ($source['folder_name'] ?? '')); ?>;
+            var storedRoot = <?php echo wp_json_encode((string) ($target['folder_path'] ?? '')); ?>;
+            function update() {
+                var rootField = document.querySelector('[data-sp-field="folder_path"]');
+                var root = rootField && rootField.value ? rootField.value : storedRoot;
+                var keep = document.querySelector('input[name="keep_name"]:checked');
+                var nameField = document.querySelector('input[name="destination_folder_name"]');
+                var extraField = document.querySelector('input[name="extra_structure"]');
+                var name = keep && keep.value === '1' ? sourceName : (nameField ? nameField.value : '');
+                preview.textContent = [root, extraField ? extraField.value : '', name].filter(Boolean).join('/').replace(/\/+/, '/');
+            }
+            document.addEventListener('input', update); document.addEventListener('change', update); update();
+        }());
+        </script>
         <?php
     }
 

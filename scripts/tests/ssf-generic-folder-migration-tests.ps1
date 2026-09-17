@@ -28,6 +28,8 @@ Assert-Contains 'Pagination loop protection' $core 'migration_pagination_loop'
 Assert-Contains 'Populated metadata inventory' $core 'populated_fields'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
 Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
+Assert-Contains 'Schema is reread after prepare' $core 'migration_schema_verify_failed'
+Assert-Contains 'Live preview recalculates' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
 Assert-Contains 'Generic test case action' $archive 'ssf_folder_migration_test_case'
 Assert-Contains 'Test case reuses core' $archive '$core->migrate($test_source'
