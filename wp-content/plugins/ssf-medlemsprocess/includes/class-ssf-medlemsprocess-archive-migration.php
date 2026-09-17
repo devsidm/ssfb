@@ -54,6 +54,7 @@ class SSF_Medlemsprocess_Archive_Migration
         add_action('admin_post_ssf_folder_migration_dry_run', array($this, 'generic_dry_run'));
         add_action('admin_post_ssf_folder_migration_prepare', array($this, 'generic_prepare'));
         add_action('admin_post_ssf_folder_migration_write_test', array($this, 'generic_write_test'));
+        add_action('admin_post_ssf_folder_migration_test_case', array($this, 'generic_test_case'));
         add_action('admin_post_ssf_folder_migration_run', array($this, 'generic_run'));
     }
 
@@ -230,7 +231,10 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php if ($write) : foreach ((array) ($write['steps'] ?? array()) as $step) : ?><p><?php echo ! empty($step['ok']) ? '✓' : '✗'; ?> <?php echo esc_html((string) ($step['label'] ?? '')); ?></p><?php endforeach; endif; ?>
             </section>
 
-            <section id="archive-test-case" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>8</span><div><h2>Testärende – valfritt</h2><p>Du kan hoppa över testärende. Slutförandet använder samma generella motor och hoppar över redan verifierade objekt vid återupptagning.</p></div></div><p><em>Ingen separat förenklad kopieringsväg används.</em></p></section>
+            <section id="archive-test-case" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>8</span><div><h2>Testärende – valfritt</h2><p>Du kan hoppa över testärende. Slutförandet använder samma generella motor och hoppar över redan verifierade objekt vid återupptagning.</p></div></div>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_folder_migration_test_case"><?php wp_nonce_field('ssf_folder_migration_test_case'); ?><label>Testärende <select name="source_item_id"><?php foreach ((array) ($inventory['items'] ?? array()) as $item) : if ('folder' !== ($item['type'] ?? '') || empty($item['depth'])) continue; ?><option value="<?php echo esc_attr((string) $item['id']); ?>"><?php echo esc_html((string) $item['path']); ?></option><?php endforeach; ?></select></label> <?php submit_button('Migrera testärende', 'secondary', 'submit', false, array('disabled' => empty($write['ok']))); ?></form>
+                <p><a class="button" href="#archive-run">Hoppa över testärende</a> <em>Ingen separat förenklad kopieringsväg används.</em></p>
+            </section>
             <section id="archive-run" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>9</span><div><h2>Slutför migrering av källmappen</h2><p>Mappar och filer kopieras stegvis från SharePoint, metadata läses tillbaka och varje objekt sparas som verifierat. Källan raderas aldrig.</p></div></div>
                 <?php $this->generic_button('ssf_folder_migration_run', 'Slutför migrering av källmappen', 'archive-run', empty($write['ok']) || empty($prepared['target_folder_id']), 'primary'); ?>
             </section>
@@ -302,6 +306,21 @@ class SSF_Medlemsprocess_Archive_Migration
         if (is_wp_error($result)) $this->generic_redirect('archive-run', $result->get_error_message(), 'error');
         $state['migration'] = $result; $state['reconciliation'] = $core->reconcile((array) $state['source'], (array) $state['target'], (array) $state['inventory'], (string) ($state['prepared']['target_folder_id'] ?? '')); update_option(self::GENERIC_OPTION, $state, false);
         $this->generic_redirect('archive-reconcile', 'Migreringen är klar och slutkontrollerad.', 'success');
+    }
+
+    private function generic_test_case(): void
+    {
+        $this->require_manage(); check_admin_referer('ssf_folder_migration_test_case'); $state = $this->generic_state(); $core = $this->generic_core();
+        if (is_wp_error($core) || empty($state['write_test']['ok']) || empty($state['prepared']['target_folder_id'])) $this->generic_redirect('archive-test-case', 'Skrivtest och förberedd målroot krävs före testärendet.', 'error');
+        $id = sanitize_text_field((string) ($_POST['source_item_id'] ?? '')); $item = array(); foreach ((array) ($state['inventory']['items'] ?? array()) as $candidate) if ($id === (string) ($candidate['id'] ?? '')) { $item = $candidate; break; }
+        if (empty($item) || 'folder' !== ($item['type'] ?? '') || empty($item['depth'])) $this->generic_redirect('archive-test-case', 'Välj en undermapp som testärende.', 'error');
+        $test_source = array_merge((array) $state['source'], array('folder_id' => $item['id'], 'folder_name' => $item['name'], 'folder_path' => $item['path']));
+        $test_inventory = $core->inventory($test_source); if (is_wp_error($test_inventory)) $this->generic_redirect('archive-test-case', $test_inventory->get_error_message(), 'error');
+        $test_target = array_merge((array) $state['target'], array('folder_id' => (string) $state['prepared']['target_folder_id'], 'folder_path' => (string) ($state['dry_run']['destination_path'] ?? ''), 'destination_folder_name' => (string) $item['name'], 'extra_structure' => ''));
+        $test_dry_run = $core->dry_run($test_source, $test_target, $test_inventory); if (is_wp_error($test_dry_run) || empty($test_dry_run['ok'])) $this->generic_redirect('archive-test-case', is_wp_error($test_dry_run) ? $test_dry_run->get_error_message() : 'Testärendet har blockerare.', 'error');
+        $prepared = $core->prepare($test_target, $test_dry_run); if (is_wp_error($prepared)) $this->generic_redirect('archive-test-case', $prepared->get_error_message(), 'error');
+        $result = $core->migrate($test_source, $test_target, $test_inventory, (string) $prepared['target_folder_id']); if (is_wp_error($result)) $this->generic_redirect('archive-test-case', $result->get_error_message(), 'error');
+        $state['test_case'] = array('source_item_id' => $id, 'target_folder_id' => $prepared['target_folder_id'], 'verified_at' => gmdate('c')); update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect('archive-test-case', 'Testärendet är kopierat och verifierat. Slutmigreringen kommer att hoppa över verifierade objekt.', 'success');
     }
 
     private function generic_execute(string $nonce, string $section, callable $operation, string $key, string $success): void

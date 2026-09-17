@@ -29,6 +29,8 @@ Assert-Contains 'Populated metadata inventory' $core 'populated_fields'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
 Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
+Assert-Contains 'Generic test case action' $archive 'ssf_folder_migration_test_case'
+Assert-Contains 'Test case reuses core' $archive '$core->migrate($test_source'
 Assert-Contains 'Copy uses Graph source item' $core "'/copy'"
 Assert-Contains 'Metadata readback verification' $core 'migration_metadata_mismatch'
 Assert-Contains 'Reconciliation source safety' $core "'source_untouched' => true"
