@@ -23,6 +23,9 @@ $ftpPassword = [string]$env:SSF_FTP_PASSWORD
 $wpUser = [string]$env:SSF_WP_USER
 $wpPassword = [string]$env:SSF_WP_PASSWORD
 
+if ($Environment -eq 'development' -and -not [string]::IsNullOrWhiteSpace($RemoteRoot)) {
+    throw 'DEV FTP account is already rooted at the DEV WordPress document root. Do not specify RemoteRoot.'
+}
 if (-not $ftpPassword) { throw 'SSF_FTP_PASSWORD saknas i den aktuella processen.' }
 if (-not $wpUser -or -not $wpPassword) { throw 'SSF_WP_USER och SSF_WP_PASSWORD krävs för verifiering efter deployment.' }
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw 'Release-manifest saknas. Registrera först en build.' }
@@ -66,6 +69,15 @@ function Register-Failure {
 }
 
 try {
+    if ($Environment -eq 'development') {
+        $ftpRootListing = @(& curl.exe -sS --fail --ftp-pasv --list-only -u ($FtpUser + ':' + $ftpPassword) ('ftp://' + $FtpHost.TrimEnd('/') + '/'))
+        if ($LASTEXITCODE -ne 0 -or $ftpRootListing -notcontains 'wp-content') {
+            throw 'DEV FTP root does not contain wp-content directly. Abort rather than guessing an FTP path.'
+        }
+        if ($ftpRootListing -contains 'ssfb.se') {
+            Write-Warning 'Accidental nested /ssfb.se directory exists in the DEV FTP root. It will not be deleted automatically; remove it manually.'
+        }
+    }
     foreach ($file in $trackedFiles) {
         $local = Join-Path $repo ($file -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (-not (Test-Path -LiteralPath $local)) { throw "Versionsstyrd fil saknas lokalt: $file" }

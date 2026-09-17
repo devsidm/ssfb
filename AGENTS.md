@@ -59,9 +59,9 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 
 - Never push GitHub without explicit approval.
 - Never deploy PROD without explicit approval.
+- **CRITICAL – SSF DEV FTP ROOT:** DEV FTP `/` is already the DEV WordPress document root. Never prepend or create `ssfb.se`, `public_html`, or `dev`; deployment paths start directly with `wp-content/`, `wp-admin/`, etc. For `scripts/ssf-release-deploy.ps1` on DEV, `RemoteRoot` MUST be omitted/empty. If FTP `/` does not look like a WordPress root, abort rather than guess. Never touch uploads or copy `wp-config.php`.
 - Do not copy DEV database or `wp-config.php` to PROD.
-- Active DEV FTP root is `public_html/dev`.
-- Known wrong FTP root: `/wp-content/...` at FTP account root. Uploading there does not affect active DEV.
+- DEV's server filesystem may be `public_html/dev`, but that path must never be used as an FTP `RemoteRoot`.
 - Production server deployment uses `scripts/deploy/ssf-server-deploy.sh`.
 - Production server rollback uses `scripts/deploy/ssf-server-rollback.sh`.
 - The production server GitHub deploy key is read-only.
@@ -106,9 +106,9 @@ SYMPTOM: Live behavior differs from repo.
 CAUSE: Live-only MU plugin.
 CORRECT: All active MU plugins must be represented in repo.
 
-SYMPTOM: Temporary harness does nothing.
-CAUSE: Uploaded to FTP account root rather than active DEV tree.
-CORRECT: Use `public_html/dev/wp-content/...`.
+SYMPTOM: DEV deployment creates a nested installation.
+CAUSE: `public_html/dev` was prepended even though FTP `/` is already the DEV WordPress root.
+CORRECT: Omit `RemoteRoot` and upload directly to `/wp-content/...`.
 
 SYMPTOM: Workflow action unavailable.
 CAUSE: Reused case already past the required state.
