@@ -2,14 +2,13 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.11",
-    "built_at":  "2026-09-17T20:11:41.6468519Z",
+    "build":  "20260917.12",
+    "built_at":  "2026-09-17T20:51:58.7982778Z",
     "source":  "codex",
-    "source_revision":  "62638b1edab4e9f11a12a9ba76bdd13f8762b36c",
-    "description":  "Move SharePoint Entra credentials into integration",
+    "source_revision":  "036ca25e7281cf86569ea73be543ee2b3b792b89",
+    "description":  "Fix SharePoint administration parse error",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "release-tooling",
                        "ssf-member-portal"
                    ],
     "status":  "development",

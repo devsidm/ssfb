@@ -68,7 +68,7 @@ final class SharePointAdmin
                         <div class="ssf-sp-destination__heading"><h3><?php echo esc_html($item['label']); ?></h3><span class="ssf-sp-status ssf-sp-status--<?php echo esc_attr($missing ? 'missing' : (! empty($health['ok']) ? 'ok' : 'unknown')); ?>"><?php echo esc_html($missing ? 'Ej klar' : (! empty($health['ok']) ? 'Ansluten' : 'Konfigurerad')); ?></span></div>
                         <dl><div><dt>Site</dt><dd><?php echo esc_html($active['site_name'] ?: ($active['site_url'] ?: 'Saknas')); ?></dd></div><div><dt>Bibliotek</dt><dd><?php echo esc_html($active['drive_name'] ?: 'Saknas'); ?></dd></div><div><dt>Mapp</dt><dd><?php echo esc_html($active['folder_path'] ?: ($active['folder_name'] ?: 'Saknas')); ?></dd></div></dl>
                         <p class="description"><?php echo esc_html(implode(', ', $item['uses'])); ?></p>
-                        <a class="button <?php echo $key === $destination ? 'button-primary' : ''; ?>" href="<?php echo esc_url(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations', 'destination' => $key, 'profile_environment' => $current_environment), admin_url('admin.php')) . '#sharepoint'; ?>">Konfigurera</a>
+                        <a class="button <?php echo $key === $destination ? 'button-primary' : ''; ?>" href="<?php echo esc_url(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations', 'destination' => $key, 'profile_environment' => $current_environment), admin_url('admin.php')) . '#sharepoint'); ?>">Konfigurera</a>
                     </article>
                 <?php endforeach; ?>
             </div>
