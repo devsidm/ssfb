@@ -21,11 +21,14 @@ $expectedOrganisation = 'Sveriges Segelfartygsf' + [char]0x00f6 + 'rbund'
 $expectedOrganisationHeading = 'Microsoft 365 ' + [char]0x2013 + ' organisation'
 $expectedInvalidTenant = 'Microsoft k' + [char]0x00e4 + 'nner inte igen Tenant ID:t'
 $expectedLegacyPreserved = 'Inga ' + [char]0x00e4 + 'ldre v' + [char]0x00e4 + 'rden har tagits bort.'
+$expectedLegacyCentralWins = 'Runtime anv' + [char]0x00e4 + 'nder central Tenant ID; legacy-v' + [char]0x00e4 + 'rdet anv' + [char]0x00e4 + 'nds inte.'
+$expectedLegacyUnused = 'Runtime anv' + [char]0x00e4 + 'nder inte legacy-v' + [char]0x00e4 + 'rdet.'
 
 Assert-Contains 'Central tenant service exists' $central 'final class SSF_Microsoft365_Config'
 Assert-Contains 'Central tenant option exists' $central 'ssf_microsoft365_tenant_configuration'
 Assert-Contains 'Central tenant service is deployable' $deploy 'ssf-microsoft365-config.php'
 Assert-Contains 'Central tenant getter exists' $central 'public static function get_tenant_id()'
+Assert-NotContains 'Central tenant getter does not silently migrate legacy runtime values' $central "public static function get_tenant_id(): string`r`n    {`r`n        self::maybe_migrate_legacy_tenant();"
 Assert-Contains 'Central primary domain getter exists' $central 'public static function get_primary_domain()'
 Assert-Contains 'Central authority getter exists' $central 'public static function get_authority_host()'
 Assert-Contains 'Central authority URL getter exists' $central 'public static function get_authority_url(string $path = '''')'
@@ -46,9 +49,16 @@ Assert-NotContains 'Central page never renders client secret value' $central 'cl
 
 Assert-Contains 'Login runtime reads central tenant' $login 'SSF_Microsoft365_Config::get_tenant_id()'
 Assert-Contains 'Login runtime reads central authority' $login 'SSF_Microsoft365_Config::get_authority_url($path)'
+Assert-Contains 'Login runtime loads central MU config' $login 'ssf-microsoft365-config.php'
+Assert-NotContains 'Login runtime has no legacy tenant constant mapping' $login "'tenant_id' => 'SSF_M365_LOGIN_TENANT_ID'"
 Assert-NotContains 'Login has no duplicate tenant input' $login 'name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]"'
+Assert-Contains 'Login backend shows central tenant label' $login 'Central Microsoft 365 configuration'
+Assert-Contains 'Login backend shows CONFIGURED state' $login "'CONFIGURED'"
+Assert-Contains 'Login backend shows MISSING state' $login "'MISSING'"
+Assert-Contains 'Login backend shows effective status' $login 'Effective status'
 Assert-Contains 'Login Client ID remains integration specific' $login "'client_id' => 'SSF_M365_LOGIN_CLIENT_ID'"
 Assert-Contains 'Login Client Secret remains integration specific' $login "'client_secret' => 'SSF_M365_LOGIN_CLIENT_SECRET'"
+Assert-Contains 'Login Client ID can come from backend setting' $login "return is_string(`$profile[`$key] ?? null) ? trim((string) `$profile[`$key]) : '';"
 Assert-Contains 'Login still validates state' $login 'STATE_PREFIX . $state'
 Assert-Contains 'Login still validates nonce' $login "`$claims['nonce']"
 Assert-Contains 'Login still uses PKCE' $login "'code_challenge_method' => 'S256'"
@@ -56,7 +66,8 @@ Assert-Contains 'Login still validates tid' $login "`$claims['tid']"
 Assert-Contains 'Login still validates oid' $login "empty(`$claims['oid'])"
 
 Assert-Contains 'SharePoint runtime reads central tenant' $sharepoint 'SSF_Microsoft365_Config::get_tenant_id()'
-Assert-Contains 'SharePoint token endpoint reads central authority' $authentication 'SSF_Microsoft365_Config::get_authority_url'
+Assert-Contains 'SharePoint runtime loads central MU config' $sharepoint 'ssf-microsoft365-config.php'
+Assert-Contains 'SharePoint token endpoint reads central authority' $authentication "Configuration::authority_url('/oauth2/v2.0/token')"
 Assert-Contains 'SharePoint Client ID remains integration specific' $sharepoint "'client_id' => 'SSF_GRAPH_CLIENT_ID'"
 Assert-Contains 'SharePoint Client Secret remains integration specific' $sharepoint "'client_secret' => 'SSF_GRAPH_CLIENT_SECRET'"
 Assert-Contains 'SharePoint permissions remain Sites.Selected' $discovery "'grantedToIdentities'"
@@ -66,6 +77,10 @@ Assert-Contains 'Legacy SharePoint tenant candidate detected' $central 'SSF_GRAP
 Assert-Contains 'Legacy Login tenant candidate detected' $central 'SSF_M365_LOGIN_TENANT_ID'
 Assert-Contains 'Legacy tenant values are not deleted' $central $expectedLegacyPreserved
 Assert-Contains 'Conflicting tenant values are detected' $central "'status' => 'conflict'"
+Assert-Contains 'Legacy conflict warnings exist' $central 'public static function legacy_tenant_warnings()'
+Assert-Contains 'Legacy conflict warning says central tenant wins' $central $expectedLegacyCentralWins
+Assert-Contains 'Legacy missing-central warning says legacy unused' $central $expectedLegacyUnused
+Assert-Contains 'Login renders legacy tenant warnings' $login 'legacy_tenant_warnings'
 Assert-Contains 'Central non-empty tenant is preserved' $central "'' !== (string) (`$settings['profiles'][`$environment]['tenant_id'] ?? '')"
 Assert-Contains 'Microsoft 365 admin renders central section' $admin 'SSF_Microsoft365_Config::render_admin_section()'
 Assert-NotContains 'SharePoint UI no longer edits tenant' $admin 'name="graph[tenant_id]"'

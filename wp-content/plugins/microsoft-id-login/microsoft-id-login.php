@@ -334,19 +334,26 @@ final class SSF_Microsoft_ID_Login
         $settings = $this->settings();
         $active_profile = $this->active_profile_key();
         $force_off = $this->is_force_disabled();
+        $this->ensure_central_config_loaded();
+        $central_tenant_configured = class_exists('SSF_Microsoft365_Config') && SSF_Microsoft365_Config::is_tenant_configured();
+        $legacy_tenant_warnings = $this->legacy_tenant_warnings();
         ?>
         <section class="ssf-admin-card">
             <h2><?php esc_html_e('Microsoft / Entra', 'microsoft-id-login'); ?></h2>
             <p><?php esc_html_e('Konfigurera separata Microsoft-appar för Development och Production. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'microsoft-id-login'); ?></p>
             <?php if ($force_off) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Avstängd av serverkonfiguration', 'microsoft-id-login'); ?></strong></p></div><?php endif; ?>
             <?php if (class_exists('SSF_Microsoft365_Config')) : ?>
-                <div class="notice notice-info inline"><p><strong>Tenant:</strong><br><?php echo esc_html(SSF_Microsoft365_Config::get_organisation_name()); ?><br><?php echo esc_html(SSF_Microsoft365_Config::get_primary_domain()); ?><br>Central tenant: <?php echo esc_html(SSF_Microsoft365_Config::is_tenant_configured() ? 'CONFIGURED' : 'NOT CONFIGURED'); ?></p><p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-member-portal-microsoft365')); ?>">Hantera Microsoft 365-inställningar</a></p></div>
+                <div class="notice notice-info inline"><p><strong><?php esc_html_e('Tenant', 'microsoft-id-login'); ?></strong><br><?php esc_html_e('Central Microsoft 365 configuration', 'microsoft-id-login'); ?><br><?php echo esc_html(SSF_Microsoft365_Config::get_organisation_name()); ?><br><?php echo esc_html(SSF_Microsoft365_Config::get_primary_domain()); ?><br><?php echo esc_html($central_tenant_configured ? 'CONFIGURED' : 'MISSING'); ?></p><p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=ssf-member-portal-microsoft365')); ?>">Hantera Microsoft 365-inställningar</a></p></div>
+            <?php else : ?>
+                <div class="notice notice-error inline"><p><strong><?php esc_html_e('Tenant', 'microsoft-id-login'); ?></strong><br><?php esc_html_e('Central Microsoft 365 configuration', 'microsoft-id-login'); ?><br><?php echo esc_html('MISSING'); ?></p></div>
             <?php endif; ?>
+            <?php foreach ($legacy_tenant_warnings as $warning) : ?><div class="notice notice-warning inline"><p><?php echo esc_html($warning); ?></p></div><?php endforeach; ?>
             <dl>
                 <div><dt><?php esc_html_e('Aktiv profil', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($active_profile); ?></dd></div>
-                <div><dt><?php esc_html_e('Tenant ID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['tenant_id'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Central Microsoft 365 configuration', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($central_tenant_configured ? 'CONFIGURED' : 'MISSING'); ?></dd></div>
                 <div><dt><?php esc_html_e('Client ID', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_id'])); ?></dd></div>
                 <div><dt><?php esc_html_e('Client Secret', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->configured_label($status['client_secret'])); ?></dd></div>
+                <div><dt><?php esc_html_e('Effective status', 'microsoft-id-login'); ?></dt><dd><?php echo esc_html($this->status_label($status)); ?></dd></div>
                 <div><dt><?php esc_html_e('Kontotyp', 'microsoft-id-login'); ?></dt><dd><?php esc_html_e('Endast konton i SSF:s organisation', 'microsoft-id-login'); ?></dd></div>
                 <div><dt><?php esc_html_e('Scopes', 'microsoft-id-login'); ?></dt><dd><code>openid profile email</code></dd></div>
                 <div><dt><?php esc_html_e('SharePoint permissions', 'microsoft-id-login'); ?></dt><dd><?php esc_html_e('Inga', 'microsoft-id-login'); ?></dd></div>
@@ -1637,8 +1644,9 @@ final class SSF_Microsoft_ID_Login
 
     private function config(string $key): string
     {
-        if ('tenant_id' === $key && class_exists('SSF_Microsoft365_Config')) {
-            return SSF_Microsoft365_Config::get_tenant_id();
+        if ('tenant_id' === $key) {
+            $this->ensure_central_config_loaded();
+            return class_exists('SSF_Microsoft365_Config') ? SSF_Microsoft365_Config::get_tenant_id() : '';
         }
         $map = array(
             'client_id' => 'SSF_M365_LOGIN_CLIENT_ID',
@@ -1659,6 +1667,27 @@ final class SSF_Microsoft_ID_Login
         $settings = $this->settings();
         $profile = $settings['profiles'][$this->active_profile_key()] ?? array();
         return is_string($profile[$key] ?? null) ? trim((string) $profile[$key]) : '';
+    }
+
+    private function ensure_central_config_loaded(): void
+    {
+        if (class_exists('SSF_Microsoft365_Config')) {
+            return;
+        }
+        $base = defined('WPMU_PLUGIN_DIR') ? WPMU_PLUGIN_DIR : (defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR . '/mu-plugins' : '');
+        $file = $base ? rtrim((string) $base, '/\\') . '/ssf-microsoft365-config.php' : '';
+        if ($file && is_readable($file)) {
+            require_once $file;
+        }
+    }
+
+    private function legacy_tenant_warnings(): array
+    {
+        $this->ensure_central_config_loaded();
+        if (! class_exists('SSF_Microsoft365_Config') || ! method_exists('SSF_Microsoft365_Config', 'legacy_tenant_warnings')) {
+            return array();
+        }
+        return SSF_Microsoft365_Config::legacy_tenant_warnings();
     }
 
     private function profile_keys(): array
@@ -1699,6 +1728,7 @@ final class SSF_Microsoft_ID_Login
 
     private function authority_url(string $path): string
     {
+        $this->ensure_central_config_loaded();
         return class_exists('SSF_Microsoft365_Config')
             ? SSF_Microsoft365_Config::get_authority_url($path)
             : 'https://login.microsoftonline.com/' . rawurlencode($this->config('tenant_id')) . $path;
@@ -1706,6 +1736,7 @@ final class SSF_Microsoft_ID_Login
 
     private function expected_issuer(): string
     {
+        $this->ensure_central_config_loaded();
         $host = class_exists('SSF_Microsoft365_Config') ? SSF_Microsoft365_Config::get_authority_host() : 'login.microsoftonline.com';
         return 'https://' . $host . '/' . $this->config('tenant_id') . '/v2.0';
     }

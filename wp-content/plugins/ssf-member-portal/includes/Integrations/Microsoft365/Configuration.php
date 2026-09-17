@@ -131,8 +131,9 @@ final class Configuration
             return '';
         }
 
-        if ('tenant_id' === $key && class_exists('SSF_Microsoft365_Config')) {
-            return \SSF_Microsoft365_Config::get_tenant_id();
+        if ('tenant_id' === $key) {
+            self::ensure_central_config_loaded();
+            return class_exists('SSF_Microsoft365_Config') ? \SSF_Microsoft365_Config::get_tenant_id() : '';
         }
 
         $destination = SharePointDestinations::legacy_mapping($key);
@@ -141,6 +142,16 @@ final class Configuration
         }
 
         return self::legacy_value($key);
+    }
+
+    public static function authority_url(string $path): string
+    {
+        self::ensure_central_config_loaded();
+        if (class_exists('SSF_Microsoft365_Config')) {
+            return \SSF_Microsoft365_Config::get_authority_url($path);
+        }
+
+        return 'https://login.microsoftonline.com/' . rawurlencode(self::value('tenant_id')) . $path;
     }
 
     public static function legacy_value(string $key): string
@@ -315,8 +326,9 @@ final class Configuration
     {
         $status = array();
         foreach (self::KEYS as $key => $constant) {
-            if ('tenant_id' === $key && class_exists('SSF_Microsoft365_Config')) {
-                $status[$key] = array('constant' => 'SSF_MICROSOFT365_TENANT_ID', 'configured' => \SSF_Microsoft365_Config::is_tenant_configured(), 'source' => 'central');
+            if ('tenant_id' === $key) {
+                self::ensure_central_config_loaded();
+                $status[$key] = array('constant' => 'SSF_MICROSOFT365_TENANT_ID', 'configured' => class_exists('SSF_Microsoft365_Config') && \SSF_Microsoft365_Config::is_tenant_configured(), 'source' => 'central');
                 continue;
             }
             $server_value = self::server_value($key);
@@ -336,6 +348,18 @@ final class Configuration
     private static function stored(): array
     {
         return (array) get_option(self::OPTION, array());
+    }
+
+    private static function ensure_central_config_loaded(): void
+    {
+        if (class_exists('SSF_Microsoft365_Config')) {
+            return;
+        }
+        $base = defined('WPMU_PLUGIN_DIR') ? WPMU_PLUGIN_DIR : (defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR . '/mu-plugins' : '');
+        $file = $base ? rtrim((string) $base, '/\\') . '/ssf-microsoft365-config.php' : '';
+        if ($file && is_readable($file)) {
+            require_once $file;
+        }
     }
 
     public static function server_value(string $key): string

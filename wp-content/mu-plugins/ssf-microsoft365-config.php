@@ -35,7 +35,6 @@ final class SSF_Microsoft365_Config
 
     public static function get_tenant_id(): string
     {
-        self::maybe_migrate_legacy_tenant();
         $override = self::server_value(self::TENANT_CONSTANT);
         return '' !== $override ? $override : (string) self::profile()['tenant_id'];
     }
@@ -73,6 +72,7 @@ final class SSF_Microsoft365_Config
         $authority_host = self::get_authority_host();
         $settings = self::settings();
         $migration = (array) ($settings['migration'][self::environment()] ?? array());
+        $legacy_warnings = self::legacy_tenant_warnings();
         $notice = get_transient(self::NOTICE_PREFIX . get_current_user_id());
         $test = get_transient(self::TEST_PREFIX . get_current_user_id());
         if ($notice) { delete_transient(self::NOTICE_PREFIX . get_current_user_id()); }
@@ -82,6 +82,7 @@ final class SSF_Microsoft365_Config
             <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr((string) $notice['type']); ?> inline"><p><?php echo esc_html((string) $notice['message']); ?></p></div><?php endif; ?>
             <?php if ('conflict' === ($migration['status'] ?? '')) : ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('Konflikt mellan äldre Tenant ID-värden.', 'ssf'); ?></strong> <?php esc_html_e('Granska och spara rätt Tenant ID centralt. Inga äldre värden har tagits bort.', 'ssf'); ?></p></div><?php endif; ?>
             <?php if ($override || $authority_override) : ?><div class="notice notice-info inline"><p><?php esc_html_e('Tenant ID och/eller Microsoft cloud styrs av serverkonfiguration och har företräde framför WordPress-värdet.', 'ssf'); ?></p></div><?php endif; ?>
+            <?php foreach ($legacy_warnings as $warning) : ?><div class="notice notice-warning inline"><p><?php echo esc_html($warning); ?></p></div><?php endforeach; ?>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="ssf_save_microsoft365_tenant">
                 <?php wp_nonce_field('ssf_save_microsoft365_tenant'); ?>
@@ -167,6 +168,27 @@ final class SSF_Microsoft365_Config
             $settings['migration'][$environment] = array('status' => 'conflict', 'sources' => array_column($candidates, 'source'), 'candidate_count' => count($values), 'checked_at' => gmdate('c'));
             update_option(self::OPTION, $settings, false);
         }
+    }
+
+    public static function legacy_tenant_warnings(): array
+    {
+        $central = strtolower(self::get_tenant_id());
+        $candidates = self::legacy_tenant_candidates(self::environment());
+        $warnings = array();
+        if ('' === $central) {
+            foreach ($candidates as $candidate) {
+                $warnings[] = sprintf('Äldre Tenant ID finns i %s, men central Microsoft 365-konfiguration saknar Tenant ID. Runtime använder inte legacy-värdet.', (string) $candidate['source']);
+            }
+            return array_values(array_unique($warnings));
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($central !== strtolower((string) $candidate['value'])) {
+                $warnings[] = sprintf('Äldre Tenant ID i %s matchar inte central Microsoft 365-konfiguration. Runtime använder central Tenant ID; legacy-värdet används inte.', (string) $candidate['source']);
+            }
+        }
+
+        return array_values(array_unique($warnings));
     }
 
     private static function legacy_tenant_candidates(string $environment): array

@@ -43,7 +43,7 @@ Assert-Contains 'SharePoint migration fills metadata recursively' $destinations 
 Assert-Contains 'DEV-skrivspärr' $destinations 'write_allowed_for_profile'
 Assert-Contains 'Central delegation' $configuration 'SharePointDestinations::value'
 Assert-Contains 'SharePoint tenant delegates to central service' $configuration 'SSF_Microsoft365_Config::get_tenant_id()'
-Assert-Contains 'SharePoint authority delegates to central service' $authentication 'SSF_Microsoft365_Config::get_authority_url'
+Assert-Contains 'SharePoint authority delegates to central service' $authentication "Configuration::authority_url('/oauth2/v2.0/token')"
 Assert-Contains 'Central tenant is environment separated' $tenantConfig "'production' === wp_get_environment_type() ? 'production' : 'development'"
 Assert-Contains 'Publikt destinations-API' $configuration 'public static function destination(string $destination): array'
 Assert-Contains 'Discovery-list-ID sparas centralt' $configuration "SharePointDestinations::save_field('annual_meetings', 'list_id'"

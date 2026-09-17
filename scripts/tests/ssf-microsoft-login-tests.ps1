@@ -27,8 +27,8 @@ Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
 Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.3'
 
-Assert-Contains 'Feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
-Assert-Contains 'Explicit feature flag required' $plugin "SSF_M365_LOGIN_ENABLED"
+Assert-Contains 'Server force-off switch exists' $plugin "SSF_M365_LOGIN_ENABLED"
+Assert-Contains 'Server force-off switch is explicit' $plugin 'private function is_force_disabled()'
 Assert-Contains 'One structured enable resolver exists' $plugin 'private function enable_state()'
 Assert-Contains 'Backend enable state comes from active DB profile' $plugin "`$admin_enabled = ! empty(`$profile['enabled'])"
 Assert-Contains 'Effective state combines backend config and force-off' $plugin '$active = $admin_enabled && $configured && ! $force_off'
@@ -48,10 +48,23 @@ Assert-Contains 'Force-off is shown in backend' $plugin 'Avstängd av serverkonf
 Assert-Contains 'Force-off disables backend checkbox' $plugin 'disabled($force_off)'
 Assert-Contains 'Effective ACTIVE requires complete status' $plugin "return __('AKTIV'"
 Assert-Contains 'Tenant comes from central Microsoft 365 service' $plugin 'SSF_Microsoft365_Config::get_tenant_id()'
+Assert-Contains 'Central tenant loader exists' $plugin 'ensure_central_config_loaded'
+Assert-Contains 'Login runtime can load central MU config' $plugin 'ssf-microsoft365-config.php'
+Assert-NotContains 'Login runtime never reads legacy tenant constant' $plugin "'tenant_id' => 'SSF_M365_LOGIN_TENANT_ID'"
+Assert-NotContains 'Login runtime does not getenv legacy tenant' $plugin "getenv('SSF_M365_LOGIN_TENANT_ID')"
 Assert-NotContains 'No duplicate Tenant ID input in Login UI' $plugin 'name="profiles[<?php echo esc_attr($profile_key); ?>][tenant_id]"'
+Assert-Contains 'Login UI names central tenant configuration' $plugin 'Central Microsoft 365 configuration'
+Assert-Contains 'Login UI shows central tenant configured' $plugin "'CONFIGURED'"
+Assert-Contains 'Login UI shows central tenant missing' $plugin "'MISSING'"
+Assert-Contains 'Login UI shows effective status' $plugin 'Effective status'
+Assert-Contains 'Legacy tenant warnings displayed on login page' $plugin 'legacy_tenant_warnings'
 Assert-Contains 'Central tenant management link exists' $plugin 'Hantera Microsoft 365-inställningar'
 Assert-Contains 'Client ID constant exists' $plugin "SSF_M365_LOGIN_CLIENT_ID"
 Assert-Contains 'Client secret constant exists' $plugin "SSF_M365_LOGIN_CLIENT_SECRET"
+Assert-Contains 'Client ID falls back to backend profile' $plugin "return is_string(`$profile[`$key] ?? null) ? trim((string) `$profile[`$key]) : '';"
+Assert-Contains 'Login settings save keeps backend enabled' $plugin "`$current['profiles'][`$profile_key]['enabled'] = ! empty(`$profile['enabled']);"
+Assert-Contains 'Login settings save keeps backend client ID' $plugin "`$current['profiles'][`$profile_key]['client_id']"
+Assert-Contains 'Login settings save keeps backend client secret' $plugin "`$current['profiles'][`$profile_key]['client_secret']"
 Assert-NotContains 'No SharePoint option reuse' $plugin 'ssf_member_portal_graph_configuration'
 Assert-NotContains 'No SharePoint client constants' $plugin 'SSF_GRAPH_CLIENT_SECRET'
 
