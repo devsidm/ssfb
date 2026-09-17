@@ -2,18 +2,17 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.2",
-    "built_at":  "2026-09-17T07:12:56.8274248Z",
+    "build":  "20260917.3",
+    "built_at":  "2026-09-17T11:41:48.4163979Z",
     "source":  "codex",
-    "source_revision":  "5062cc3c94b0040881277f515e7366e6437aea8a",
-    "description":  "Central Microsoft 365 tenant configuration shared by Login and SharePoint",
+    "source_revision":  "a1b6ea6a28b7400ddea0d6a58abfab62524ff939",
+    "description":  "Refactor central Microsoft 365 administration",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "microsoft-id-login",
-                       "release-tooling",
-                       "ssf-admin-navigation",
                        "ssf-member-portal",
-                       "ssf-microsoft365-config"
+                       "ssf-microsoft365-config",
+                       "ssf-office365-mailer"
                    ],
     "status":  "development",
     "prepared_at":  ""
