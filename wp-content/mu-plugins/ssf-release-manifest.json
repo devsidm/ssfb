@@ -2,13 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.4",
-    "built_at":  "2026-09-17T11:54:38.9637880Z",
+    "build":  "20260917.5",
+    "built_at":  "2026-09-17T12:35:02.2664874Z",
     "source":  "codex",
-    "source_revision":  "e8bf64e87e984ff9d09dd4875afff76b7bf37e86",
-    "description":  "Fix archive migration column schema reader",
+    "source_revision":  "e6bf730e07bb6300e0a96ea2ff525d09b8cc8f34",
+    "description":  "Improve archive migration target folder step",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
+                       "release-tooling",
                        "ssf-medlemsprocess"
                    ],
     "status":  "development",
