@@ -81,22 +81,31 @@ final class SharePointDiscovery
         $path = $parent_id
             ? 'drives/' . rawurlencode($drive_id) . '/items/' . rawurlencode($parent_id) . '/children'
             : 'drives/' . rawurlencode($drive_id) . '/root/children';
-        $result = $this->graph->request('GET', $path . '?$select=id,name,folder,webUrl,parentReference');
-        if (is_wp_error($result)) {
-            return $result;
-        }
         $folders = array();
-        foreach ((array) ($result['value'] ?? array()) as $item) {
-            if (empty($item['folder'])) {
-                continue;
+        $next = $path . '?$select=id,name,folder,webUrl,parentReference';
+        $seen = array();
+        while ($next) {
+            if (isset($seen[$next])) {
+                return new \WP_Error('sharepoint_pagination_loop', 'Microsoft Graph returnerade en sidloop vid mappbläddring.');
             }
-            $name = sanitize_text_field((string) ($item['name'] ?? ''));
-            $folders[] = array(
-                'id' => sanitize_text_field((string) ($item['id'] ?? '')),
-                'name' => $name,
-                'path' => trim($parent_path . '/' . $name, '/'),
-                'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
-            );
+            $seen[$next] = true;
+            $result = $this->graph->request('GET', $next);
+            if (is_wp_error($result)) {
+                return $result;
+            }
+            foreach ((array) ($result['value'] ?? array()) as $item) {
+                if (empty($item['folder'])) {
+                    continue;
+                }
+                $name = sanitize_text_field((string) ($item['name'] ?? ''));
+                $folders[] = array(
+                    'id' => sanitize_text_field((string) ($item['id'] ?? '')),
+                    'name' => $name,
+                    'path' => trim($parent_path . '/' . $name, '/'),
+                    'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
+                );
+            }
+            $next = esc_url_raw((string) ($result['@odata.nextLink'] ?? ''));
         }
         return $folders;
     }

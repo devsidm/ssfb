@@ -182,7 +182,9 @@ final class SharePointAdmin
         }
         $destination = sanitize_key((string) ($_POST['destination'] ?? ''));
         $environment = SharePointDestinations::environment();
-        if (! isset(SharePointDestinations::definitions()[$destination])) {
+        // Folder migration owns its working profile, but deliberately reuses
+        // this discovery endpoint and its site/drive/folder browser.
+        if (! isset(SharePointDestinations::definitions()[$destination]) && 'folder_migration' !== $destination) {
             wp_send_json_error(array('message' => 'Okänd SharePoint-destination.'), 400);
         }
         $profile = json_decode((string) wp_unslash($_POST['profile'] ?? '{}'), true);
@@ -209,16 +211,18 @@ final class SharePointAdmin
                 break;
             case 'diagnostics':
                 $result = $this->discovery->diagnostics($profile);
-                SharePointDestinations::save_health($destination, $environment, $result);
+                if ('folder_migration' !== $destination) {
+                    SharePointDestinations::save_health($destination, $environment, $result);
+                }
                 break;
             case 'write_test':
                 if ($environment !== SharePointDestinations::environment()) {
                     $result = new \WP_Error('sharepoint_environment_write_blocked', 'Skrivtest kan bara köras för installationens aktiva miljöprofil.');
-                } elseif (! SharePointDestinations::write_allowed_for_profile($destination, $environment, $profile)) {
+                } elseif ('folder_migration' !== $destination && ! SharePointDestinations::write_allowed_for_profile($destination, $environment, $profile)) {
                     $result = new \WP_Error('sharepoint_environment_write_blocked', 'Skrivning från Development är blockerad eftersom destinationen även används i Production.');
                 } else {
                     $result = $this->discovery->write_test($profile);
-                    if (is_array($result)) {
+                    if (is_array($result) && 'folder_migration' !== $destination) {
                         $health = SharePointDestinations::health($destination, $environment);
                         $health['write'] = array('ok' => ! empty($result['write']), 'cleanup' => ! empty($result['cleanup']));
                         $health['timestamp'] = gmdate('c');

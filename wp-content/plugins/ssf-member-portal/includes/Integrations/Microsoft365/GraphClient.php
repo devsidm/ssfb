@@ -22,7 +22,11 @@ final class GraphClient
             return $token;
         }
 
-        $endpoint = 'https://graph.microsoft.com/v1.0/' . ltrim($path, '/');
+        // Graph returns absolute @odata.nextLink and copy-monitor URLs. Keep
+        // those URLs in the shared authenticated transport.
+        $endpoint = preg_match('#^https://graph\\.microsoft\\.com/#i', $path)
+            ? $path
+            : 'https://graph.microsoft.com/v1.0/' . ltrim($path, '/');
         $args = array(
             'method' => $method,
             'timeout' => 45,
@@ -61,6 +65,35 @@ final class GraphClient
         }
 
         return is_array($json) ? $json : array();
+    }
+
+    /** Response headers are needed for async DriveItem copy Location URLs. */
+    public function request_response(string $method, string $path, $body = null, array $headers = array())
+    {
+        $token = $this->authentication->token();
+        if (is_wp_error($token)) {
+            return $token;
+        }
+        $endpoint = preg_match('#^https://graph\\.microsoft\\.com/#i', $path)
+            ? $path
+            : 'https://graph.microsoft.com/v1.0/' . ltrim($path, '/');
+        $args = array('method' => $method, 'timeout' => 45, 'headers' => array_merge(array('Authorization' => 'Bearer ' . $token), $headers));
+        if (null !== $body) {
+            if (! isset($args['headers']['Content-Type'])) {
+                $args['headers']['Content-Type'] = is_string($body) ? 'application/octet-stream' : 'application/json';
+            }
+            $args['body'] = is_string($body) ? $body : wp_json_encode($body);
+        }
+        $response = wp_remote_request($endpoint, $args);
+        if (is_wp_error($response)) {
+            return new \WP_Error('graph_request_transport', __('Kunde inte kontakta Microsoft Graph.', 'ssf-member-portal'), array('http_status' => 0));
+        }
+        $status = (int) wp_remote_retrieve_response_code($response);
+        $json = json_decode(wp_remote_retrieve_body($response), true);
+        if ($status < 200 || $status >= 300) {
+            return new \WP_Error('graph_request_failed', sanitize_text_field($json['error']['message'] ?? __('Okänt fel från Microsoft Graph.', 'ssf-member-portal')), array('http_status' => $status, 'graph_code' => sanitize_key((string) ($json['error']['code'] ?? ''))));
+        }
+        return array('status' => $status, 'headers' => wp_remote_retrieve_headers($response), 'body' => is_array($json) ? $json : array());
     }
 
     public function clear_token(): void

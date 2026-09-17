@@ -20,8 +20,10 @@ class SSF_Medlemsprocess_Archive_Migration
     private const SCHEMA_SYNC_OPTION = 'ssf_medlemsprocess_archive_schema_sync';
     private const BATCH_OPTION = 'ssf_medlemsprocess_archive_batch';
     private const SCHEMA_ERROR_PREFIX = 'ssf_archive_schema_error_';
+    private const GENERIC_OPTION = 'ssf_sharepoint_folder_migration';
 
     private $graph;
+    private $generic_core;
 
     public function __construct()
     {
@@ -45,6 +47,14 @@ class SSF_Medlemsprocess_Archive_Migration
         add_action('admin_post_ssf_application_archive_cutover', array($this, 'activate_target'));
         add_action('admin_post_ssf_application_archive_export', array($this, 'export_plan'));
         add_action('admin_post_ssf_application_archive_restore_refs', array($this, 'restore_old_refs'));
+        add_action('admin_post_ssf_folder_migration_mode', array($this, 'generic_save_mode'));
+        add_action('admin_post_ssf_folder_migration_location', array($this, 'generic_save_location'));
+        add_action('admin_post_ssf_folder_migration_destination', array($this, 'generic_save_destination'));
+        add_action('admin_post_ssf_folder_migration_inventory', array($this, 'generic_inventory'));
+        add_action('admin_post_ssf_folder_migration_dry_run', array($this, 'generic_dry_run'));
+        add_action('admin_post_ssf_folder_migration_prepare', array($this, 'generic_prepare'));
+        add_action('admin_post_ssf_folder_migration_write_test', array($this, 'generic_write_test'));
+        add_action('admin_post_ssf_folder_migration_run', array($this, 'generic_run'));
     }
 
     public static function unschedule(): void
@@ -54,6 +64,10 @@ class SSF_Medlemsprocess_Archive_Migration
     public function render_page(): void
     {
         $this->require_manage();
+        if ($this->generic_enabled()) {
+            $this->render_generic_wizard();
+            return;
+        }
         $this->render_wizard();
         return;
         $target = $this->target();
@@ -150,6 +164,184 @@ class SSF_Medlemsprocess_Archive_Migration
             <details class="ssf-archive-details"><summary>Tekniska detaljer</summary><pre><?php echo esc_html(wp_json_encode(array('target' => $target, 'readiness' => $readiness, 'write_test' => $write), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre></details>
         </div>
         <?php
+    }
+
+    /**
+     * New generic folder-migration UI.  The legacy wizard below remains the
+     * membership adapter and can be selected explicitly for its WP reference
+     * switch/restore behaviour.
+     */
+    private function render_generic_wizard(): void
+    {
+        $this->enqueue_generic_discovery();
+        $state = $this->generic_state();
+        $source = (array) ($state['source'] ?? array());
+        $target = (array) ($state['target'] ?? array());
+        $inventory = (array) ($state['inventory'] ?? array());
+        $dry_run = (array) ($state['dry_run'] ?? array());
+        $prepared = (array) ($state['prepared'] ?? array());
+        $write = (array) ($state['write_test'] ?? array());
+        $final = (array) ($state['reconciliation'] ?? array());
+        $editing = sanitize_key((string) ($_GET['location'] ?? 'source')) === 'target' ? 'target' : 'source';
+        $profile = 'target' === $editing ? $target : $source;
+        $display_name = (string) ($target['destination_folder_name'] ?? ($source['folder_name'] ?? ''));
+        $preview = trim(trim((string) ($target['folder_path'] ?? ''), '/') . '/' . trim((string) ($target['extra_structure'] ?? ''), '/') . '/' . $display_name, '/');
+        ?>
+        <div class="wrap ssf-archive-migration">
+            <h1>Migrera katalogstruktur</h1>
+            <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-application-archive-migration'); } ?>
+            <?php $this->generic_notice(); ?>
+            <p class="ssf-archive-migration__intro">Kopiera och verifiera en vald SharePoint-katalog. Källan lämnas alltid orörd.</p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="ssf-archive-inline-form"><input type="hidden" name="action" value="ssf_folder_migration_mode"><?php wp_nonce_field('ssf_folder_migration_mode'); ?><label><strong>Typ</strong> <select name="mode"><option value="generic">Generell SharePoint-katalog</option><option value="membership">Medlemsansökningar</option></select></label> <?php submit_button('Byt läge', 'secondary', 'submit', false); ?></form>
+
+            <section id="archive-source" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>1</span><div><h2>Välj källa</h2><p>Hitta site, dokumentbibliotek och källa med samma SharePoint-utforskare som används för SharePoint-integrationer.</p></div></div>
+                <p><strong>KÄLLA:</strong> <?php echo esc_html((string) ($source['site_name'] ?? 'Inte vald')); ?> / <?php echo esc_html((string) ($source['drive_name'] ?? '')); ?> / <?php echo esc_html((string) ($source['folder_path'] ?? '')); ?></p>
+                <p><a class="button" href="<?php echo esc_url(add_query_arg('location', 'source', remove_query_arg('location')) . '#archive-source'); ?>">Välj källa</a> <a class="button" href="<?php echo esc_url(add_query_arg('location', 'target', remove_query_arg('location')) . '#archive-target'); ?>">Välj målroot</a></p>
+                <?php $this->render_generic_discovery_form($editing, $profile); ?>
+            </section>
+
+            <section id="archive-inventory" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>2</span><div><h2>Inventera källa</h2><p>Hela den valda strukturen, metadata som faktiskt används och relevanta kolumner läses utan skrivning.</p></div></div>
+                <?php $this->generic_button('ssf_folder_migration_inventory', 'Inventera källa', 'archive-inventory', empty($source['folder_id'])); ?>
+                <?php if ($inventory) : ?><p><strong>Struktur inventerad:</strong> <?php echo esc_html((string) ($inventory['summary']['folders'] ?? 0)); ?> mappar, <?php echo esc_html((string) ($inventory['summary']['files'] ?? 0)); ?> filer, <?php echo esc_html(size_format((int) ($inventory['summary']['bytes'] ?? 0))); ?>. Metadatafält använda: <?php echo esc_html((string) ($inventory['summary']['metadata_fields_used'] ?? 0)); ?>.</p><?php endif; ?>
+            </section>
+
+            <section id="archive-target" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj målroot</h2><p>Välj den katalog där den migrerade strukturen ska placeras. Slutmappen skapas automatiskt vid förberedelse.</p></div></div>
+                <p><strong>VALD ROOT:</strong> <?php echo esc_html((string) ($target['site_name'] ?? 'Inte vald')); ?> / <?php echo esc_html((string) ($target['drive_name'] ?? '')); ?> / <?php echo esc_html((string) ($target['folder_path'] ?? '')); ?></p>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_folder_migration_destination"><?php wp_nonce_field('ssf_folder_migration_destination'); ?>
+                    <p><label><input type="radio" name="keep_name" value="1" <?php checked(empty($target['keep_name']) || '1' === (string) $target['keep_name']); ?>> Flytta och behåll namn</label> <label><input type="radio" name="keep_name" value="0" <?php checked('0' === (string) ($target['keep_name'] ?? '')); ?>> Flytta och byt namn</label></p>
+                    <p><label>Nytt namn <input class="regular-text" name="destination_folder_name" value="<?php echo esc_attr($display_name); ?>"></label></p>
+                    <p><label>Extra struktur <input class="regular-text" name="extra_structure" value="<?php echo esc_attr((string) ($target['extra_structure'] ?? '')); ?>" placeholder="arkiv/2026"></label></p>
+                    <?php submit_button('Uppdatera resultat', 'secondary', 'submit', false); ?></form>
+                <div class="ssf-archive-preview"><strong>SÅ KOMMER DET ATT SE UT</strong><dl><div><dt>Källa</dt><dd><?php echo esc_html((string) ($source['folder_path'] ?? '')); ?></dd></div><div><dt>Mål</dt><dd data-ssf-migration-preview><?php echo esc_html($preview); ?></dd></div></dl></div>
+            </section>
+
+            <section id="archive-plan" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4–5</span><div><h2>Migreringsplan och torrkörning</h2><p>Beräknar mål, schema, konflikter och blockerare. Torrkörning gör noll SharePoint-skrivningar.</p></div></div>
+                <?php $this->generic_button('ssf_folder_migration_dry_run', 'Kör torrkörning', 'archive-plan', empty($inventory['ok']) || empty($target['folder_id'])); ?>
+                <?php if ($dry_run) : ?><p><strong>Mål:</strong> <?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?>. Schema: <?php echo esc_html((string) count((array) ($dry_run['schema']['exact'] ?? array()))); ?> matchar, <?php echo esc_html((string) count((array) ($dry_run['schema']['create'] ?? array()))); ?> skapas. <strong>Blockerare:</strong> <?php echo esc_html((string) count((array) ($dry_run['blockers'] ?? array()))); ?>.</p><?php endif; ?>
+            </section>
+
+            <section id="archive-prepare" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>6</span><div><h2>Förbered mål och schema</h2><p>Skapar bara eventuell extra struktur, slutlig målroot och säkra saknade bibliotekskolumner – aldrig källans hela underträd.</p></div></div>
+                <?php $this->generic_button('ssf_folder_migration_prepare', 'Förbered mål och schema', 'archive-prepare', empty($dry_run['ok'])); ?>
+                <?php if ($prepared) : ?><p><strong>Slutligt mål:</strong> <?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?>. Root skapad och schema verifierat. Skapade migreringsundermapppar: 0.</p><?php endif; ?>
+            </section>
+
+            <section id="archive-write-test" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>7</span><div><h2>Skrivtest</h2><p>Verifierar mapp, fil och representativ metadata i den verkliga förberedda målroten, och städar testdata.</p></div></div>
+                <?php $this->generic_button('ssf_folder_migration_write_test', 'Kör skrivtest', 'archive-write-test', empty($prepared['target_folder_id'])); ?>
+                <?php if ($write) : foreach ((array) ($write['steps'] ?? array()) as $step) : ?><p><?php echo ! empty($step['ok']) ? '✓' : '✗'; ?> <?php echo esc_html((string) ($step['label'] ?? '')); ?></p><?php endforeach; endif; ?>
+            </section>
+
+            <section id="archive-test-case" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>8</span><div><h2>Testärende – valfritt</h2><p>Du kan hoppa över testärende. Slutförandet använder samma generella motor och hoppar över redan verifierade objekt vid återupptagning.</p></div></div><p><em>Ingen separat förenklad kopieringsväg används.</em></p></section>
+            <section id="archive-run" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>9</span><div><h2>Slutför migrering av källmappen</h2><p>Mappar och filer kopieras stegvis från SharePoint, metadata läses tillbaka och varje objekt sparas som verifierat. Källan raderas aldrig.</p></div></div>
+                <?php $this->generic_button('ssf_folder_migration_run', 'Slutför migrering av källmappen', 'archive-run', empty($write['ok']) || empty($prepared['target_folder_id']), 'primary'); ?>
+            </section>
+            <section id="archive-reconcile" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>10</span><div><h2>Slutkontroll</h2><p>Källan är kvar och orörd. Rapporten visar verifierade objekt och eventuella fel.</p></div></div>
+                <?php if ($final) : ?><p>Verifierade objekt: <?php echo esc_html((string) ($final['verified_items'] ?? 0)); ?> / <?php echo esc_html((string) ($final['expected_items'] ?? 0)); ?>. Källa: <?php echo ! empty($final['source_untouched']) ? '✓ kvar och orörd' : 'okänd'; ?>.</p><?php endif; ?>
+            </section>
+        </div>
+        <?php
+    }
+
+    private function generic_enabled(): bool
+    {
+        $state = $this->generic_state();
+        return 'membership' !== (string) ($state['mode'] ?? 'generic');
+    }
+
+    private function generic_state(): array
+    {
+        return array_merge(array('mode' => 'generic', 'source' => array(), 'target' => array()), (array) get_option(self::GENERIC_OPTION, array()));
+    }
+
+    private function generic_core()
+    {
+        if (! $this->generic_core && $this->graph && class_exists('SSF\\MemberPortal\\Integrations\\Microsoft365\\FolderMigrationCore')) {
+            $this->generic_core = new \SSF\MemberPortal\Integrations\Microsoft365\FolderMigrationCore($this->graph);
+        }
+        return $this->generic_core ?: new WP_Error('migration_core_unavailable', 'Den generella SharePoint-migreringen är inte tillgänglig.');
+    }
+
+    private function generic_save_mode(): void
+    {
+        $this->require_manage(); check_admin_referer('ssf_folder_migration_mode');
+        $state = $this->generic_state(); $state['mode'] = 'membership' === sanitize_key((string) ($_POST['mode'] ?? 'generic')) ? 'membership' : 'generic';
+        update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect('archive-source', 'Läge uppdaterat.', 'success');
+    }
+
+    private function generic_save_location(): void
+    {
+        $this->require_manage(); check_admin_referer('ssf_folder_migration_location');
+        $kind = 'target' === sanitize_key((string) ($_POST['location_kind'] ?? 'source')) ? 'target' : 'source';
+        $input = (array) wp_unslash($_POST['profile'] ?? array()); $location = array();
+        foreach (array('site_url','site_id','site_name','drive_id','drive_name','list_id','folder_id','folder_name','folder_path','folder_web_url') as $key) $location[$key] = in_array($key, array('site_url','folder_web_url'), true) ? esc_url_raw((string) ($input[$key] ?? '')) : sanitize_text_field((string) ($input[$key] ?? ''));
+        foreach (array('site_id','drive_id','list_id','folder_id') as $key) if (empty($location[$key])) $this->generic_redirect('archive-' . $kind, 'Välj site, dokumentbibliotek och mapp med Hitta/bläddra så att verifierade identifierare sparas.', 'error');
+        $state = $this->generic_state(); $state[$kind] = $location;
+        if ('source' === $kind && empty($state['target']['destination_folder_name'])) $state['target']['destination_folder_name'] = $location['folder_name'];
+        unset($state['inventory'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']); update_option(self::GENERIC_OPTION, $state, false);
+        $this->generic_redirect('archive-' . $kind, ucfirst($kind) . ' verifierad och sparad.', 'success');
+    }
+
+    private function generic_save_destination(): void
+    {
+        $this->require_manage(); check_admin_referer('ssf_folder_migration_destination'); $state = $this->generic_state();
+        $keep = '0' !== (string) ($_POST['keep_name'] ?? '1'); $source_name = (string) ($state['source']['folder_name'] ?? '');
+        $state['target']['keep_name'] = $keep ? '1' : '0'; $state['target']['destination_folder_name'] = $keep ? $source_name : sanitize_text_field((string) ($_POST['destination_folder_name'] ?? ''));
+        $state['target']['extra_structure'] = trim(sanitize_text_field((string) ($_POST['extra_structure'] ?? '')), '/');
+        unset($state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']); update_option(self::GENERIC_OPTION, $state, false);
+        $this->generic_redirect('archive-target', 'Resultatet har uppdaterats.', 'success');
+    }
+
+    private function generic_inventory(): void { $this->generic_execute('ssf_folder_migration_inventory', 'archive-inventory', function ($core, &$state) { return $core->inventory((array) $state['source']); }, 'inventory', 'Källan är inventerad.'); }
+    private function generic_dry_run(): void { $this->generic_execute('ssf_folder_migration_dry_run', 'archive-plan', function ($core, &$state) { return $core->dry_run((array) $state['source'], (array) $state['target'], (array) $state['inventory']); }, 'dry_run', 'Torrkörningen är klar; inga SharePoint-skrivningar gjordes.'); }
+    private function generic_prepare(): void { $this->generic_execute('ssf_folder_migration_prepare', 'archive-prepare', function ($core, &$state) { return $core->prepare((array) $state['target'], (array) $state['dry_run']); }, 'prepared', 'Målroot och schema är förberedda.'); }
+    private function generic_write_test(): void { $this->generic_execute('ssf_folder_migration_write_test', 'archive-write-test', function ($core, &$state) { return $core->write_test((array) $state['target'], (string) ($state['prepared']['target_folder_id'] ?? ''), (array) $state['inventory']); }, 'write_test', 'Skrivtestet är klart.'); }
+    private function generic_run(): void
+    {
+        $this->require_manage(); check_admin_referer('ssf_folder_migration_run'); $state = $this->generic_state(); $core = $this->generic_core();
+        if (is_wp_error($core)) $this->generic_redirect('archive-run', $core->get_error_message(), 'error');
+        $result = $core->migrate((array) $state['source'], (array) $state['target'], (array) $state['inventory'], (string) ($state['prepared']['target_folder_id'] ?? ''));
+        if (is_wp_error($result)) $this->generic_redirect('archive-run', $result->get_error_message(), 'error');
+        $state['migration'] = $result; $state['reconciliation'] = $core->reconcile((array) $state['source'], (array) $state['target'], (array) $state['inventory'], (string) ($state['prepared']['target_folder_id'] ?? '')); update_option(self::GENERIC_OPTION, $state, false);
+        $this->generic_redirect('archive-reconcile', 'Migreringen är klar och slutkontrollerad.', 'success');
+    }
+
+    private function generic_execute(string $nonce, string $section, callable $operation, string $key, string $success): void
+    {
+        $this->require_manage(); check_admin_referer($nonce); $state = $this->generic_state(); $core = $this->generic_core();
+        if (is_wp_error($core)) $this->generic_redirect($section, $core->get_error_message(), 'error'); $result = $operation($core, $state);
+        if (is_wp_error($result)) $this->generic_redirect($section, $result->get_error_message(), 'error'); $state[$key] = $result; update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect($section, $success, 'success');
+    }
+
+    private function generic_redirect(string $section, string $message, string $type): void
+    {
+        set_transient('ssf_folder_migration_notice_' . get_current_user_id(), array('message' => $message, 'type' => $type), MINUTE_IN_SECONDS);
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-application-archive-migration'), admin_url('admin.php')) . '#' . $section); exit;
+    }
+
+    private function generic_notice(): void { $notice = get_transient('ssf_folder_migration_notice_' . get_current_user_id()); if ($notice) { delete_transient('ssf_folder_migration_notice_' . get_current_user_id()); echo '<div class="notice notice-' . esc_attr('error' === ($notice['type'] ?? '') ? 'error' : 'success') . ' is-dismissible"><p>' . esc_html((string) $notice['message']) . '</p></div>'; } }
+
+    private function generic_button(string $action, string $label, string $section, bool $disabled = false, string $class = 'secondary'): void { echo '<form method="post" class="ssf-archive-inline-form" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="' . esc_attr($action) . '">'; wp_nonce_field($action); submit_button($label, $class, 'submit', false, array('disabled' => $disabled)); echo '</form>'; }
+
+    private function render_generic_discovery_form(string $kind, array $profile): void
+    {
+        ?>
+        <form class="ssf-sp-wizard" data-ssf-sharepoint-admin data-destination="folder_migration" data-environment="<?php echo esc_attr($this->environment()); ?>" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="ssf_folder_migration_location"><input type="hidden" name="location_kind" value="<?php echo esc_attr($kind); ?>"><?php wp_nonce_field('ssf_folder_migration_location'); ?>
+            <p><strong>Redigerar:</strong> <?php echo 'source' === $kind ? 'KÄLLA' : 'VALD ROOT'; ?></p>
+            <p><label>SharePoint Site URL <input class="regular-text" name="profile[site_url]" value="<?php echo esc_attr((string) ($profile['site_url'] ?? '')); ?>" data-sp-field="site_url"></label> <button type="button" class="button" data-sp-operation="site">Hitta site</button></p><div class="ssf-sp-result" data-sp-result="site" aria-live="polite"></div>
+            <p><label>Dokumentbibliotek <input class="regular-text" name="profile[drive_name]" value="<?php echo esc_attr((string) ($profile['drive_name'] ?? '')); ?>" data-sp-field="drive_name"></label> <button type="button" class="button" data-sp-operation="drives">Hitta dokumentbibliotek</button></p><div class="ssf-sp-result" data-sp-result="drives" aria-live="polite"></div>
+            <p><label>Mappväg <input class="regular-text" name="profile[folder_path]" value="<?php echo esc_attr((string) ($profile['folder_path'] ?? '')); ?>" data-sp-field="folder_path"></label> <button type="button" class="button" data-sp-operation="folder_path">Hitta mapp</button> <button type="button" class="button" data-sp-operation="folders" data-parent-id="" data-parent-path="">Bläddra från roten</button></p><div class="ssf-sp-result" data-sp-result="folders" aria-live="polite"></div>
+            <details><summary>Avancerat / identifierare</summary><?php foreach (array('site_name','site_id','drive_id','list_id','folder_name','folder_id','folder_web_url') as $key) : ?><p><label><?php echo esc_html($key); ?> <input class="regular-text" name="profile[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($profile[$key] ?? '')); ?>" data-sp-field="<?php echo esc_attr($key); ?>"></label></p><?php endforeach; ?></details>
+            <?php submit_button('Spara verifierad ' . ('source' === $kind ? 'källa' : 'målroot'), 'secondary'); ?>
+        </form>
+        <?php
+    }
+
+    private function enqueue_generic_discovery(): void
+    {
+        if (! defined('SSF_MEMBER_PORTAL_URL')) return;
+        wp_enqueue_style('ssf-sharepoint-admin', SSF_MEMBER_PORTAL_URL . 'assets/css/sharepoint-admin.css', array(), SSF_MEMBER_PORTAL_VERSION);
+        wp_enqueue_script('ssf-sharepoint-admin', SSF_MEMBER_PORTAL_URL . 'assets/js/sharepoint-admin.js', array(), SSF_MEMBER_PORTAL_VERSION, true);
+        wp_localize_script('ssf-sharepoint-admin', 'ssfSharePointAdmin', array('ajaxUrl' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('ssf_sharepoint_admin'), 'currentEnvironment' => $this->environment()));
     }
 
     private function render_wizard(): void
