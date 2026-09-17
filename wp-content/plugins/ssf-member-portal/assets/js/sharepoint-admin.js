@@ -3,7 +3,7 @@
 
   var root = document.querySelector('[data-ssf-sharepoint-admin]');
   if (!root || typeof ssfSharePointAdmin === 'undefined') return;
-  var form = root.querySelector('.ssf-sp-wizard');
+  var form = root.matches('.ssf-sp-wizard') ? root : root.querySelector('.ssf-sp-wizard');
   if (!form) return;
 
   function escapeHtml(value) {

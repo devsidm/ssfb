@@ -2,14 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.13",
-    "built_at":  "2026-09-17T20:57:20.7097614Z",
+    "build":  "20260917.14",
+    "built_at":  "2026-09-17T21:05:38.4918243Z",
     "source":  "codex",
-    "source_revision":  "e0c0f5b1e0e17cccbe1975888ae74d874f58ab2e",
-    "description":  "Fix generic migration WordPress hook callbacks",
+    "source_revision":  "dd751d8b8983a761251ef01f80395a65d6e97b00",
+    "description":  "Fix generic SharePoint site discovery button",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "ssf-medlemsprocess"
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
