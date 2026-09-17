@@ -304,6 +304,9 @@ final class Controller
         $notice = is_wp_error($result)
             ? array('type' => 'error', 'message' => $result->get_error_message())
             : array('type' => 'success', 'message' => __('Microsoft 365-konfigurationen har sparats.', 'ssf-member-portal'));
+        if (class_exists('SSF_Admin_Feedback')) {
+            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', $notice['type'], $notice['message'], array('m365_tab' => 'integrations'));
+        }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;
@@ -316,6 +319,9 @@ final class Controller
         }
 
         Configuration::reset_admin_defaults();
+        if (class_exists('SSF_Admin_Feedback')) {
+            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', 'success', __('SSF-standardvärdena har återställts. Client secret har behållits.', 'ssf-member-portal'), array('m365_tab' => 'integrations'));
+        }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), array('type' => 'success', 'message' => __('SSF-standardvärdena har återställts. Client secret har behållits.', 'ssf-member-portal')), MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;
@@ -606,6 +612,13 @@ final class Controller
         }
 
         update_option('ssf_member_portal_graph_diagnostics', $diagnostics, false);
+        if (class_exists('SSF_Admin_Feedback')) {
+            $details = empty($diagnostics['ok']) ? array(
+                'code' => (string) ($diagnostics['graph_code'] ?? ''),
+                'http_status' => (int) ($diagnostics['http_status'] ?? 0),
+            ) : array();
+            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', $notice['type'], $notice['message'], array('m365_tab' => 'integrations'), $details);
+        }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;

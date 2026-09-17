@@ -132,12 +132,13 @@ final class SSF_Microsoft365_Config
         $settings = self::settings();
         $migration = (array) ($settings['migration'][self::environment()] ?? array());
         $legacy_warnings = self::legacy_tenant_warnings();
-        $notice = get_transient(self::NOTICE_PREFIX . get_current_user_id());
+        $notice = class_exists('SSF_Admin_Feedback') ? false : get_transient(self::NOTICE_PREFIX . get_current_user_id());
         $test = get_transient(self::TEST_PREFIX . get_current_user_id());
         if ($notice) { delete_transient(self::NOTICE_PREFIX . get_current_user_id()); }
         ?>
-        <section class="postbox" style="max-width:980px;padding:20px">
+        <section id="microsoft-directory" class="postbox" style="max-width:980px;padding:20px">
             <h2><?php esc_html_e('Microsoft 365 – organisation', 'ssf'); ?></h2>
+            <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('microsoft-directory'); } ?>
             <?php if ($notice) : ?><div class="notice notice-<?php echo esc_attr((string) $notice['type']); ?> inline"><p><?php echo esc_html((string) $notice['message']); ?></p></div><?php endif; ?>
             <?php if ('conflict' === ($migration['status'] ?? '')) : ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('Konflikt mellan äldre Tenant ID-värden.', 'ssf'); ?></strong> <?php esc_html_e('Granska och spara rätt Tenant ID centralt. Inga äldre värden har tagits bort.', 'ssf'); ?></p></div><?php endif; ?>
             <?php if ($override || $authority_override) : ?><div class="notice notice-info inline"><p><?php esc_html_e('Tenant ID och/eller Microsoft cloud styrs av serverkonfiguration och har företräde framför WordPress-värdet.', 'ssf'); ?></p></div><?php endif; ?>
@@ -354,6 +355,9 @@ final class SSF_Microsoft365_Config
 
     private static function redirect(string $message, string $type): void
     {
+        if (class_exists('SSF_Admin_Feedback')) {
+            SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'microsoft-directory', $type, $message, array('m365_tab' => 'directory'));
+        }
         set_transient(self::NOTICE_PREFIX . get_current_user_id(), array('message' => $message, 'type' => $type), MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
         exit;

@@ -173,14 +173,16 @@ class SSF_Medlemsprocess_Archive_Migration
 
             <?php $this->render_location_step(1, 'Välj källa', 'Källan hämtas normalt från medlemsansökningarnas aktiva SharePoint-konfiguration.', 'source', $source); ?>
 
-            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>2</span><div><h2>Läs källans schema</h2><p>Inventera alla kolumndefinitioner och klassificera system-, innehållstyp- och anpassade kolumner.</p></div></div>
+            <section id="archive-inventory" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>2</span><div><h2>Läs källans schema</h2><p>Inventera alla kolumndefinitioner och klassificera system-, innehållstyp- och anpassade kolumner.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-inventory'); } ?>
                 <?php $this->button('ssf_application_archive_read_source_schema', 'Läs källans kolumnschema'); ?>
                 <?php $this->render_schema_inventory($source_schema); ?>
             </section>
 
             <?php $this->render_target_location_step($source, $target); ?>
 
-            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4</span><div><h2>Jämför schema</h2><p>Matchning sker på internt kolumnnamn. Konflikter och typer som inte stöds kräver manuell kontroll.</p></div></div>
+            <section id="archive-schema" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4</span><div><h2>Jämför schema</h2><p>Matchning sker på internt kolumnnamn. Konflikter och typer som inte stöds kräver manuell kontroll.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-schema'); } ?>
                 <?php $this->button('ssf_application_archive_compare_schema', 'Jämför schema'); ?>
                 <?php $this->render_schema_comparison($comparison); ?>
             </section>
@@ -192,30 +194,35 @@ class SSF_Medlemsprocess_Archive_Migration
                 <p><strong>Status:</strong> <?php echo esc_html($this->status_label($schema_sync['verified'] ?? null)); ?><?php if (! empty($schema_sync['mode'])) { echo ' (' . esc_html((string) $schema_sync['mode']) . ')'; } ?></p>
             </section>
 
-            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>6</span><div><h2>Skrivtest</h2><p>Skapa, metadata-sätt, läs tillbaka, jämför och radera en temporär testfil och testkatalog.</p></div></div>
+            <section id="archive-write-test" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>6</span><div><h2>Skrivtest</h2><p>Skapa, metadata-sätt, läs tillbaka, jämför och radera en temporär testfil och testkatalog.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-write-test'); } ?>
                 <?php $this->button('ssf_application_archive_write_test', 'Kör skrivtest'); ?>
                 <?php $this->render_check_steps($write); ?>
             </section>
 
-            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>7</span><div><h2>Förhandsgranska ansökningar</h2><p>Torrkörning: inga filer eller referenser ändras.</p></div></div>
+            <section id="archive-plan" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>7</span><div><h2>Förhandsgranska ansökningar</h2><p>Torrkörning: inga filer eller referenser ändras.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-plan'); } ?>
                 <?php $this->button('ssf_application_archive_plan', 'Förhandsgranska migrering'); ?>
                 <?php $this->render_plan($plan); ?>
             </section>
 
-            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>8</span><div><h2>Migrera ett testärende</h2><p>Kopiera och verifiera ett valt ärende innan dess aktiva referenser byts.</p></div></div>
+            <section id="archive-migrate" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>8</span><div><h2>Migrera ett testärende</h2><p>Kopiera och verifiera ett valt ärende innan dess aktiva referenser byts.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-migrate'); } ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_application_archive_migrate_one"><?php wp_nonce_field('ssf_application_archive_migrate_one'); ?>
                     <select name="application_id"><?php foreach ((array) ($plan['rows'] ?? array()) as $row) : ?><option value="<?php echo esc_attr((string) $row['id']); ?>"><?php echo esc_html($row['number'] . ' - ' . $row['vessel'] . ' (' . $row['status'] . ')'); ?></option><?php endforeach; ?></select>
                     <?php submit_button('Migrera testärende', 'primary', 'submit', false); ?>
                 </form>
             </section>
 
-            <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>9</span><div><h2>Migrera resterande</h2><p>Kör en liten återupptagbar batch. Fel isoleras per ansökan.</p></div></div>
+            <section id="archive-batch" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>9</span><div><h2>Migrera resterande</h2><p>Kör en liten återupptagbar batch. Fel isoleras per ansökan.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-batch'); } ?>
                 <?php $this->button('ssf_application_archive_batch', 'Migrera resterande', 'primary'); ?>
                 <?php $this->batch_button('pause', 'Pausa'); $this->batch_button('resume', 'Återuppta'); $this->batch_button('retry', 'Försök igen för fel'); ?>
                 <p><strong>Batchstatus:</strong> <?php echo esc_html((string) ($batch['status'] ?? 'ej startad')); ?></p>
             </section>
 
-            <section class="ssf-archive-step ssf-archive-step--activation"><div class="ssf-archive-step__heading"><span>10</span><div><h2>Slutkontroll</h2><p>Stäm av resultatet och gör ett explicit byte för framtida medlemsansökningar. Befintliga ärenden byter inte automatiskt.</p></div></div>
+            <section id="archive-cutover" class="ssf-archive-step ssf-archive-step--activation"><div class="ssf-archive-step__heading"><span>10</span><div><h2>Slutkontroll</h2><p>Stäm av resultatet och gör ett explicit byte för framtida medlemsansökningar. Befintliga ärenden byter inte automatiskt.</p></div></div>
+                <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-cutover'); } ?>
                 <?php $this->button('ssf_application_archive_readiness', 'Kör slutkontroll'); ?>
                 <?php $this->button('ssf_application_archive_cutover', 'Använd nya katalogen för nya medlemsansökningar', 'primary'); ?>
                 <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_application_archive_export'), 'ssf_application_archive_export')); ?>">Exportera avstämningsrapport</a>
@@ -803,7 +810,9 @@ class SSF_Medlemsprocess_Archive_Migration
     private function render_location_step(int $number, string $title, string $description, string $kind, array $location): void
     {
         $action = 'ssf_application_archive_save_' . $kind;
-        echo '<section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>' . esc_html((string) $number) . '</span><div><h2>' . esc_html($title) . '</h2><p>' . esc_html($description) . '</p></div></div>';
+        $section = 'source' === $kind ? 'archive-source' : 'archive-target';
+        echo '<section id="' . esc_attr($section) . '" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>' . esc_html((string) $number) . '</span><div><h2>' . esc_html($title) . '</h2><p>' . esc_html($description) . '</p></div></div>';
+        if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline($section); }
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="' . esc_attr($action) . '">';
         wp_nonce_field($action);
         echo '<table class="form-table"><tr><th>SharePoint-site</th><td><input class="regular-text" name="' . esc_attr($kind) . '[site_url]" value="' . esc_attr((string) ($location['site_url'] ?? '')) . '"></td></tr><tr><th>Dokumentbibliotek</th><td><input class="regular-text" name="' . esc_attr($kind) . '[drive_name]" value="' . esc_attr((string) ($location['drive_name'] ?? '')) . '"></td></tr><tr><th>Katalog</th><td><input class="regular-text" name="' . esc_attr($kind) . '[folder_path]" value="' . esc_attr((string) ($location['folder_path'] ?? '')) . '"></td></tr></table>';
@@ -822,7 +831,8 @@ class SSF_Medlemsprocess_Archive_Migration
         $children = $this->target_browser_children($target);
         $parent_path = (string) ($target['parent_folder_path'] ?? '');
         $final_path = (string) ($target['folder_path'] ?? $this->join_drive_path($parent_path, (string) ($target['destination_folder_name'] ?? $source_name)));
-        echo '<section class="ssf-archive-step ssf-archive-target-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj var mappen ska placeras</h2><p>Välj den SharePoint-mapp där källmappen ska placeras.</p></div></div>';
+        echo '<section id="archive-target" class="ssf-archive-step ssf-archive-target-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj var mappen ska placeras</h2><p>Välj den SharePoint-mapp där källmappen ska placeras.</p></div></div>';
+        if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('archive-target'); }
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_application_archive_save_target">';
         wp_nonce_field('ssf_application_archive_save_target');
         $this->render_target_hidden_fields($target);
@@ -1677,6 +1687,29 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function redirect(string $message, string $type): void
     {
+        $action = sanitize_key((string) ($_REQUEST['action'] ?? ''));
+        $sections = array(
+            'ssf_application_archive_save_source' => 'archive-source',
+            'ssf_application_archive_read_source_schema' => 'archive-inventory',
+            'ssf_application_archive_save_target' => 'archive-target',
+            'ssf_application_archive_create_target_folder' => 'archive-target',
+            'ssf_application_archive_use_existing_target' => 'archive-target',
+            'ssf_application_archive_create_browser_folder' => 'archive-target',
+            'ssf_application_archive_compare_schema' => 'archive-schema',
+            'ssf_application_archive_preview_schema' => 'archive-schema',
+            'ssf_application_archive_create_columns' => 'archive-schema',
+            'ssf_application_archive_verify_schema' => 'archive-schema',
+            'ssf_application_archive_write_test' => 'archive-write-test',
+            'ssf_application_archive_plan' => 'archive-plan',
+            'ssf_application_archive_migrate_one' => 'archive-migrate',
+            'ssf_application_archive_batch' => 'archive-batch',
+            'ssf_application_archive_batch_control' => 'archive-batch',
+            'ssf_application_archive_readiness' => 'archive-cutover',
+            'ssf_application_archive_cutover' => 'archive-cutover',
+        );
+        if (class_exists('SSF_Admin_Feedback')) {
+            SSF_Admin_Feedback::redirect('ssf-application-archive-migration', $sections[$action] ?? 'archive-target', $type, $message);
+        }
         wp_safe_redirect(add_query_arg(array('page' => 'ssf-application-archive-migration', 'ssf_archive_message' => rawurlencode($message), 'ssf_archive_type' => $type), admin_url('admin.php')));
         exit;
     }

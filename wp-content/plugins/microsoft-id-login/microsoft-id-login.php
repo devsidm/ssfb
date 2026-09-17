@@ -338,8 +338,9 @@ final class SSF_Microsoft_ID_Login
         $central_tenant_configured = class_exists('SSF_Microsoft365_Config') && SSF_Microsoft365_Config::is_tenant_configured();
         $legacy_tenant_warnings = $this->legacy_tenant_warnings();
         ?>
-        <section class="ssf-admin-card">
+        <section id="microsoft-login" class="ssf-admin-card">
             <h2><?php esc_html_e('Microsoft / Entra', 'microsoft-id-login'); ?></h2>
+            <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('microsoft-login'); } ?>
             <p><?php esc_html_e('Konfigurera Microsoft-appen för den aktiva WordPress-installationen. Microsoft-kontot används för identitet; behörigheter styrs i WordPress.', 'microsoft-id-login'); ?></p>
             <?php if ($force_off) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Avstängd av serverkonfiguration', 'microsoft-id-login'); ?></strong></p></div><?php endif; ?>
             <?php if (defined('SSF_M365_LOGIN_CLIENT_ID')) : ?><div class="notice notice-warning inline"><p><strong><?php esc_html_e('Serverkonfiguration överstyr WordPress', 'microsoft-id-login'); ?></strong><br><code>SSF_M365_LOGIN_CLIENT_ID</code></p></div><?php endif; ?>
@@ -466,6 +467,8 @@ final class SSF_Microsoft_ID_Login
         $users = get_users(array('number' => 200, 'orderby' => 'display_name', 'order' => 'ASC'));
         $groups = self::permission_groups();
         ?>
+        <div id="microsoft-users">
+        <?php if (class_exists('SSF_Admin_Feedback')) { SSF_Admin_Feedback::render_inline('microsoft-users'); } ?>
         <h2><?php esc_html_e('Användare', 'microsoft-id-login'); ?></h2>
         <?php $this->render_invitation_form($groups); ?>
         <h2><?php esc_html_e('Användare och behörigheter', 'microsoft-id-login'); ?></h2>
@@ -498,7 +501,7 @@ final class SSF_Microsoft_ID_Login
                 </tbody>
             </table>
             <?php submit_button(__('Spara behörigheter', 'microsoft-id-login')); ?>
-        </form>
+        </form></div>
         <?php
     }
 
@@ -526,12 +529,12 @@ final class SSF_Microsoft_ID_Login
 
     private function render_permission_matrix(): void
     {
-        echo '<h2>' . esc_html__('Behörighetsmatris', 'microsoft-id-login') . '</h2>';
+        echo '<div id="microsoft-permissions"><h2>' . esc_html__('Behörighetsmatris', 'microsoft-id-login') . '</h2>';
         echo '<table class="widefat striped" style="max-width:1100px"><thead><tr><th>' . esc_html__('Grupp', 'microsoft-id-login') . '</th><th>' . esc_html__('Beskrivning', 'microsoft-id-login') . '</th><th>' . esc_html__('Faktiska WordPress-capabilities', 'microsoft-id-login') . '</th></tr></thead><tbody>';
         foreach (self::permission_groups() as $group) {
             printf('<tr><th>%s</th><td>%s</td><td><code>%s</code></td></tr>', esc_html($group['label']), esc_html($group['description']), esc_html(implode(', ', (array) $group['capabilities'])));
         }
-        echo '</tbody></table>';
+        echo '</tbody></table></div>';
     }
 
     private function render_technical_details(array $status, int $linked_count): void
@@ -693,8 +696,8 @@ final class SSF_Microsoft_ID_Login
         delete_user_meta($user_id, self::META_TID);
         delete_user_meta($user_id, self::META_OID);
         delete_user_meta($user_id, self::META_EMAIL);
-        $this->set_notice(get_current_user_id(), 'success', __('Microsoft 365-kopplingen har tagits bort. WordPress-behorigheter andrades inte.', 'microsoft-id-login'));
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->set_notice(get_current_user_id(), 'success', __('Microsoft 365-kopplingen har tagits bort. WordPress-behorigheter andrades inte.', 'microsoft-id-login'), 'microsoft-users');
+        wp_safe_redirect($this->admin_section_url('microsoft-users'));
         exit;
     }
 
@@ -703,7 +706,7 @@ final class SSF_Microsoft_ID_Login
         if (! is_user_logged_in() || ! $this->can_manage_login() || ! check_admin_referer('ssf_m365_test_login')) {
             wp_die(esc_html__('Du saknar behorighet.', 'microsoft-id-login'));
         }
-        $this->start_authorization('test', get_current_user_id(), admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->start_authorization('test', get_current_user_id(), $this->admin_section_url('microsoft-login'));
     }
 
     public function create_invitation(): void
@@ -715,21 +718,21 @@ final class SSF_Microsoft_ID_Login
         $display_name = isset($_POST['display_name']) && is_scalar($_POST['display_name']) ? sanitize_text_field(wp_unslash($_POST['display_name'])) : '';
         $groups = isset($_POST['groups']) && is_array($_POST['groups']) ? array_map('sanitize_key', wp_unslash($_POST['groups'])) : array();
         if (! $this->is_ssf_email($email)) {
-            $this->set_notice(get_current_user_id(), 'error', __('SSF-konto måste vara en @ssfb.se-adress.', 'microsoft-id-login'));
-            wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '#ssf-m365-create-user'));
+            $this->set_notice(get_current_user_id(), 'error', __('SSF-konto måste vara en @ssfb.se-adress.', 'microsoft-id-login'), 'microsoft-users');
+            wp_safe_redirect($this->admin_section_url('microsoft-users'));
             exit;
         }
         $user_id = $this->find_or_create_user($email, $display_name);
         if (is_wp_error($user_id)) {
-            $this->set_notice(get_current_user_id(), 'error', __('Användaren kunde inte skapas.', 'microsoft-id-login'));
-            wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG . '#ssf-m365-create-user'));
+            $this->set_notice(get_current_user_id(), 'error', __('Användaren kunde inte skapas.', 'microsoft-id-login'), 'microsoft-users');
+            wp_safe_redirect($this->admin_section_url('microsoft-users'));
             exit;
         }
         $this->save_user_groups((int) $user_id, $groups, get_current_user_id());
         $invitation = $this->issue_invitation((int) $user_id, $email);
         $sent = $this->send_invitation_email((int) $user_id, $invitation['raw_token']);
-        $this->set_notice(get_current_user_id(), $sent ? 'success' : 'error', $sent ? __('SSF-användaren skapades och inbjudan skickades.', 'microsoft-id-login') : __('SSF-användaren skapades men inbjudningsmailet kunde inte skickas.', 'microsoft-id-login'));
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->set_notice(get_current_user_id(), $sent ? 'success' : 'error', $sent ? __('SSF-användaren skapades och inbjudan skickades.', 'microsoft-id-login') : __('SSF-användaren skapades men inbjudningsmailet kunde inte skickas.', 'microsoft-id-login'), 'microsoft-users');
+        wp_safe_redirect($this->admin_section_url('microsoft-users'));
         exit;
     }
 
@@ -741,15 +744,15 @@ final class SSF_Microsoft_ID_Login
         }
         $user = get_user_by('id', $user_id);
         if (! $user instanceof WP_User || ! $this->is_ssf_email((string) $user->user_email)) {
-            $this->set_notice(get_current_user_id(), 'error', __('Inbjudan kan bara skickas till @ssfb.se-konton.', 'microsoft-id-login'));
-            wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+            $this->set_notice(get_current_user_id(), 'error', __('Inbjudan kan bara skickas till @ssfb.se-konton.', 'microsoft-id-login'), 'microsoft-users');
+            wp_safe_redirect($this->admin_section_url('microsoft-users'));
             exit;
         }
         $this->invalidate_open_invitations($user_id);
         $invitation = $this->issue_invitation($user_id, (string) $user->user_email);
         $sent = $this->send_invitation_email($user_id, $invitation['raw_token']);
-        $this->set_notice(get_current_user_id(), $sent ? 'success' : 'error', $sent ? __('Ny inbjudan har skickats.', 'microsoft-id-login') : __('Inbjudan kunde inte skickas.', 'microsoft-id-login'));
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->set_notice(get_current_user_id(), $sent ? 'success' : 'error', $sent ? __('Ny inbjudan har skickats.', 'microsoft-id-login') : __('Inbjudan kunde inte skickas.', 'microsoft-id-login'), 'microsoft-users');
+        wp_safe_redirect($this->admin_section_url('microsoft-users'));
         exit;
     }
 
@@ -764,8 +767,8 @@ final class SSF_Microsoft_ID_Login
             $invitations[$invite_id]['canceled_at'] = gmdate('c');
             $this->save_invitations($invitations);
         }
-        $this->set_notice(get_current_user_id(), 'success', __('Inbjudan har avbrutits.', 'microsoft-id-login'));
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->set_notice(get_current_user_id(), 'success', __('Inbjudan har avbrutits.', 'microsoft-id-login'), 'microsoft-users');
+        wp_safe_redirect($this->admin_section_url('microsoft-users'));
         exit;
     }
 
@@ -807,8 +810,8 @@ final class SSF_Microsoft_ID_Login
             $groups = isset($posted_groups[$user_id]) && is_array($posted_groups[$user_id]) ? array_map('sanitize_key', $posted_groups[$user_id]) : array();
             $this->save_user_groups($user_id, $groups, get_current_user_id());
         }
-        $this->set_notice(get_current_user_id(), 'success', __('Behorigheterna har sparats.', 'microsoft-id-login'));
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->set_notice(get_current_user_id(), 'success', __('Behorigheterna har sparats.', 'microsoft-id-login'), 'microsoft-users');
+        wp_safe_redirect($this->admin_section_url('microsoft-users'));
         exit;
     }
 
@@ -837,8 +840,8 @@ final class SSF_Microsoft_ID_Login
         $current['updated_at'] = gmdate('c');
         $current['updated_by'] = get_current_user_id();
         update_option(self::SETTINGS_OPTION, $current, false);
-        $this->set_notice(get_current_user_id(), 'success', __('Microsoft-konfigurationen har sparats.', 'microsoft-id-login'));
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        $this->set_notice(get_current_user_id(), 'success', __('Microsoft-konfigurationen har sparats.', 'microsoft-id-login'), 'microsoft-login');
+        wp_safe_redirect($this->admin_section_url('microsoft-login'));
         exit;
     }
 
@@ -851,17 +854,13 @@ final class SSF_Microsoft_ID_Login
         $passed = $this->checks_passed($checks);
         set_transient(self::TEST_PREFIX . 'config_' . get_current_user_id(), $checks, 10 * MINUTE_IN_SECONDS);
         $this->record_test_status('technical', $passed);
-        set_transient(
-            self::NOTICE_PREFIX . get_current_user_id(),
-            array(
-                'type' => $passed ? 'success' : 'error',
-                'message' => $passed
-                    ? __('Microsoft-konfigurationen kunde lasas.', 'microsoft-id-login')
-                    : __('Microsoft-konfigurationen kunde inte verifieras.', 'microsoft-id-login'),
-            ),
-            MINUTE_IN_SECONDS
+        $this->set_notice(
+            get_current_user_id(),
+            $passed ? 'success' : 'error',
+            $passed ? __('Microsoft-konfigurationen kunde lasas.', 'microsoft-id-login') : __('Microsoft-konfigurationen kunde inte verifieras.', 'microsoft-id-login'),
+            'microsoft-login'
         );
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        wp_safe_redirect($this->admin_section_url('microsoft-login'));
         exit;
     }
 
@@ -1139,7 +1138,7 @@ final class SSF_Microsoft_ID_Login
             ),
             10 * MINUTE_IN_SECONDS
         );
-        wp_safe_redirect(admin_url('admin.php?page=' . self::MENU_SLUG));
+        wp_safe_redirect($this->admin_section_url('microsoft-login'));
         exit;
     }
 
@@ -1755,9 +1754,21 @@ final class SSF_Microsoft_ID_Login
         wp_die(esc_html($message), esc_html__('Microsoft 365-inloggning', 'microsoft-id-login'), array('response' => 403));
     }
 
-    private function set_notice(int $user_id, string $type, string $message): void
+    private function set_notice(int $user_id, string $type, string $message, string $section = 'microsoft-login'): void
     {
+        if (class_exists('SSF_Admin_Feedback') && $user_id === get_current_user_id()) {
+            SSF_Admin_Feedback::set_flash(self::MENU_SLUG, $section, $type, $message);
+            return;
+        }
         set_transient(self::NOTICE_PREFIX . $user_id, array('type' => $type, 'message' => $message), MINUTE_IN_SECONDS);
+    }
+
+    private function admin_section_url(string $section): string
+    {
+        if (class_exists('SSF_Admin_Feedback')) {
+            return SSF_Admin_Feedback::redirect_url(self::MENU_SLUG, $section);
+        }
+        return admin_url('admin.php?page=' . self::MENU_SLUG . '#' . sanitize_key($section));
     }
 
     private function truthy(string $value): bool
