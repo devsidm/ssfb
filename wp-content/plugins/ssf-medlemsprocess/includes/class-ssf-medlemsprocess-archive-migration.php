@@ -29,6 +29,9 @@ class SSF_Medlemsprocess_Archive_Migration
         add_action('admin_post_ssf_application_archive_save_source', array($this, 'save_source'));
         add_action('admin_post_ssf_application_archive_read_source_schema', array($this, 'read_source_schema'));
         add_action('admin_post_ssf_application_archive_save_target', array($this, 'save_target'));
+        add_action('admin_post_ssf_application_archive_create_target_folder', array($this, 'create_target_folder'));
+        add_action('admin_post_ssf_application_archive_use_existing_target', array($this, 'use_existing_target'));
+        add_action('admin_post_ssf_application_archive_create_browser_folder', array($this, 'create_browser_folder'));
         add_action('admin_post_ssf_application_archive_compare_schema', array($this, 'compare_schema'));
         add_action('admin_post_ssf_application_archive_preview_schema', array($this, 'preview_schema_sync'));
         add_action('admin_post_ssf_application_archive_create_columns', array($this, 'create_missing_columns'));
@@ -166,7 +169,7 @@ class SSF_Medlemsprocess_Archive_Migration
             <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs('ssf-application-archive-migration'); } ?>
             <?php $this->notice(); ?>
             <p class="ssf-archive-migration__intro">Guidad migrering enbart för medlemsansökningar. Motioner, årsmöten, arbetsflöden och e-post lämnas oförändrade.</p>
-            <div class="ssf-archive-summary"><dl><div><dt>Källa</dt><dd><?php echo esc_html((string) ($source['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Mål</dt><dd><?php echo esc_html((string) ($target['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Miljö</dt><dd><?php echo esc_html(strtoupper($this->environment())); ?></dd></div></dl></div>
+            <div class="ssf-archive-summary"><dl><div><dt>Källa</dt><dd><?php echo esc_html((string) ($source['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Mål</dt><dd><?php echo esc_html((string) ($target['folder_path'] ?: 'Inte vald')); ?></dd></div><div><dt>Målstatus</dt><dd><?php echo esc_html($this->target_state_label((string) ($target['target_state'] ?? ''))); ?></dd></div><div><dt>Miljö</dt><dd><?php echo esc_html(strtoupper($this->environment())); ?></dd></div></dl></div>
 
             <?php $this->render_location_step(1, 'Välj källa', 'Källan hämtas normalt från medlemsansökningarnas aktiva SharePoint-konfiguration.', 'source', $source); ?>
 
@@ -175,7 +178,7 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php $this->render_schema_inventory($source_schema); ?>
             </section>
 
-            <?php $this->render_location_step(3, 'Välj mål', 'Välj SharePoint-site, dokumentbibliotek och katalog. Tekniska ID:n upptäcks och visas för kontroll.', 'target', $target); ?>
+            <?php $this->render_target_location_step($source, $target); ?>
 
             <section class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4</span><div><h2>Jämför schema</h2><p>Matchning sker på internt kolumnnamn. Konflikter och typer som inte stöds kräver manuell kontroll.</p></div></div>
                 <?php $this->button('ssf_application_archive_compare_schema', 'Jämför schema'); ?>
@@ -331,16 +334,89 @@ class SSF_Medlemsprocess_Archive_Migration
     public function save_target(): void
     {
         $this->guard('ssf_application_archive_save_target');
-        $input = (array) wp_unslash($_POST['target'] ?? array());
-        $target = array();
-        foreach ($this->target_fields() as $key => $label) {
-            $target[$key] = 'site_url' === $key || 'folder_web_url' === $key ? esc_url_raw((string) ($input[$key] ?? '')) : sanitize_text_field((string) ($input[$key] ?? ''));
-        }
-        $target['folder_path'] = trim((string) ($target['folder_path'] ?? ''), '/');
+        $target = $this->posted_target();
+        $name_check = $this->validate_sharepoint_folder_name((string) ($target['destination_folder_name'] ?? ''));
+        if (is_wp_error($name_check)) { $this->redirect($name_check->get_error_message(), 'error'); }
         $settings = $this->settings();
-        $settings['targets'][$this->environment()] = array_merge($this->default_target(), $target);
+        $settings['targets'][$this->environment()] = $target;
         update_option(self::OPTION, $settings, false);
-        $this->redirect('Målkatalogen har sparats.', 'success');
+        $this->reset_target_dependent_state();
+        $resolved = $this->resolve_target_parent(true);
+        if (is_wp_error($resolved)) {
+            set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($resolved), 10 * MINUTE_IN_SECONDS);
+            $this->redirect('Kunde inte hitta den valda SharePoint-mappen.', 'error');
+        }
+        $state = $this->refresh_target_state($resolved, true);
+        if (is_wp_error($state)) {
+            set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($state), 10 * MINUTE_IN_SECONDS);
+            $this->redirect($state->get_error_message(), 'error');
+        }
+        $message = 'final_destination_exists' === ($state['target_state'] ?? '') ? 'Mappen finns redan.' : 'Målets överordnade mapp är vald och verifierad. Målmappen saknas.';
+        $this->redirect($message, 'final_destination_exists' === ($state['target_state'] ?? '') ? 'error' : 'success');
+    }
+
+    public function create_target_folder(): void
+    {
+        $this->guard('ssf_application_archive_create_target_folder');
+        $target = $this->resolve_target_parent(true);
+        if (is_wp_error($target)) { $this->redirect($target->get_error_message(), 'error'); }
+        if (! $this->target_write_allowed($target)) { $this->redirect('Skrivning blockerad: DEV får inte använda produktionsmålet.', 'error'); }
+        $created = $this->create_and_verify_final_target($target);
+        if (is_wp_error($created)) {
+            set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($created), 10 * MINUTE_IN_SECONDS);
+            $this->redirect($created->get_error_message(), 'error');
+        }
+        $this->persist_verified_target($created, 'final_destination_created');
+        $this->reset_target_dependent_state();
+        $this->redirect('Målmappen skapades, lästes tillbaka från SharePoint och är verifierad.', 'success');
+    }
+
+    public function use_existing_target(): void
+    {
+        $this->guard('ssf_application_archive_use_existing_target');
+        $target = $this->resolve_target_parent(true);
+        if (is_wp_error($target)) { $this->redirect($target->get_error_message(), 'error'); }
+        $existing = $this->find_final_target($target);
+        if (is_wp_error($existing)) { $this->redirect($existing->get_error_message(), 'error'); }
+        if (empty($existing)) { $this->redirect('Målmappen saknas. Skapa den eller välj en annan plats.', 'error'); }
+        $verified = $this->verify_folder_item($target, (string) ($existing['id'] ?? ''));
+        if (is_wp_error($verified)) { $this->redirect($verified->get_error_message(), 'error'); }
+        $this->persist_verified_target(array_merge($target, $this->target_folder_reference($verified, (string) $target['folder_path'])), 'final_destination_verified');
+        $this->reset_target_dependent_state();
+        $this->redirect('Befintlig målmapp är verifierad och vald. Schemajämförelsen avgör om den kan användas säkert.', 'success');
+    }
+
+    public function create_browser_folder(): void
+    {
+        $this->guard('ssf_application_archive_create_browser_folder');
+        $settings = $this->settings();
+        $settings['targets'][$this->environment()] = $this->posted_target();
+        update_option(self::OPTION, $settings, false);
+        $target = $this->resolve_target_parent(true);
+        if (is_wp_error($target)) { $this->redirect($target->get_error_message(), 'error'); }
+        if (! $this->target_write_allowed($target)) { $this->redirect('Skrivning blockerad: DEV får inte använda produktionsmålet.', 'error'); }
+        $name = sanitize_text_field((string) wp_unslash($_POST['new_folder_name'] ?? ''));
+        $name_check = $this->validate_sharepoint_folder_name($name);
+        if (is_wp_error($name_check)) { $this->redirect($name_check->get_error_message(), 'error'); }
+        $created = $this->request('POST', $this->children_path($target, (string) $target['parent_folder_id']), array('name' => $name, 'folder' => new stdClass(), '@microsoft.graph.conflictBehavior' => 'fail'));
+        if (is_wp_error($created)) {
+            set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($created), 10 * MINUTE_IN_SECONDS);
+            $this->redirect('Mappen kunde inte skapas.', 'error');
+        }
+        $verified = $this->verify_folder_item($target, (string) ($created['id'] ?? ''));
+        if (is_wp_error($verified)) {
+            set_transient(self::SCHEMA_ERROR_PREFIX . get_current_user_id(), $this->safe_schema_error($verified), 10 * MINUTE_IN_SECONDS);
+            $this->redirect('Mappen skapades men kunde inte verifieras.', 'error');
+        }
+        $target['parent_folder_id'] = sanitize_text_field((string) ($verified['id'] ?? ''));
+        $target['parent_folder_name'] = sanitize_text_field((string) ($verified['name'] ?? $name));
+        $target['parent_folder_path'] = $this->join_drive_path((string) ($target['parent_folder_path'] ?? ''), $name);
+        $target['parent_folder_web_url'] = esc_url_raw((string) ($verified['webUrl'] ?? ''));
+        $state = $this->refresh_target_state($target, false);
+        if (is_wp_error($state)) { $this->redirect($state->get_error_message(), 'error'); }
+        $this->save_target_state($state);
+        $this->reset_target_dependent_state();
+        $this->redirect('Mappen skapades, verifierades och valdes som placering.', 'success');
     }
 
     public function run_readiness(): void
@@ -740,6 +816,99 @@ class SSF_Medlemsprocess_Archive_Migration
         echo '</form></section>';
     }
 
+    private function render_target_location_step(array $source, array $target): void
+    {
+        $source_name = $this->source_folder_name($source);
+        $children = $this->target_browser_children($target);
+        $parent_path = (string) ($target['parent_folder_path'] ?? '');
+        $final_path = (string) ($target['folder_path'] ?? $this->join_drive_path($parent_path, (string) ($target['destination_folder_name'] ?? $source_name)));
+        echo '<section class="ssf-archive-step ssf-archive-target-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj var mappen ska placeras</h2><p>Välj den SharePoint-mapp där källmappen ska placeras.</p></div></div>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_application_archive_save_target">';
+        wp_nonce_field('ssf_application_archive_save_target');
+        $this->render_target_hidden_fields($target);
+        echo '<div class="ssf-archive-target-grid"><div><h3>SharePoint-plats</h3><table class="form-table">';
+        echo '<tr><th>SharePoint-site</th><td><input class="regular-text" name="target[site_url]" value="' . esc_attr((string) ($target['site_url'] ?? '')) . '"></td></tr>';
+        echo '<tr><th>Dokumentbibliotek</th><td><input class="regular-text" name="target[drive_name]" value="' . esc_attr((string) ($target['drive_name'] ?? '')) . '"></td></tr>';
+        echo '<tr><th>Aktuell plats</th><td><input class="regular-text" name="target[parent_folder_path]" value="' . esc_attr($parent_path) . '"><p class="description">' . esc_html($this->display_drive_path($target, $parent_path)) . '</p></td></tr>';
+        echo '</table><p>';
+        submit_button('Välj aktuell plats som parent', 'secondary', 'submit', false);
+        echo '</p></div><div><h3>Destination</h3><table class="form-table">';
+        echo '<tr><th>Mapp som ska flyttas</th><td><strong>' . esc_html($source_name) . '</strong></td></tr>';
+        echo '<tr><th>Behåll källmappens namn</th><td><label><input type="checkbox" name="target[keep_source_folder_name]" value="1" ' . checked(! empty($target['keep_source_folder_name']), true, false) . '> Behåll källmappens namn</label></td></tr>';
+        echo '<tr><th>Mappnamn på mål</th><td><input id="ssf-archive-target-name" class="regular-text" name="target[destination_folder_name]" value="' . esc_attr((string) ($target['destination_folder_name'] ?? $source_name)) . '"' . (! empty($target['keep_source_folder_name']) ? ' readonly' : '') . '></td></tr>';
+        echo '</table></div></div>';
+        echo '<details><summary>Avancerade tekniska uppgifter</summary><table class="form-table">';
+        foreach (array('site_id', 'drive_id', 'list_id', 'parent_folder_name', 'parent_folder_id', 'parent_folder_web_url', 'folder_name', 'folder_id', 'folder_web_url', 'target_state', 'verified_at') as $key) {
+            echo '<tr><th>' . esc_html($this->target_fields()[$key] ?? $key) . '</th><td><input class="regular-text" name="target[' . esc_attr($key) . ']" value="' . esc_attr((string) ($target[$key] ?? '')) . '"></td></tr>';
+        }
+        echo '</table></details></form>';
+        $this->render_target_browser($target, $children);
+        $this->render_target_create_parent_form($target);
+        $this->render_target_preview($source, $target, $final_path);
+        echo '</section>';
+    }
+
+    private function render_target_browser(array $target, $children): void
+    {
+        echo '<div class="ssf-archive-browser"><h3>Bläddra i mappar</h3><p><strong>Aktuell plats</strong><br>' . esc_html($this->display_drive_path($target, (string) ($target['parent_folder_path'] ?? ''))) . '</p>';
+        echo '<div class="ssf-archive-actions">';
+        if ('' !== (string) ($target['parent_folder_path'] ?? '')) {
+            $up_target = $target;
+            $up_target['parent_folder_path'] = $this->dirname_path((string) ($target['parent_folder_path'] ?? ''));
+            $up_target['parent_folder_id'] = '';
+            $this->target_post_button('ssf_application_archive_save_target', 'Gå upp en nivå', $up_target);
+        }
+        $this->target_post_button('ssf_application_archive_save_target', 'Välj aktuell folder', $target, 'primary');
+        echo '</div>';
+        if (is_wp_error($children)) {
+            echo '<div class="notice notice-warning inline"><p>' . esc_html($children->get_error_message()) . '</p></div>';
+        } elseif (empty($children)) {
+            echo '<p>Inga undermappar hittades här.</p>';
+        } else {
+            echo '<ul class="ssf-archive-folder-list">';
+            foreach ($children as $child) {
+                $child_target = $target;
+                $child_target['parent_folder_id'] = (string) ($child['id'] ?? '');
+                $child_target['parent_folder_name'] = (string) ($child['name'] ?? '');
+                $child_target['parent_folder_path'] = (string) ($child['path'] ?? $this->join_drive_path((string) ($target['parent_folder_path'] ?? ''), (string) ($child['name'] ?? '')));
+                $child_target['parent_folder_web_url'] = (string) ($child['web_url'] ?? '');
+                echo '<li><span><strong>' . esc_html((string) ($child['name'] ?? '')) . '</strong><small>' . esc_html($this->display_drive_path($target, (string) ($child['path'] ?? ''))) . '</small></span><span>';
+                $this->target_post_button('ssf_application_archive_save_target', 'Öppna', $child_target);
+                echo '</span></li>';
+            }
+            echo '</ul>';
+        }
+        echo '</div>';
+    }
+
+    private function render_target_create_parent_form(array $target): void
+    {
+        echo '<details class="ssf-archive-create-folder"><summary>+ Skapa ny mapp</summary><p><strong>Skapa mapp under:</strong><br>' . esc_html($this->display_drive_path($target, (string) ($target['parent_folder_path'] ?? ''))) . '</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_application_archive_create_browser_folder">';
+        wp_nonce_field('ssf_application_archive_create_browser_folder');
+        $this->render_target_hidden_fields($target);
+        echo '<p><label><strong>Namn</strong><br><input class="regular-text" name="new_folder_name" value=""></label></p><div class="ssf-archive-actions"><a class="button" href="' . esc_url(admin_url('admin.php?page=ssf-application-archive-migration')) . '">Avbryt</a>';
+        submit_button('Skapa mapp', 'primary', 'submit', false);
+        echo '</div></form></details>';
+    }
+
+    private function render_target_preview(array $source, array $target, string $final_path): void
+    {
+        echo '<div class="ssf-archive-preview"><h3>SÅ KOMMER FLYTTEN ATT SE UT</h3><dl><div><dt>Från</dt><dd>' . esc_html((string) ($source['site_url'] ?? '')) . '<br>' . esc_html((string) ($source['drive_name'] ?? '')) . '<br>' . esc_html('/' . trim((string) ($source['folder_path'] ?? ''), '/')) . '</dd></div><div><dt>Till</dt><dd>' . esc_html((string) ($target['site_url'] ?? '')) . '<br>' . esc_html((string) ($target['drive_name'] ?? '')) . '<br>' . esc_html('/' . trim($final_path, '/')) . '</dd></div></dl>';
+        echo '<p><strong>' . esc_html($this->target_state_label((string) ($target['target_state'] ?? 'destination_parent_selected'))) . '</strong></p>';
+        if ('final_destination_missing' === ($target['target_state'] ?? '')) {
+            $this->button('ssf_application_archive_create_target_folder', 'Skapa och verifiera målmapp', 'primary');
+        } elseif ('final_destination_exists' === ($target['target_state'] ?? '')) {
+            echo '<p>Mappen finns redan.</p><div class="ssf-archive-actions">';
+            $this->button('ssf_application_archive_use_existing_target', 'Använd befintlig mapp', 'primary');
+            echo '<a class="button" href="' . esc_url(admin_url('admin.php?page=ssf-application-archive-migration')) . '">Välj annan plats</a>';
+            echo '<a class="button" href="#ssf-archive-target-name">Ändra mappnamn</a></div>';
+        } elseif (in_array(($target['target_state'] ?? ''), array('final_destination_created', 'final_destination_verified'), true)) {
+            echo '<ul class="ssf-archive-verified"><li>Målmappen skapades eller valdes</li><li>Målmappen kunde läsas tillbaka från SharePoint</li><li>Målet är verifierat</li></ul><p><strong>Final destination:</strong><br>' . esc_html('/' . trim($final_path, '/')) . '</p>';
+        }
+        echo '</div>';
+    }
+
     private function render_schema_inventory(array $inventory): void
     {
         if (empty($inventory['columns'])) { echo '<p>Status: EJ TESTAD</p>'; return; }
@@ -891,12 +1060,12 @@ class SSF_Medlemsprocess_Archive_Migration
 
     private function target_fields(): array
     {
-        return array('site_url' => 'SharePoint Site URL', 'site_id' => 'Site ID', 'drive_name' => 'Bibliotek', 'drive_id' => 'Drive ID', 'list_id' => 'List ID', 'folder_path' => 'Mappsökväg', 'folder_name' => 'Mappnamn', 'folder_id' => 'Mappens DriveItem ID', 'folder_web_url' => 'Mappens webbadress');
+        return array('site_url' => 'SharePoint Site URL', 'site_id' => 'Site ID', 'drive_name' => 'Bibliotek', 'drive_id' => 'Drive ID', 'list_id' => 'List ID', 'parent_folder_path' => 'Parent-mappsökväg', 'parent_folder_name' => 'Parent-mappnamn', 'parent_folder_id' => 'Parent DriveItem ID', 'parent_folder_web_url' => 'Parent webbadress', 'destination_folder_name' => 'Mappnamn på mål', 'keep_source_folder_name' => 'Behåll källmappens namn', 'folder_path' => 'Final mappsökväg', 'folder_name' => 'Final mappnamn', 'folder_id' => 'Final DriveItem ID', 'folder_web_url' => 'Final webbadress', 'target_state' => 'Målstatus', 'verified_at' => 'Verifierad');
     }
 
     private function default_target(): array
     {
-        return array('site_url' => 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9', 'site_id' => '', 'drive_name' => 'Dokument', 'drive_id' => '', 'list_id' => '', 'folder_path' => 'General/Medlemskap/Ansökningar', 'folder_name' => 'Ansökningar', 'folder_id' => '', 'folder_web_url' => '');
+        return array('site_url' => 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9', 'site_id' => '', 'drive_name' => 'Dokument', 'drive_id' => '', 'list_id' => '', 'parent_folder_path' => 'General/Medlemskap', 'parent_folder_name' => 'Medlemskap', 'parent_folder_id' => '', 'parent_folder_web_url' => '', 'destination_folder_name' => '', 'keep_source_folder_name' => '1', 'folder_path' => '', 'folder_name' => '', 'folder_id' => '', 'folder_web_url' => '', 'target_state' => '', 'verified_at' => '', 'existing_folder_id' => '', 'existing_folder_web_url' => '');
     }
 
     private function default_source(): array
@@ -919,12 +1088,77 @@ class SSF_Medlemsprocess_Archive_Migration
     private function target(): array
     {
         $settings = $this->settings();
-        return array_merge($this->default_target(), (array) ($settings['targets'][$this->environment()] ?? array()));
+        return $this->normalize_target(array_merge($this->default_target(), (array) ($settings['targets'][$this->environment()] ?? array())));
+    }
+
+    private function posted_target(): array
+    {
+        $input = (array) wp_unslash($_POST['target'] ?? array());
+        $target = $this->target();
+        foreach (array_keys($this->target_fields()) as $key) {
+            if (! array_key_exists($key, $input)) { continue; }
+            $target[$key] = in_array($key, array('site_url', 'folder_web_url', 'parent_folder_web_url'), true) ? esc_url_raw((string) $input[$key]) : sanitize_text_field((string) $input[$key]);
+        }
+        $target['keep_source_folder_name'] = ! empty($input['keep_source_folder_name']) ? '1' : '';
+        if (! empty($target['keep_source_folder_name'])) { $target['destination_folder_name'] = $this->source_folder_name($this->source()); }
+        $target['parent_folder_path'] = trim((string) ($target['parent_folder_path'] ?? ''), '/');
+        $target['_has_new_target_fields'] = '1';
+        $target['folder_id'] = '';
+        $target['folder_web_url'] = '';
+        $target['existing_folder_id'] = '';
+        $target['existing_folder_web_url'] = '';
+        $target['verified_at'] = '';
+        return $this->normalize_target($target);
+    }
+
+    private function normalize_target(array $target): array
+    {
+        $source_name = $this->source_folder_name($this->source());
+        $stored = (array) ($this->settings()['targets'][$this->environment()] ?? array());
+        $had_new_fields = ! empty($target['_has_new_target_fields']) || array_key_exists('parent_folder_path', $stored) || array_key_exists('destination_folder_name', $stored);
+        $folder_path = trim((string) ($target['folder_path'] ?? ''), '/');
+        if (! $had_new_fields && $folder_path) {
+            $target['parent_folder_path'] = $this->dirname_path($folder_path);
+            $target['destination_folder_name'] = $this->basename_path($folder_path);
+            $target['keep_source_folder_name'] = 0 === strcasecmp((string) $target['destination_folder_name'], $source_name) ? '1' : '';
+        }
+        $target['parent_folder_path'] = trim((string) ($target['parent_folder_path'] ?? ''), '/');
+        if (! empty($target['keep_source_folder_name']) || '' === trim((string) ($target['destination_folder_name'] ?? ''))) {
+            $target['destination_folder_name'] = $source_name;
+            $target['keep_source_folder_name'] = '1';
+        }
+        $target['destination_folder_name'] = sanitize_text_field((string) $target['destination_folder_name']);
+        $target['folder_path'] = $this->join_drive_path((string) ($target['parent_folder_path'] ?? ''), (string) $target['destination_folder_name']);
+        $target['folder_name'] = (string) $target['destination_folder_name'];
+        if (! empty($target['folder_id']) && empty($target['target_state'])) { $target['target_state'] = 'final_destination_verified'; }
+        unset($target['_has_new_target_fields']);
+        return $target;
+    }
+
+    private function render_target_hidden_fields(array $target): void
+    {
+        foreach (array('site_id', 'drive_id', 'list_id', 'parent_folder_id', 'parent_folder_name', 'parent_folder_web_url', 'folder_path', 'folder_id', 'folder_web_url', 'target_state', 'verified_at') as $key) {
+            echo '<input type="hidden" name="target[' . esc_attr($key) . ']" value="' . esc_attr((string) ($target[$key] ?? '')) . '">';
+        }
+    }
+
+    private function target_post_button(string $action, string $label, array $target, string $class = 'secondary'): void
+    {
+        echo '<form method="post" class="ssf-archive-inline-form" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="' . esc_attr($action) . '">';
+        wp_nonce_field($action);
+        foreach ($target as $key => $value) {
+            if (is_scalar($value)) { echo '<input type="hidden" name="target[' . esc_attr((string) $key) . ']" value="' . esc_attr((string) $value) . '">'; }
+        }
+        submit_button($label, $class, 'submit', false);
+        echo '</form>';
     }
 
     private function resolve_target(bool $save = false)
     {
         $target = $this->target();
+        if (empty($target['folder_id']) || ! in_array((string) ($target['target_state'] ?? ''), array('final_destination_created', 'final_destination_verified'), true)) {
+            return new WP_Error('migration_target_not_verified', 'Målmappen är inte verifierad. Skapa och verifiera målmappen eller använd en befintlig verifierad mapp först.');
+        }
         if (empty($target['site_id'])) {
             $site_path = $this->site_lookup_path((string) ($target['site_url'] ?? ''));
             if (! $site_path) {
@@ -973,6 +1207,145 @@ class SSF_Medlemsprocess_Archive_Migration
             update_option(self::OPTION, $settings, false);
         }
         return $target;
+    }
+
+    private function resolve_target_parent(bool $save = false)
+    {
+        $target = $this->target();
+        if (empty($target['site_id'])) {
+            $site_path = $this->site_lookup_path((string) ($target['site_url'] ?? ''));
+            if (! $site_path) { return new WP_Error('migration_target_site_url_missing', 'Ange en giltig SharePoint Site URL.'); }
+            $site = $this->request('GET', $site_path . '?$select=id,displayName,webUrl');
+            if (is_wp_error($site)) { return $site; }
+            $target['site_id'] = sanitize_text_field((string) ($site['id'] ?? ''));
+            $target['site_url'] = esc_url_raw((string) ($site['webUrl'] ?? $target['site_url']));
+        } else {
+            $site = $this->request('GET', 'sites/' . rawurlencode((string) $target['site_id']) . '?$select=id,displayName,webUrl');
+            if (is_wp_error($site)) { return $site; }
+        }
+        if (empty($target['drive_id'])) {
+            $drives = $this->request('GET', 'sites/' . rawurlencode((string) $target['site_id']) . '/drives?$select=id,name,webUrl');
+            if (is_wp_error($drives)) { return $drives; }
+            foreach ((array) ($drives['value'] ?? array()) as $drive) {
+                if (0 === strcasecmp((string) ($target['drive_name'] ?: 'Dokument'), (string) ($drive['name'] ?? ''))) {
+                    $target['drive_id'] = sanitize_text_field((string) ($drive['id'] ?? ''));
+                    $target['drive_name'] = sanitize_text_field((string) ($drive['name'] ?? $target['drive_name']));
+                    break;
+                }
+            }
+            if (empty($target['drive_id'])) { return new WP_Error('migration_target_drive_missing', 'Dokumentbiblioteket kunde inte hittas.'); }
+        } else {
+            $drive = $this->request('GET', $this->drive_base($target) . '?$select=id,name,webUrl');
+            if (is_wp_error($drive)) { return $drive; }
+            $target['drive_name'] = sanitize_text_field((string) ($drive['name'] ?? $target['drive_name']));
+        }
+        if (empty($target['list_id'])) {
+            $list = $this->request('GET', $this->drive_base($target) . '/list?$select=id,displayName,webUrl');
+            if (is_wp_error($list)) { return $list; }
+            $target['list_id'] = sanitize_text_field((string) ($list['id'] ?? ''));
+        }
+        if (empty($target['parent_folder_id'])) {
+            $parent_path = trim((string) ($target['parent_folder_path'] ?? ''), '/');
+            $folder = '' === $parent_path
+                ? $this->request('GET', $this->drive_base($target) . '/root?$select=id,name,folder,webUrl,parentReference')
+                : $this->request('GET', $this->drive_base($target) . '/root:/' . $this->encode_drive_path($parent_path) . '?$select=id,name,folder,webUrl,parentReference');
+            if (is_wp_error($folder)) { return $this->friendly_parent_error($folder, $target); }
+        } else {
+            $folder = $this->request('GET', $this->item_path($target, (string) $target['parent_folder_id']) . '?$select=id,name,folder,webUrl,parentReference');
+            if (is_wp_error($folder)) { return $this->friendly_parent_error($folder, $target); }
+        }
+        if (empty($folder['folder'])) { return new WP_Error('migration_parent_not_folder', 'Den valda SharePoint-posten är inte en mapp.'); }
+        $target['parent_folder_id'] = sanitize_text_field((string) ($folder['id'] ?? ''));
+        $target['parent_folder_name'] = sanitize_text_field((string) ($folder['name'] ?? $target['parent_folder_name']));
+        $target['parent_folder_web_url'] = esc_url_raw((string) ($folder['webUrl'] ?? ''));
+        $target = $this->normalize_target($target);
+        if ($save) { $this->save_target_state($target); }
+        return $target;
+    }
+
+    private function refresh_target_state(array $target, bool $save)
+    {
+        $target = $this->normalize_target($target);
+        $target['target_state'] = 'destination_parent_selected';
+        $target['folder_id'] = '';
+        $target['folder_web_url'] = '';
+        $target['existing_folder_id'] = '';
+        $target['existing_folder_web_url'] = '';
+        $existing = $this->find_final_target($target);
+        if (is_wp_error($existing)) { return $existing; }
+        if ($existing) {
+            $target['target_state'] = 'final_destination_exists';
+            $target['existing_folder_id'] = sanitize_text_field((string) ($existing['id'] ?? ''));
+            $target['existing_folder_web_url'] = esc_url_raw((string) ($existing['webUrl'] ?? ''));
+        } else {
+            $target['target_state'] = 'final_destination_missing';
+        }
+        if ($save) { $this->save_target_state($target); }
+        return $target;
+    }
+
+    private function create_and_verify_final_target(array $target)
+    {
+        $existing = $this->find_final_target($target);
+        if (is_wp_error($existing)) { return $existing; }
+        if ($existing) { return new WP_Error('migration_target_folder_exists', 'Mappen finns redan. Använd befintlig mapp, välj annan plats eller ändra mappnamn.'); }
+        $name_check = $this->validate_sharepoint_folder_name((string) $target['destination_folder_name']);
+        if (is_wp_error($name_check)) { return $name_check; }
+        $created = $this->request('POST', $this->children_path($target, (string) $target['parent_folder_id']), array('name' => (string) $target['destination_folder_name'], 'folder' => new stdClass(), '@microsoft.graph.conflictBehavior' => 'fail'));
+        if (is_wp_error($created)) { return new WP_Error('migration_target_create_failed', 'Mappen kunde inte skapas.', $created->get_error_data()); }
+        $verified = $this->verify_folder_item($target, (string) ($created['id'] ?? ''));
+        if (is_wp_error($verified)) { return new WP_Error('migration_target_verify_failed', 'Mappen skapades men kunde inte verifieras.', $verified->get_error_data()); }
+        return array_merge($target, $this->target_folder_reference($verified, (string) $target['folder_path']));
+    }
+
+    private function find_final_target(array $target)
+    {
+        $children = $this->request('GET', $this->children_path($target, (string) $target['parent_folder_id']) . '?$select=id,name,folder,webUrl');
+        if (is_wp_error($children)) { return $children; }
+        foreach ((array) ($children['value'] ?? array()) as $child) {
+            if (isset($child['folder']) && 0 === strcasecmp((string) $target['destination_folder_name'], (string) ($child['name'] ?? ''))) { return $child; }
+        }
+        return array();
+    }
+
+    private function verify_folder_item(array $target, string $folder_id)
+    {
+        if (! $folder_id) { return new WP_Error('migration_folder_id_missing', 'Mappens DriveItem ID saknas.'); }
+        $folder = $this->request('GET', $this->item_path($target, $folder_id) . '?$select=id,name,folder,webUrl,parentReference');
+        if (is_wp_error($folder)) { return $folder; }
+        if (empty($folder['folder'])) { return new WP_Error('migration_target_not_folder', 'Målplatsen är inte en SharePoint-mapp.'); }
+        return $folder;
+    }
+
+    private function target_folder_reference(array $folder, string $path): array
+    {
+        return array('folder_id' => sanitize_text_field((string) ($folder['id'] ?? '')), 'folder_name' => sanitize_text_field((string) ($folder['name'] ?? '')), 'folder_path' => trim($path, '/'), 'folder_web_url' => esc_url_raw((string) ($folder['webUrl'] ?? '')));
+    }
+
+    private function persist_verified_target(array $target, string $state): void
+    {
+        $target['target_state'] = 'final_destination_created' === $state ? 'final_destination_created' : 'final_destination_verified';
+        $target['verified_at'] = gmdate('c');
+        $target['existing_folder_id'] = '';
+        $target['existing_folder_web_url'] = '';
+        $this->save_target_state($target);
+    }
+
+    private function save_target_state(array $target): void
+    {
+        $settings = $this->settings();
+        $settings['targets'][$this->environment()] = $this->normalize_target($target);
+        update_option(self::OPTION, $settings, false);
+    }
+
+    private function reset_target_dependent_state(): void
+    {
+        delete_option(self::READINESS_OPTION);
+        delete_option(self::WRITE_TEST_OPTION);
+        delete_option(self::SCHEMA_COMPARE_OPTION);
+        delete_option(self::SCHEMA_SYNC_OPTION);
+        delete_option(self::PLAN_OPTION);
+        delete_option(self::BATCH_OPTION);
     }
 
     private function resolve_location(string $kind, bool $save = false)
@@ -1184,6 +1557,78 @@ class SSF_Medlemsprocess_Archive_Migration
         return implode('/', array_map('rawurlencode', $segments));
     }
 
+    private function source_folder_name(array $source): string
+    {
+        $name = $this->basename_path((string) ($source['folder_path'] ?? ''));
+        if (! $name) { $name = sanitize_text_field((string) ($source['folder_name'] ?? 'Medlemsansökningar')); }
+        return $name ?: 'Medlemsansökningar';
+    }
+
+    private function join_drive_path(string $parent, string $child): string
+    {
+        return trim(trim($parent, '/') . '/' . trim($child, '/'), '/');
+    }
+
+    private function dirname_path(string $path): string
+    {
+        $parts = array_values(array_filter(explode('/', trim($path, '/')), static function ($part): bool { return '' !== trim($part); }));
+        array_pop($parts);
+        return implode('/', $parts);
+    }
+
+    private function basename_path(string $path): string
+    {
+        $parts = array_values(array_filter(explode('/', trim($path, '/')), static function ($part): bool { return '' !== trim($part); }));
+        return $parts ? (string) end($parts) : '';
+    }
+
+    private function display_drive_path(array $target, string $path): string
+    {
+        return '/' . trim((string) ($target['drive_name'] ?: 'Dokumentbibliotek'), '/') . ('' !== trim($path, '/') ? '/' . trim($path, '/') : '') . '/';
+    }
+
+    private function validate_sharepoint_folder_name(string $name)
+    {
+        $name = trim($name);
+        if ('' === $name) { return new WP_Error('migration_target_folder_name_missing', 'Ange ett mappnamn för målet.'); }
+        if (preg_match('/["*:<>?\\\\\/|]/', $name) || in_array($name, array('.', '..'), true) || preg_match('/[. ]$/', $name)) {
+            return new WP_Error('migration_target_folder_name_invalid', 'Mappnamnet innehåller tecken som inte är tillåtna i SharePoint.');
+        }
+        return true;
+    }
+
+    private function target_state_label(string $state): string
+    {
+        $labels = array(
+            'destination_parent_selected' => 'Destination parent vald',
+            'final_destination_missing' => 'MÅLMAPP SAKNAS',
+            'final_destination_exists' => 'MÅLMAPP FINNS REDAN',
+            'final_destination_created' => 'Målmappen skapades och verifierades',
+            'final_destination_verified' => 'Målet är verifierat',
+        );
+        return $labels[$state] ?? 'Inte verifierad';
+    }
+
+    private function target_browser_children(array $target)
+    {
+        if (empty($target['drive_id']) && empty($target['site_id']) && empty($target['site_url'])) { return array(); }
+        $resolved = $this->resolve_target_parent(false);
+        if (is_wp_error($resolved)) { return $resolved; }
+        $result = $this->request('GET', $this->children_path($resolved, (string) $resolved['parent_folder_id']) . '?$select=id,name,folder,webUrl,parentReference');
+        if (is_wp_error($result)) { return $result; }
+        $folders = array();
+        foreach ((array) ($result['value'] ?? array()) as $item) {
+            if (empty($item['folder'])) { continue; }
+            $folders[] = array(
+                'id' => sanitize_text_field((string) ($item['id'] ?? '')),
+                'name' => sanitize_text_field((string) ($item['name'] ?? '')),
+                'path' => $this->join_drive_path((string) ($resolved['parent_folder_path'] ?? ''), (string) ($item['name'] ?? '')),
+                'web_url' => esc_url_raw((string) ($item['webUrl'] ?? '')),
+            );
+        }
+        return $folders;
+    }
+
     private function friendly_folder_error(WP_Error $error, array $target): WP_Error
     {
         $data = (array) $error->get_error_data();
@@ -1194,6 +1639,16 @@ class SSF_Medlemsprocess_Archive_Migration
                 'Målmappen hittades inte. Skapa mappen i SharePoint först: ' . (string) ($target['folder_path'] ?? '') . '. Verktyget skapar inte katalogstruktur, kolumner eller Choice-värden automatiskt.',
                 $data
             );
+        }
+        return $error;
+    }
+
+    private function friendly_parent_error(WP_Error $error, array $target): WP_Error
+    {
+        $data = (array) $error->get_error_data();
+        $status = (int) ($data['http_status'] ?? $data['status'] ?? 0);
+        if (404 === $status || 'itemnotfound' === strtolower((string) ($data['graph_code'] ?? ''))) {
+            return new WP_Error('migration_parent_folder_missing', 'Kunde inte hitta den valda SharePoint-mappen.', $data);
         }
         return $error;
     }

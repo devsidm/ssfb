@@ -41,6 +41,17 @@
 .ssf-archive-step form select { min-width: min(420px, 100%); }
 .ssf-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ssf-archive-actions form, .ssf-archive-actions p { margin: 0; }
+.ssf-archive-target-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.ssf-archive-browser, .ssf-archive-preview, .ssf-archive-create-folder { margin-top: 14px; padding-top: 14px; border-top: 1px solid #dcdcde; }
+.ssf-archive-folder-list { margin: 10px 0 0; border: 1px solid #dcdcde; background: #fff; }
+.ssf-archive-folder-list li { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 0; padding: 10px 12px; border-top: 1px solid #f0f0f1; }
+.ssf-archive-folder-list li:first-child { border-top: 0; }
+.ssf-archive-folder-list small { display: block; margin-top: 2px; color: #646970; overflow-wrap: anywhere; }
+.ssf-archive-inline-form { display: inline-block; margin: 0; }
+.ssf-archive-preview dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; }
+.ssf-archive-preview dt { margin-bottom: 4px; color: #646970; font-weight: 600; }
+.ssf-archive-preview dd { margin: 0; overflow-wrap: anywhere; }
+.ssf-archive-verified { margin-left: 18px; list-style: disc; }
 .ssf-archive-status th { width: 220px; }
 .ssf-archive-step--activation { border-left: 4px solid #2271b1; }
 .ssf-archive-details { margin: 12px 0; background: #fff; border: 1px solid #c3c4c7; }
@@ -49,5 +60,5 @@
 .ssf-archive-details > table, .ssf-archive-details > pre, .ssf-archive-details > p { box-sizing: border-box; margin: 16px; max-width: calc(100% - 32px); }
 .ssf-archive-details pre { overflow: auto; font-size: 12px; }
 .ssf-process-status-badge { display: inline-block; padding: 4px 8px; color: #0b2d5c; background: #f8f1df; border: 1px solid #d8b46a; border-radius: 4px; font-weight: 600; }
-@media (max-width: 782px) { .ssf-process-admin-overview, .ssf-process-admin-grid, .ssf-process-dashboard-cards, .ssf-archive-summary dl { grid-template-columns: 1fr; } .ssf-process-check-row { grid-template-columns: 1fr; } .ssf-archive-summary dl > div { padding: 8px 0; border-top: 1px solid #dcdcde; border-left: 0; } .ssf-archive-summary dl > div:first-child { border-top: 0; } .ssf-archive-step { padding: 14px; } .ssf-archive-step .form-table th, .ssf-archive-step .form-table td { display: block; width: auto; padding: 6px 0; } .ssf-archive-actions { align-items: stretch; } .ssf-archive-actions .button { text-align: center; } }
+@media (max-width: 782px) { .ssf-process-admin-overview, .ssf-process-admin-grid, .ssf-process-dashboard-cards, .ssf-archive-summary dl, .ssf-archive-target-grid, .ssf-archive-preview dl { grid-template-columns: 1fr; } .ssf-process-check-row { grid-template-columns: 1fr; } .ssf-archive-summary dl > div { padding: 8px 0; border-top: 1px solid #dcdcde; border-left: 0; } .ssf-archive-summary dl > div:first-child { border-top: 0; } .ssf-archive-step { padding: 14px; } .ssf-archive-step .form-table th, .ssf-archive-step .form-table td { display: block; width: auto; padding: 6px 0; } .ssf-archive-actions { align-items: stretch; } .ssf-archive-actions .button { text-align: center; } .ssf-archive-folder-list li { align-items: flex-start; flex-direction: column; } }
 @media print { #adminmenumain, #wpadminbar, #wpfooter, #screen-meta, #postdivrich, #submitdiv, .notice, .button, .button-link, .button-link-delete, .ssf-process-note-form { display: none !important; } #wpcontent, #wpbody, #wpbody-content { margin: 0 !important; padding: 0 !important; } .postbox { border: 0 !important; box-shadow: none !important; } }
