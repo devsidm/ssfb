@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.14",
-    "built_at":  "2026-09-17T21:05:38.4918243Z",
+    "build":  "20260917.15",
+    "built_at":  "2026-09-17T21:06:53.2983290Z",
     "source":  "codex",
-    "source_revision":  "dd751d8b8983a761251ef01f80395a65d6e97b00",
-    "description":  "Fix generic SharePoint site discovery button",
+    "source_revision":  "3ef8a81284151066992b93a6c90284e457f0123b",
+    "description":  "Bust cache for SharePoint site discovery fix",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "ssf-member-portal"
