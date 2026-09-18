@@ -2,14 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260918.6",
-    "built_at":  "2026-09-18T12:19:58.4012072Z",
+    "build":  "20260918.7",
+    "built_at":  "2026-09-18T13:06:53.9702536Z",
     "source":  "codex",
-    "source_revision":  "615770e2c6f0b056981c0a973dd0246367395fdb",
-    "description":  "Rätta visning av manuella Choice-kolumner",
+    "source_revision":  "508442d43bb02043bbecab5f9fe75fc1cd4aaa98",
+    "description":  "Use a dedicated SharePoint library root as the migration destination",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "ssf-medlemsprocess"
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""

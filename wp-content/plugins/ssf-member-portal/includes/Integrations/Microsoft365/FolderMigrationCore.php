@@ -39,7 +39,8 @@ final class FolderMigrationCore
             return is_wp_error($root) ? $root : new \WP_Error('migration_source_not_folder', 'Den valda källan är inte en mapp.');
         }
         $items = array();
-        $queue = array(array('item' => $root, 'path' => trim((string) ($source['folder_path'] ?? $root['name']), '/'), 'depth' => 0));
+        $root_path = ! empty($source['folder_path']) ? (string) $source['folder_path'] : (string) ($source['drive_name'] ?? $root['name']);
+        $queue = array(array('item' => $root, 'path' => trim($root_path, '/'), 'depth' => 0));
         $seen = array();
         $bytes = 0;
         while ($queue) {
@@ -119,7 +120,8 @@ final class FolderMigrationCore
         if (! empty($inventory['metadata_policy']['excluded_fields'])) {
             $warnings[] = 'Äldre medlemsfält ignoreras: ' . implode(', ', (array) $inventory['metadata_policy']['excluded_fields']) . '. Kanoniska medlemsfält används i stället.';
         }
-        return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => end($segments), 'source_summary' => (array) $inventory['summary'], 'schema' => $schema, 'existing_destination' => $existing, 'existing_destination_confirmed' => $confirmed_existing, 'blockers' => $blockers, 'warnings' => $warnings);
+        $final_root_name = $segments ? (string) end($segments) : (string) ($target['drive_name'] ?? '');
+        return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => $final_root_name, 'source_summary' => (array) $inventory['summary'], 'schema' => $schema, 'existing_destination' => $existing, 'existing_destination_confirmed' => $confirmed_existing, 'blockers' => $blockers, 'warnings' => $warnings);
     }
 
     /** Verify only the calculated destination path; no target contents are inventoried. */
@@ -128,6 +130,17 @@ final class FolderMigrationCore
         $target_check = $this->location($target, 'Vald root');
         if (is_wp_error($target_check)) {
             return $target_check;
+        }
+        if (! empty($target['direct_to_root'])) {
+            return array(
+                'ok' => true,
+                'checked_at' => gmdate('c'),
+                'destination_path' => (string) ($target['drive_name'] ?? 'Dokumentbibliotek') . ' / bibliotekets rot',
+                'segments' => array(),
+                'exists' => false,
+                'existing_destination' => array(),
+                'direct_to_root' => true,
+            );
         }
         $name = (string) ($target['destination_folder_name'] ?? $source['folder_name'] ?? '');
         $segments = $this->segments((string) ($target['extra_structure'] ?? ''), $name);
@@ -241,6 +254,10 @@ final class FolderMigrationCore
     {
         $inventory = $this->apply_metadata_policy($inventory);
         $state = $this->state();
+        $context = hash('sha256', implode('|', array((string) ($source['drive_id'] ?? ''), (string) ($source['folder_id'] ?? ''), (string) ($target['drive_id'] ?? ''), $target_root_id)));
+        if (! hash_equals((string) ($state['context'] ?? ''), $context)) {
+            $state = array('context' => $context, 'items' => array());
+        }
         $state['items'] = (array) ($state['items'] ?? array());
         $folders = array_filter((array) $inventory['items'], static fn($item) => 'folder' === $item['type']);
         usort($folders, static fn($a, $b) => $a['depth'] <=> $b['depth']);
@@ -271,6 +288,16 @@ final class FolderMigrationCore
                 $target_id = (string) $target_item['id'];
             }
             $folder_map[$source_id] = $target_id;
+            if ($source_id === (string) $source['folder_id'] && ! empty($target['direct_to_root'])) {
+                $target_item = $this->item((string) $target['drive_id'], $target_id);
+                if (is_wp_error($target_item) || empty($target_item['folder'])) {
+                    $message = is_wp_error($target_item) ? $target_item->get_error_message() : 'Bibliotekets rot kunde inte verifieras som mapp.';
+                    return $this->fail($state, $source_id, $folder, $message);
+                }
+                $state['items'][$source_id] = array_merge($this->verified($folder, $target_id), array('target_path' => (string) ($target['drive_name'] ?? ''), 'verification_result' => 'target-library-root'));
+                $this->save_state($state);
+                continue;
+            }
             $result = $this->metadata_and_verify($target, $folder, $target_id);
             if (is_wp_error($result)) {
                 return $this->fail($state, $source_id, $folder, $result->get_error_message());
@@ -311,6 +338,10 @@ final class FolderMigrationCore
     public function reconcile(array $source, array $target, array $inventory, string $target_root_id): array
     {
         $state = $this->state();
+        $context = hash('sha256', implode('|', array((string) ($source['drive_id'] ?? ''), (string) ($source['folder_id'] ?? ''), (string) ($target['drive_id'] ?? ''), $target_root_id)));
+        if (! hash_equals((string) ($state['context'] ?? ''), $context)) {
+            return array('ok' => false, 'source_folders' => $inventory['summary']['folders'] ?? 0, 'source_files' => $inventory['summary']['files'] ?? 0, 'verified_items' => 0, 'expected_items' => count((array) $inventory['items']), 'source_untouched' => true, 'target_root_id' => $target_root_id);
+        }
         $verified = count(array_filter((array) ($state['items'] ?? array()), static fn($item) => 'VERIFIED' === ($item['state'] ?? '')));
         return array('ok' => $verified === count((array) $inventory['items']), 'source_folders' => $inventory['summary']['folders'] ?? 0, 'source_files' => $inventory['summary']['files'] ?? 0, 'verified_items' => $verified, 'expected_items' => count((array) $inventory['items']), 'source_untouched' => true, 'target_root_id' => $target_root_id);
     }

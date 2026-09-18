@@ -49,7 +49,7 @@ Assert-Contains 'Publikt destinations-API' $configuration 'public static functio
 Assert-Contains 'Discovery-list-ID sparas centralt' $configuration "SharePointDestinations::save_field('annual_meetings', 'list_id'"
 Assert-Contains 'Autentisering kräver endast credentials' $authentication 'Configuration::credential_missing()'
 
-foreach ($endpoint in @("'/sites/root?`$select", "'/drives?`$select", "'/root?`$select=id,name,sharepointIds", "'/columns?`$select", "'/children'", "':/content'")) {
+foreach ($endpoint in @("'/sites/root?`$select", "'/drives?`$select", "'/root?`$select=id,name,webUrl,sharepointIds", "'/columns?`$select", "'/children'", "':/content'")) {
     Assert-Contains "Graph discovery $endpoint" $discovery $endpoint
 }
 Assert-Contains 'Segmentvis path-encoding' $discovery "array_map('rawurlencode'"

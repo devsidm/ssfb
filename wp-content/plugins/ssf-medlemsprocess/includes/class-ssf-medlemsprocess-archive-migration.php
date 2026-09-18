@@ -187,10 +187,13 @@ class SSF_Medlemsprocess_Archive_Migration
         $final = (array) ($state['reconciliation'] ?? array());
         $editing = sanitize_key((string) ($_GET['location'] ?? 'source')) === 'target' ? 'target' : 'source';
         $keep_name = '0' !== (string) ($target['keep_name'] ?? '1');
+        $direct_to_root = ! empty($target['direct_to_root']);
         $source_name = (string) ($source['folder_name'] ?? '');
         $custom_name = $keep_name ? '' : (string) ($target['destination_folder_name'] ?? '');
         $result_name = $keep_name ? $source_name : $custom_name;
-        $preview = implode('/', array_values(array_filter(array(trim((string) ($target['folder_path'] ?? ''), '/'), trim((string) ($target['extra_structure'] ?? ''), '/'), $result_name), 'strlen')));
+        $preview = $direct_to_root
+            ? (string) ($target['drive_name'] ?? '') . ' / bibliotekets rot'
+            : implode('/', array_values(array_filter(array(trim((string) ($target['folder_path'] ?? ''), '/'), trim((string) ($target['extra_structure'] ?? ''), '/'), $result_name), 'strlen')));
         $destination_check = $dry_run ?: $target_check;
         $existing_destination = (array) ($destination_check['existing_destination'] ?? array());
         $existing_confirmed = ! empty($existing_destination['id'])
@@ -222,14 +225,17 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php if (! empty($inventory['metadata_policy']['excluded_fields'])) : ?><p class="description"><strong>Kanonisk medlemsmetadata:</strong> äldre dubblettfält ignoreras: <code><?php echo esc_html(implode(', ', (array) $inventory['metadata_policy']['excluded_fields'])); ?></code>.</p><?php endif; ?>
             </section>
 
-            <section id="archive-target" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj målroot</h2><p>Välj den katalog där den migrerade strukturen ska placeras. Slutmappen skapas automatiskt vid förberedelse.</p></div></div>
-                <p><strong>VALD ROOT:</strong> <?php echo esc_html((string) ($target['site_name'] ?? 'Inte vald')); ?> / <?php echo esc_html((string) ($target['drive_name'] ?? '')); ?> / <?php echo esc_html((string) ($target['folder_path'] ?? '')); ?></p>
+            <section id="archive-target" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj målroot</h2><p>Välj en mapp som placering eller ett dedikerat dokumentbiblioteks rot som direkt slutmål.</p></div></div>
+                <p><strong>VALD ROOT:</strong> <?php echo esc_html((string) ($target['site_name'] ?? 'Inte vald')); ?> / <?php echo esc_html((string) ($target['drive_name'] ?? '')); ?> / <?php echo esc_html($direct_to_root ? 'bibliotekets rot (direkt slutmål)' : (string) ($target['folder_path'] ?? '')); ?></p>
                 <p class="<?php echo empty($target['folder_id']) ? 'ssf-archive-pending-state' : 'ssf-archive-verified-state'; ?>"><?php echo empty($target['folder_id']) ? 'Välj och spara en målroot för att fortsätta.' : '✓ Målrooten är verifierad och sparad.'; ?></p>
                 <?php if ('target' === $editing) : ?>
                     <?php $this->render_generic_discovery_form('target', $target); ?>
                 <?php else : ?>
                     <p><a class="button" href="<?php echo esc_url(add_query_arg('location', 'target', remove_query_arg('location')) . '#archive-target'); ?>">Välj eller ändra målroot</a></p>
                 <?php endif; ?>
+                <?php if ($direct_to_root) : ?>
+                    <div class="notice notice-info inline"><p><strong>Direkt till bibliotekets rot:</strong> källmappens innehåll kopieras in i biblioteket. Ingen extra mapp med samma namn skapas.</p></div>
+                <?php else : ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-ssf-destination-options><input type="hidden" name="action" value="ssf_folder_migration_destination"><?php wp_nonce_field('ssf_folder_migration_destination'); ?>
                     <fieldset><legend><strong>Slutmappens namn</strong></legend>
                     <p><label><input type="radio" name="keep_name" value="1" <?php checked($keep_name); ?>> Behåll källmappens namn<?php echo $source_name ? ': ' . esc_html($source_name) : ''; ?></label><br><label><input type="radio" name="keep_name" value="0" <?php checked(! $keep_name); ?>> Använd ett nytt namn</label></p>
@@ -237,6 +243,7 @@ class SSF_Medlemsprocess_Archive_Migration
                     </fieldset>
                     <p><label>Extra struktur <input class="regular-text" name="extra_structure" value="<?php echo esc_attr((string) ($target['extra_structure'] ?? '')); ?>" placeholder="arkiv/2026"></label></p>
                     <?php submit_button('Spara namn och struktur', 'secondary', 'submit', false); ?></form>
+                <?php endif; ?>
                 <div class="ssf-archive-preview"><strong>SÅ KOMMER DET ATT SE UT</strong><dl><div><dt>Källa</dt><dd><?php echo esc_html((string) ($source['folder_path'] ?? '')); ?></dd></div><div><dt>Mål</dt><dd data-ssf-migration-preview><?php echo esc_html($preview); ?></dd></div></dl></div>
                 <?php if (! empty($existing_destination['id'])) : ?>
                     <div class="notice notice-warning inline ssf-archive-result">
@@ -255,7 +262,7 @@ class SSF_Medlemsprocess_Archive_Migration
                         <?php endif; ?>
                     </div>
                 <?php elseif (! empty($target_check['ok'])) : ?>
-                    <p class="ssf-archive-verified-state">✓ Målet är verifierat. Ingen mapp med namnet finns ännu.</p>
+                    <p class="ssf-archive-verified-state"><?php echo $direct_to_root ? '✓ Dokumentbibliotekets rot är verifierad som direkt slutmål.' : '✓ Målet är verifierat. Ingen mapp med namnet finns ännu.'; ?></p>
                 <?php endif; ?>
             </section>
 
@@ -271,10 +278,10 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php else : ?><p class="description">Kör torrkörningen för att få ett tydligt godkänt eller blockerat resultat innan något skapas.</p><?php endif; ?>
             </section>
 
-            <section id="archive-prepare" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>5</span><div><h2>Förbered målmapp</h2><p>Verifierar först att hela biblioteksschemat redan är korrekt. Först därefter skapas eventuell extra struktur och slutlig målmapp.</p></div></div>
-                <?php $this->generic_button('ssf_folder_migration_prepare', 'Förbered målmapp', 'archive-prepare', empty($dry_run['ok'])); ?>
+            <section id="archive-prepare" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>5</span><div><h2>Förbered mål</h2><p>Verifierar först att hela biblioteksschemat redan är korrekt. För ett direkt biblioteksmål verifieras roten utan att en extra mapp skapas.</p></div></div>
+                <?php $this->generic_button('ssf_folder_migration_prepare', 'Förbered mål', 'archive-prepare', empty($dry_run['ok'])); ?>
                 <?php if (empty($dry_run['ok'])) : ?><p class="description">Knappen aktiveras först när steg 4 visar att torrkörningen är godkänd utan saknade kolumner eller andra blockerare. Inga mappar skapas medan schemat är ofullständigt.</p><?php endif; ?>
-                <?php if ($prepared) : ?><p><strong>Slutligt mål:</strong> <?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?>. Schemat verifierades före mappen skapades. Skapade migreringsundermapppar: 0.</p><?php endif; ?>
+                <?php if ($prepared) : ?><p><strong>Slutligt mål:</strong> <?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?>. Schemat och målroten är verifierade. Skapade migreringsundermapppar: 0.</p><?php endif; ?>
             </section>
 
             <section id="archive-write-test" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>6</span><div><h2>Skrivtest</h2><p>Verifierar mapp, fil och representativ metadata i den verkliga förberedda målroten, och städar testdata.</p></div></div>
@@ -299,9 +306,12 @@ class SSF_Medlemsprocess_Archive_Migration
             if (!preview) return;
             var sourceName = <?php echo wp_json_encode((string) ($source['folder_name'] ?? '')); ?>;
             var storedRoot = <?php echo wp_json_encode((string) ($target['folder_path'] ?? '')); ?>;
+            var directToRoot = <?php echo wp_json_encode($direct_to_root); ?>;
+            var driveName = <?php echo wp_json_encode((string) ($target['drive_name'] ?? '')); ?>;
             function update() {
                 var rootField = document.querySelector('[data-ssf-sharepoint-admin][data-location-kind="target"] [data-sp-field="folder_path"]');
                 var root = rootField && rootField.value ? rootField.value : storedRoot;
+                if (directToRoot) { preview.textContent = driveName + ' / bibliotekets rot'; return; }
                 var keep = document.querySelector('input[name="keep_name"]:checked');
                 var nameField = document.querySelector('input[name="destination_folder_name"]');
                 var extraField = document.querySelector('input[name="extra_structure"]');
@@ -369,23 +379,39 @@ class SSF_Medlemsprocess_Archive_Migration
         $this->require_manage(); check_admin_referer('ssf_folder_migration_location');
         $kind = 'target' === sanitize_key((string) ($_POST['location_kind'] ?? 'source')) ? 'target' : 'source';
         $input = (array) wp_unslash($_POST['profile'] ?? array()); $location = array();
-        foreach (array('site_url','site_id','site_name','drive_id','drive_name','list_id','folder_id','folder_name','folder_path','folder_web_url') as $key) $location[$key] = in_array($key, array('site_url','folder_web_url'), true) ? esc_url_raw((string) ($input[$key] ?? '')) : sanitize_text_field((string) ($input[$key] ?? ''));
+        foreach (array('site_url','site_id','site_name','drive_id','drive_name','drive_root_id','list_id','folder_id','folder_name','folder_path','folder_web_url','is_drive_root','direct_to_root') as $key) $location[$key] = in_array($key, array('site_url','folder_web_url'), true) ? esc_url_raw((string) ($input[$key] ?? '')) : sanitize_text_field((string) ($input[$key] ?? ''));
         foreach (array('site_id','drive_id','list_id','folder_id') as $key) if (empty($location[$key])) $this->generic_redirect('archive-' . $kind, 'Välj site, dokumentbibliotek och mapp med Hitta/bläddra så att verifierade identifierare sparas.', 'error');
+        $is_verified_drive_root = ! empty($location['drive_root_id']) && hash_equals((string) $location['drive_root_id'], (string) $location['folder_id']) && '1' === (string) $location['is_drive_root'];
+        $location['direct_to_root'] = 'target' === $kind && $is_verified_drive_root && '1' === (string) $location['direct_to_root'] ? '1' : '0';
         $state = $this->generic_state(); $state[$kind] = $location;
         if ('source' === $kind && empty($state['target']['destination_folder_name'])) $state['target']['destination_folder_name'] = $location['folder_name'];
         unset($state['target']['use_existing_target'], $state['target']['existing_target_policy'], $state['target']['confirmed_existing_target_id']);
-        unset($state['target_check'], $state['inventory'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']); update_option(self::GENERIC_OPTION, $state, false);
-        $this->generic_redirect('archive-' . $kind, ucfirst($kind) . ' verifierad och sparad.', 'success');
+        unset($state['target_check'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']);
+        if ('source' === $kind) unset($state['inventory']);
+        if ('target' === $kind && ! empty($location['direct_to_root'])) {
+            $core = $this->generic_core();
+            $check = is_wp_error($core) ? $core : $core->inspect_destination((array) $state['source'], $location);
+            if (is_wp_error($check)) {
+                update_option(self::GENERIC_OPTION, $state, false);
+                $this->generic_redirect('archive-target', $check->get_error_message(), 'error');
+            }
+            $state['target_check'] = $check;
+        }
+        update_option(self::GENERIC_OPTION, $state, false);
+        $message = 'target' === $kind && ! empty($location['direct_to_root']) ? 'Bibliotekets rot är verifierad och sparad som direkt slutmål.' : ucfirst($kind) . ' verifierad och sparad.';
+        $this->generic_redirect('archive-' . $kind, $message, 'success');
     }
 
     public function generic_save_destination(): void
     {
         $this->require_manage(); check_admin_referer('ssf_folder_migration_destination'); $state = $this->generic_state();
+        $direct_to_root = ! empty($state['target']['direct_to_root']) && ! empty($_POST['direct_to_root']);
         $keep = '0' !== (string) ($_POST['keep_name'] ?? '1'); $source_name = (string) ($state['source']['folder_name'] ?? '');
         $destination_name = $keep ? $source_name : sanitize_text_field((string) ($_POST['destination_folder_name'] ?? ''));
-        if (! $destination_name) $this->generic_redirect('archive-target', $keep ? 'Spara en verifierad källa innan källmappens namn kan behållas.' : 'Ange ett nytt namn för slutmappen.', 'error');
+        if (! $direct_to_root && ! $destination_name) $this->generic_redirect('archive-target', $keep ? 'Spara en verifierad källa innan källmappens namn kan behållas.' : 'Ange ett nytt namn för slutmappen.', 'error');
+        $state['target']['direct_to_root'] = $direct_to_root ? '1' : '0';
         $state['target']['keep_name'] = $keep ? '1' : '0'; $state['target']['destination_folder_name'] = $destination_name;
-        $state['target']['extra_structure'] = trim(sanitize_text_field((string) ($_POST['extra_structure'] ?? '')), '/');
+        $state['target']['extra_structure'] = $direct_to_root ? '' : trim(sanitize_text_field((string) ($_POST['extra_structure'] ?? '')), '/');
         unset($state['target']['use_existing_target'], $state['target']['existing_target_policy'], $state['target']['confirmed_existing_target_id']);
         unset($state['target_check'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']);
         $core = $this->generic_core();
@@ -393,7 +419,7 @@ class SSF_Medlemsprocess_Archive_Migration
         $check = $core->inspect_destination((array) $state['source'], (array) $state['target']);
         if (is_wp_error($check)) { update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect('archive-target', $check->get_error_message(), 'error'); }
         $state['target_check'] = $check; update_option(self::GENERIC_OPTION, $state, false);
-        $message = ! empty($check['exists']) ? 'Målmappen finns redan. Bekräfta hur konflikten ska hanteras.' : 'Målet är verifierat och mappnamnet är ledigt.';
+        $message = $direct_to_root ? 'Bibliotekets rot är verifierad som direkt slutmål.' : (! empty($check['exists']) ? 'Målmappen finns redan. Bekräfta hur konflikten ska hanteras.' : 'Målet är verifierat och mappnamnet är ledigt.');
         $this->generic_redirect('archive-target', $message, ! empty($check['exists']) ? 'error' : 'success');
     }
 
@@ -433,7 +459,7 @@ class SSF_Medlemsprocess_Archive_Migration
         if (empty($item) || 'folder' !== ($item['type'] ?? '') || empty($item['depth'])) $this->generic_redirect('archive-test-case', 'Välj en undermapp som testärende.', 'error');
         $test_source = array_merge((array) $state['source'], array('folder_id' => $item['id'], 'folder_name' => $item['name'], 'folder_path' => $item['path']));
         $test_inventory = $core->inventory($test_source); if (is_wp_error($test_inventory)) $this->generic_redirect('archive-test-case', $test_inventory->get_error_message(), 'error');
-        $test_target = array_merge((array) $state['target'], array('folder_id' => (string) $state['prepared']['target_folder_id'], 'folder_path' => (string) ($state['dry_run']['destination_path'] ?? ''), 'destination_folder_name' => (string) $item['name'], 'extra_structure' => ''));
+        $test_target = array_merge((array) $state['target'], array('folder_id' => (string) $state['prepared']['target_folder_id'], 'folder_path' => (string) ($state['dry_run']['destination_path'] ?? ''), 'destination_folder_name' => (string) $item['name'], 'extra_structure' => '', 'direct_to_root' => '0'));
         $test_dry_run = $core->dry_run($test_source, $test_target, $test_inventory); if (is_wp_error($test_dry_run) || empty($test_dry_run['ok'])) $this->generic_redirect('archive-test-case', is_wp_error($test_dry_run) ? $test_dry_run->get_error_message() : 'Testärendet har blockerare.', 'error');
         $prepared = $core->prepare($test_target, $test_dry_run); if (is_wp_error($prepared)) $this->generic_redirect('archive-test-case', $prepared->get_error_message(), 'error');
         $result = $core->migrate($test_source, $test_target, $test_inventory, (string) $prepared['target_folder_id']); if (is_wp_error($result)) $this->generic_redirect('archive-test-case', $result->get_error_message(), 'error');
@@ -466,8 +492,8 @@ class SSF_Medlemsprocess_Archive_Migration
             <p><strong>Redigerar:</strong> <?php echo 'source' === $kind ? 'KÄLLA' : 'VALD ROOT'; ?></p>
             <p><label>SharePoint Site URL <input class="regular-text" name="profile[site_url]" value="<?php echo esc_attr((string) ($profile['site_url'] ?? '')); ?>" data-sp-field="site_url"></label> <button type="button" class="button" data-sp-operation="site">Hitta site</button></p><div class="ssf-sp-result" data-sp-result="site" aria-live="polite"></div>
             <p><label>Dokumentbibliotek <input class="regular-text" name="profile[drive_name]" value="<?php echo esc_attr((string) ($profile['drive_name'] ?? '')); ?>" data-sp-field="drive_name"></label> <button type="button" class="button" data-sp-operation="drives">Hitta dokumentbibliotek</button></p><div class="ssf-sp-result" data-sp-result="drives" aria-live="polite"></div>
-            <p><label>Mappväg <input class="regular-text" name="profile[folder_path]" value="<?php echo esc_attr((string) ($profile['folder_path'] ?? '')); ?>" data-sp-field="folder_path"></label> <button type="button" class="button" data-sp-operation="folder_path">Hitta mapp</button> <button type="button" class="button" data-sp-operation="folders" data-parent-id="" data-parent-path="">Bläddra från roten</button></p><div class="ssf-sp-result" data-sp-result="folders" aria-live="polite"></div>
-            <details><summary>Avancerat / identifierare</summary><?php foreach (array('site_name','site_id','drive_id','list_id','folder_name','folder_id','folder_web_url') as $key) : ?><p><label><?php echo esc_html($key); ?> <input class="regular-text" name="profile[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($profile[$key] ?? '')); ?>" data-sp-field="<?php echo esc_attr($key); ?>"></label></p><?php endforeach; ?></details>
+            <p><label>Mappväg <input class="regular-text" name="profile[folder_path]" value="<?php echo esc_attr((string) ($profile['folder_path'] ?? '')); ?>" data-sp-field="folder_path"></label> <button type="button" class="button" data-sp-operation="folder_path">Hitta mapp</button> <button type="button" class="button" data-sp-operation="folders" data-parent-id="" data-parent-path="">Bläddra från roten</button></p><p class="description"><?php echo 'target' === $kind ? 'För ett dedikerat bibliotek: välj biblioteket ovan och klicka “Använd bibliotekets rot som slutmål”.' : 'Välj den källmapp som ska kopieras.'; ?></p><div class="ssf-sp-result" data-sp-result="folders" aria-live="polite"></div>
+            <details><summary>Avancerat / identifierare</summary><?php foreach (array('site_name','site_id','drive_id','drive_root_id','list_id','folder_name','folder_id','folder_web_url','is_drive_root','direct_to_root') as $key) : ?><p><label><?php echo esc_html($key); ?> <input class="regular-text" name="profile[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) ($profile[$key] ?? '')); ?>" data-sp-field="<?php echo esc_attr($key); ?>"></label></p><?php endforeach; ?></details>
             <?php submit_button('Spara verifierad ' . ('source' === $kind ? 'källa' : 'målroot'), 'secondary'); ?>
         </form>
         <?php

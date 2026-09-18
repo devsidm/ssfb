@@ -192,7 +192,8 @@ Assert-Contains 'Arkivflytt använder server-till-server Graph' $archiveMigratio
 Assert-NotContains 'Arkivflytt får inte använda Microsoft ID Login-token' $archiveMigration 'microsoft-id-login'
 Assert-Contains 'Arkivflytt har separat målkonfiguration' $archiveMigration "ssf_medlemsprocess_archive_migration"
 Assert-Contains 'Arkivflytt mål är styrelsens SharePoint' $archiveMigration 'https://tradtionsfartyg.sharepoint.com/sites/styrelsen9'
-Assert-Contains 'Arkivflytt målväg Medlemskap/Ansökningar' $archiveMigration 'General/Medlemskap/Ansökningar'
+Assert-Contains 'Arkivflytt målparent Medlemskap' $archiveMigration "'parent_folder_path' => 'General/Medlemskap'"
+Assert-Contains 'Arkivflytt har separat slutmappsnamn' $archiveMigration "'destination_folder_name'"
 Assert-Contains 'Arkivflytt kan slå upp site via URL' $archiveMigration 'site_lookup_path'
 Assert-Contains 'Arkivflytt kan slå upp bibliotek via namn' $archiveMigration '/drives?$select=id,name,webUrl'
 Assert-Contains 'Arkivflytt kan slå upp list-ID via drive' $archiveMigration '/list?$select=id,displayName,webUrl'
@@ -243,7 +244,7 @@ Assert-Contains 'Gamla ärenden byter inte automatiskt vid cutover' $archiveMigr
 
 Assert-Contains 'Archive migration appears in System tabs' $adminNavigation "'ssf-application-archive-migration' => array('label' => 'Flytta kataloger'"
 Assert-Contains 'Archive migration renders System tabs' $archiveMigration "render_system_tabs('ssf-application-archive-migration')"
-Assert-True 'Archive migration has exactly one H1' (([regex]::Matches($archiveMigration, '<h1[ >]')).Count -eq 1)
+Assert-True 'Archive migration has one H1 per selectable flow' (([regex]::Matches($archiveMigration, '<h1[ >]')).Count -eq 2)
 Assert-Contains 'Archive migration uses compact admin steps' $archiveMigration 'ssf-archive-step__heading'
 
 & node --check (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\assets\js\ssf-medlemsprocess.js')

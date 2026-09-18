@@ -25,6 +25,8 @@ Assert-Contains 'Intermediate structure' $archive 'Extra struktur'
 Assert-Contains 'Live preview' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Source selector stays in source step' $archive "render_generic_discovery_form('source', `$source)"
 Assert-Contains 'Target selector stays in target step' $archive "render_generic_discovery_form('target', `$target)"
+Assert-Contains 'Target library root is explicit' $archive '$direct_to_root = ! empty('
+Assert-Contains 'Direct root selection is persisted' $archive "'direct_to_root'"
 Assert-Contains 'Target preview only reads target selector' $archive 'data-location-kind="target"] [data-sp-field="folder_path"]'
 Assert-Contains 'Mode change explains no migration starts' $archive 'Ingen migrering har startats.'
 Assert-Matches 'Generic core retries Graph after plugin load' $archive 'private function generic_core\(\)\s*\{\s*\$this->ensure_graph\(\);'
@@ -55,6 +57,8 @@ Assert-Contains 'Missing columns block dry run' $core "if (! empty(`$schema['cre
 Assert-Contains 'Old approved plans cannot create a folder' $core 'migration_schema_provisioning_required'
 Assert-NotContains 'Runtime must not create SharePoint columns' $core 'migration_schema_create_failed'
 Assert-Contains 'Destination inspection is read only' $core 'public function inspect_destination(array $source, array $target)'
+Assert-Contains 'Direct library root creates no duplicate source folder' $core "'segments' => array()"
+Assert-Contains 'Direct library root is verified specially' $core "'verification_result' => 'target-library-root'"
 Assert-Contains 'Existing destination requires confirmation' $core 'migration_existing_target_unconfirmed'
 Assert-Contains 'Existing destination identity is rechecked' $core 'migration_existing_target_changed'
 Assert-Contains 'Confirmed file conflicts use replace' $core "?@microsoft.graph.conflictBehavior=replace"
@@ -65,6 +69,7 @@ Assert-Contains 'Missing columns have manual details' $archive '$choice_values =
 Assert-Contains 'Choice object is normalized before display' $archive '$choice_config = (array)'
 Assert-Contains 'Live preview recalculates' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
+Assert-Contains 'Resume state is scoped to source and target' $core "`$state['context']"
 Assert-Contains 'Generic test case action' $archive 'ssf_folder_migration_test_case'
 Assert-Contains 'Generic existing destination confirmation action' $archive 'ssf_folder_migration_confirm_existing'
 Assert-Contains 'Existing destination path is shown' $archive 'Det finns redan en mapp med samma namn i'
@@ -76,6 +81,7 @@ Assert-Contains 'Metadata readback verification' $core 'migration_metadata_misma
 Assert-Contains 'Reconciliation source safety' $core "'source_untouched' => true"
 Assert-NotContains 'Generic core must not delete source' $core "'DELETE', 'drives/' . rawurlencode((string) `$source['drive_id'])"
 Assert-Contains 'Shared discovery pagination' $discovery 'sharepoint_pagination_loop'
+Assert-Contains 'Drive discovery exposes the stable root ID' $discovery "`$drive['root_id']"
 Assert-Contains 'Graph accepts nextLink' $graph 'https://graph.microsoft.com'
 Assert-Contains 'Async copy response support' $graph 'request_response'
 Assert-Contains 'Membership adapter retained' $archive '_ssf_sp_migration_old_refs'

@@ -62,11 +62,14 @@ final class SharePointDiscovery
         if (is_wp_error($drive)) {
             return $drive;
         }
-        $root = $this->graph->request('GET', 'drives/' . rawurlencode($drive_id) . '/root?$select=id,name,sharepointIds');
+        $root = $this->graph->request('GET', 'drives/' . rawurlencode($drive_id) . '/root?$select=id,name,webUrl,sharepointIds');
         if (is_wp_error($root)) {
             return $root;
         }
         $drive['list_id'] = sanitize_text_field((string) ($root['sharepointIds']['listId'] ?? ''));
+        $drive['root_id'] = sanitize_text_field((string) ($root['id'] ?? ''));
+        $drive['root_name'] = sanitize_text_field((string) ($root['name'] ?? $drive['name'] ?? ''));
+        $drive['root_web_url'] = esc_url_raw((string) ($root['webUrl'] ?? $drive['webUrl'] ?? ''));
         if (! $drive['list_id'] && $site_id) {
             $drive['list_id'] = $this->find_list_id($site_id, $drive_id);
         }

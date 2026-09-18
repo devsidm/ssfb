@@ -77,7 +77,13 @@
   function driveResult(data) {
     setField('drive_id', data.id || ''); setField('drive_name', data.name || ''); setField('drive_web_url', data.webUrl || '');
     if (data.list_id) setField('list_id', data.list_id);
-    show('drives', '<strong>Dokumentbibliotek valt</strong><p>' + escapeHtml(data.name) + '</p><p>List ID: <code>' + escapeHtml(data.list_id || 'kunde inte identifieras') + '</code></p>', data.list_id ? 'success' : 'warning');
+    setField('drive_root_id', data.root_id || '');
+    setField('folder_id', ''); setField('folder_name', ''); setField('folder_path', ''); setField('folder_web_url', ''); setField('is_drive_root', '0'); setField('direct_to_root', '0');
+    var isMigration = root.dataset.destination === 'folder_migration';
+    var rootLabel = root.dataset.locationKind === 'target' ? 'Använd bibliotekets rot som slutmål' : 'Använd bibliotekets rot som källa';
+    var rootHelp = root.dataset.locationKind === 'target' ? 'Innehållet kopieras direkt till biblioteket utan en extra mapp med samma namn.' : 'Hela dokumentbibliotekets innehåll blir källa.';
+    var rootAction = data.root_id && isMigration ? '<p><button type="button" class="button button-primary" data-sp-use-drive-root data-id="' + escapeHtml(data.root_id) + '" data-name="' + escapeHtml(data.root_name || data.name) + '" data-url="' + escapeHtml(data.root_web_url || data.webUrl || '') + '">' + rootLabel + '</button></p><p class="description">' + rootHelp + '</p>' : '';
+    show('drives', '<strong>Dokumentbibliotek valt</strong><p>' + escapeHtml(data.name) + '</p><p>List ID: <code>' + escapeHtml(data.list_id || 'kunde inte identifieras') + '</code></p>' + rootAction, data.list_id && data.root_id ? 'success' : 'warning');
   }
 
   function foldersResult(folders, parentPath) {
@@ -94,6 +100,7 @@
 
   function folderResult(data) {
     setField('folder_id', data.id || ''); setField('folder_name', data.name || ''); setField('folder_path', data.path || ''); setField('folder_web_url', data.web_url || '');
+    setField('is_drive_root', data.is_drive_root ? '1' : '0'); setField('direct_to_root', data.direct_to_root ? '1' : '0');
     show('folders', '<strong>Mapp vald</strong><p>' + escapeHtml(data.path || data.name) + '</p><p>Folder ID: <code>' + escapeHtml(data.id) + '</code></p>', 'success');
   }
 
@@ -162,6 +169,11 @@
     var openFolder = event.target.closest('[data-sp-open-folder]');
     if (openFolder) {
       request('folders', { parent_id: openFolder.dataset.id, parent_path: openFolder.dataset.path }, openFolder).then(function (data) { foldersResult(data, openFolder.dataset.path); }).catch(function (error) { showError('folders', error); });
+      return;
+    }
+    var useDriveRoot = event.target.closest('[data-sp-use-drive-root]');
+    if (useDriveRoot) {
+      folderResult({ id: useDriveRoot.dataset.id, name: useDriveRoot.dataset.name, path: '', web_url: useDriveRoot.dataset.url, is_drive_root: true, direct_to_root: root.dataset.locationKind === 'target' });
       return;
     }
     var useFolder = event.target.closest('[data-sp-use-folder]');
