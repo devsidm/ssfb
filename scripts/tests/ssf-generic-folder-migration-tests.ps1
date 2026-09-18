@@ -51,12 +51,17 @@ Assert-Contains 'Legacy fields are removed before writes' $core 'unset($metadata
 Assert-Contains 'Canonical status is required for legacy filtering' $core "empty(`$column_names['ApplicationStatus'])"
 Assert-Contains 'UI explains canonical membership metadata' $archive 'Kanonisk medlemsmetadata:'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
+Assert-Contains 'Missing columns block dry run' $core "if (! empty(`$schema['create']))"
+Assert-Contains 'Old approved plans cannot create a folder' $core 'migration_schema_provisioning_required'
+Assert-NotContains 'Runtime must not create SharePoint columns' $core 'migration_schema_create_failed'
 Assert-Contains 'Destination inspection is read only' $core 'public function inspect_destination(array $source, array $target)'
 Assert-Contains 'Existing destination requires confirmation' $core 'migration_existing_target_unconfirmed'
 Assert-Contains 'Existing destination identity is rechecked' $core 'migration_existing_target_changed'
 Assert-Contains 'Confirmed file conflicts use replace' $core "?@microsoft.graph.conflictBehavior=replace"
 Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
-Assert-Contains 'Schema is reread after prepare' $core 'migration_schema_verify_failed'
+Assert-Contains 'Schema is verified before prepare' $core 'migration_schema_verify_failed'
+Assert-Matches 'Schema verification precedes folder creation' $core '(?s)\$verified_columns = \$this->columns\(\$target\).*?\$parent = \(string\) \$target\[''folder_id''\]'
+Assert-Contains 'Missing columns have manual details' $archive '$choice_values = (array)'
 Assert-Contains 'Live preview recalculates' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
 Assert-Contains 'Generic test case action' $archive 'ssf_folder_migration_test_case'

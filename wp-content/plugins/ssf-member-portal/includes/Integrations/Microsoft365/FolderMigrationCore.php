@@ -105,6 +105,9 @@ final class FolderMigrationCore
         $existing = (array) $destination_check['existing_destination'];
         $blockers = (array) $schema['blockers'];
         $warnings = array();
+        if (! empty($schema['create'])) {
+            $blockers[] = 'Målet saknar ' . count((array) $schema['create']) . ' nödvändiga kolumner. Skapa dem manuellt i målbiblioteket och kör torrkörningen igen.';
+        }
         $confirmed_existing = ! empty($existing['id'])
             && 'replace_files' === (string) ($target['existing_target_policy'] ?? '')
             && hash_equals((string) $existing['id'], (string) ($target['confirmed_existing_target_id'] ?? ''));
@@ -146,9 +149,12 @@ final class FolderMigrationCore
         );
     }
 
-    /** Step 6: only schema, requested intermediate folders and final root. */
+    /** Verify the complete schema before creating any destination folder. */
     public function prepare(array $target, array $dry_run)
     {
+        if (! empty($dry_run['schema']['create'])) {
+            return new \WP_Error('migration_schema_provisioning_required', 'Målet saknar nödvändiga kolumner. Inga måländringar gjordes. Skapa kolumnerna manuellt och kör torrkörningen igen.');
+        }
         if (empty($dry_run['ok'])) {
             return new \WP_Error('migration_prepare_blocked', 'Torrkörningen har blockerande fel. Inga måländringar gjordes.');
         }
@@ -157,6 +163,20 @@ final class FolderMigrationCore
         if ($planned_existing_id && (! $confirmed_existing_id || ! hash_equals($planned_existing_id, $confirmed_existing_id))) {
             return new \WP_Error('migration_existing_target_unconfirmed', 'Den befintliga målmappen är inte uttryckligen bekräftad. Inga måländringar gjordes.');
         }
+        $verified_columns = $this->columns($target);
+        if (is_wp_error($verified_columns)) {
+            return $verified_columns;
+        }
+        $verified_names = array();
+        foreach ((array) ($verified_columns['value'] ?? array()) as $column) {
+            $verified_names[(string) ($column['name'] ?? '')] = true;
+        }
+        foreach ((array) ($dry_run['schema']['exact'] ?? array()) as $name) {
+            if (empty($verified_names[(string) $name])) {
+                return new \WP_Error('migration_schema_verify_failed', 'En verifierad målkolumn saknas nu: ' . $name . '. Inga målmappar skapades. Kör torrkörningen igen.');
+            }
+        }
+
         $parent = (string) $target['folder_id'];
         foreach ((array) $dry_run['segments'] as $segment) {
             $next = $this->find_child((string) $target['drive_id'], $parent, (string) $segment);
@@ -173,27 +193,6 @@ final class FolderMigrationCore
         }
         if ($planned_existing_id && ! hash_equals($planned_existing_id, $parent)) {
             return new \WP_Error('migration_existing_target_changed', 'Målmappen har ändrats sedan verifieringen. Kör torrkörningen igen.');
-        }
-        foreach ((array) ($dry_run['schema']['create'] ?? array()) as $column) {
-            $created = $this->graph->request('POST', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/columns', $column['payload']);
-            if (is_wp_error($created)) {
-                return new \WP_Error('migration_schema_create_failed', 'En nödvändig målkolumn kunde inte skapas: ' . $column['name'], $created->get_error_data());
-            }
-        }
-        // Re-read the library schema; a successful POST alone is not proof
-        // that a field is usable by the target list.
-        $verified_columns = $this->columns($target);
-        if (is_wp_error($verified_columns)) {
-            return $verified_columns;
-        }
-        $verified_names = array();
-        foreach ((array) ($verified_columns['value'] ?? array()) as $column) {
-            $verified_names[(string) ($column['name'] ?? '')] = true;
-        }
-        foreach ((array) ($dry_run['schema']['create'] ?? array()) as $column) {
-            if (empty($verified_names[(string) $column['name']])) {
-                return new \WP_Error('migration_schema_verify_failed', 'Den skapade målkolumnen kunde inte läsas tillbaka: ' . $column['name']);
-            }
         }
         $read = $this->item((string) $target['drive_id'], $parent);
         if (is_wp_error($read) || empty($read['folder'])) {
@@ -408,7 +407,7 @@ final class FolderMigrationCore
                 continue;
             }
             $payload = array('name' => $name, 'displayName' => (string) ($source['displayName'] ?? $name), $type => (object) ((array) ($source[$type] ?? array())));
-            $create[] = array('name' => $name, 'payload' => $payload);
+            $create[] = array('name' => $name, 'display_name' => (string) ($source['displayName'] ?? $name), 'type' => $type, 'payload' => $payload);
         }
         return array('exact' => $exact, 'create' => $create, 'blockers' => $blockers);
     }
