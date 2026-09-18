@@ -2,14 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260918.1",
-    "built_at":  "2026-09-18T05:29:57.7588964Z",
+    "build":  "20260918.2",
+    "built_at":  "2026-09-18T05:33:36.1057472Z",
     "source":  "codex",
-    "source_revision":  "e512f0e918c4c5d1102f20fdb87249495c4017f0",
-    "description":  "Explain dry-run blockers and next-step gating",
+    "source_revision":  "0e63b3982168e6b6d5c720862e11eea120b0f7dc",
+    "description":  "Ignore SharePoint system metadata in folder migration",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "ssf-medlemsprocess"
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""

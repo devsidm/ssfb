@@ -38,6 +38,11 @@ Assert-Contains 'No arbitrary depth cutoff' $core 'while ($queue)'
 Assert-Contains 'Graph pagination' $core "'@odata.nextLink'"
 Assert-Contains 'Pagination loop protection' $core 'migration_pagination_loop'
 Assert-Contains 'Populated metadata inventory' $core 'populated_fields'
+Assert-Contains 'Graph etag ignored as system metadata' $core "'@odata.etag'"
+Assert-Contains 'SharePoint author lookup ignored as system metadata' $core "'AuthorLookupId'"
+Assert-Contains 'SharePoint editor lookup ignored as system metadata' $core "'EditorLookupId'"
+Assert-Contains 'SharePoint file presentation fields ignored' $core "'DocIcon', 'FileSizeDisplay'"
+Assert-Contains 'Schema plan defensively skips system metadata' $core 'in_array($name, self::SYSTEM_FIELDS, true)'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
 Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
 Assert-Contains 'Schema is reread after prepare' $core 'migration_schema_verify_failed'

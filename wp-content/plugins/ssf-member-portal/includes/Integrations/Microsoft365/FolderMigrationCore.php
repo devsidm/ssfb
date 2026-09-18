@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
 final class FolderMigrationCore
 {
     private const STATE_OPTION = 'ssf_sharepoint_folder_migration_state';
-    private const SYSTEM_FIELDS = array('id', 'ContentType', 'ContentTypeId', 'Created', 'Modified', 'Author', 'Editor', '_UIVersionString', 'FileRef', 'FileLeafRef', 'FSObjType', 'LinkFilename', 'LinkFilenameNoMenu', 'Edit', 'ItemChildCount', 'FolderChildCount', 'ComplianceAssetId');
+    private const SYSTEM_FIELDS = array('id', '@odata.etag', 'ContentType', 'ContentTypeId', 'Created', 'Modified', 'Author', 'AuthorLookupId', 'Editor', 'EditorLookupId', 'AppAuthorLookupId', 'AppEditorLookupId', 'ParentVersionStringLookupId', 'ParentLeafNameLookupId', '_UIVersionString', 'FileRef', 'FileLeafRef', 'FSObjType', 'LinkFilename', 'LinkFilenameNoMenu', 'Edit', 'DocIcon', 'FileSizeDisplay', 'ItemChildCount', 'FolderChildCount', 'ComplianceAssetId');
 
     private GraphClient $graph;
 
@@ -312,6 +312,7 @@ final class FolderMigrationCore
         $target_by_name = array(); foreach ((array) ($target_columns['value'] ?? array()) as $column) $target_by_name[(string) ($column['name'] ?? '')] = $column;
         $exact = array(); $create = array(); $blockers = array();
         foreach ($used as $name) {
+            if (in_array($name, self::SYSTEM_FIELDS, true)) { continue; }
             $source = $source_by_name[$name] ?? null;
             if (! $source || ! empty($source['hidden']) || ! empty($source['readOnly'])) { $blockers[] = 'Det använda fältet ' . $name . ' kan inte återskapas säkert.'; continue; }
             $type = $this->column_type($source);
