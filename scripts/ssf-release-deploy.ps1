@@ -117,7 +117,9 @@ try {
     if (-not $nonce) { throw 'Verifieringsnonce saknas på Release-sidan.' }
     & curl.exe -sS -L -b $cookiePath -o $pagePath --data-urlencode 'action=ssf_verify_release_deployment' --data-urlencode "_wpnonce=$nonce" --data-urlencode "expected_build=$expectedBuild" "$BaseUrl/wp-admin/admin-post.php"
     $verifiedHtml = Get-Content -Raw -LiteralPath $pagePath
-    if ($verifiedHtml -notmatch 'deploymenten är markerad som lyckad') {
+    # Keep the success marker ASCII-only so Windows PowerShell 5.1 cannot
+    # misread this UTF-8 script differently from curl's UTF-8 response.
+    if ($verifiedHtml -notmatch 'markerad som lyckad') {
         throw 'WordPress bekräftade inte en lyckad deployment.'
     }
 
