@@ -17,6 +17,8 @@ final class FolderMigrationCore
 {
     private const STATE_OPTION = 'ssf_sharepoint_folder_migration_state';
     private const SYSTEM_FIELDS = array('id', '@odata.etag', 'ContentType', 'ContentTypeId', 'Created', 'Modified', 'Author', 'AuthorLookupId', 'Editor', 'EditorLookupId', 'AppAuthorLookupId', 'AppEditorLookupId', 'ParentVersionStringLookupId', 'ParentLeafNameLookupId', '_UIVersionString', 'FileRef', 'FileLeafRef', 'FSObjType', 'LinkFilename', 'LinkFilenameNoMenu', 'Edit', 'DocIcon', 'FileSizeDisplay', 'ItemChildCount', 'FolderChildCount', 'ComplianceAssetId');
+    private const MEMBERSHIP_CANONICAL_SIGNATURE = array('ApplicationNumber', 'ApplicationStatus', 'VesselName', 'ApplicationPath', 'ReceivedDate');
+    private const MEMBERSHIP_LEGACY_FIELDS = array('Ansokningsnummer', 'Status', 'Fartyg', 'InkommenDatum', 'Ansokningsvag');
 
     private GraphClient $graph;
 
@@ -79,7 +81,7 @@ final class FolderMigrationCore
         }
         $folders = count(array_filter($items, static fn($item) => 'folder' === $item['type']));
         $files = count($items) - $folders;
-        return array('ok' => true, 'completed_at' => gmdate('c'), 'source' => $source, 'items' => $items, 'columns' => $columns, 'summary' => array('folders' => $folders, 'files' => $files, 'bytes' => $bytes, 'metadata_fields_used' => count($populated), 'schema_fields_required' => count($populated)), 'populated_fields' => array_keys($populated));
+        return $this->apply_metadata_policy(array('ok' => true, 'completed_at' => gmdate('c'), 'source' => $source, 'items' => $items, 'columns' => $columns, 'summary' => array('folders' => $folders, 'files' => $files, 'bytes' => $bytes, 'metadata_fields_used' => count($populated), 'schema_fields_required' => count($populated)), 'populated_fields' => array_keys($populated)));
     }
 
     /** Dry run: destination calculation and schema diff only; zero writes. */
@@ -88,6 +90,7 @@ final class FolderMigrationCore
         if (empty($inventory['ok'])) {
             return new \WP_Error('migration_inventory_required', 'Inventera källan utan fel före torrkörning.');
         }
+        $inventory = $this->apply_metadata_policy($inventory);
         $destination_check = $this->inspect_destination($source, $target);
         if (is_wp_error($destination_check)) {
             return $destination_check;
@@ -109,6 +112,9 @@ final class FolderMigrationCore
             $blockers[] = 'Målmappen finns redan: ' . $destination . '. Bekräfta i steg 3 om den ska användas och filer med samma namn skrivas över.';
         } elseif ($confirmed_existing) {
             $warnings[] = 'Den befintliga målmappen används. Filer med samma namn skrivs över; andra befintliga objekt lämnas orörda.';
+        }
+        if (! empty($inventory['metadata_policy']['excluded_fields'])) {
+            $warnings[] = 'Äldre medlemsfält ignoreras: ' . implode(', ', (array) $inventory['metadata_policy']['excluded_fields']) . '. Kanoniska medlemsfält används i stället.';
         }
         return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => end($segments), 'source_summary' => (array) $inventory['summary'], 'schema' => $schema, 'existing_destination' => $existing, 'existing_destination_confirmed' => $confirmed_existing, 'blockers' => $blockers, 'warnings' => $warnings);
     }
@@ -199,6 +205,7 @@ final class FolderMigrationCore
     /** A real, self-cleaning write probe against the prepared migration root. */
     public function write_test(array $target, string $root_id, array $inventory): array
     {
+        $inventory = $this->apply_metadata_policy($inventory);
         $folder_name = 'ssf-migration-test-' . gmdate('Ymd-His') . '-' . wp_generate_password(4, false, false);
         $steps = array(); $folder_id = ''; $file_id = '';
         $folder = $this->create_folder((string) $target['drive_id'], $root_id, $folder_name);
@@ -233,6 +240,7 @@ final class FolderMigrationCore
     /** Incremental, resumable source-to-source SharePoint copy. Never deletes source. */
     public function migrate(array $source, array $target, array $inventory, string $target_root_id)
     {
+        $inventory = $this->apply_metadata_policy($inventory);
         $state = $this->state();
         $state['items'] = (array) ($state['items'] ?? array());
         $folders = array_filter((array) $inventory['items'], static fn($item) => 'folder' === $item['type']);
@@ -333,6 +341,50 @@ final class FolderMigrationCore
         $metadata = (array) ($item['listItem']['fields'] ?? array());
         foreach (self::SYSTEM_FIELDS as $field) unset($metadata[$field]);
         return array('id' => sanitize_text_field((string) ($item['id'] ?? '')), 'parent_id' => sanitize_text_field((string) ($item['parentReference']['id'] ?? '')), 'name' => sanitize_text_field((string) ($item['name'] ?? '')), 'path' => $path, 'depth' => $depth, 'type' => ! empty($item['folder']) ? 'folder' : 'file', 'size' => (int) ($item['size'] ?? 0), 'metadata' => $metadata);
+    }
+
+    /** Keep legacy membership aliases from polluting or overwriting a generic target library. */
+    private function apply_metadata_policy(array $inventory): array
+    {
+        $column_names = array();
+        foreach ((array) ($inventory['columns']['value'] ?? array()) as $column) {
+            $name = (string) ($column['name'] ?? '');
+            if ($name) {
+                $column_names[$name] = true;
+            }
+        }
+        $signature_matches = count(array_intersect(self::MEMBERSHIP_CANONICAL_SIGNATURE, array_keys($column_names)));
+        if (empty($column_names['ApplicationStatus']) || $signature_matches < 3) {
+            return $inventory;
+        }
+
+        $excluded = array();
+        $populated = array();
+        foreach ((array) ($inventory['items'] ?? array()) as $index => $item) {
+            $metadata = (array) ($item['metadata'] ?? array());
+            foreach (self::MEMBERSHIP_LEGACY_FIELDS as $field) {
+                if (array_key_exists($field, $metadata)) {
+                    if ($this->populated($metadata[$field])) {
+                        $excluded[$field] = true;
+                    }
+                    unset($metadata[$field]);
+                }
+            }
+            foreach ($metadata as $field => $value) {
+                if ($this->populated($value)) {
+                    $populated[$field] = true;
+                }
+            }
+            $inventory['items'][$index]['metadata'] = $metadata;
+        }
+        $inventory['populated_fields'] = array_keys($populated);
+        $inventory['summary']['metadata_fields_used'] = count($populated);
+        $inventory['summary']['schema_fields_required'] = count($populated);
+        $inventory['metadata_policy'] = array(
+            'profile' => 'canonical_membership',
+            'excluded_fields' => array_values(array_intersect(self::MEMBERSHIP_LEGACY_FIELDS, array_keys($excluded))),
+        );
+        return $inventory;
     }
 
     private function columns(array $location)

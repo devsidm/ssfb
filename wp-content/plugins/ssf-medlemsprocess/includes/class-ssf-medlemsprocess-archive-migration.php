@@ -219,6 +219,7 @@ class SSF_Medlemsprocess_Archive_Migration
                 <?php $this->generic_button('ssf_folder_migration_inventory', 'Inventera källa', 'archive-inventory', empty($source['folder_id'])); ?>
                 <?php if (empty($source['folder_id'])) : ?><p class="description">Steg 1 måste vara verifierat och sparat innan inventeringen kan starta.</p><?php endif; ?>
                 <?php if ($inventory) : ?><p><strong>Struktur inventerad:</strong> <?php echo esc_html((string) ($inventory['summary']['folders'] ?? 0)); ?> mappar, <?php echo esc_html((string) ($inventory['summary']['files'] ?? 0)); ?> filer, <?php echo esc_html(size_format((int) ($inventory['summary']['bytes'] ?? 0))); ?>. Metadatafält använda: <?php echo esc_html((string) ($inventory['summary']['metadata_fields_used'] ?? 0)); ?>.</p><?php endif; ?>
+                <?php if (! empty($inventory['metadata_policy']['excluded_fields'])) : ?><p class="description"><strong>Kanonisk medlemsmetadata:</strong> äldre dubblettfält ignoreras: <code><?php echo esc_html(implode(', ', (array) $inventory['metadata_policy']['excluded_fields'])); ?></code>.</p><?php endif; ?>
             </section>
 
             <section id="archive-target" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>3</span><div><h2>Välj målroot</h2><p>Välj den katalog där den migrerade strukturen ska placeras. Slutmappen skapas automatiskt vid förberedelse.</p></div></div>

@@ -43,6 +43,13 @@ Assert-Contains 'SharePoint author lookup ignored as system metadata' $core "'Au
 Assert-Contains 'SharePoint editor lookup ignored as system metadata' $core "'EditorLookupId'"
 Assert-Contains 'SharePoint file presentation fields ignored' $core "'DocIcon', 'FileSizeDisplay'"
 Assert-Contains 'Schema plan defensively skips system metadata' $core 'in_array($name, self::SYSTEM_FIELDS, true)'
+Assert-Contains 'Canonical membership signature' $core 'MEMBERSHIP_CANONICAL_SIGNATURE'
+Assert-Contains 'Legacy membership aliases are isolated' $core 'MEMBERSHIP_LEGACY_FIELDS'
+Assert-Contains 'Inventory applies metadata policy' $core 'return $this->apply_metadata_policy(array('
+Assert-Contains 'Saved inventory is normalized in dry run' $core '$inventory = $this->apply_metadata_policy($inventory);'
+Assert-Contains 'Legacy fields are removed before writes' $core 'unset($metadata[$field]);'
+Assert-Contains 'Canonical status is required for legacy filtering' $core "empty(`$column_names['ApplicationStatus'])"
+Assert-Contains 'UI explains canonical membership metadata' $archive 'Kanonisk medlemsmetadata:'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
 Assert-Contains 'Destination inspection is read only' $core 'public function inspect_destination(array $source, array $target)'
 Assert-Contains 'Existing destination requires confirmation' $core 'migration_existing_target_unconfirmed'
