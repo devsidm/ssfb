@@ -62,6 +62,7 @@ Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
 Assert-Contains 'Schema is verified before prepare' $core 'migration_schema_verify_failed'
 Assert-Matches 'Schema verification precedes folder creation' $core '(?s)\$verified_columns = \$this->columns\(\$target\).*?\$parent = \(string\) \$target\[''folder_id''\]'
 Assert-Contains 'Missing columns have manual details' $archive '$choice_values = (array)'
+Assert-Contains 'Choice object is normalized before display' $archive '$choice_config = (array)'
 Assert-Contains 'Live preview recalculates' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
 Assert-Contains 'Generic test case action' $archive 'ssf_folder_migration_test_case'

@@ -2,15 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260918.5",
-    "built_at":  "2026-09-18T12:16:36.8097981Z",
+    "build":  "20260918.6",
+    "built_at":  "2026-09-18T12:19:58.4012072Z",
     "source":  "codex",
-    "source_revision":  "1f29f6e589f276146c8ab0c7dcd1ed19f332e31a",
-    "description":  "Verifiera hela målschemat före mappskapande",
+    "source_revision":  "615770e2c6f0b056981c0a973dd0246367395fdb",
+    "description":  "Rätta visning av manuella Choice-kolumner",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
