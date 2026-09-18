@@ -50,6 +50,7 @@ class SSF_Medlemsprocess_Archive_Migration
         add_action('admin_post_ssf_folder_migration_mode', array($this, 'generic_save_mode'));
         add_action('admin_post_ssf_folder_migration_location', array($this, 'generic_save_location'));
         add_action('admin_post_ssf_folder_migration_destination', array($this, 'generic_save_destination'));
+        add_action('admin_post_ssf_folder_migration_confirm_existing', array($this, 'generic_confirm_existing_target'));
         add_action('admin_post_ssf_folder_migration_inventory', array($this, 'generic_inventory'));
         add_action('admin_post_ssf_folder_migration_dry_run', array($this, 'generic_dry_run'));
         add_action('admin_post_ssf_folder_migration_prepare', array($this, 'generic_prepare'));
@@ -180,6 +181,7 @@ class SSF_Medlemsprocess_Archive_Migration
         $target = (array) ($state['target'] ?? array());
         $inventory = (array) ($state['inventory'] ?? array());
         $dry_run = (array) ($state['dry_run'] ?? array());
+        $target_check = (array) ($state['target_check'] ?? array());
         $prepared = (array) ($state['prepared'] ?? array());
         $write = (array) ($state['write_test'] ?? array());
         $final = (array) ($state['reconciliation'] ?? array());
@@ -189,6 +191,12 @@ class SSF_Medlemsprocess_Archive_Migration
         $custom_name = $keep_name ? '' : (string) ($target['destination_folder_name'] ?? '');
         $result_name = $keep_name ? $source_name : $custom_name;
         $preview = implode('/', array_values(array_filter(array(trim((string) ($target['folder_path'] ?? ''), '/'), trim((string) ($target['extra_structure'] ?? ''), '/'), $result_name), 'strlen')));
+        $destination_check = $dry_run ?: $target_check;
+        $existing_destination = (array) ($destination_check['existing_destination'] ?? array());
+        $existing_confirmed = ! empty($existing_destination['id'])
+            && 'replace_files' === (string) ($target['existing_target_policy'] ?? '')
+            && hash_equals((string) $existing_destination['id'], (string) ($target['confirmed_existing_target_id'] ?? ''));
+        $destination_label = implode(' / ', array_values(array_filter(array((string) ($target['site_name'] ?? ''), (string) ($target['drive_name'] ?? ''), (string) ($destination_check['destination_path'] ?? $preview)), 'strlen')));
         ?>
         <div class="wrap ssf-archive-migration">
             <h1>Migrera katalogstruktur</h1>
@@ -229,15 +237,35 @@ class SSF_Medlemsprocess_Archive_Migration
                     <p><label>Extra struktur <input class="regular-text" name="extra_structure" value="<?php echo esc_attr((string) ($target['extra_structure'] ?? '')); ?>" placeholder="arkiv/2026"></label></p>
                     <?php submit_button('Spara namn och struktur', 'secondary', 'submit', false); ?></form>
                 <div class="ssf-archive-preview"><strong>SÅ KOMMER DET ATT SE UT</strong><dl><div><dt>Källa</dt><dd><?php echo esc_html((string) ($source['folder_path'] ?? '')); ?></dd></div><div><dt>Mål</dt><dd data-ssf-migration-preview><?php echo esc_html($preview); ?></dd></div></dl></div>
+                <?php if (! empty($existing_destination['id'])) : ?>
+                    <div class="notice notice-warning inline ssf-archive-result">
+                        <p><strong>Det finns redan en mapp med samma namn i <?php echo esc_html($destination_label); ?>.</strong></p>
+                        <?php if ($existing_confirmed) : ?>
+                            <p>✓ Du har valt att använda den befintliga mappen. Filer med samma namn skrivs över; övriga filer och mappar lämnas orörda.</p>
+                        <?php else : ?>
+                            <p>Vill du skriva över den? Detta återanvänder mappen och ersätter bara filer som har samma namn. Tidigare versioner av ersatta filer kan gå förlorade.</p>
+                            <form method="post" class="ssf-archive-inline-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                <input type="hidden" name="action" value="ssf_folder_migration_confirm_existing">
+                                <input type="hidden" name="existing_target_id" value="<?php echo esc_attr((string) $existing_destination['id']); ?>">
+                                <?php wp_nonce_field('ssf_folder_migration_confirm_existing'); ?>
+                                <?php submit_button('Ja, använd mappen och skriv över filer med samma namn', 'primary', 'submit', false); ?>
+                            </form>
+                            <a class="button" href="#archive-target">Nej, välj ett annat namn eller mål</a>
+                        <?php endif; ?>
+                    </div>
+                <?php elseif (! empty($target_check['ok'])) : ?>
+                    <p class="ssf-archive-verified-state">✓ Målet är verifierat. Ingen mapp med namnet finns ännu.</p>
+                <?php endif; ?>
             </section>
 
             <section id="archive-plan" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4</span><div><h2>Migreringsplan och torrkörning</h2><p>Beräknar mål, schema, konflikter och blockerare. Torrkörning gör noll SharePoint-skrivningar.</p></div></div>
                 <?php $this->generic_button('ssf_folder_migration_dry_run', 'Kör torrkörning', 'archive-plan', empty($inventory['ok']) || empty($target['folder_id'])); ?>
                 <?php if ($dry_run) : ?>
-                    <?php $blockers = (array) ($dry_run['blockers'] ?? array()); $create_columns = (array) ($dry_run['schema']['create'] ?? array()); ?>
+                    <?php $blockers = (array) ($dry_run['blockers'] ?? array()); $warnings = (array) ($dry_run['warnings'] ?? array()); $create_columns = (array) ($dry_run['schema']['create'] ?? array()); ?>
                     <p class="<?php echo empty($dry_run['ok']) ? 'ssf-archive-blocked-state' : 'ssf-archive-verified-state'; ?>"><strong><?php echo empty($dry_run['ok']) ? '✕ Torrkörningen är blockerad. Åtgärda punkterna nedan och kör igen.' : '✓ Torrkörningen är godkänd. Du kan gå vidare till steg 5.'; ?></strong></p>
                     <dl class="ssf-archive-plan-summary"><div><dt>Mål</dt><dd><?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?></dd></div><div><dt>Matchande kolumner</dt><dd><?php echo esc_html((string) count((array) ($dry_run['schema']['exact'] ?? array()))); ?></dd></div><div><dt>Planerade nya kolumner</dt><dd><?php echo esc_html((string) count($create_columns)); ?></dd></div><div><dt>Blockerare</dt><dd><?php echo esc_html((string) count($blockers)); ?></dd></div></dl>
                     <?php if ($blockers) : ?><div class="notice notice-error inline ssf-archive-result"><p><strong>Det går inte att förbereda målet ännu:</strong></p><ul><?php foreach ($blockers as $blocker) : ?><li><?php echo esc_html((string) $blocker); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+                    <?php if ($warnings) : ?><div class="notice notice-warning inline ssf-archive-result"><p><strong>Observera:</strong></p><ul><?php foreach ($warnings as $warning) : ?><li><?php echo esc_html((string) $warning); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
                     <?php if ($create_columns) : ?><details class="ssf-archive-result"><summary>Visa <?php echo esc_html((string) count($create_columns)); ?> planerade kolumner</summary><ul><?php foreach ($create_columns as $column) : ?><li><code><?php echo esc_html((string) ($column['name'] ?? '')); ?></code></li><?php endforeach; ?></ul></details><?php endif; ?>
                 <?php else : ?><p class="description">Kör torrkörningen för att få ett tydligt godkänt eller blockerat resultat innan något skapas.</p><?php endif; ?>
             </section>
@@ -344,7 +372,8 @@ class SSF_Medlemsprocess_Archive_Migration
         foreach (array('site_id','drive_id','list_id','folder_id') as $key) if (empty($location[$key])) $this->generic_redirect('archive-' . $kind, 'Välj site, dokumentbibliotek och mapp med Hitta/bläddra så att verifierade identifierare sparas.', 'error');
         $state = $this->generic_state(); $state[$kind] = $location;
         if ('source' === $kind && empty($state['target']['destination_folder_name'])) $state['target']['destination_folder_name'] = $location['folder_name'];
-        unset($state['inventory'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']); update_option(self::GENERIC_OPTION, $state, false);
+        unset($state['target']['use_existing_target'], $state['target']['existing_target_policy'], $state['target']['confirmed_existing_target_id']);
+        unset($state['target_check'], $state['inventory'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']); update_option(self::GENERIC_OPTION, $state, false);
         $this->generic_redirect('archive-' . $kind, ucfirst($kind) . ' verifierad och sparad.', 'success');
     }
 
@@ -356,8 +385,29 @@ class SSF_Medlemsprocess_Archive_Migration
         if (! $destination_name) $this->generic_redirect('archive-target', $keep ? 'Spara en verifierad källa innan källmappens namn kan behållas.' : 'Ange ett nytt namn för slutmappen.', 'error');
         $state['target']['keep_name'] = $keep ? '1' : '0'; $state['target']['destination_folder_name'] = $destination_name;
         $state['target']['extra_structure'] = trim(sanitize_text_field((string) ($_POST['extra_structure'] ?? '')), '/');
+        unset($state['target']['use_existing_target'], $state['target']['existing_target_policy'], $state['target']['confirmed_existing_target_id']);
+        unset($state['target_check'], $state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']);
+        $core = $this->generic_core();
+        if (is_wp_error($core)) { update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect('archive-target', $core->get_error_message(), 'error'); }
+        $check = $core->inspect_destination((array) $state['source'], (array) $state['target']);
+        if (is_wp_error($check)) { update_option(self::GENERIC_OPTION, $state, false); $this->generic_redirect('archive-target', $check->get_error_message(), 'error'); }
+        $state['target_check'] = $check; update_option(self::GENERIC_OPTION, $state, false);
+        $message = ! empty($check['exists']) ? 'Målmappen finns redan. Bekräfta hur konflikten ska hanteras.' : 'Målet är verifierat och mappnamnet är ledigt.';
+        $this->generic_redirect('archive-target', $message, ! empty($check['exists']) ? 'error' : 'success');
+    }
+
+    public function generic_confirm_existing_target(): void
+    {
+        $this->require_manage(); check_admin_referer('ssf_folder_migration_confirm_existing'); $state = $this->generic_state();
+        $check = ! empty($state['dry_run']['existing_destination']['id']) ? (array) $state['dry_run'] : (array) ($state['target_check'] ?? array());
+        $existing_id = (string) ($check['existing_destination']['id'] ?? '');
+        $posted_id = sanitize_text_field((string) ($_POST['existing_target_id'] ?? ''));
+        if (! $existing_id || ! $posted_id || ! hash_equals($existing_id, $posted_id)) $this->generic_redirect('archive-target', 'Målmappen har ändrats. Verifiera målet igen.', 'error');
+        $state['target']['use_existing_target'] = '1';
+        $state['target']['existing_target_policy'] = 'replace_files';
+        $state['target']['confirmed_existing_target_id'] = $existing_id;
         unset($state['dry_run'], $state['prepared'], $state['write_test'], $state['reconciliation']); update_option(self::GENERIC_OPTION, $state, false);
-        $this->generic_redirect('archive-target', 'Resultatet har uppdaterats.', 'success');
+        $this->generic_redirect('archive-target', 'Den befintliga målmappen är bekräftad. Filer med samma namn skrivs över först när migreringen körs.', 'success');
     }
 
     public function generic_inventory(): void { $this->generic_execute('ssf_folder_migration_inventory', 'archive-inventory', function ($core, &$state) { return $core->inventory((array) $state['source']); }, 'inventory', 'Källan är inventerad.'); }

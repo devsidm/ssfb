@@ -88,6 +88,34 @@ final class FolderMigrationCore
         if (empty($inventory['ok'])) {
             return new \WP_Error('migration_inventory_required', 'Inventera källan utan fel före torrkörning.');
         }
+        $destination_check = $this->inspect_destination($source, $target);
+        if (is_wp_error($destination_check)) {
+            return $destination_check;
+        }
+        $segments = (array) $destination_check['segments'];
+        $target_columns = $this->columns($target);
+        if (is_wp_error($target_columns)) {
+            return $target_columns;
+        }
+        $schema = $this->schema_plan((array) $inventory['columns'], $target_columns, (array) $inventory['populated_fields']);
+        $destination = (string) $destination_check['destination_path'];
+        $existing = (array) $destination_check['existing_destination'];
+        $blockers = (array) $schema['blockers'];
+        $warnings = array();
+        $confirmed_existing = ! empty($existing['id'])
+            && 'replace_files' === (string) ($target['existing_target_policy'] ?? '')
+            && hash_equals((string) $existing['id'], (string) ($target['confirmed_existing_target_id'] ?? ''));
+        if (! empty($existing['id']) && ! $confirmed_existing) {
+            $blockers[] = 'Målmappen finns redan: ' . $destination . '. Bekräfta i steg 3 om den ska användas och filer med samma namn skrivas över.';
+        } elseif ($confirmed_existing) {
+            $warnings[] = 'Den befintliga målmappen används. Filer med samma namn skrivs över; andra befintliga objekt lämnas orörda.';
+        }
+        return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => end($segments), 'source_summary' => (array) $inventory['summary'], 'schema' => $schema, 'existing_destination' => $existing, 'existing_destination_confirmed' => $confirmed_existing, 'blockers' => $blockers, 'warnings' => $warnings);
+    }
+
+    /** Verify only the calculated destination path; no target contents are inventoried. */
+    public function inspect_destination(array $source, array $target)
+    {
         $target_check = $this->location($target, 'Vald root');
         if (is_wp_error($target_check)) {
             return $target_check;
@@ -97,21 +125,19 @@ final class FolderMigrationCore
         if (is_wp_error($segments)) {
             return $segments;
         }
-        $target_columns = $this->columns($target);
-        if (is_wp_error($target_columns)) {
-            return $target_columns;
-        }
-        $schema = $this->schema_plan((array) $inventory['columns'], $target_columns, (array) $inventory['populated_fields']);
         $destination = trim(trim((string) ($target['folder_path'] ?? ''), '/') . '/' . implode('/', $segments), '/');
         $existing = $this->find_path((string) $target['drive_id'], (string) $target['folder_id'], $segments);
-        if (is_wp_error($existing) && 'graph_request_failed' !== $existing->get_error_code()) {
+        if (is_wp_error($existing)) {
             return $existing;
         }
-        $blockers = (array) $schema['blockers'];
-        if (is_array($existing) && ! empty($existing['id']) && empty($target['use_existing_target'])) {
-            $blockers[] = 'Målet finns redan och får inte sammanfogas automatiskt.';
-        }
-        return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => end($segments), 'source_summary' => (array) $inventory['summary'], 'schema' => $schema, 'existing_destination' => is_array($existing) ? $existing : array(), 'blockers' => $blockers, 'warnings' => array());
+        return array(
+            'ok' => true,
+            'checked_at' => gmdate('c'),
+            'destination_path' => $destination,
+            'segments' => $segments,
+            'exists' => ! empty($existing['id']),
+            'existing_destination' => is_array($existing) ? $existing : array(),
+        );
     }
 
     /** Step 6: only schema, requested intermediate folders and final root. */
@@ -119,6 +145,11 @@ final class FolderMigrationCore
     {
         if (empty($dry_run['ok'])) {
             return new \WP_Error('migration_prepare_blocked', 'Torrkörningen har blockerande fel. Inga måländringar gjordes.');
+        }
+        $confirmed_existing_id = (string) ($target['confirmed_existing_target_id'] ?? '');
+        $planned_existing_id = (string) ($dry_run['existing_destination']['id'] ?? '');
+        if ($planned_existing_id && (! $confirmed_existing_id || ! hash_equals($planned_existing_id, $confirmed_existing_id))) {
+            return new \WP_Error('migration_existing_target_unconfirmed', 'Den befintliga målmappen är inte uttryckligen bekräftad. Inga måländringar gjordes.');
         }
         $parent = (string) $target['folder_id'];
         foreach ((array) $dry_run['segments'] as $segment) {
@@ -133,6 +164,9 @@ final class FolderMigrationCore
                 }
             }
             $parent = (string) $next['id'];
+        }
+        if ($planned_existing_id && ! hash_equals($planned_existing_id, $parent)) {
+            return new \WP_Error('migration_existing_target_changed', 'Målmappen har ändrats sedan verifieringen. Kör torrkörningen igen.');
         }
         foreach ((array) ($dry_run['schema']['create'] ?? array()) as $column) {
             $created = $this->graph->request('POST', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/columns', $column['payload']);
@@ -337,7 +371,8 @@ final class FolderMigrationCore
 
     private function copy_file(array $source, array $target, string $source_id, string $parent_id, string $name)
     {
-        $response = $this->graph->request_response('POST', 'drives/' . rawurlencode((string) $source['drive_id']) . '/items/' . rawurlencode($source_id) . '/copy', array('parentReference' => array('driveId' => (string) $target['drive_id'], 'id' => $parent_id), 'name' => $name));
+        $conflict_query = 'replace_files' === (string) ($target['existing_target_policy'] ?? '') ? '?@microsoft.graph.conflictBehavior=replace' : '';
+        $response = $this->graph->request_response('POST', 'drives/' . rawurlencode((string) $source['drive_id']) . '/items/' . rawurlencode($source_id) . '/copy' . $conflict_query, array('parentReference' => array('driveId' => (string) $target['drive_id'], 'id' => $parent_id), 'name' => $name));
         if (is_wp_error($response)) return $response;
         $headers = $response['headers']; $monitor = is_object($headers) ? $headers['location'] : ($headers['location'] ?? '');
         for ($attempt = 0; $attempt < 20 && $monitor; $attempt++) { $poll = $this->graph->request('GET', (string) $monitor); if (! is_wp_error($poll) && ! empty($poll['resourceId'])) break; }

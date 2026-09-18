@@ -44,11 +44,19 @@ Assert-Contains 'SharePoint editor lookup ignored as system metadata' $core "'Ed
 Assert-Contains 'SharePoint file presentation fields ignored' $core "'DocIcon', 'FileSizeDisplay'"
 Assert-Contains 'Schema plan defensively skips system metadata' $core 'in_array($name, self::SYSTEM_FIELDS, true)'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
+Assert-Contains 'Destination inspection is read only' $core 'public function inspect_destination(array $source, array $target)'
+Assert-Contains 'Existing destination requires confirmation' $core 'migration_existing_target_unconfirmed'
+Assert-Contains 'Existing destination identity is rechecked' $core 'migration_existing_target_changed'
+Assert-Contains 'Confirmed file conflicts use replace' $core "?@microsoft.graph.conflictBehavior=replace"
 Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
 Assert-Contains 'Schema is reread after prepare' $core 'migration_schema_verify_failed'
 Assert-Contains 'Live preview recalculates' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
 Assert-Contains 'Generic test case action' $archive 'ssf_folder_migration_test_case'
+Assert-Contains 'Generic existing destination confirmation action' $archive 'ssf_folder_migration_confirm_existing'
+Assert-Contains 'Existing destination path is shown' $archive 'Det finns redan en mapp med samma namn i'
+Assert-Contains 'Overwrite policy is explicit' $archive "existing_target_policy'] = 'replace_files'"
+Assert-Contains 'Changing destination clears confirmation' $archive "unset(`$state['target']['use_existing_target'], `$state['target']['existing_target_policy'], `$state['target']['confirmed_existing_target_id'])"
 Assert-Contains 'Test case reuses core' $archive '$core->migrate($test_source'
 Assert-Contains 'Copy uses Graph source item' $core "'/copy'"
 Assert-Contains 'Metadata readback verification' $core 'migration_metadata_mismatch'
