@@ -188,7 +188,7 @@ class SSF_Medlemsprocess_Archive_Migration
         $source_name = (string) ($source['folder_name'] ?? '');
         $custom_name = $keep_name ? '' : (string) ($target['destination_folder_name'] ?? '');
         $result_name = $keep_name ? $source_name : $custom_name;
-        $preview = trim(trim((string) ($target['folder_path'] ?? ''), '/') . '/' . trim((string) ($target['extra_structure'] ?? ''), '/') . '/' . $result_name, '/');
+        $preview = implode('/', array_values(array_filter(array(trim((string) ($target['folder_path'] ?? ''), '/'), trim((string) ($target['extra_structure'] ?? ''), '/'), $result_name), 'strlen')));
         ?>
         <div class="wrap ssf-archive-migration">
             <h1>Migrera katalogstruktur</h1>
@@ -233,11 +233,18 @@ class SSF_Medlemsprocess_Archive_Migration
 
             <section id="archive-plan" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>4</span><div><h2>Migreringsplan och torrkörning</h2><p>Beräknar mål, schema, konflikter och blockerare. Torrkörning gör noll SharePoint-skrivningar.</p></div></div>
                 <?php $this->generic_button('ssf_folder_migration_dry_run', 'Kör torrkörning', 'archive-plan', empty($inventory['ok']) || empty($target['folder_id'])); ?>
-                <?php if ($dry_run) : ?><p><strong>Mål:</strong> <?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?>. Schema: <?php echo esc_html((string) count((array) ($dry_run['schema']['exact'] ?? array()))); ?> matchar, <?php echo esc_html((string) count((array) ($dry_run['schema']['create'] ?? array()))); ?> skapas. <strong>Blockerare:</strong> <?php echo esc_html((string) count((array) ($dry_run['blockers'] ?? array()))); ?>.</p><?php endif; ?>
+                <?php if ($dry_run) : ?>
+                    <?php $blockers = (array) ($dry_run['blockers'] ?? array()); $create_columns = (array) ($dry_run['schema']['create'] ?? array()); ?>
+                    <p class="<?php echo empty($dry_run['ok']) ? 'ssf-archive-blocked-state' : 'ssf-archive-verified-state'; ?>"><strong><?php echo empty($dry_run['ok']) ? '✕ Torrkörningen är blockerad. Åtgärda punkterna nedan och kör igen.' : '✓ Torrkörningen är godkänd. Du kan gå vidare till steg 5.'; ?></strong></p>
+                    <dl class="ssf-archive-plan-summary"><div><dt>Mål</dt><dd><?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?></dd></div><div><dt>Matchande kolumner</dt><dd><?php echo esc_html((string) count((array) ($dry_run['schema']['exact'] ?? array()))); ?></dd></div><div><dt>Planerade nya kolumner</dt><dd><?php echo esc_html((string) count($create_columns)); ?></dd></div><div><dt>Blockerare</dt><dd><?php echo esc_html((string) count($blockers)); ?></dd></div></dl>
+                    <?php if ($blockers) : ?><div class="notice notice-error inline ssf-archive-result"><p><strong>Det går inte att förbereda målet ännu:</strong></p><ul><?php foreach ($blockers as $blocker) : ?><li><?php echo esc_html((string) $blocker); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+                    <?php if ($create_columns) : ?><details class="ssf-archive-result"><summary>Visa <?php echo esc_html((string) count($create_columns)); ?> planerade kolumner</summary><ul><?php foreach ($create_columns as $column) : ?><li><code><?php echo esc_html((string) ($column['name'] ?? '')); ?></code></li><?php endforeach; ?></ul></details><?php endif; ?>
+                <?php else : ?><p class="description">Kör torrkörningen för att få ett tydligt godkänt eller blockerat resultat innan något skapas.</p><?php endif; ?>
             </section>
 
             <section id="archive-prepare" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>5</span><div><h2>Förbered mål och schema</h2><p>Skapar bara eventuell extra struktur, slutlig målroot och säkra saknade bibliotekskolumner – aldrig källans hela underträd.</p></div></div>
                 <?php $this->generic_button('ssf_folder_migration_prepare', 'Förbered mål och schema', 'archive-prepare', empty($dry_run['ok'])); ?>
+                <?php if (empty($dry_run['ok'])) : ?><p class="description">Knappen aktiveras först när steg 4 visar att torrkörningen är godkänd utan blockerare.</p><?php endif; ?>
                 <?php if ($prepared) : ?><p><strong>Slutligt mål:</strong> <?php echo esc_html((string) ($dry_run['destination_path'] ?? '')); ?>. Root skapad och schema verifierat. Skapade migreringsundermapppar: 0.</p><?php endif; ?>
             </section>
 

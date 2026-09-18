@@ -28,6 +28,10 @@ Assert-Contains 'Target selector stays in target step' $archive "render_generic_
 Assert-Contains 'Target preview only reads target selector' $archive 'data-location-kind="target"] [data-sp-field="folder_path"]'
 Assert-Contains 'Mode change explains no migration starts' $archive 'Ingen migrering har startats.'
 Assert-Matches 'Generic core retries Graph after plugin load' $archive 'private function generic_core\(\)\s*\{\s*\$this->ensure_graph\(\);'
+Assert-Contains 'Dry run lists every blocker' $archive 'foreach ($blockers as $blocker)'
+Assert-Contains 'Dry run lists planned columns' $archive 'foreach ($create_columns as $column)'
+Assert-Contains 'Prepare explains disabled state' $archive "if (empty(`$dry_run['ok']))"
+Assert-Contains 'Server preview removes empty path segments' $archive "array_filter(array(trim((string) (`$target['folder_path']"
 Assert-Contains 'Root-only prepare wording' $archive 'Skapade migreringsundermapppar: 0'
 Assert-Contains 'Incremental migration' $core 'Incremental, resumable source-to-source SharePoint copy'
 Assert-Contains 'No arbitrary depth cutoff' $core 'while ($queue)'

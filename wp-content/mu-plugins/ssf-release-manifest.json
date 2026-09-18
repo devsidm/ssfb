@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260917.17",
-    "built_at":  "2026-09-17T21:32:46.1302829Z",
+    "build":  "20260918.1",
+    "built_at":  "2026-09-18T05:29:57.7588964Z",
     "source":  "codex",
-    "source_revision":  "a68f0c667e367b251684682e2491a43a246e73fa",
-    "description":  "Restructure generic SharePoint folder migration flow",
+    "source_revision":  "e512f0e918c4c5d1102f20fdb87249495c4017f0",
+    "description":  "Explain dry-run blockers and next-step gating",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "ssf-medlemsprocess"
