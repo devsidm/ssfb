@@ -220,6 +220,15 @@ final class FolderMigrationCore
         $inventory = $this->apply_metadata_policy($inventory);
         $folder_name = 'ssf-migration-test-' . gmdate('Ymd-His') . '-' . wp_generate_password(4, false, false);
         $steps = array(); $folder_id = ''; $file_id = '';
+        $stale_cleanup = $this->cleanup_stale_write_test_folders((string) $target['drive_id'], $root_id);
+        $steps['stale_cleanup'] = array(
+            'label' => 'Tidigare testrester städades',
+            'ok' => ! is_wp_error($stale_cleanup),
+            'message' => is_wp_error($stale_cleanup) ? $stale_cleanup->get_error_message() : ((int) $stale_cleanup ? (int) $stale_cleanup . ' gammal testmapp togs bort.' : ''),
+        );
+        if (is_wp_error($stale_cleanup)) {
+            return array('ok' => false, 'steps' => $steps, 'artifact' => array(), 'tested_at' => gmdate('c'));
+        }
         $folder = $this->create_folder((string) $target['drive_id'], $root_id, $folder_name);
         $steps['folder'] = array('label' => 'Mapp kunde skapas', 'ok' => ! is_wp_error($folder), 'message' => is_wp_error($folder) ? $folder->get_error_message() : '');
         if (! is_wp_error($folder)) {
@@ -255,6 +264,32 @@ final class FolderMigrationCore
         $steps['cleanup_folder'] = array('label' => 'Testmapp togs bort', 'ok' => ! is_wp_error($delete_folder), 'message' => is_wp_error($delete_folder) ? $delete_folder->get_error_message() : '');
         $ok = ! in_array(false, array_column($steps, 'ok'), true);
         return array('ok' => $ok, 'steps' => $steps, 'artifact' => $ok ? array() : array('folder_id' => $folder_id, 'file_id' => $file_id), 'tested_at' => gmdate('c'));
+    }
+
+    /** Remove only abandoned artifacts created by this probe, never user folders. */
+    private function cleanup_stale_write_test_folders(string $drive_id, string $root_id)
+    {
+        $children = $this->children($drive_id, $root_id);
+        if (is_wp_error($children)) {
+            return $children;
+        }
+        $deleted = 0;
+        foreach ($children as $child) {
+            $name = (string) ($child['name'] ?? '');
+            if (empty($child['folder']) || ! preg_match('/^ssf-migration-test-(\d{8}-\d{6})-[A-Za-z0-9]{4}$/', $name, $matches)) {
+                continue;
+            }
+            $created = \DateTimeImmutable::createFromFormat('!Ymd-His', $matches[1], new \DateTimeZone('UTC'));
+            if (! $created || time() - $created->getTimestamp() < 5 * MINUTE_IN_SECONDS) {
+                continue;
+            }
+            $result = $this->graph->request('DELETE', 'drives/' . rawurlencode($drive_id) . '/items/' . rawurlencode((string) ($child['id'] ?? '')));
+            if (is_wp_error($result)) {
+                return $result;
+            }
+            ++$deleted;
+        }
+        return $deleted;
     }
 
     /** Incremental, resumable source-to-source SharePoint copy. Never deletes source. */
@@ -385,11 +420,40 @@ final class FolderMigrationCore
     private function apply_metadata_policy(array $inventory): array
     {
         $column_names = array();
+        $nonwritable = array_fill_keys(self::SYSTEM_FIELDS, true);
         foreach ((array) ($inventory['columns']['value'] ?? array()) as $column) {
             $name = (string) ($column['name'] ?? '');
             if ($name) {
                 $column_names[$name] = true;
+                if (! empty($column['hidden']) || ! empty($column['readOnly'])) {
+                    $nonwritable[$name] = true;
+                }
             }
+        }
+        $excluded_system = array();
+        $populated = array();
+        foreach ((array) ($inventory['items'] ?? array()) as $index => $item) {
+            $metadata = (array) ($item['metadata'] ?? array());
+            foreach (array_keys($metadata) as $field) {
+                if (isset($nonwritable[$field])) {
+                    if ($this->populated($metadata[$field])) {
+                        $excluded_system[$field] = true;
+                    }
+                    unset($metadata[$field]);
+                }
+            }
+            foreach ($metadata as $field => $value) {
+                if ($this->populated($value)) {
+                    $populated[$field] = true;
+                }
+            }
+            $inventory['items'][$index]['metadata'] = $metadata;
+        }
+        $inventory['populated_fields'] = array_keys($populated);
+        $inventory['summary']['metadata_fields_used'] = count($populated);
+        $inventory['summary']['schema_fields_required'] = count($populated);
+        if ($excluded_system) {
+            $inventory['metadata_policy']['excluded_system_fields'] = array_keys($excluded_system);
         }
         $signature_matches = count(array_intersect(self::MEMBERSHIP_CANONICAL_SIGNATURE, array_keys($column_names)));
         if (empty($column_names['ApplicationStatus']) || $signature_matches < 3) {
@@ -418,10 +482,10 @@ final class FolderMigrationCore
         $inventory['populated_fields'] = array_keys($populated);
         $inventory['summary']['metadata_fields_used'] = count($populated);
         $inventory['summary']['schema_fields_required'] = count($populated);
-        $inventory['metadata_policy'] = array(
+        $inventory['metadata_policy'] = array_merge((array) ($inventory['metadata_policy'] ?? array()), array(
             'profile' => 'canonical_membership',
             'excluded_fields' => array_values(array_intersect(self::MEMBERSHIP_LEGACY_FIELDS, array_keys($excluded))),
-        );
+        ));
         return $inventory;
     }
 

@@ -2,14 +2,13 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260919.1",
-    "built_at":  "2026-09-19T07:40:38.2917754Z",
+    "build":  "20260919.2",
+    "built_at":  "2026-09-19T07:49:38.9173669Z",
     "source":  "codex",
-    "source_revision":  "3dcda7517df560279f94d3f7feac8e8d12660c48",
-    "description":  "Handle SharePoint write-test errors without WordPress fatal failures",
+    "source_revision":  "c645c29a384058cd84b99c72bddb6740452524d8",
+    "description":  "Filter read-only SharePoint metadata and clean stale write-test artifacts",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "ssf-medlemsprocess",
                        "ssf-member-portal"
                    ],
     "status":  "development",
