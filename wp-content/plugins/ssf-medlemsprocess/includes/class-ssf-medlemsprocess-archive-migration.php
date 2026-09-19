@@ -286,7 +286,7 @@ class SSF_Medlemsprocess_Archive_Migration
 
             <section id="archive-write-test" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>6</span><div><h2>Skrivtest</h2><p>Verifierar mapp, fil och representativ metadata i den verkliga förberedda målroten, och städar testdata.</p></div></div>
                 <?php $this->generic_button('ssf_folder_migration_write_test', 'Kör skrivtest', 'archive-write-test', empty($prepared['target_folder_id'])); ?>
-                <?php if ($write) : foreach ((array) ($write['steps'] ?? array()) as $step) : ?><p><?php echo ! empty($step['ok']) ? '✓' : '✗'; ?> <?php echo esc_html((string) ($step['label'] ?? '')); ?></p><?php endforeach; endif; ?>
+                <?php if ($write) : foreach ((array) ($write['steps'] ?? array()) as $step) : ?><p><?php echo ! empty($step['ok']) ? '✓' : '✗'; ?> <?php echo esc_html((string) ($step['label'] ?? '')); ?><?php if (empty($step['ok']) && ! empty($step['message'])) : ?><br><span class="description"><?php echo esc_html((string) $step['message']); ?></span><?php endif; ?></p><?php endforeach; endif; ?>
             </section>
 
             <section id="archive-test-case" class="ssf-archive-step"><div class="ssf-archive-step__heading"><span>7</span><div><h2>Testärende – valfritt</h2><p>Du kan hoppa över testärende. Slutförandet använder samma generella motor och hoppar över redan verifierade objekt vid återupptagning.</p></div></div>

@@ -78,6 +78,9 @@ Assert-Contains 'Changing destination clears confirmation' $archive "unset(`$sta
 Assert-Contains 'Test case reuses core' $archive '$core->migrate($test_source'
 Assert-Contains 'Copy uses Graph source item' $core "'/copy'"
 Assert-Contains 'Metadata readback verification' $core 'migration_metadata_mismatch'
+Assert-Contains 'Write test guards error before metadata array access' $core 'if ($match) {'
+Assert-Contains 'Write test exposes Graph error message' $core '$metadata_error->get_error_message()'
+Assert-Contains 'Write test renders failed step details' $archive "empty(`$step['ok']) && ! empty(`$step['message'])"
 Assert-Contains 'Reconciliation source safety' $core "'source_untouched' => true"
 Assert-NotContains 'Generic core must not delete source' $core "'DELETE', 'drives/' . rawurlencode((string) `$source['drive_id'])"
 Assert-Contains 'Shared discovery pagination' $discovery 'sharepoint_pagination_loop'

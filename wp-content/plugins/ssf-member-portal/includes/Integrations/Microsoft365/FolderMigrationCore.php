@@ -221,11 +221,11 @@ final class FolderMigrationCore
         $folder_name = 'ssf-migration-test-' . gmdate('Ymd-His') . '-' . wp_generate_password(4, false, false);
         $steps = array(); $folder_id = ''; $file_id = '';
         $folder = $this->create_folder((string) $target['drive_id'], $root_id, $folder_name);
-        $steps['folder'] = array('label' => 'Mapp kunde skapas', 'ok' => ! is_wp_error($folder));
+        $steps['folder'] = array('label' => 'Mapp kunde skapas', 'ok' => ! is_wp_error($folder), 'message' => is_wp_error($folder) ? $folder->get_error_message() : '');
         if (! is_wp_error($folder)) {
             $folder_id = (string) ($folder['id'] ?? '');
             $file = $this->graph->request('PUT', 'drives/' . rawurlencode((string) $target['drive_id']) . '/items/' . rawurlencode($folder_id) . ':/diagnostic.txt:/content', "SSF generic migration write test\n", array('Content-Type' => 'text/plain; charset=utf-8'));
-            $steps['file'] = array('label' => 'Fil kunde skrivas', 'ok' => ! is_wp_error($file));
+            $steps['file'] = array('label' => 'Fil kunde skrivas', 'ok' => ! is_wp_error($file), 'message' => is_wp_error($file) ? $file->get_error_message() : '');
             $file_id = is_wp_error($file) ? '' : (string) ($file['id'] ?? '');
             $sample = array();
             foreach ((array) ($inventory['items'] ?? array()) as $item) { if (! empty($item['metadata'])) { $sample = array_slice((array) $item['metadata'], 0, 1, true); break; } }
@@ -234,17 +234,25 @@ final class FolderMigrationCore
                 $patched = is_wp_error($list) ? $list : $this->graph->request('PATCH', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/items/' . rawurlencode((string) ($list['listItem']['id'] ?? '')) . '/fields', $sample);
                 $read = is_wp_error($patched) ? $patched : $this->item((string) $target['drive_id'], $file_id);
                 $match = ! is_wp_error($read);
-                foreach ($sample as $key => $value) { if (wp_json_encode($value) !== wp_json_encode($read['listItem']['fields'][$key] ?? null)) $match = false; }
-                $steps['metadata'] = array('label' => 'Metadata kunde skrivas och läsas tillbaka korrekt', 'ok' => ! is_wp_error($patched) && $match);
+                if ($match) {
+                    foreach ($sample as $key => $value) { if (wp_json_encode($value) !== wp_json_encode($read['listItem']['fields'][$key] ?? null)) $match = false; }
+                }
+                $metadata_error = is_wp_error($patched) ? $patched : (is_wp_error($read) ? $read : null);
+                $steps['metadata'] = array(
+                    'label' => 'Metadata kunde skrivas och läsas tillbaka korrekt',
+                    'ok' => ! is_wp_error($patched) && $match,
+                    'message' => $metadata_error ? $metadata_error->get_error_message() : ($match ? '' : 'Metadata stämde inte vid återläsning.'),
+                );
             } else {
                 $steps['metadata'] = array('label' => 'Metadata kunde skrivas och läsas tillbaka korrekt', 'ok' => true, 'message' => 'Inga relevanta metadatafält användes i källan.');
             }
-            $steps['read'] = array('label' => 'Fil kunde läsas tillbaka', 'ok' => $file_id && ! is_wp_error($this->item((string) $target['drive_id'], $file_id)));
+            $file_read = $file_id ? $this->item((string) $target['drive_id'], $file_id) : new \WP_Error('test_file_missing', 'Testfil saknas.');
+            $steps['read'] = array('label' => 'Fil kunde läsas tillbaka', 'ok' => ! is_wp_error($file_read), 'message' => is_wp_error($file_read) ? $file_read->get_error_message() : '');
         }
         $delete_file = $file_id ? $this->graph->request('DELETE', 'drives/' . rawurlencode((string) $target['drive_id']) . '/items/' . rawurlencode($file_id)) : new \WP_Error('test_file_missing', 'Testfil saknas.');
         $delete_folder = $folder_id ? $this->graph->request('DELETE', 'drives/' . rawurlencode((string) $target['drive_id']) . '/items/' . rawurlencode($folder_id)) : new \WP_Error('test_folder_missing', 'Testmapp saknas.');
-        $steps['cleanup_file'] = array('label' => 'Testfil togs bort', 'ok' => ! is_wp_error($delete_file));
-        $steps['cleanup_folder'] = array('label' => 'Testmapp togs bort', 'ok' => ! is_wp_error($delete_folder));
+        $steps['cleanup_file'] = array('label' => 'Testfil togs bort', 'ok' => ! is_wp_error($delete_file), 'message' => is_wp_error($delete_file) ? $delete_file->get_error_message() : '');
+        $steps['cleanup_folder'] = array('label' => 'Testmapp togs bort', 'ok' => ! is_wp_error($delete_folder), 'message' => is_wp_error($delete_folder) ? $delete_folder->get_error_message() : '');
         $ok = ! in_array(false, array_column($steps, 'ok'), true);
         return array('ok' => $ok, 'steps' => $steps, 'artifact' => $ok ? array() : array('folder_id' => $folder_id, 'file_id' => $file_id), 'tested_at' => gmdate('c'));
     }
