@@ -103,9 +103,11 @@ final class GraphClient
         $host = strtolower((string) ($parts['host'] ?? ''));
         $path = (string) ($parts['path'] ?? '');
         if ('https' !== strtolower((string) ($parts['scheme'] ?? ''))
+            || ! empty($parts['user']) || ! empty($parts['pass'])
+            || (isset($parts['port']) && 443 !== (int) $parts['port'])
             || (! in_array($host, array('api.onedrive.com', 'graph.microsoft.com'), true)
                 && ! preg_match('/^[a-z0-9-]+\.sharepoint\.com$/', $host))
-            || ! preg_match('#/monitor/[a-z0-9-]+$#i', $path)) {
+            || '' === $path) {
             return new \WP_Error('graph_copy_monitor_invalid', 'Microsoft Graph returnerade en ogiltig adress för kopieringsstatus.');
         }
 

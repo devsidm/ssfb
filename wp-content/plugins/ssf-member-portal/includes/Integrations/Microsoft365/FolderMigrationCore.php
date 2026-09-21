@@ -403,7 +403,7 @@ final class FolderMigrationCore
                     $state['items'][$source_id] = array_merge($this->pending($file), array('state' => 'COPYING', 'monitor_url' => $monitor_url));
                     $this->save_state($state);
                 }
-                $copied = $this->complete_copy($target, $monitor_url, (string) $file['name']);
+                $copied = $this->complete_copy($target, $monitor_url, $parent, $file);
                 if (is_wp_error($copied)) {
                     return $this->fail($state, $source_id, $file, $copied->get_error_message());
                 }
@@ -595,11 +595,24 @@ final class FolderMigrationCore
         return array('monitor_url' => $monitor);
     }
 
-    private function complete_copy(array $target, string $monitor_url, string $name)
+    private function complete_copy(array $target, string $monitor_url, string $parent_id, array $source_file)
     {
+        $name = (string) ($source_file['name'] ?? '');
         for ($attempt = 0; $attempt < 20; ++$attempt) {
             $status = $this->graph->copy_status($monitor_url);
-            if (is_wp_error($status)) return $status;
+            if (is_wp_error($status)) {
+                // A monitor URL can expire after Graph has completed the copy.
+                // Only recover an unconfirmed, non-overwriting copy whose file
+                // now exists under the exact prepared parent with the same size.
+                if ('replace_files' !== (string) ($target['existing_target_policy'] ?? '')) {
+                    $found = $this->find_child_file((string) $target['drive_id'], $parent_id, $name);
+                    if (is_array($found) && ! empty($found['id'])
+                        && (int) ($found['size'] ?? -1) === (int) ($source_file['size'] ?? -2)) {
+                        return $this->item((string) $target['drive_id'], (string) $found['id']);
+                    }
+                }
+                return $status;
+            }
             if ('failed' === (string) ($status['status'] ?? '')) {
                 return new \WP_Error('migration_copy_failed', sanitize_text_field((string) ($status['error']['message'] ?? 'Microsoft Graph kunde inte kopiera filen: ' . $name)));
             }

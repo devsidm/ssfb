@@ -79,6 +79,8 @@ Assert-Contains 'Test case reuses core' $archive '$core->migrate($test_source'
 Assert-Contains 'Copy uses Graph source item' $core "'/copy'"
 Assert-Contains 'Copy checks existing files as files' $core '$this->find_child_file((string) $target[''drive_id''], $parent_id, $name)'
 Assert-Contains 'Copy waits for asynchronous completion' $core '$this->graph->copy_status($monitor_url)'
+Assert-Contains 'Expired monitor can recover an already copied file' $core "`$this->find_child_file((string) `$target['drive_id'], `$parent_id, `$name)"
+Assert-Contains 'Expired monitor recovery checks file size' $core "(int) (`$found['size'] ?? -1) === (int) (`$source_file['size'] ?? -2)"
 Assert-Contains 'Copy requires completed status' $core "'completed' === (string) (`$status['status'] ?? '')"
 Assert-Contains 'Copy requires returned target file ID' $core "`$status['resourceId']"
 Assert-Contains 'In-flight copy is saved for resume' $core "'monitor_url' => `$monitor_url"

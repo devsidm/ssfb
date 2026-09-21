@@ -29,7 +29,8 @@ namespace {
     function wp_remote_get($url, $args): array
     {
         ++$GLOBALS['monitor_calls'];
-        if (! str_ends_with($url, '/monitor/copy-1') || isset($args['headers']['Authorization'])) {
+        if (str_ends_with($url, '/monitor/expired')) return response(404, array());
+        if ((! str_ends_with($url, '/monitor/copy-1') && ! str_contains($url, '/monitor(copy_1)?')) || isset($args['headers']['Authorization'])) {
             throw new \RuntimeException('Copy monitor URL or credentials are unsafe.');
         }
         return response(202, array('status' => 'completed', 'resourceId' => 'TARGET_FILE'));
@@ -98,7 +99,17 @@ namespace {
         'items' => array('SOURCE_2026' => array('state' => 'ERROR', 'source_id' => 'SOURCE_2026')),
     );
 
-    $core = new FolderMigrationCore(new GraphClient(new Authentication()));
+    $graph = new GraphClient(new Authentication());
+    $alternate_status = $graph->copy_status('https://tenant.sharepoint.com/sites/source/_api/v2.1/monitor(copy_1)?job=123');
+    check(! is_wp_error($alternate_status) && $alternate_status['status'] === 'completed', 'Valid opaque Microsoft monitor path was rejected.');
+    $monitor_calls = $GLOBALS['monitor_calls'];
+    check(is_wp_error($graph->copy_status('http://tenant.sharepoint.com/monitor/copy-1')), 'Insecure monitor URL was accepted.');
+    check(is_wp_error($graph->copy_status('https://example.com/monitor/copy-1')), 'Untrusted monitor host was accepted.');
+    check(is_wp_error($graph->copy_status('https://user:password@tenant.sharepoint.com/monitor/copy-1')), 'Credential-bearing monitor URL was accepted.');
+    check($GLOBALS['monitor_calls'] === $monitor_calls, 'Invalid monitor URL triggered an HTTP request.');
+    $GLOBALS['monitor_calls'] = 0;
+
+    $core = new FolderMigrationCore($graph);
     $plan = $core->dry_run($source, $target, $inventory);
     check(! is_wp_error($plan) && $plan['ok'] && $plan['resume_existing'], 'Existing 2026 test folder was not resumable.');
     $prepared = $core->prepare($target, $plan);
@@ -107,6 +118,12 @@ namespace {
     check(! is_wp_error($result) && $result['ok'], is_wp_error($result) ? $result->get_error_message() : 'Test migration failed.');
     check($GLOBALS['copy_calls'] === 1 && $GLOBALS['monitor_calls'] === 1, 'File was not copied and monitored exactly once.');
     check($GLOBALS['fields']['2']['ApplicationNumber'] === 'SSF-2026' && $GLOBALS['fields']['3']['ApplicationNumber'] === 'SSF-2026', 'Folder or file metadata was not written.');
+
+    $state = $GLOBALS['options']['ssf_sharepoint_folder_migration_state'];
+    $state['items']['SOURCE_FILE'] = array('state' => 'COPYING', 'source_id' => 'SOURCE_FILE', 'monitor_url' => 'https://tenant.sharepoint.com/monitor/expired');
+    $GLOBALS['options']['ssf_sharepoint_folder_migration_state'] = $state;
+    $resumed = $core->migrate($source, $target, $inventory, 'TARGET_2026');
+    check(! is_wp_error($resumed) && $resumed['ok'] && $GLOBALS['copy_calls'] === 1, 'Expired monitor did not recover the completed file safely.');
 
     $full_source = $source;
     $full_source['folder_id'] = 'SOURCE_ROOT';
