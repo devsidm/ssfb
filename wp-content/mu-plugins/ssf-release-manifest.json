@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260919.2",
-    "built_at":  "2026-09-19T07:49:38.9173669Z",
+    "build":  "20260921.1",
+    "built_at":  "2026-09-21T09:05:04.5193951Z",
     "source":  "codex",
-    "source_revision":  "c645c29a384058cd84b99c72bddb6740452524d8",
-    "description":  "Filter read-only SharePoint metadata and clean stale write-test artifacts",
+    "source_revision":  "17f32807fc353dc5d5595668420e7283901f5952",
+    "description":  "Verify SharePoint folder names separately from file sizes and resume complete file copies",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "ssf-member-portal"
