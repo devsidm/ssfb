@@ -77,6 +77,18 @@ Assert-Contains 'Overwrite policy is explicit' $archive "existing_target_policy'
 Assert-Contains 'Changing destination clears confirmation' $archive "unset(`$state['target']['use_existing_target'], `$state['target']['existing_target_policy'], `$state['target']['confirmed_existing_target_id'])"
 Assert-Contains 'Test case reuses core' $archive '$core->migrate($test_source'
 Assert-Contains 'Copy uses Graph source item' $core "'/copy'"
+Assert-Contains 'Copy checks existing files as files' $core '$this->find_child_file((string) $target[''drive_id''], $parent_id, $name)'
+Assert-Contains 'Copy waits for asynchronous completion' $core '$this->graph->copy_status($monitor_url)'
+Assert-Contains 'Copy requires completed status' $core "'completed' === (string) (`$status['status'] ?? '')"
+Assert-Contains 'Copy requires returned target file ID' $core "`$status['resourceId']"
+Assert-Contains 'In-flight copy is saved for resume' $core "'monitor_url' => `$monitor_url"
+Assert-Contains 'Completed copy ID is saved before metadata write' $core "'state' => 'COPIED', 'target_id' => `$target_id"
+Assert-Contains 'Test case verified items transfer to full run' $core 'Carry its'
+Assert-Contains 'Old test folder resumes only with matching context' $core 'is_resumable_target($source, $target'
+Assert-Contains 'Folders do not compare aggregate size before copying children' $core "('file' === `$type && (! isset(`$target_item['file']) || (int) (`$source_item['size']"
+Assert-Contains 'Folder and file metadata is written and read back' $core '$this->metadata_and_verify($target, $folder, $target_id)'
+Assert-Contains 'File metadata is written and read back' $core '$this->metadata_and_verify($target, $file, $target_id)'
+Assert-Contains 'Copy monitor never sends Graph bearer token' $graph 'wp_remote_get($url, array('
 Assert-Contains 'Metadata readback verification' $core 'migration_metadata_mismatch'
 Assert-Contains 'Write test guards error before metadata array access' $core 'if ($match) {'
 Assert-Contains 'Write test exposes Graph error message' $core '$metadata_error->get_error_message()'

@@ -96,6 +96,31 @@ final class GraphClient
         return array('status' => $status, 'headers' => wp_remote_retrieve_headers($response), 'body' => is_array($json) ? $json : array());
     }
 
+    /** Copy monitor URLs are short-lived and may be hosted outside Graph. Never send the Graph token to them. */
+    public function copy_status(string $url)
+    {
+        $parts = wp_parse_url($url);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $path = (string) ($parts['path'] ?? '');
+        if ('https' !== strtolower((string) ($parts['scheme'] ?? ''))
+            || (! in_array($host, array('api.onedrive.com', 'graph.microsoft.com'), true)
+                && ! preg_match('/^[a-z0-9-]+\.sharepoint\.com$/', $host))
+            || ! preg_match('#/monitor/[a-z0-9-]+$#i', $path)) {
+            return new \WP_Error('graph_copy_monitor_invalid', 'Microsoft Graph returnerade en ogiltig adress för kopieringsstatus.');
+        }
+
+        $response = wp_remote_get($url, array('timeout' => 20, 'redirection' => 0));
+        if (is_wp_error($response)) {
+            return new \WP_Error('graph_copy_monitor_transport', 'Kunde inte läsa kopieringsstatus från Microsoft.');
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        if ($code < 200 || $code >= 300 || ! is_array($body)) {
+            return new \WP_Error('graph_copy_monitor_failed', 'Microsoft returnerade inte en giltig kopieringsstatus.', array('http_status' => $code));
+        }
+        return $body;
+    }
+
     public function clear_token(): void
     {
         $this->authentication->clear_token();

@@ -112,16 +112,19 @@ final class FolderMigrationCore
         $confirmed_existing = ! empty($existing['id'])
             && 'replace_files' === (string) ($target['existing_target_policy'] ?? '')
             && hash_equals((string) $existing['id'], (string) ($target['confirmed_existing_target_id'] ?? ''));
-        if (! empty($existing['id']) && ! $confirmed_existing) {
+        $resume_existing = ! empty($existing['id']) && $this->is_resumable_target($source, $target, (string) $existing['id']);
+        if (! empty($existing['id']) && ! $confirmed_existing && ! $resume_existing) {
             $blockers[] = 'Målmappen finns redan: ' . $destination . '. Bekräfta i steg 3 om den ska användas och filer med samma namn skrivas över.';
         } elseif ($confirmed_existing) {
             $warnings[] = 'Den befintliga målmappen används. Filer med samma namn skrivs över; andra befintliga objekt lämnas orörda.';
+        } elseif ($resume_existing) {
+            $warnings[] = 'En tidigare påbörjad migrering till samma målmapp kan återupptas.';
         }
         if (! empty($inventory['metadata_policy']['excluded_fields'])) {
             $warnings[] = 'Äldre medlemsfält ignoreras: ' . implode(', ', (array) $inventory['metadata_policy']['excluded_fields']) . '. Kanoniska medlemsfält används i stället.';
         }
         $final_root_name = $segments ? (string) end($segments) : (string) ($target['drive_name'] ?? '');
-        return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => $final_root_name, 'source_summary' => (array) $inventory['summary'], 'schema' => $schema, 'existing_destination' => $existing, 'existing_destination_confirmed' => $confirmed_existing, 'blockers' => $blockers, 'warnings' => $warnings);
+        return array('ok' => empty($blockers), 'dry_run_at' => gmdate('c'), 'writes' => 0, 'destination_path' => $destination, 'segments' => $segments, 'intermediate_segments' => array_slice($segments, 0, -1), 'final_root_name' => $final_root_name, 'source_summary' => (array) $inventory['summary'], 'source_ref' => array('drive_id' => (string) ($source['drive_id'] ?? ''), 'folder_id' => (string) ($source['folder_id'] ?? '')), 'schema' => $schema, 'existing_destination' => $existing, 'existing_destination_confirmed' => $confirmed_existing, 'resume_existing' => $resume_existing, 'blockers' => $blockers, 'warnings' => $warnings);
     }
 
     /** Verify only the calculated destination path; no target contents are inventoried. */
@@ -173,7 +176,8 @@ final class FolderMigrationCore
         }
         $confirmed_existing_id = (string) ($target['confirmed_existing_target_id'] ?? '');
         $planned_existing_id = (string) ($dry_run['existing_destination']['id'] ?? '');
-        if ($planned_existing_id && (! $confirmed_existing_id || ! hash_equals($planned_existing_id, $confirmed_existing_id))) {
+        if ($planned_existing_id && (empty($dry_run['resume_existing']) || ! $this->is_resumable_target((array) ($dry_run['source_ref'] ?? array()), $target, $planned_existing_id))
+            && (! $confirmed_existing_id || ! hash_equals($planned_existing_id, $confirmed_existing_id))) {
             return new \WP_Error('migration_existing_target_unconfirmed', 'Den befintliga målmappen är inte uttryckligen bekräftad. Inga måländringar gjordes.');
         }
         $verified_columns = $this->columns($target);
@@ -299,7 +303,27 @@ final class FolderMigrationCore
         $state = $this->state();
         $context = hash('sha256', implode('|', array((string) ($source['drive_id'] ?? ''), (string) ($source['folder_id'] ?? ''), (string) ($target['drive_id'] ?? ''), $target_root_id)));
         if (! hash_equals((string) ($state['context'] ?? ''), $context)) {
+            $previous = $state;
             $state = array('context' => $context, 'items' => array());
+            // A completed test case belongs to the same target tree. Carry its
+            // verified IDs into the full run instead of copying those files twice.
+            foreach ((array) ($inventory['items'] ?? array()) as $candidate) {
+                if ('folder' !== ($candidate['type'] ?? '') || 1 !== (int) ($candidate['depth'] ?? -1)) continue;
+                $id = (string) ($candidate['id'] ?? '');
+                $test_root = (string) ($previous['items'][$id]['target_id'] ?? '');
+                $test_context = hash('sha256', implode('|', array((string) $source['drive_id'], $id, (string) $target['drive_id'], $test_root)));
+                if (! $test_root || ! hash_equals($test_context, (string) ($previous['context'] ?? ''))) continue;
+                $existing = $this->find_child((string) $target['drive_id'], $target_root_id, (string) $candidate['name']);
+                if (is_wp_error($existing)) return $existing;
+                if ((string) ($existing['id'] ?? '') !== $test_root) continue;
+                $inventory_ids = array_fill_keys(array_column((array) $inventory['items'], 'id'), true);
+                foreach ((array) ($previous['items'] ?? array()) as $source_id => $record) {
+                    if (isset($inventory_ids[$source_id]) && 'VERIFIED' === ($record['state'] ?? '') && ! empty($record['target_id'])) {
+                        $state['items'][$source_id] = $record;
+                    }
+                }
+                break;
+            }
         }
         $state['items'] = (array) ($state['items'] ?? array());
         $folders = array_filter((array) $inventory['items'], static fn($item) => 'folder' === $item['type']);
@@ -310,6 +334,10 @@ final class FolderMigrationCore
             $known = (array) ($state['items'][$source_id] ?? array());
             if ('VERIFIED' === ($known['state'] ?? '') && ! empty($known['target_id'])) {
                 $folder_map[$source_id] = (string) $known['target_id'];
+                if ($source_id !== (string) $source['folder_id'] || empty($target['direct_to_root'])) {
+                    $checked = $this->metadata_and_verify($target, $folder, (string) $known['target_id']);
+                    if (is_wp_error($checked)) return $this->fail($state, $source_id, $folder, $checked->get_error_message());
+                }
                 continue;
             }
             $target_id = $source_id === (string) $source['folder_id'] ? $target_root_id : '';
@@ -353,24 +381,41 @@ final class FolderMigrationCore
                 continue;
             }
             $source_id = (string) $file['id'];
-            if ('VERIFIED' === (($state['items'][$source_id]['state'] ?? ''))) {
+            $known = (array) ($state['items'][$source_id] ?? array());
+            if ('VERIFIED' === ($known['state'] ?? '')) {
+                $checked = $this->metadata_and_verify($target, $file, (string) ($known['target_id'] ?? ''));
+                if (is_wp_error($checked)) return $this->fail($state, $source_id, $file, $checked->get_error_message());
                 continue;
             }
             $parent = $folder_map[(string) $file['parent_id']] ?? '';
             if (! $parent) {
                 return $this->fail($state, $source_id, $file, 'Målmapp för filen saknas.');
             }
-            $state['items'][$source_id] = array_merge($this->pending($file), array('state' => 'COPYING'));
-            $this->save_state($state);
-            $copy = $this->copy_file($source, $target, $source_id, $parent, (string) $file['name']);
-            if (is_wp_error($copy)) {
-                return $this->fail($state, $source_id, $file, $copy->get_error_message());
+            $target_id = (string) ($known['target_id'] ?? '');
+            if (! $target_id) {
+                $monitor_url = (string) ($known['monitor_url'] ?? '');
+                if (! $monitor_url) {
+                    $copy = $this->copy_file($source, $target, $source_id, $parent, (string) $file['name']);
+                    if (is_wp_error($copy)) {
+                        return $this->fail($state, $source_id, $file, $copy->get_error_message());
+                    }
+                    $monitor_url = (string) ($copy['monitor_url'] ?? '');
+                    $state['items'][$source_id] = array_merge($this->pending($file), array('state' => 'COPYING', 'monitor_url' => $monitor_url));
+                    $this->save_state($state);
+                }
+                $copied = $this->complete_copy($target, $monitor_url, (string) $file['name']);
+                if (is_wp_error($copied)) {
+                    return $this->fail($state, $source_id, $file, $copied->get_error_message());
+                }
+                $target_id = (string) ($copied['id'] ?? '');
+                $state['items'][$source_id] = array_merge($this->pending($file), array('state' => 'COPIED', 'target_id' => $target_id));
+                $this->save_state($state);
             }
-            $result = $this->metadata_and_verify($target, $file, (string) $copy['id']);
+            $result = $this->metadata_and_verify($target, $file, $target_id);
             if (is_wp_error($result)) {
                 return $this->fail($state, $source_id, $file, $result->get_error_message());
             }
-            $state['items'][$source_id] = $this->verified($file, (string) $copy['id']);
+            $state['items'][$source_id] = $this->verified($file, $target_id);
             $this->save_state($state);
         }
         $state['completed_at'] = gmdate('c');
@@ -517,35 +562,78 @@ final class FolderMigrationCore
 
     private function column_type(array $column): string { foreach (array('text','choice','number','currency','boolean','dateTime','personOrGroup','lookup','hyperlinkOrPicture') as $type) if (array_key_exists($type, $column)) return $type; return ''; }
     private function populated($value): bool { return ! (null === $value || '' === $value || array() === $value); }
+    private function is_resumable_target(array $source, array $target, string $target_id): bool
+    {
+        $source_id = (string) ($source['folder_id'] ?? '');
+        if (! $source_id || ! $target_id || empty($source['drive_id']) || empty($target['drive_id'])) return false;
+        $state = $this->state();
+        $context = hash('sha256', implode('|', array((string) $source['drive_id'], $source_id, (string) $target['drive_id'], $target_id)));
+        return hash_equals($context, (string) ($state['context'] ?? '')) && isset($state['items'][$source_id]);
+    }
     private function location(array $location, string $label) { foreach (array('site_id','drive_id','list_id','folder_id') as $key) if (empty($location[$key])) return new \WP_Error('migration_location_missing', $label . ' saknar verifierat ' . $key . '.'); return true; }
     private function segments(string $extra, string $name) { $segments = array_filter(explode('/', trim($extra, '/')), 'strlen'); $segments[] = trim($name); foreach ($segments as $segment) if (! $segment || '.' === $segment || '..' === $segment || preg_match('/["*:<>?\\\\|\/]/', $segment) || preg_match('/[. ]$/', $segment)) return new \WP_Error('migration_destination_name_invalid', 'Målsökvägen innehåller ett ogiltigt SharePoint-mappnamn.'); return array_values($segments); }
     private function find_child(string $drive, string $parent, string $name) { $children = $this->children($drive, $parent); if (is_wp_error($children)) return $children; foreach ($children as $child) if (! empty($child['folder']) && 0 === strcasecmp($name, (string) ($child['name'] ?? ''))) return $child; return array(); }
+    private function find_child_file(string $drive, string $parent, string $name) { $children = $this->children($drive, $parent); if (is_wp_error($children)) return $children; foreach ($children as $child) if (! empty($child['file']) && 0 === strcasecmp($name, (string) ($child['name'] ?? ''))) return $child; return array(); }
     private function find_path(string $drive, string $root, array $segments) { $parent = $root; $last = array(); foreach ($segments as $segment) { $last = $this->find_child($drive, $parent, $segment); if (is_wp_error($last) || ! $last) return $last; $parent = (string) $last['id']; } return $last; }
     private function create_folder(string $drive, string $parent, string $name) { return $this->graph->request('POST', 'drives/' . rawurlencode($drive) . '/items/' . rawurlencode($parent) . '/children', array('name' => $name, 'folder' => new \stdClass(), '@microsoft.graph.conflictBehavior' => 'fail')); }
 
     private function copy_file(array $source, array $target, string $source_id, string $parent_id, string $name)
     {
+        $existing = $this->find_child_file((string) $target['drive_id'], $parent_id, $name);
+        if (is_wp_error($existing)) return $existing;
+        if ($existing && 'replace_files' !== (string) ($target['existing_target_policy'] ?? '')) {
+            return new \WP_Error('migration_file_exists', 'Målfilen finns redan och överskrivning är inte bekräftad: ' . $name);
+        }
         $conflict_query = 'replace_files' === (string) ($target['existing_target_policy'] ?? '') ? '?@microsoft.graph.conflictBehavior=replace' : '';
         $response = $this->graph->request_response('POST', 'drives/' . rawurlencode((string) $source['drive_id']) . '/items/' . rawurlencode($source_id) . '/copy' . $conflict_query, array('parentReference' => array('driveId' => (string) $target['drive_id'], 'id' => $parent_id), 'name' => $name));
         if (is_wp_error($response)) return $response;
-        $headers = $response['headers']; $monitor = is_object($headers) ? $headers['location'] : ($headers['location'] ?? '');
-        for ($attempt = 0; $attempt < 20 && $monitor; $attempt++) { $poll = $this->graph->request('GET', (string) $monitor); if (! is_wp_error($poll) && ! empty($poll['resourceId'])) break; }
-        $copied = $this->find_child((string) $target['drive_id'], $parent_id, $name);
-        if (is_wp_error($copied) || ! $copied) return is_wp_error($copied) ? $copied : new \WP_Error('migration_copy_unverified', 'Kopieringen slutfördes inte eller kunde inte verifieras.');
-        return $copied;
+        $headers = $response['headers'];
+        $monitor = (string) ($headers['location'] ?? '');
+        if (202 !== (int) ($response['status'] ?? 0) || ! $monitor) {
+            return new \WP_Error('migration_copy_monitor_missing', 'Microsoft Graph bekräftade inte den asynkrona filkopieringen.');
+        }
+        return array('monitor_url' => $monitor);
+    }
+
+    private function complete_copy(array $target, string $monitor_url, string $name)
+    {
+        for ($attempt = 0; $attempt < 20; ++$attempt) {
+            $status = $this->graph->copy_status($monitor_url);
+            if (is_wp_error($status)) return $status;
+            if ('failed' === (string) ($status['status'] ?? '')) {
+                return new \WP_Error('migration_copy_failed', sanitize_text_field((string) ($status['error']['message'] ?? 'Microsoft Graph kunde inte kopiera filen: ' . $name)));
+            }
+            if ('completed' === (string) ($status['status'] ?? '')) {
+                $id = sanitize_text_field((string) ($status['resourceId'] ?? ''));
+                if (! $id) return new \WP_Error('migration_copy_id_missing', 'Den slutförda filkopieringen saknar mål-ID: ' . $name);
+                $copied = $this->item((string) $target['drive_id'], $id);
+                if (is_wp_error($copied)) return $copied;
+                if (empty($copied['file']) || (string) ($copied['name'] ?? '') !== $name) {
+                    return new \WP_Error('migration_copy_unverified', 'Den kopierade filens namn eller typ kunde inte verifieras: ' . $name);
+                }
+                return $copied;
+            }
+            sleep(1);
+        }
+        return new \WP_Error('migration_copy_pending', 'Filkopieringen pågår fortfarande. Kör migreringen igen för att fortsätta: ' . $name);
     }
 
     private function metadata_and_verify(array $target, array $source_item, string $target_id)
     {
         $target_item = $this->item((string) $target['drive_id'], $target_id); if (is_wp_error($target_item)) return $target_item;
-        if ((string) $target_item['name'] !== (string) $source_item['name'] || (int) ($source_item['size'] ?? 0) !== (int) ($target_item['size'] ?? 0)) return new \WP_Error('migration_item_mismatch', 'Målobjektets namn eller storlek matchar inte källan.');
+        $type = (string) ($source_item['type'] ?? '');
+        if ((string) ($target_item['name'] ?? '') !== (string) ($source_item['name'] ?? '')
+            || ('folder' === $type && ! isset($target_item['folder']))
+            || ('file' === $type && (! isset($target_item['file']) || (int) ($source_item['size'] ?? 0) !== (int) ($target_item['size'] ?? 0)))) {
+            return new \WP_Error('migration_item_mismatch', 'Målobjektets namn, typ eller filstorlek matchar inte källan: ' . (string) ($source_item['path'] ?? $source_item['name'] ?? ''));
+        }
         $values = (array) ($source_item['metadata'] ?? array());
         if ($values) { $list_id = (string) ($target_item['listItem']['id'] ?? ''); if (! $list_id) return new \WP_Error('migration_metadata_item_missing', 'Målobjektets ListItem saknas.'); $patched = $this->graph->request('PATCH', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/items/' . rawurlencode($list_id) . '/fields', $values); if (is_wp_error($patched)) return $patched; $read = $this->item((string) $target['drive_id'], $target_id); if (is_wp_error($read)) return $read; foreach ($values as $key => $value) if (wp_json_encode($value) !== wp_json_encode($read['listItem']['fields'][$key] ?? null)) return new \WP_Error('migration_metadata_mismatch', 'Metadata kunde inte läsas tillbaka korrekt: ' . $key); }
         return true;
     }
     private function pending(array $item): array { return array('source_id' => $item['id'], 'source_path' => $item['path'], 'type' => $item['type'], 'state' => 'PENDING', 'attempt_count' => 1); }
-    private function verified(array $item, string $target_id): array { return array_merge($this->pending($item), array('target_id' => $target_id, 'target_path' => $item['path'], 'state' => 'VERIFIED', 'verification_result' => 'name,size,metadata', 'verified_at' => gmdate('c'), 'error' => '')); }
-    private function fail(array &$state, string $id, array $item, string $message) { $state['items'][$id] = array_merge($this->pending($item), array('state' => 'ERROR', 'error' => sanitize_text_field($message))); $this->save_state($state); return new \WP_Error('migration_item_error', $message); }
+    private function verified(array $item, string $target_id): array { return array_merge($this->pending($item), array('target_id' => $target_id, 'target_path' => $item['path'], 'state' => 'VERIFIED', 'verification_result' => 'file' === ($item['type'] ?? '') ? 'name,type,size,metadata' : 'name,type,metadata', 'verified_at' => gmdate('c'), 'error' => '')); }
+    private function fail(array &$state, string $id, array $item, string $message) { $state['items'][$id] = array_merge($this->pending($item), (array) ($state['items'][$id] ?? array()), array('state' => 'ERROR', 'error' => sanitize_text_field($message))); $this->save_state($state); return new \WP_Error('migration_item_error', $message); }
     private function state(): array { return (array) get_option(self::STATE_OPTION, array()); }
     private function save_state(array $state): void { update_option(self::STATE_OPTION, $state, false); }
 }
