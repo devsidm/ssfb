@@ -123,7 +123,7 @@ $report.membership.list = if ($dev.membership_sharepoint.list_id) { 'PASS' } els
 $report.membership.folder = if ($dev.membership_sharepoint.applications_folder_id -and $dev.membership_sharepoint.expected_path -eq $memberApplicationsPath) { 'PASS' } else { 'FAIL' }
 $report.membership.schema = if (
     @($dev.membership_sharepoint.application_path_choices).Count -eq 4 -and
-    @($dev.membership_sharepoint.application_status_choices).Count -eq 9 -and
+    @($dev.membership_sharepoint.application_status_choices).Count -eq 6 -and
     @($dev.membership_sharepoint.membership_status_choices).Count -eq 5
 ) { 'PASS' } else { 'FAIL' }
 

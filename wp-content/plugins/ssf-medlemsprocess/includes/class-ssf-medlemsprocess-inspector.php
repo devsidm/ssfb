@@ -248,6 +248,9 @@ class SSF_Medlemsprocess_Inspector
         $user_id = get_current_user_id();
         $this->assert_case_access($application_id, $user_id, 'ssf_inspector_report_');
         $action = 'complete' === sanitize_key(wp_unslash($_POST['report_action'] ?? 'draft')) ? 'complete' : 'draft';
+        if ('complete' === $action && ! in_array(SSF_Medlemsprocess_Application::membership_status($application_id), array('aspirant', 'follow_up'), true)) {
+            wp_die('Inspektion kan slutföras först när aspirantåret har startat.');
+        }
         $inspection = $this->sanitize_inspection((array) wp_unslash($_POST['ssf_inspection'] ?? array()));
         $portal_url = $this->case_url($application_id);
 
@@ -284,11 +287,10 @@ class SSF_Medlemsprocess_Inspector
         if ('complete' === $action && 'complete' !== ($current['status'] ?? '')) {
             SSF_Medlemsprocess_Application::add_history($application_id, 'inspection_report', 'Inspektionsrapport markerades som klar.', false, array('audience' => 'inspectors', 'inspector_id' => $user_id));
             if ($this->all_assigned_reports_complete($application_id)) {
-                $previous_status = SSF_Medlemsprocess_Application::status($application_id);
-                if (! in_array($previous_status, array('awaiting_decision', 'approved', 'approved_aspirant', 'rejected', 'archived'), true)) {
-                    SSF_Medlemsprocess_Application::transition($application_id, 'awaiting_decision', '', false, 'inspector');
+                if (in_array(SSF_Medlemsprocess_Application::membership_status($application_id), array('aspirant', 'follow_up'), true) && SSF_Medlemsprocess_Application::set_inspection_status($application_id, 'completed', 'inspector')) {
+                    SSF_Medlemsprocess_Plugin::instance()->sharepoint->push_status($application_id);
+                    SSF_Medlemsprocess_Plugin::instance()->emails->send_inspection_complete($application_id);
                 }
-                SSF_Medlemsprocess_Plugin::instance()->emails->send_inspection_complete($application_id);
             }
         }
 

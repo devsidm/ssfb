@@ -24,9 +24,6 @@ Inkommen
 Under granskning
 Begär komplettering
 Väntar på komplettering
-Inspektion ska bokas
-Inspektion bokad
-Under slutbedömning
 Godkänd som aspirant
 Avslagen
 ```
@@ -41,9 +38,13 @@ Medlemsfartyg
 Avslutad
 ```
 
+`InspectionStatus` beskriver separat arbetet under aspirantåret: Ej planerad → Inspektion ska bokas → Inspektion bokad → Inspektion genomförd → Under uppföljning → Under slutbedömning. Dessa steg ändrar inte `ApplicationStatus` eller `MembershipStatus`. Äldre ärenden med inspektion som ansökningsstatus förblir läsbara utan automatisk omskrivning.
+
 WordPress är master för giltiga övergångar, historik, e-post, aspirantdatum och medlemsstatus. SharePoint får initiera en ändring av ansökningsstatus, men WordPress validerar den innan den används. Okända eller ogiltiga värden lämnar WordPress oförändrat och ger en adminvarning.
 
 ## Aspirantår
+
+Styrelsen kan godkänna direkt från Under granskning, utan inspektion. Godkännandet sätter ansökningsstatus till Godkänd som aspirant och medlemsstatus till Aspirant. Inspektion planeras därefter under aspirantåret.
 
 Ett godkännande kräver ett faktiskt beslutsdatum. Då sätts medlemsstatus till Aspirant, aspirantstart till beslutsdatum och uppföljningsdatum till exakt ett år senare. Saknas `DecisionDate` vid ett SharePoint-godkännande skickas inget godkännandemail och ärendet markeras med varningen "Beslutsdatum saknas".
 
@@ -80,8 +81,11 @@ Skapa följande kolumner manuellt i dokumentbiblioteket. Internnamnen ska vara e
 | `AspirantStartDate` | Aspirant från | Datum |
 | `AspirantReviewDate` | Aspirant uppföljning | Datum |
 | `WordPressApplicationID` | WordPress-ID | Enskild textrad |
+| `InspectionStatus` | Inspektionsstatus | Val |
 
 Valen för `ApplicationPath` är de fyra visningsnamnen ovan. Valen för statuskolumnerna är de exakta statusvärdena i föregående avsnitt.
+
+`InspectionStatus` skapas manuellt i varje berört målbibliotek med de sex valen ovan. Om kolumnen saknas fortsätter övriga ansökningsfält att synkas; inspektionsstatus lagras i WordPress och en adminvarning visas. WordPress skapar inte kolumnen automatiskt.
 
 **SSF > Medlemskap > Processinställningar > Kontrollera SharePoint-konfiguration** testar autentisering, site, drive, lista, kolumnläsning och en befintlig ärendemapps läs-/skrivåtkomst. Kontrollen visar saknade val samt HTTP- och Graph-felkod, men skapar eller ändrar aldrig kolumner. Skrivtestet återlagrar enbart aktuell ansökningsstatus på en redan länkad mapp.
 

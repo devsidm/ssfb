@@ -66,7 +66,7 @@ foreach ($field in @('ApplicationNumber','VesselName','ApplicationPath','Applica
 foreach ($choice in @('Normalfallet','Mindre registrerat fartyg','Fartyg under restaurering','Nybyggt traditionsfartyg')) {
     Assert-True "ApplicationPath choice $choice" (@($envJson.dev.membership_sharepoint.application_path_choices) -contains $choice)
 }
-foreach ($choice in @('Inkommen','Under granskning',"Beg${u00e4}r komplettering","V${u00e4}ntar p${u00e5} komplettering",'Inspektion ska bokas','Inspektion bokad',"Under slutbed${u00f6}mning","Godk${u00e4}nd som aspirant",'Avslagen')) {
+foreach ($choice in @('Inkommen','Under granskning',"Beg${u00e4}r komplettering","V${u00e4}ntar p${u00e5} komplettering","Godk${u00e4}nd som aspirant",'Avslagen')) {
     Assert-True "ApplicationStatus choice $choice" (@($envJson.dev.membership_sharepoint.application_status_choices) -contains $choice)
 }
 foreach ($choice in @('Ej medlem','Aspirant',"Uppf${u00f6}ljning",'Medlemsfartyg','Avslutad')) {

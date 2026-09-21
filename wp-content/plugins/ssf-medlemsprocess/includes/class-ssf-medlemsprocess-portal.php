@@ -91,12 +91,13 @@ class SSF_Medlemsprocess_Portal
         $application_id = $this->current_application_id();
         ob_start();
         echo '<div class="ssf-portal" data-ssf-membership-portal>';
-        $this->render_notice();
         if ($application_id) {
             $this->render_case($application_id);
         } elseif ('aspiranter' === $this->current_view()) {
+            $this->render_notice();
             $this->render_aspirants();
         } else {
+            $this->render_notice();
             $this->render_overview();
         }
         echo '</div>';
@@ -126,10 +127,18 @@ class SSF_Medlemsprocess_Portal
             case 'transition':
                 $ok = $this->handle_transition($application_id);
                 $target_status = sanitize_key((string) wp_unslash($_POST['target_status'] ?? ''));
-                $message = $ok ? 'updated' : ('approved_aspirant' === $target_status && get_post_meta($application_id, '_ssf_decision_date_required', true) ? 'decision_date_missing' : 'failed');
+                $message = $ok ? ('approved_aspirant' === $target_status ? 'aspirant_approved' : 'updated') : ('approved_aspirant' === $target_status && get_post_meta($application_id, '_ssf_decision_date_required', true) ? 'decision_date_missing' : 'failed');
                 break;
             case 'book_inspection':
                 $ok = $this->handle_booking($application_id);
+                $message = $ok ? 'updated' : 'failed';
+                break;
+            case 'inspection_progress':
+                $target = sanitize_key((string) wp_unslash($_POST['inspection_status'] ?? ''));
+                $ok = SSF_Medlemsprocess_Application::set_inspection_status($application_id, $target, 'membership_portal');
+                if ($ok) {
+                    SSF_Medlemsprocess_Plugin::instance()->sharepoint->push_status($application_id);
+                }
                 $message = $ok ? 'updated' : 'failed';
                 break;
             case 'membership_decision':
@@ -187,9 +196,15 @@ class SSF_Medlemsprocess_Portal
         if (! $booking['date']) {
             return false;
         }
+        $changed = SSF_Medlemsprocess_Application::set_inspection_status($application_id, 'booked', 'membership_portal');
+        if (! $changed) {
+            return false;
+        }
         update_post_meta($application_id, '_ssf_booking', $booking);
         SSF_Medlemsprocess_Application::add_history($application_id, 'booking', 'Inspektion bokades via handläggningsportalen.', false, array('source' => 'membership_portal'));
-        $changed = SSF_Medlemsprocess_Application::transition($application_id, 'inspection_booked', (string) ($booking['comment'] ?? ''), ! empty($_POST['send_booking_email']), 'membership_portal');
+        if (! empty($_POST['send_booking_email'])) {
+            SSF_Medlemsprocess_Plugin::instance()->emails->send_booking($application_id, $booking);
+        }
         SSF_Medlemsprocess_Plugin::instance()->sharepoint->push_status($application_id);
         return $changed;
     }
@@ -277,6 +292,7 @@ class SSF_Medlemsprocess_Portal
     private function render_case_overview(int $application_id, array $data): void
     {
         echo '<div class="ssf-case-grid"><section class="ssf-portal-panel" id="next-step"><h2>Nästa steg</h2>';
+        $this->render_notice();
         $this->render_actions($application_id);
         echo '</section><section class="ssf-portal-panel"><h2>Snabböversikt</h2><dl class="ssf-definition-grid">';
         foreach (array('Fartygsombud' => 'applicant_name', 'E-post' => 'applicant_email', 'Telefon' => 'applicant_phone', 'Hemmahamn' => 'ship_home_port', 'Byggår' => 'ship_build_year', 'Rigg' => 'ship_rig') as $label => $key) {
@@ -295,8 +311,10 @@ class SSF_Medlemsprocess_Portal
         }
         if ('under_review' === $status) {
             echo $this->transition_form($application_id, 'needs_completion', 'Begär komplettering', true);
-            echo $this->transition_button($application_id, 'inspection_planned', 'Gå vidare till inspektion');
-            echo $this->transition_button($application_id, 'awaiting_decision', 'Gå till slutbedömning');
+            if (current_user_can('ssf_decide_applications')) {
+                echo $this->approve_aspirant_form($application_id);
+                echo $this->transition_form($application_id, 'rejected', 'Avslå ansökan', true, true);
+            }
             return;
         }
         if ('awaiting_completion' === $status) {
@@ -304,30 +322,38 @@ class SSF_Medlemsprocess_Portal
             echo $this->transition_button($application_id, 'under_review', 'Komplettering mottagen');
             return;
         }
-        if ('inspection_planned' === $status) {
-            echo $this->booking_form($application_id);
-            return;
-        }
-        if ('inspection_booked' === $status) {
-            echo $this->transition_button($application_id, 'awaiting_decision', 'Markera inspektion genomförd');
-            echo $this->transition_form($application_id, 'needs_completion', 'Begär komplettering', true);
-            return;
-        }
-        if ('awaiting_decision' === $status) {
-            echo '<div class="ssf-decision-panel"><p class="ssf-portal-kicker">Slutbedömning</p><h3>Fatta beslut</h3><p class="ssf-muted">Godkännande skapar en aspirantperiod på ett år och kräver beslutsdatum.</p>';
-            echo $this->approve_aspirant_form($application_id);
-            echo $this->transition_form($application_id, 'rejected', 'Avslå ansökan', true, true);
+        if (in_array($status, array('inspection_planned', 'inspection_booked', 'inspection_completed', 'awaiting_decision'), true)) {
+            echo '<div class="ssf-decision-panel"><p class="ssf-portal-kicker">Äldre ärende</p><h3>Fatta ansökningsbeslut</h3><p class="ssf-muted">Tidigare inspektionsstatus bevaras. Inspektion är inte ett krav för aspirantbeslut.</p>';
+            if (current_user_can('ssf_decide_applications')) {
+                echo $this->approve_aspirant_form($application_id);
+                echo $this->transition_form($application_id, 'rejected', 'Avslå ansökan', true, true);
+            }
             echo '</div>';
             return;
         }
         $membership = SSF_Medlemsprocess_Application::membership_status($application_id);
-        if ('follow_up' === $membership) {
-            echo $this->membership_decision_form($application_id);
+        if (in_array($membership, array('aspirant', 'follow_up'), true)) {
+            $review = (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true);
+            $inspection = SSF_Medlemsprocess_Application::inspection_status($application_id);
+            echo '<div class="ssf-aspirant-summary"><strong>ASPIRANTÅR</strong><span>Aspirant från ' . esc_html((string) get_post_meta($application_id, '_ssf_aspirant_started_at', true)) . '</span><span>Planerad uppföljning ' . esc_html($review) . ' (' . esc_html($this->days_label($review)) . ')</span><span>Inspektion: ' . esc_html(SSF_Medlemsprocess_Application::inspection_statuses()[$inspection]) . '</span></div>';
+            if ('not_planned' === $inspection) {
+                echo $this->inspection_progress_form($application_id, 'planning', 'Planera inspektion');
+            } elseif ('planning' === $inspection) {
+                echo $this->booking_form($application_id);
+            } elseif ('booked' === $inspection) {
+                echo $this->inspection_progress_form($application_id, 'completed', 'Markera inspektion genomförd');
+            } elseif ('completed' === $inspection) {
+                echo $this->inspection_progress_form($application_id, 'follow_up', 'Starta uppföljning');
+            } elseif ('follow_up' === $inspection) {
+                echo $this->inspection_progress_form($application_id, 'final_review', 'Gå till slutbedömning');
+            }
+            if ('follow_up' === $membership) {
+                echo $this->membership_decision_form($application_id);
+            }
             return;
         }
-        if ('approved_aspirant' === $status || 'aspirant' === $membership) {
-            $review = (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true);
-            echo '<div class="ssf-aspirant-summary"><strong>Aspirant</strong><span>Aspirant sedan ' . esc_html((string) get_post_meta($application_id, '_ssf_aspirant_started_at', true)) . '</span><span>Uppföljning ' . esc_html($review) . ' (' . esc_html($this->days_label($review)) . ')</span></div>';
+        if ('approved_aspirant' === $status && 'not_member' === $membership) {
+            echo '<p class="ssf-muted">Aspirantbeslut finns registrerat men aspirantåret har inte startat. Kontrollera beslutsdatumet.</p>';
             return;
         }
         echo '<p class="ssf-muted">Inga rekommenderade åtgärder just nu.</p>';
@@ -392,7 +418,7 @@ class SSF_Medlemsprocess_Portal
 
     private function render_need_action(array $applications): void
     {
-        $counts = array('received' => 0, 'under_review' => 0, 'awaiting_completion' => 0, 'inspection_planned' => 0, 'follow_up' => 0);
+        $counts = array('received' => 0, 'under_review' => 0, 'awaiting_completion' => 0, 'inspection_pending' => 0, 'follow_up' => 0);
         foreach ($applications as $application) {
             $status = SSF_Medlemsprocess_Application::status((int) $application->ID);
             if (isset($counts[$status])) {
@@ -401,10 +427,14 @@ class SSF_Medlemsprocess_Portal
             if ('follow_up' === SSF_Medlemsprocess_Application::membership_status((int) $application->ID)) {
                 ++$counts['follow_up'];
             }
+            if ('aspirant' === SSF_Medlemsprocess_Application::membership_status((int) $application->ID) && in_array(SSF_Medlemsprocess_Application::inspection_status((int) $application->ID), array('not_planned', 'planning'), true)) {
+                ++$counts['inspection_pending'];
+            }
         }
         echo '<section class="ssf-action-strip"><h2>Behöver åtgärd</h2>';
-        foreach (array('received' => 'Nya ansökningar', 'under_review' => 'Väntar på granskning', 'awaiting_completion' => 'Väntar komplettering', 'inspection_planned' => 'Inspektion behöver bokas', 'follow_up' => 'Aspirantuppföljning') as $key => $label) {
-            echo '<a href="' . esc_url(add_query_arg('status', $key, self::page_url())) . '"><strong>' . esc_html((string) $counts[$key]) . '</strong><span>' . esc_html($label) . '</span></a>';
+        foreach (array('received' => 'Nya ansökningar', 'under_review' => 'Väntar på granskning', 'awaiting_completion' => 'Väntar komplettering', 'inspection_pending' => 'Inspektion under aspirantåret', 'follow_up' => 'Aspirantuppföljning') as $key => $label) {
+            $url = 'inspection_pending' === $key ? self::aspirants_url() : add_query_arg('status', $key, self::page_url());
+            echo '<a href="' . esc_url($url) . '"><strong>' . esc_html((string) $counts[$key]) . '</strong><span>' . esc_html($label) . '</span></a>';
         }
         echo '</section>';
     }
@@ -463,7 +493,7 @@ class SSF_Medlemsprocess_Portal
 
     private function render_process(string $status): void
     {
-        $steps = array('received' => 'Inkommen', 'under_review' => 'Granskning', 'awaiting_completion' => 'Komplettering', 'inspection_planned' => 'Inspektion', 'awaiting_decision' => 'Slutbedömning', 'approved_aspirant' => 'Aspirant');
+        $steps = array('received' => 'Inkommen', 'under_review' => 'Granskning', 'awaiting_completion' => 'Komplettering', 'approved_aspirant' => 'Aspirant');
         $current_step = (int) (SSF_Medlemsprocess_Application::workflow_statuses()[$status]['step'] ?? 0);
         echo '<ol class="ssf-process-steps">';
         foreach ($steps as $key => $label) {
@@ -544,7 +574,7 @@ class SSF_Medlemsprocess_Portal
 
     private function redirect(int $application_id, string $message): void
     {
-        wp_safe_redirect(add_query_arg('portal_message', $message, self::review_url($application_id)));
+        wp_safe_redirect(add_query_arg('portal_message', $message, self::review_url($application_id)) . '#next-step');
         exit;
     }
 
@@ -553,6 +583,7 @@ class SSF_Medlemsprocess_Portal
         $message = sanitize_key((string) ($_GET['portal_message'] ?? ''));
         $labels = array(
             'updated' => 'Status uppdaterad.',
+            'aspirant_approved' => '✓ Fartyget är nu aspirant. Planera inspektion under aspirantåret.',
             'note_added' => 'Intern notering sparad.',
             'changed' => 'Ärendet har uppdaterats av någon annan. Ladda om sidan innan du fortsätter.',
             'drag_opened' => 'Välj och bekräfta rätt nästa steg för ärendet.',
@@ -597,8 +628,13 @@ class SSF_Medlemsprocess_Portal
         $today = wp_date('Y-m-d');
         $review = (new DateTimeImmutable($today, wp_timezone()))->modify('+1 year')->format('Y-m-d');
         $dialog_id = 'ssf-aspirant-dialog-' . $application_id;
-        $fields = '<input type="hidden" name="target_status" value="approved_aspirant"><button class="ssf-portal-button ssf-portal-button-primary" type="button" data-ssf-dialog-open="' . esc_attr($dialog_id) . '">Godkänn som aspirant</button><dialog class="ssf-decision-dialog" id="' . esc_attr($dialog_id) . '" aria-labelledby="' . esc_attr($dialog_id) . '-title"><div class="ssf-decision-dialog-inner"><h3 id="' . esc_attr($dialog_id) . '-title">Godkänn som aspirant</h3><p>Fartyget blir aspirant i ett år. Det blir inte automatiskt medlemsfartyg.</p><label>Beslutsdatum<input type="date" name="decision_date" value="' . esc_attr($today) . '" required></label><p class="ssf-muted">Planerad uppföljning: ' . esc_html($review) . '</p><label>Meddelande till sökanden<textarea name="public_comment" rows="3"></textarea></label><div class="ssf-dialog-actions"><button class="ssf-portal-button" type="button" data-ssf-dialog-close>Avbryt</button><button class="ssf-portal-button ssf-portal-button-primary" type="submit">Bekräfta godkännande</button></div></div></dialog>';
+        $fields = '<input type="hidden" name="target_status" value="approved_aspirant"><button class="ssf-portal-button ssf-portal-button-primary" type="button" data-ssf-dialog-open="' . esc_attr($dialog_id) . '">Godkänn som aspirant</button><dialog class="ssf-decision-dialog" id="' . esc_attr($dialog_id) . '" aria-labelledby="' . esc_attr($dialog_id) . '-title"><div class="ssf-decision-dialog-inner"><h3 id="' . esc_attr($dialog_id) . '-title">Godkänn som aspirant</h3><p>Styrelsens godkännande startar fartygets aspirantår. Inspektion genomförs under aspirantåret och är inte ett krav för aspirantstatus.</p><label>Beslutsdatum och aspirant från<input type="date" name="decision_date" value="' . esc_attr($today) . '" required></label><p class="ssf-muted">Aspirantstart är samma datum som styrelsens beslut. Uppföljning planeras ett år senare (vid dagens datum ' . esc_html($review) . ').</p><label>Meddelande till sökanden<textarea name="public_comment" rows="3"></textarea></label><div class="ssf-dialog-actions"><button class="ssf-portal-button" type="button" data-ssf-dialog-close>Avbryt</button><button class="ssf-portal-button ssf-portal-button-primary" type="submit">Godkänn som aspirant</button></div></div></dialog>';
         return $this->action_form($application_id, 'transition', $fields);
+    }
+
+    private function inspection_progress_form(int $application_id, string $target, string $label): string
+    {
+        return $this->action_form($application_id, 'inspection_progress', '<input type="hidden" name="inspection_status" value="' . esc_attr($target) . '"><button class="ssf-portal-button ssf-portal-button-primary" type="submit">' . esc_html($label) . '</button>');
     }
 
     private function booking_form(int $application_id): string
@@ -619,8 +655,8 @@ class SSF_Medlemsprocess_Portal
             'received' => array('label' => 'Inkommen', 'statuses' => array('received')),
             'review' => array('label' => 'Granskning', 'statuses' => array('under_review')),
             'completion' => array('label' => 'Komplettering', 'statuses' => array('needs_completion', 'awaiting_completion')),
-            'inspection' => array('label' => 'Inspektion', 'statuses' => array('inspection_planned', 'inspection_booked')),
-            'decision' => array('label' => 'Slutbedömning', 'statuses' => array('awaiting_decision')),
+            'inspection' => array('label' => 'Äldre inspektionsärenden', 'statuses' => array('inspection_planned', 'inspection_booked', 'inspection_completed')),
+            'decision' => array('label' => 'Äldre slutbedömning', 'statuses' => array('awaiting_decision')),
             'aspirant' => array('label' => 'Aspirant', 'statuses' => array('approved_aspirant')),
             'closed' => array('label' => 'Avslutade', 'statuses' => array('rejected')),
         );

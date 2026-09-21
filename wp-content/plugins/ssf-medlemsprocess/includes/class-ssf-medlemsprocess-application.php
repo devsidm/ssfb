@@ -56,7 +56,10 @@ class SSF_Medlemsprocess_Application
             'draft' => array('label' => 'Utkast (äldre ärende)', 'public' => 'Ansökan har påbörjats.', 'step' => 0, 'legacy' => true),
             'submitted' => array('label' => 'Inskickad (äldre ärende)', 'public' => 'Din ansökan har skickats in.', 'step' => 1, 'legacy' => true),
             'completion_submitted' => array('label' => 'Komplettering inskickad (äldre ärende)', 'public' => 'Din komplettering har skickats till SSF.', 'step' => 3, 'legacy' => true),
+            'inspection_planned' => array('label' => 'Inspektion ska bokas (äldre ärende)', 'public' => 'En inspektion behöver bokas.', 'step' => 3, 'legacy' => true),
+            'inspection_booked' => array('label' => 'Inspektion bokad (äldre ärende)', 'public' => 'En inspektion är bokad.', 'step' => 3, 'legacy' => true),
             'inspection_completed' => array('label' => 'Inspektion genomförd (äldre ärende)', 'public' => 'Inspektionsunderlaget är klart.', 'step' => 4, 'legacy' => true),
+            'awaiting_decision' => array('label' => 'Under slutbedömning (äldre ärende)', 'public' => 'Ärendet slutbedöms av SSF.', 'step' => 3, 'legacy' => true),
             'approved' => array('label' => 'Godkänd (äldre ärende)', 'public' => 'Din ansökan har godkänts av Sveriges Segelfartygsförbund.', 'step' => 6, 'legacy' => true),
             'paused' => array('label' => 'Vilande (äldre ärende)', 'public' => 'Ärendet är tillfälligt pausat.', 'step' => 0, 'legacy' => true),
             'archived' => array('label' => 'Arkiverad (äldre ärende)', 'public' => 'Ärendet är avslutat och arkiverat.', 'step' => 6, 'legacy' => true),
@@ -70,11 +73,8 @@ class SSF_Medlemsprocess_Application
             'under_review' => array('label' => 'Under granskning', 'public' => 'SSF går igenom uppgifterna i din ansökan.', 'step' => 2),
             'needs_completion' => array('label' => 'Begär komplettering', 'public' => 'SSF behöver ytterligare uppgifter från dig.', 'step' => 3),
             'awaiting_completion' => array('label' => 'Väntar på komplettering', 'public' => 'SSF väntar på din komplettering.', 'step' => 3),
-            'inspection_planned' => array('label' => 'Inspektion ska bokas', 'public' => 'En inspektion behöver bokas.', 'step' => 4),
-            'inspection_booked' => array('label' => 'Inspektion bokad', 'public' => 'En tid har bokats för fortsatt granskning.', 'step' => 4),
-            'awaiting_decision' => array('label' => 'Under slutbedömning', 'public' => 'Ärendet är komplett och slutbedöms av SSF.', 'step' => 5),
-            'approved_aspirant' => array('label' => 'Godkänd som aspirant', 'public' => 'Din ansökan har godkänts som aspirant.', 'step' => 6),
-            'rejected' => array('label' => 'Avslagen', 'public' => 'SSF har fattat beslut om din ansökan.', 'step' => 6),
+            'approved_aspirant' => array('label' => 'Godkänd som aspirant', 'public' => 'Din ansökan har godkänts som aspirant.', 'step' => 4),
+            'rejected' => array('label' => 'Avslagen', 'public' => 'SSF har fattat beslut om din ansökan.', 'step' => 4),
         );
     }
 
@@ -87,6 +87,53 @@ class SSF_Medlemsprocess_Application
             'member_ship' => 'Medlemsfartyg',
             'closed' => 'Avslutad',
         );
+    }
+
+    public static function inspection_statuses(): array
+    {
+        return array(
+            'not_planned' => 'Ej planerad',
+            'planning' => 'Inspektion ska bokas',
+            'booked' => 'Inspektion bokad',
+            'completed' => 'Inspektion genomförd',
+            'follow_up' => 'Under uppföljning',
+            'final_review' => 'Under slutbedömning',
+        );
+    }
+
+    public static function inspection_status(int $application_id): string
+    {
+        $stored = (string) get_post_meta($application_id, '_ssf_inspection_status', true);
+        if (isset(self::inspection_statuses()[$stored])) {
+            return $stored;
+        }
+        // Interpret old application statuses without rewriting historical decisions.
+        $legacy = array('inspection_planned' => 'planning', 'inspection_booked' => 'booked', 'inspection_completed' => 'completed', 'awaiting_decision' => 'final_review');
+        return $legacy[self::status($application_id)] ?? 'not_planned';
+    }
+
+    public static function set_inspection_status(int $application_id, string $status, string $source = 'wordpress_admin'): bool
+    {
+        if (! isset(self::inspection_statuses()[$status]) || ! in_array(self::membership_status($application_id), array('aspirant', 'follow_up'), true)) {
+            return false;
+        }
+        $old = self::inspection_status($application_id);
+        if ($old === $status) {
+            return true;
+        }
+        $allowed = array(
+            'not_planned' => array('planning'),
+            'planning' => array('booked'),
+            'booked' => array('completed'),
+            'completed' => array('follow_up'),
+            'follow_up' => array('final_review'),
+        );
+        if (! in_array($status, $allowed[$old] ?? array(), true)) {
+            return false;
+        }
+        update_post_meta($application_id, '_ssf_inspection_status', $status);
+        self::add_history($application_id, 'inspection_status', sprintf('Inspektion/aspirantår: %s → %s.', self::inspection_statuses()[$old], self::inspection_statuses()[$status]), false, array('source' => $source, 'from_status' => $old, 'to_status' => $status));
+        return true;
     }
 
     public static function membership_status(int $application_id): string
@@ -288,6 +335,12 @@ class SSF_Medlemsprocess_Application
             self::add_history($application_id, 'workflow_warning', 'Godkännande som aspirant väntar eftersom beslutsdatum saknas.', false, array('source' => $source, 'from_status' => $old_status, 'to_status' => $status));
             return false;
         }
+        if ('approved_aspirant' === $status && ! get_post_meta($application_id, '_ssf_inspection_status', true)) {
+            $legacy_inspection = array('inspection_planned' => 'planning', 'inspection_booked' => 'booked', 'inspection_completed' => 'completed');
+            if (isset($legacy_inspection[$old_status])) {
+                update_post_meta($application_id, '_ssf_inspection_status', $legacy_inspection[$old_status]);
+            }
+        }
         update_post_meta($application_id, '_ssf_process_status', $status);
         update_post_meta($application_id, '_ssf_status_changed_at', current_time('mysql'));
         self::add_history($application_id, 'status', sprintf('Status ändrad från %s till %s.', self::status_label($old_status), self::status_label($status)), false, array('source' => $source, 'from_status' => $old_status, 'to_status' => $status, 'public_comment' => $message));
@@ -360,6 +413,10 @@ class SSF_Medlemsprocess_Application
         update_post_meta($application_id, '_ssf_aspirant_review_due_at', $review->format('Y-m-d'));
         delete_post_meta($application_id, '_ssf_decision_date_required');
         self::set_membership_status($application_id, 'aspirant', $source);
+        if (! get_post_meta($application_id, '_ssf_inspection_status', true)) {
+            update_post_meta($application_id, '_ssf_inspection_status', 'not_planned');
+        }
+        self::add_history($application_id, 'aspirant_year', 'Aspirantåret startade ' . $date->format('Y-m-d') . '. Inspektion planeras under aspirantåret.', false, array('source' => $source));
         self::add_history($application_id, 'decision', sprintf(
             'Beslut: Godkänd som aspirant. Beslutsdatum %s, aspirantperiod till %s.',
             $date->format('Y-m-d'),
@@ -383,17 +440,18 @@ class SSF_Medlemsprocess_Application
     {
         $allowed = array(
             'received' => array('under_review', 'rejected'),
-            'under_review' => array('needs_completion', 'inspection_planned', 'awaiting_decision', 'rejected'),
+            'under_review' => array('needs_completion', 'approved_aspirant', 'rejected'),
             'needs_completion' => array('awaiting_completion'),
             'awaiting_completion' => array('under_review', 'rejected'),
-            'inspection_planned' => array('inspection_booked', 'needs_completion', 'awaiting_decision', 'rejected'),
-            'inspection_booked' => array('needs_completion', 'awaiting_decision', 'rejected'),
+            'inspection_planned' => array('needs_completion', 'approved_aspirant', 'rejected'),
+            'inspection_booked' => array('needs_completion', 'approved_aspirant', 'rejected'),
+            'inspection_completed' => array('approved_aspirant', 'rejected'),
             'awaiting_decision' => array('needs_completion', 'approved_aspirant', 'rejected'),
             'approved_aspirant' => array(),
             'rejected' => array(),
         );
-        if (! isset(self::workflow_statuses()[$from])) {
-            return array_keys(self::workflow_statuses());
+        if (! isset($allowed[$from])) {
+            return array();
         }
         return $allowed[$from] ?? array();
     }

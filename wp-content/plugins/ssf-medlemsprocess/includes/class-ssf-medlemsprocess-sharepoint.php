@@ -293,6 +293,7 @@ class SSF_Medlemsprocess_SharePoint
             $this->config('metadata_application_aspirant_review_field') => (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
         );
         $schema = $this->ensure_schema();
+        $fields = $this->with_inspection_metadata($application_id, $fields, $schema);
         if (is_wp_error($schema)) {
             if (! $this->schema_field_ok($schema, 'application_status')) {
                 update_post_meta($application_id, '_ssf_sp_status_push_error', $schema->get_error_message());
@@ -381,6 +382,7 @@ class SSF_Medlemsprocess_SharePoint
             $this->config('metadata_application_aspirant_start_field') => (string) get_post_meta($application_id, '_ssf_aspirant_started_at', true),
             $this->config('metadata_application_aspirant_review_field') => (string) get_post_meta($application_id, '_ssf_aspirant_review_due_at', true),
         );
+        $fields = $this->with_inspection_metadata($application_id, $fields, $schema);
         if (is_wp_error($schema)) {
             if (! $this->schema_field_ok($schema, 'application_status')) {
                 return $schema;
@@ -392,6 +394,18 @@ class SSF_Medlemsprocess_SharePoint
             if ($is_initial) { update_post_meta($application_id, '_ssf_sp_last_status', 'Inkommen'); }
         }
         return is_wp_error($schema) && ! is_wp_error($result) ? $schema : $result;
+    }
+
+    private function with_inspection_metadata(int $application_id, array $fields, $schema): array
+    {
+        $field = $this->config('metadata_application_inspection_status_field');
+        if ($field && $this->schema_field_ok($schema, 'inspection_status')) {
+            $fields[$field] = SSF_Medlemsprocess_Application::inspection_statuses()[SSF_Medlemsprocess_Application::inspection_status($application_id)];
+            delete_post_meta($application_id, '_ssf_sp_inspection_schema_warning');
+        } else {
+            update_post_meta($application_id, '_ssf_sp_inspection_schema_warning', 'Kolumnen InspectionStatus saknas eller har fel val i SharePoint. Inspektionsstatus sparas i WordPress men synkas inte förrän kolumnen har skapats manuellt.');
+        }
+        return $fields;
     }
 
     private function ensure_schema()
@@ -417,7 +431,7 @@ class SSF_Medlemsprocess_SharePoint
             $type_ok = (bool) $column && array_key_exists($requirement['type'], $column);
             $ok = $type_ok && ! $missing_choices;
             $checks[$key] = array('name' => $name, 'label' => $requirement['label'], 'type' => $requirement['type'], 'type_ok' => $type_ok, 'ok' => $ok, 'missing_choices' => $missing_choices, 'choices_found' => $column ? count(array_intersect($requirement['choices'], (array) ($column['choice']['choices'] ?? array()))) : 0, 'choices_required' => count($requirement['choices']));
-            if (! $ok) {
+            if (! $ok && empty($requirement['optional'])) {
                 $missing[] = $name ?: $requirement['label'];
             }
         }
@@ -568,6 +582,7 @@ class SSF_Medlemsprocess_SharePoint
             'route' => array('label' => 'Ansökningsväg', 'config' => 'metadata_application_route_field', 'type' => 'choice', 'choices' => array('Normalfallet', 'Mindre registrerat fartyg', 'Fartyg under restaurering', 'Nybyggt traditionsfartyg')),
             'application_status' => array('label' => 'Ansökningsstatus', 'config' => 'metadata_application_status_field', 'type' => 'choice', 'choices' => array_values($this->status_labels())),
             'membership_status' => array('label' => 'Medlemsstatus', 'config' => 'metadata_application_membership_status_field', 'type' => 'choice', 'choices' => array_values(SSF_Medlemsprocess_Application::membership_statuses())),
+            'inspection_status' => array('label' => 'Inspektionsstatus', 'config' => 'metadata_application_inspection_status_field', 'type' => 'choice', 'choices' => array_values(SSF_Medlemsprocess_Application::inspection_statuses()), 'optional' => true),
             'received' => array('label' => 'Inkommen datum', 'config' => 'metadata_application_received_field', 'type' => 'dateTime', 'choices' => array()),
             'decision_date' => array('label' => 'Beslutsdatum', 'config' => 'metadata_application_decision_date_field', 'type' => 'dateTime', 'choices' => array()),
             'aspirant_start' => array('label' => 'Aspirant från', 'config' => 'metadata_application_aspirant_start_field', 'type' => 'dateTime', 'choices' => array()),
@@ -651,8 +666,7 @@ class SSF_Medlemsprocess_SharePoint
     {
         return array(
             'received' => 'Inkommen', 'under_review' => 'Under granskning', 'needs_completion' => 'Begär komplettering', 'awaiting_completion' => 'Väntar på komplettering',
-            'inspection_planned' => 'Inspektion ska bokas', 'inspection_booked' => 'Inspektion bokad',
-            'awaiting_decision' => 'Under slutbedömning', 'approved_aspirant' => 'Godkänd som aspirant', 'rejected' => 'Avslagen',
+            'approved_aspirant' => 'Godkänd som aspirant', 'rejected' => 'Avslagen',
         );
     }
 
@@ -664,13 +678,14 @@ class SSF_Medlemsprocess_SharePoint
                 return $status;
             }
         }
-        $legacy = array('mottagen' => 'received', 'inskickad' => 'received', 'komplettering krävs' => 'needs_completion', 'komplettering inkommen' => 'under_review', 'väntar på beslut' => 'awaiting_decision', 'under bedömning' => 'awaiting_decision');
+        $legacy = array('mottagen' => 'received', 'inskickad' => 'received', 'komplettering krävs' => 'needs_completion', 'komplettering inkommen' => 'under_review', 'väntar på beslut' => 'awaiting_decision', 'under bedömning' => 'awaiting_decision', 'inspektion ska bokas' => 'inspection_planned', 'inspektion bokad' => 'inspection_booked', 'inspektion genomförd' => 'inspection_completed', 'under slutbedömning' => 'awaiting_decision');
         return $legacy[$normalized] ?? '';
     }
 
     private function sharepoint_status(string $status): string
     {
-        return $this->status_labels()[$status] ?? SSF_Medlemsprocess_Application::status_label($status);
+        $legacy = array('inspection_planned' => 'Inspektion ska bokas', 'inspection_booked' => 'Inspektion bokad', 'inspection_completed' => 'Inspektion genomförd', 'awaiting_decision' => 'Under slutbedömning');
+        return $this->status_labels()[$status] ?? $legacy[$status] ?? SSF_Medlemsprocess_Application::status_label($status);
     }
 
     private function config(string $key): string

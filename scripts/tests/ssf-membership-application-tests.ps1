@@ -134,7 +134,7 @@ Assert-Contains 'Portal DnD ändrar inte status direkt' $portalScript 'portal_me
 Assert-NotContains 'Portal JS får inte posta status vid drag' $portalScript 'fetch('
 Assert-Contains 'Portal visuella statuschips' $portalStyles '.ssf-status-chip'
 
-$applicationStatuses = @('Inkommen', 'Under granskning', 'Begär komplettering', 'Väntar på komplettering', 'Inspektion ska bokas', 'Inspektion bokad', 'Under slutbedömning', 'Godkänd som aspirant', 'Avslagen')
+$applicationStatuses = @('Inkommen', 'Under granskning', 'Begär komplettering', 'Väntar på komplettering', 'Godkänd som aspirant', 'Avslagen')
 foreach ($statusLabel in $applicationStatuses) { Assert-Contains "Ansökningsstatus $statusLabel" $sharepoint "'$statusLabel'" }
 $membershipStatuses = @('Ej medlem', 'Aspirant', 'Uppföljning', 'Medlemsfartyg', 'Avslutad')
 foreach ($statusLabel in $membershipStatuses) { Assert-Contains "Medlemsstatus $statusLabel" $application "'$statusLabel'" }
@@ -162,6 +162,18 @@ Assert-True 'ListItem-ID ska sparas före schemakontrollen' ($listItemSave -ge 0
 
 Assert-Contains 'Beslutsdatum krävs' $application "'_ssf_decision_date_required'"
 Assert-Contains 'Aspirantåret är ett år' $application "modify('+1 year')"
+Assert-Contains 'Direkt aspirantbeslut från granskning' $application "'under_review' => array('needs_completion', 'approved_aspirant', 'rejected')"
+Assert-Contains 'Separat inspektionsstatus' $application "'_ssf_inspection_status'"
+Assert-Contains 'Inspektion bara under aspirantåret' $application "array('aspirant', 'follow_up')"
+Assert-Contains 'Portal visar direkt aspirantbeslut' $portal 'echo $this->approve_aspirant_form($application_id);'
+Assert-Contains 'Portal kräver styrelsebehörighet för aspirantbeslut' $portal "current_user_can('ssf_decide_applications')"
+Assert-Contains 'Portal bokar inspektion separat' $portal "set_inspection_status(`$application_id, 'booked'"
+Assert-Contains 'Portal behåller lokal feedback' $portal "'aspirant_approved'"
+Assert-Contains 'SharePoint-mappning för separat inspektion' $sharepoint 'with_inspection_metadata($application_id, $fields, $schema)'
+Assert-Contains 'SharePoint-fältet är valfritt tills det finns' $sharepoint "'optional' => true"
+Assert-Contains 'Saknat inspektionsfält visas som varning' $admin '_ssf_sp_inspection_schema_warning'
+Assert-Contains 'Befintliga beslutsdatum synkas' $sharepoint "metadata_application_decision_date_field"
+Assert-Contains 'Befintliga aspirantdatum synkas' $sharepoint "metadata_application_aspirant_start_field"
 Assert-Contains 'Förfallen aspirant går till uppföljning' $application 'set_membership_status((int) $application_id, ''follow_up'', ''system'')'
 Assert-Contains 'Ordinarie medlemskap kräver aktivt beslut' $admin '''member_ship'' === $membership_decision'
 Assert-Contains 'Medlemsfartyg skapas först efter medlemsbeslut' $admin 'create_member_ship($post_id)'
@@ -179,7 +191,8 @@ Assert-Contains 'Aspirantmail visar uppföljningsdatum' $emails "'Planerat uppf�
 Assert-Contains 'Separat aspirantvy' $admin 'ssf-medlemsprocess-aspirants'
 Assert-Contains '60-dagarsmarkering' $admin 'Kommande inom 60 dagar'
 Assert-Contains '30-dagarsvarning' $admin 'Åtgärd inom 30 dagar'
-Assert-Contains 'Slutförd inspektion går till slutbedömning' $inspector "transition(`$application_id, 'awaiting_decision'"
+Assert-Contains 'Slutförd inspektion stannar i aspirantåret' $inspector "set_inspection_status(`$application_id, 'completed'"
+Assert-NotContains 'Inspektion ändrar inte ansökningsbeslut' $inspector "transition(`$application_id, 'awaiting_decision'"
 Assert-True 'Inspektören använder inte äldre slutförd-status' (-not $inspector.Contains("transition(`$application_id, 'inspection_completed'"))
 foreach ($step in @('Autentisering', 'Site access', 'Drive access', 'List access', 'Läs kolumner', 'Hitta ärendemapp', 'Läs mappmetadata', 'Skriv mappmetadata')) { Assert-Contains "Diagnostik $step" $sharepoint "'$step'" }
 Assert-Contains 'Teknisk HTTP-detalj' $sharepoint "'http_status'"
