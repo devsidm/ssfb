@@ -193,10 +193,6 @@ final class SSF_Office365_Mailer
                         <th scope="row"><?php esc_html_e('Redirect URI', 'ssf-office365-mailer'); ?></th>
                         <td><code><?php echo esc_html($callback_url); ?></code><p class="description"><?php esc_html_e('Lägg in exakt denna Web-redirect URI i Microsoft Entra App registrations > Authentication.', 'ssf-office365-mailer'); ?></p></td>
                     </tr>
-                    <tr>
-                        <th scope="row"><label for="ssf-external-news-review-recipient"><?php esc_html_e('Nyhetsgranskning: E-postmottagare', 'ssf-office365-mailer'); ?></label></th>
-                        <td><input class="regular-text" id="ssf-external-news-review-recipient" type="email" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[external_news_review_recipient]" value="<?php echo esc_attr($settings['external_news_review_recipient']); ?>"><p class="description"><?php esc_html_e('Hit skickas en notifiering när en extern skribent skickar in en nyhet för granskning.', 'ssf-office365-mailer'); ?></p></td>
-                    </tr>
                 </table>
                 <?php submit_button(__('Spara inställningar', 'ssf-office365-mailer')); ?>
             </form>

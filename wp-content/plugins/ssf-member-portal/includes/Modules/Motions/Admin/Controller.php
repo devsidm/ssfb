@@ -35,6 +35,7 @@ final class Controller
 
         add_action('admin_post_ssf_member_portal_save_motion_settings', array($this, 'save_settings'));
         add_action('admin_post_ssf_member_portal_save_microsoft365_configuration', array($this, 'save_microsoft365_configuration'));
+        add_action('admin_post_ssf_member_portal_save_external_news_review_recipient', array($this, 'save_external_news_review_recipient'));
         add_action('admin_post_ssf_member_portal_reset_microsoft365_configuration', array($this, 'reset_microsoft365_configuration'));
         add_action('admin_post_ssf_member_portal_test_sharepoint_authentication', array($this, 'test_sharepoint_authentication'));
         add_action('admin_post_ssf_member_portal_test_sharepoint', array($this, 'test_sharepoint'));
@@ -210,6 +211,15 @@ final class Controller
 
             <?php if (class_exists('SSF_Email_Template')) { \SSF_Email_Template::render_admin_section(); } ?>
 
+            <?php if ('integrations' === $tab && current_user_can('manage_options')) : $mailer = (array) get_option('ssf_office365_mailer_settings', array()); ?>
+                <div class="postbox" style="max-width:980px;padding:20px">
+                    <h2><?php esc_html_e('Nyhetsgranskning', 'ssf-member-portal'); ?></h2>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_save_external_news_review_recipient"><?php wp_nonce_field('ssf_member_portal_save_external_news_review_recipient'); ?>
+                        <table class="form-table" role="presentation"><tbody><tr><th scope="row"><label for="external-news-review-recipient"><?php esc_html_e('E-postmottagare', 'ssf-member-portal'); ?></label></th><td><input class="regular-text" id="external-news-review-recipient" type="email" name="external_news_review_recipient" value="<?php echo esc_attr((string) ($mailer['external_news_review_recipient'] ?? '')); ?>"><p class="description"><?php esc_html_e('Hit skickas en notifiering när en extern skribent skickar in en nyhet för granskning.', 'ssf-member-portal'); ?></p></td></tr></tbody></table><?php submit_button(__('Spara mottagare', 'ssf-member-portal'), 'primary', 'submit', false); ?>
+                    </form>
+                </div>
+            <?php endif; ?>
+
             <?php if (current_user_can(Capabilities::MANAGE)) { $this->sharepoint_admin->render(); } ?>
 
             <div class="postbox" style="max-width:980px;padding:20px">
@@ -263,6 +273,18 @@ final class Controller
         update_option('ssf_member_portal_active_meeting_id', absint($_POST['active_meeting_id'] ?? 0), false);
         Settings::save(wp_unslash($_POST));
         wp_safe_redirect(wp_get_referer() ?: admin_url('admin.php?page=ssf-member-portal-settings'));
+        exit;
+    }
+
+    public function save_external_news_review_recipient(): void
+    {
+        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_member_portal_save_external_news_review_recipient')) { wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal')); }
+        $recipient = sanitize_email(wp_unslash($_POST['external_news_review_recipient'] ?? ''));
+        if (! empty($_POST['external_news_review_recipient']) && ! is_email($recipient)) { wp_die(esc_html__('Ange en giltig e-postadress.', 'ssf-member-portal')); }
+        $settings = (array) get_option('ssf_office365_mailer_settings', array());
+        $settings['external_news_review_recipient'] = $recipient;
+        update_option('ssf_office365_mailer_settings', $settings, false);
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations', 'ssf_external_news_saved' => '1'), admin_url('admin.php')));
         exit;
     }
 
