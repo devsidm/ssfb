@@ -1,16 +1,16 @@
 {
-    "schema_version":  1,
-    "release_name":  "SSF Web",
-    "version":  "0.14.0",
-    "build":  "20260922.14",
-    "built_at":  "2026-09-22T10:20:41.2637261Z",
-    "source":  "codex",
-    "source_revision":  "9c338b54cb8d602efc9638129335e4234586f9d5",
-    "description":  "Isolate homepage feature card styles",
-    "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
-    "components":  [
-                       "site-customizations"
-                   ],
-    "status":  "development",
-    "prepared_at":  ""
+    "schema_version": 1,
+    "release_name": "SSF Web",
+    "version": "0.14.0",
+    "build": "20260922.15",
+    "built_at": "2026-09-22T18:34:02Z",
+    "source": "manual",
+    "source_revision": "8738c93c2f535dae04aa33e5d799a857c648051b",
+    "description": "Refine SSF homepage styling and rounded action cards",
+    "notes": "Homepage styling synchronized from DEV and prepared for production release.",
+    "components": [
+        "site-customizations"
+    ],
+    "status": "development",
+    "prepared_at": ""
 }
