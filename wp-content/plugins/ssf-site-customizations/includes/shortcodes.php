@@ -35,22 +35,22 @@ function ssf_site_home_shortcode(): string
     ?>
     <section class="ssf-hero" aria-label="Sveriges Segelfartygsförbund">
         <img src="<?php echo esc_url(SSF_SITE_URL . 'assets/images/ssf-hero.jpg'); ?>" alt="Traditionella segelfartyg på vattnet">
-    </section>
-
-    <section class="ssf-section ssf-intro">
-        <div class="ssf-wrap">
-            <h1>Vi samlar Sveriges seglande kulturarv</h1>
-            <p>SSF är förbundet för traditionella segelfartyg, fartygsombud och personer som vill bevara, bruka och utveckla Sveriges segelfartygsarv.</p>
-            <div class="ssf-actions">
-                <?php echo ssf_site_button('Bli stödmedlem', home_url('/medlemskap/')); ?>
-                <?php echo ssf_site_button('Ansök som fartygsombud', home_url('/ansokan/'), 'ssf-button--ghost'); ?>
+        <div class="ssf-hero__copy">
+            <div class="ssf-wrap">
+                <p class="ssf-hero__eyebrow">Sveriges Segelfartygsförbund</p>
+                <h1>Vi samlar Sveriges seglande kulturarv</h1>
+                <p>SSF är förbundet för traditionella segelfartyg, fartygsombud och personer som vill bevara, bruka och utveckla Sveriges segelfartygsarv.</p>
+                <div class="ssf-actions">
+                    <?php echo ssf_site_button('Bli stödmedlem', home_url('/medlemskap/')); ?>
+                    <?php echo ssf_site_button('Ansök som fartygsombud', home_url('/ansokan/'), 'ssf-button--ghost'); ?>
+                </div>
             </div>
         </div>
     </section>
 
     <section class="ssf-section">
         <div class="ssf-wrap">
-            <h2>Vad vill du gora?</h2>
+            <h2>Vad vill du göra?</h2>
             <div class="ssf-card-grid ssf-card-grid--three">
                 <?php echo ssf_site_feature_card('Ansöka som fartygsombud', 'Testa om ditt fartyg kan gå vidare till ansökan', home_url('/ansokan/')); ?>
                 <?php echo ssf_site_feature_card('Bli stödmedlem', 'Stöd arbetet för Sveriges segelfartyg', home_url('/medlemskap/')); ?>
