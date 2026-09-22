@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.13",
-    "built_at":  "2026-09-22T10:11:24.5254345Z",
+    "build":  "20260922.14",
+    "built_at":  "2026-09-22T10:20:41.2637261Z",
     "source":  "codex",
-    "source_revision":  "d3f01423cbae61ac3b54ad9002970c75dad39bf1",
-    "description":  "Revert homepage choice component redesign",
+    "source_revision":  "9c338b54cb8d602efc9638129335e4234586f9d5",
+    "description":  "Isolate homepage feature card styles",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "site-customizations"
