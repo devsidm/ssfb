@@ -26,6 +26,7 @@ require_once SSF_SITE_PATH . 'includes/content-admin.php';
 require_once SSF_SITE_PATH . 'includes/organization.php';
 require_once SSF_SITE_PATH . 'includes/shortcodes.php';
 require_once SSF_SITE_PATH . 'includes/content-renderers.php';
+require_once SSF_SITE_PATH . 'includes/external-news-authors.php';
 
 function ssf_site_enqueue_assets(): void
 {

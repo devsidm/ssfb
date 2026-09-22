@@ -115,6 +115,13 @@ h3, h4, .site-title {
 }
 
 .ssf-card-grid,
+.ssf-external-news { max-width: 860px; margin: 48px auto; padding: 0 20px; }
+.ssf-external-news__card { background: #fff; padding: 32px; border: 1px solid #d8d8d8; border-radius: 8px; }
+.ssf-external-news__brand { color: #1d5a7a; font-weight: 700; }
+.ssf-external-news__form { display: grid; gap: 18px; }
+.ssf-external-news__form label { display: grid; gap: 7px; font-weight: 700; }
+.ssf-external-news__form input, .ssf-external-news__form textarea { max-width: 100%; padding: 10px; }
+.ssf-external-news__notice { margin: 16px 0; padding: 12px; background: #eaf6ed; border-left: 4px solid #2e7d32; }
 .ssf-news-grid {
   display: grid;
   gap: 24px;
