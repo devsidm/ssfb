@@ -2,17 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260921.3",
-    "built_at":  "2026-09-21T17:09:53.5175002Z",
+    "build":  "20260922.1",
+    "built_at":  "2026-09-22T05:00:48.1103880Z",
     "source":  "codex",
-    "source_revision":  "c45ca572d91dd195bdf400fe612092a0db0823af",
-    "description":  "Aspirantbeslut före inspektion med separat inspektionsstatus",
+    "source_revision":  "110dc79e1245dd7bb16a3bfe3f45d37083dcfddf",
+    "description":  "Add internal payment received status",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "documentation",
                        "release-tooling",
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
