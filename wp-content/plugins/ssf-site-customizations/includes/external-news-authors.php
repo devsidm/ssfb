@@ -76,7 +76,10 @@ function ssf_external_news_save(): void {
 }
 add_action('admin_post_nopriv_ssf_external_news_save', 'ssf_external_news_save'); add_action('admin_post_ssf_external_news_save', 'ssf_external_news_save');
 
-function ssf_external_news_admin_menu(): void { add_submenu_page('edit.php', 'Extern skribentlänk', 'Extern skribentlänk', 'edit_posts', 'ssf-external-news', 'ssf_external_news_admin_page'); }
+function ssf_external_news_admin_menu(): void {
+    $parent = class_exists('SSF_Admin_Navigation') ? SSF_Admin_Navigation::CONTENT : 'edit.php';
+    add_submenu_page($parent, 'Extern skribentlänk', 'Extern skribentlänk', 'edit_posts', 'ssf-external-news', 'ssf_external_news_admin_page', 35);
+}
 add_action('admin_menu', 'ssf_external_news_admin_menu');
 function ssf_external_news_admin_page(): void {
     if (! current_user_can('edit_posts')) { wp_die('Du saknar behörighet.'); }
@@ -92,13 +95,13 @@ function ssf_external_news_create(): void {
     if (! current_user_can('edit_posts') || ! check_admin_referer('ssf_external_news_create')) { wp_die('Du saknar behörighet.'); }
     $post_id = wp_insert_post(array('post_type' => 'post', 'post_status' => 'draft', 'post_title' => 'Namnlöst utkast', 'post_author' => get_current_user_id()), true); if (is_wp_error($post_id)) { wp_die('Kunde inte skapa utkastet.'); }
     $token = ssf_external_news_token(); update_post_meta($post_id, SSF_EXTERNAL_NEWS_HASH, hash('sha256', $token)); update_post_meta($post_id, SSF_EXTERNAL_NEWS_EXPIRES, time() + 14 * DAY_IN_SECONDS); update_post_meta($post_id, SSF_EXTERNAL_NEWS_REVOKED, '0'); ssf_external_news_audit((int) $post_id, 'link_created'); set_transient('ssf_external_news_created_' . get_current_user_id(), $token, 10 * MINUTE_IN_SECONDS);
-    wp_safe_redirect(admin_url('edit.php?post_type=post&page=ssf-external-news')); exit;
+    wp_safe_redirect(admin_url('admin.php?page=ssf-external-news')); exit;
 }
 add_action('admin_post_ssf_external_news_create', 'ssf_external_news_create');
 function ssf_external_news_revoke(): void {
     $post_id = absint($_POST['post_id'] ?? 0);
     if (! $post_id || ! current_user_can('edit_post', $post_id) || ! check_admin_referer('ssf_external_news_revoke_' . $post_id) || ! get_post_meta($post_id, SSF_EXTERNAL_NEWS_HASH, true)) { wp_die('Du saknar behörighet.'); }
-    update_post_meta($post_id, SSF_EXTERNAL_NEWS_REVOKED, '1'); ssf_external_news_audit($post_id, 'link_revoked'); wp_safe_redirect(admin_url('edit.php?post_type=post&page=ssf-external-news')); exit;
+    update_post_meta($post_id, SSF_EXTERNAL_NEWS_REVOKED, '1'); ssf_external_news_audit($post_id, 'link_revoked'); wp_safe_redirect(admin_url('admin.php?page=ssf-external-news')); exit;
 }
 add_action('admin_post_ssf_external_news_revoke', 'ssf_external_news_revoke');
 add_action('transition_post_status', static function(string $new_status, string $old_status, WP_Post $post): void {
