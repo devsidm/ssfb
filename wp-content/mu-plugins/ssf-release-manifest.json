@@ -1,17 +1,17 @@
 {
-    "schema_version":  1,
-    "release_name":  "SSF Web",
-    "version":  "0.14.0",
-    "build":  "20260922.16",
-    "built_at":  "2026-09-22T21:04:09.6589940Z",
-    "source":  "codex",
-    "source_revision":  "4c0f0b3f606374aab1ef1923dd29238a9e0f0476",
-    "description":  "Move news review recipient to integrations",
-    "notes":  "Homepage styling synchronized from DEV and prepared for production release.",
-    "components":  [
-                       "member-portal",
-                       "office365-mailer"
-                   ],
-    "status":  "development",
-    "prepared_at":  ""
+  "schema_version": 1,
+  "release_name": "SSF Web",
+  "version": "0.14.0",
+  "build": "20260922.17",
+  "built_at": "2026-09-22T21:26:57.7892661Z",
+  "source": "manual",
+  "source_revision": "927ec585f5394837cd6a2923dd6cdf47e5e43244",
+  "description": "Prepare current SSF changes for production",
+  "notes": "Production release 20260922.17",
+  "components": [
+    "microsoft-id-login",
+    "release-tooling"
+  ],
+  "status": "prepared",
+  "prepared_at": "2026-09-22T21:28:35.1965816Z"
 }
