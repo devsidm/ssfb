@@ -84,6 +84,9 @@ class SSF_Medlemsprocess_Emails
             return;
         }
 
+        if ('approved_aspirant' === $status) {
+            $message = trim((string) preg_replace('/\s*varmt\s+välkmonne\b/ui', '', $message));
+        }
         $map = array(
             'needs_completion' => 'completion_required', 'completion_submitted' => 'completion_received',
             'inspection_completed' => 'inspection_completed', 'approved_aspirant' => 'approved_aspirant', 'rejected' => 'rejected',
