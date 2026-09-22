@@ -122,6 +122,10 @@ h3, h4, .site-title {
 .ssf-external-news__form label { display: grid; gap: 7px; font-weight: 700; }
 .ssf-external-news__form input, .ssf-external-news__form textarea { max-width: 100%; padding: 10px; }
 .ssf-external-news__notice { margin: 16px 0; padding: 12px; background: #eaf6ed; border-left: 4px solid #2e7d32; }
+.ssf-external-news__nav, .ssf-external-news__preview-nav { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.ssf-external-news__nav a, .ssf-external-news__preview-nav a { padding: 7px 11px; border: 1px solid #1d5a7a; border-radius: 4px; }
+.ssf-external-news__preview { padding: 20px; background: #f4f7f8; border: 1px solid #d8d8d8; }
+.ssf-external-news__preview--mobile { max-width: 410px; margin: 0 auto; }
 .ssf-news-grid {
   display: grid;
   gap: 24px;

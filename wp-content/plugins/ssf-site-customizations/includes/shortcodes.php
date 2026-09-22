@@ -158,6 +158,13 @@ function ssf_site_step(string $number, string $title, string $text): string
     return sprintf('<div class="ssf-step"><span>%s</span><h3>%s</h3><p>%s</p></div>', esc_html($number), esc_html($title), esc_html($text));
 }
 
+function ssf_site_render_news_card(WP_Post $post, string $url = ''): string
+{
+    $url = $url ?: get_permalink($post);
+    $image = get_the_post_thumbnail($post->ID, 'medium_large');
+    return '<article class="ssf-news-card"><a href="' . esc_url($url) . '" class="ssf-news-card__image">' . $image . '</a><div class="ssf-news-card__body"><time datetime="' . esc_attr(get_the_date('c', $post)) . '">' . esc_html(get_the_date('', $post)) . '</time><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3><p>' . esc_html(wp_trim_words(get_the_excerpt($post), 24)) . '</p><a class="ssf-read-more" href="' . esc_url($url) . '">Läs mer <span aria-hidden="true">-&gt;</span></a></div></article>';
+}
+
 function ssf_site_news_cards_shortcode(array $atts): string
 {
     $atts = shortcode_atts(array('count' => 3), $atts);
@@ -177,21 +184,7 @@ function ssf_site_news_cards_shortcode(array $atts): string
     echo '<div class="ssf-news-grid">';
     while ($query->have_posts()) {
         $query->the_post();
-        ?>
-        <article class="ssf-news-card">
-            <a href="<?php the_permalink(); ?>" class="ssf-news-card__image">
-                <?php if (has_post_thumbnail()) : ?>
-                    <?php the_post_thumbnail('medium_large'); ?>
-                <?php endif; ?>
-            </a>
-            <div class="ssf-news-card__body">
-                <time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time>
-                <h3><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
-                <p><?php echo esc_html(wp_trim_words(get_the_excerpt(), 24)); ?></p>
-                <a class="ssf-read-more" href="<?php the_permalink(); ?>">Läs mer <span aria-hidden="true">-&gt;</span></a>
-            </div>
-        </article>
-        <?php
+        echo ssf_site_render_news_card(get_post()); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     }
     echo '</div>';
     wp_reset_postdata();
