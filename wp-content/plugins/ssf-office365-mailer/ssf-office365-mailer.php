@@ -128,11 +128,17 @@ final class SSF_Office365_Mailer
     public function sanitize_settings(array $input): array
     {
         $current = $this->settings();
+        $review_recipient = sanitize_email($input['external_news_review_recipient'] ?? '');
+        if (! empty($input['external_news_review_recipient']) && ! is_email($review_recipient)) {
+            add_settings_error(self::OPTION_SETTINGS, 'external_news_review_recipient', __('Ange en giltig e-postadress för nyhetsgranskning.', 'ssf-office365-mailer'));
+            $review_recipient = (string) ($current['external_news_review_recipient'] ?? '');
+        }
         $settings = array(
             'enabled' => ! empty($input['enabled']) ? 'yes' : 'no',
             'client_id' => sanitize_text_field($input['client_id'] ?? ''),
             'tenant_id' => (string) ($current['tenant_id'] ?? ''),
             'client_secret' => $current['client_secret'],
+            'external_news_review_recipient' => $review_recipient,
         );
 
         if (! empty($input['client_secret'])) {
@@ -186,6 +192,10 @@ final class SSF_Office365_Mailer
                     <tr>
                         <th scope="row"><?php esc_html_e('Redirect URI', 'ssf-office365-mailer'); ?></th>
                         <td><code><?php echo esc_html($callback_url); ?></code><p class="description"><?php esc_html_e('Lägg in exakt denna Web-redirect URI i Microsoft Entra App registrations > Authentication.', 'ssf-office365-mailer'); ?></p></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="ssf-external-news-review-recipient"><?php esc_html_e('Nyhetsgranskning: E-postmottagare', 'ssf-office365-mailer'); ?></label></th>
+                        <td><input class="regular-text" id="ssf-external-news-review-recipient" type="email" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[external_news_review_recipient]" value="<?php echo esc_attr($settings['external_news_review_recipient']); ?>"><p class="description"><?php esc_html_e('Hit skickas en notifiering när en extern skribent skickar in en nyhet för granskning.', 'ssf-office365-mailer'); ?></p></td>
                     </tr>
                 </table>
                 <?php submit_button(__('Spara inställningar', 'ssf-office365-mailer')); ?>
@@ -502,6 +512,7 @@ final class SSF_Office365_Mailer
                 'client_id' => '',
                 'tenant_id' => '',
                 'client_secret' => '',
+                'external_news_review_recipient' => '',
             )
         );
     }

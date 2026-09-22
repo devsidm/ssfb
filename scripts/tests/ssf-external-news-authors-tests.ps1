@@ -13,6 +13,7 @@ Assert-Contains 'URL-säker token' "strtr(base64_encode(random_bytes(32)),'+/','
 Assert-Contains 'Endast hash lagras' "hash('sha256',`$token)"
 Assert-NotContains 'Rå token lagras inte som postmeta' 'SSF_EXTERNAL_NEWS_TOKEN'
 Assert-Contains 'Utgångstid' 'SSF_EXTERNAL_NEWS_EXPIRES'
+Assert-Contains '30 dagars giltighet' '30*DAY_IN_SECONDS'
 Assert-Contains 'Återkallelse kontrolleras' 'SSF_EXTERNAL_NEWS_REVOKED'
 Assert-Contains 'Extern route utan wp-admin' "'^skriv-nyhet/([^/]+)/?$'"
 Assert-Contains 'Noindex och no-cache' 'X-Robots-Tag: noindex, nofollow, noarchive'
@@ -27,6 +28,10 @@ Assert-Contains 'Mottagaradress sparas' 'SSF_EXTERNAL_NEWS_RECIPIENT'
 Assert-Contains 'Centrala e-postmallen används' 'SSF_Email_Template::send'
 Assert-Contains 'Omsändning finns' 'ssf_external_news_resend'
 Assert-Contains 'Omsändning ersätter token' 'ssf_external_news_set_token'
+Assert-Contains 'Granskningsmottagare' 'external_news_review_recipient'
+Assert-Contains 'Granskningsmail enbart vid statusövergång' 'ssf_external_news_notify_reviewer'
+Assert-Contains 'Mailfel lagras utan att blockera' "'failed'"
+Assert-Contains 'Menybadge för väntande granskning' 'awaiting-mod'
 Assert-Contains 'Förhandsgranskning finns' 'ssf_external_news_render_preview'
 Assert-Contains 'Mobilförhandsgranskning finns' "'mobile'"
 Assert-Contains 'Riktigt nyhetskort används' 'function ssf_site_render_news_card' $shortcodes
