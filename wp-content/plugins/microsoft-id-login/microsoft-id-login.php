@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
