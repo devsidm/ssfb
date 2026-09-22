@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.11",
-    "built_at":  "2026-09-22T07:56:42.5115294Z",
+    "build":  "20260922.12",
+    "built_at":  "2026-09-22T10:06:47.6602843Z",
     "source":  "codex",
-    "source_revision":  "df10eca4d092bf21aec3c478a9fa0593638ad471",
-    "description":  "Fix external news Swedish text encoding",
+    "source_revision":  "e9070947de43f4bc0c631576987a4c9b508fdc53",
+    "description":  "Give homepage choices dedicated components",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "site-customizations"
