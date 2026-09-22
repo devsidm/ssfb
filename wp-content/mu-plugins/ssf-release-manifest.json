@@ -1,16 +1,17 @@
 {
-    "schema_version": 1,
-    "release_name": "SSF Web",
-    "version": "0.14.0",
-    "build": "20260922.15",
-    "built_at": "2026-09-22T18:34:02Z",
-    "source": "manual",
-    "source_revision": "8738c93c2f535dae04aa33e5d799a857c648051b",
-    "description": "Refine SSF homepage styling and rounded action cards",
-    "notes": "Homepage styling synchronized from DEV and prepared for production release.",
-    "components": [
-        "site-customizations"
-    ],
-    "status": "development",
-    "prepared_at": ""
+    "schema_version":  1,
+    "release_name":  "SSF Web",
+    "version":  "0.14.0",
+    "build":  "20260922.16",
+    "built_at":  "2026-09-22T21:04:09.6589940Z",
+    "source":  "codex",
+    "source_revision":  "4c0f0b3f606374aab1ef1923dd29238a9e0f0476",
+    "description":  "Move news review recipient to integrations",
+    "notes":  "Homepage styling synchronized from DEV and prepared for production release.",
+    "components":  [
+                       "member-portal",
+                       "office365-mailer"
+                   ],
+    "status":  "development",
+    "prepared_at":  ""
 }
