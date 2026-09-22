@@ -78,7 +78,6 @@ h3, h4, .site-title {
 .ssf-hero__copy p:not(.ssf-hero__eyebrow) { max-width: 620px; margin: 18px 0 0; color: var(--ssf-white); font-size: 1.12rem; }
 .ssf-hero__eyebrow { margin: 0 0 12px; color: var(--ssf-gold); font-size: .82rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .ssf-hero__copy .ssf-button--ghost { border-color: var(--ssf-white); background: transparent; color: var(--ssf-white); }
-}
 
 .ssf-section {
   padding: 52px 0;
@@ -799,5 +798,253 @@ h3, h4, .site-title {
 
   .ssf-newsletter-single__viewer {
     min-height: 440px;
+  }
+}
+
+/* ==========================================================
+   SSF STARTSIDA - redaktionell maritim design
+   Endast startsidan
+   ========================================================== */
+
+body.home {
+  background: #ffffff;
+}
+
+/* Hero: lat bilden tala for sig sjalv */
+body.home .ssf-hero {
+  height: clamp(300px, 42vw, 520px);
+  background: #e9eef2;
+}
+
+body.home .ssf-hero::after {
+  display: none;
+}
+
+body.home .ssf-hero img {
+  object-position: center 55%;
+}
+
+/* Intro */
+body.home .ssf-intro {
+  padding: 64px 0 58px;
+  background: #ffffff;
+}
+
+body.home .ssf-intro .ssf-wrap {
+  max-width: 940px;
+}
+
+body.home .ssf-intro h1 {
+  max-width: 850px;
+  margin: 0 0 22px;
+  font-size: clamp(2.5rem, 5vw, 4.4rem);
+  line-height: 1.03;
+}
+
+body.home .ssf-intro p {
+  max-width: 760px;
+  margin-top: 0;
+  font-size: 1.1rem;
+  line-height: 1.75;
+}
+
+/* Grundlayout */
+body.home .ssf-section {
+  padding: 62px 0;
+}
+
+body.home .ssf-card-grid {
+  display: grid;
+  gap: 28px;
+  margin-top: 32px;
+}
+
+/* Vad vill du gora - mer lanklista, mindre AI-kort */
+body.home .ssf-card-grid--three .ssf-card--link {
+  min-height: 0;
+  padding: 24px 0 22px;
+  border: 0;
+  border-top: 2px solid var(--ssf-blue-deep);
+  border-bottom: 1px solid var(--ssf-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.home .ssf-card-grid--three .ssf-card--link:hover,
+body.home .ssf-card-grid--three .ssf-card--link:focus-visible {
+  border-top-color: var(--ssf-gold-dark);
+  background: transparent;
+}
+
+body.home .ssf-card-grid--three .ssf-card--link h3 {
+  margin: 0 0 10px;
+  font-size: 1.28rem;
+}
+
+body.home .ssf-card-grid--three .ssf-card--link p {
+  margin: 0 0 20px;
+}
+
+/* Om forbundet */
+body.home .ssf-section--blue {
+  background: #eef3f5;
+}
+
+body.home .ssf-section--blue .ssf-card-grid--three {
+  gap: 0;
+}
+
+body.home .ssf-section--blue .ssf-card {
+  padding: 20px 30px;
+  border: 0;
+  border-right: 1px solid #cbd5dc;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.home .ssf-section--blue .ssf-card:first-child {
+  padding-left: 0;
+}
+
+body.home .ssf-section--blue .ssf-card:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+/* Medlemskap */
+body.home .ssf-card-grid--two {
+  gap: 44px;
+}
+
+body.home .ssf-card--membership {
+  padding: 28px 0 0;
+  border: 0;
+  border-top: 3px solid var(--ssf-blue-deep);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.home .ssf-card--membership h3 {
+  font-size: 1.45rem;
+}
+
+body.home .ssf-card--membership ul {
+  margin: 22px 0 28px;
+}
+
+/* Aspirantprocess */
+body.home .ssf-section--gold {
+  background: #f7f2e5;
+}
+
+body.home .ssf-steps {
+  gap: 0;
+  margin-top: 38px;
+}
+
+body.home .ssf-step {
+  position: relative;
+  padding: 0 30px 0 0;
+  border-right: 0;
+}
+
+body.home .ssf-step::after {
+  position: absolute;
+  top: 17px;
+  right: 0;
+  left: 34px;
+  height: 1px;
+  background: #c7b783;
+  content: "";
+}
+
+body.home .ssf-step:last-child::after {
+  display: none;
+}
+
+body.home .ssf-step span {
+  position: relative;
+  z-index: 2;
+  border: 1px solid #b89547;
+  background: #ffffff;
+}
+
+body.home .ssf-step h3 {
+  margin: 18px 0 8px;
+}
+
+/* Nyheter */
+body.home .ssf-news-grid {
+  gap: 30px;
+}
+
+body.home .ssf-news-card {
+  border: 0;
+  border-bottom: 1px solid var(--ssf-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.home .ssf-news-card__image {
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+body.home .ssf-news-card__body {
+  padding: 20px 0 24px;
+}
+
+/* Sista CTA */
+body.home .ssf-final-cta {
+  border-top: 1px solid var(--ssf-border);
+  background: #ffffff;
+}
+
+body.home .ssf-final-cta .ssf-wrap {
+  max-width: 940px;
+}
+
+/* Mobil */
+@media (max-width: 640px) {
+  body.home .ssf-hero {
+    height: 300px;
+  }
+
+  body.home .ssf-intro {
+    padding: 42px 0;
+  }
+
+  body.home .ssf-section {
+    padding: 44px 0;
+  }
+
+  body.home .ssf-card-grid {
+    gap: 20px;
+  }
+
+  body.home .ssf-section--blue .ssf-card {
+    padding: 20px 0;
+    border-right: 0;
+    border-bottom: 1px solid #cbd5dc;
+  }
+
+  body.home .ssf-section--blue .ssf-card:last-child {
+    border-bottom: 0;
+  }
+
+  body.home .ssf-card-grid--two {
+    gap: 22px;
+  }
+
+  body.home .ssf-step {
+    padding: 16px 0;
+  }
+
+  body.home .ssf-step::after {
+    display: none;
   }
 }
