@@ -30,18 +30,20 @@ require_once SSF_SITE_PATH . 'includes/external-news-authors.php';
 
 function ssf_site_enqueue_assets(): void
 {
+    $typography_version = (string) filemtime(SSF_SITE_PATH . 'assets/css/ssf-typography.css');
+    $site_css_version = (string) filemtime(SSF_SITE_PATH . 'assets/css/ssf-site.css');
     wp_enqueue_style(
         'ssf-typography',
         SSF_SITE_URL . 'assets/css/ssf-typography.css',
         array(),
-        SSF_SITE_VERSION
+        $typography_version
     );
 
     wp_enqueue_style(
         'ssf-site',
         SSF_SITE_URL . 'assets/css/ssf-site.css',
         array('ssf-typography'),
-        SSF_SITE_VERSION
+        $site_css_version
     );
 
     wp_enqueue_script(
