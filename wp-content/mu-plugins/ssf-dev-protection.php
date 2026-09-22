@@ -88,7 +88,10 @@ function ssf_dev_protection_is_public_status_route(): bool
 
     $request_path = ssf_dev_protection_normalize_public_status_path($request_path);
 
-    return in_array($request_path, array('ansokan-status', 'motion-status'), true);
+    if (in_array($request_path, array('ansokan-status', 'motion-status'), true)) {
+        return true;
+    }
+    return (bool) preg_match('#^skriv-nyhet/[A-Za-z0-9_-]{1,128}$#', $request_path);
 }
 
 function ssf_dev_protection_normalize_public_status_path(string $request_path): string

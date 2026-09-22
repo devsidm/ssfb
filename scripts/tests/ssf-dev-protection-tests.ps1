@@ -20,10 +20,11 @@ function Assert-Contains {
 }
 
 Assert-Contains 'Statusroute-normalisering finns' 'ssf_dev_protection_normalize_public_status_path'
+Assert-Contains 'Extern skribentrutt är uttryckligen anonym' 'skriv-nyhet/[A-Za-z0-9_-]{1,128}'
 Assert-Contains 'Subdirectory-prefix hanteras' 'array_slice($parts, 1)'
 Assert-Contains 'Ansokan-status kan normaliseras' "'ansokan-status'"
 Assert-Contains 'Motion-status kan normaliseras' "'motion-status'"
-Assert-Contains 'Tokenvalidering lämnas till statuskontroller' "return in_array(`$request_path, array('ansokan-status', 'motion-status'), true);"
+Assert-Contains 'Tokenvalidering lämnas till statuskontroller' "if (in_array(`$request_path, array('ansokan-status', 'motion-status'), true))"
 
 if (-not $loginProtection.Contains('ssf_dev_protection_is_public_status_route()')) {
     throw 'DEV login protection saknar public status route-undantag.'
