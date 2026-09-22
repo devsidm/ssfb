@@ -148,7 +148,7 @@ class SSF_Medlemsprocess_Portal
             case 'payment':
                 $received = ! empty($_POST['payment_received']);
                 $was_received = SSF_Medlemsprocess_Application::payment_received($application_id);
-                $ok = SSF_Medlemsprocess_Application::set_payment_received($application_id, $received, 'membership_portal');
+                $ok = SSF_Medlemsprocess_Application::set_payment_received($application_id, $received, 'membership_portal', sanitize_text_field(wp_unslash($_POST['payment_received_date'] ?? '')));
                 $message = $ok ? 'payment_updated' : ($was_received === $received ? 'payment_unchanged' : 'failed');
                 break;
             case 'note':
@@ -275,7 +275,7 @@ class SSF_Medlemsprocess_Portal
         $status = SSF_Medlemsprocess_Application::status($application_id);
         $tab = sanitize_key((string) ($_GET['tab'] ?? 'overview'));
         echo '<a class="ssf-portal-back" href="' . esc_url(self::page_url()) . '">Till alla ansökningar</a>';
-        echo '<header class="ssf-case-hero"><div><p class="ssf-portal-kicker">' . esc_html((string) get_post_meta($application_id, '_ssf_application_number', true)) . '</p><h1>' . esc_html($data['ship_name'] ?? get_the_title($application_id)) . '</h1><div class="ssf-chip-row">' . $this->status_chip($status) . $this->membership_chip(SSF_Medlemsprocess_Application::membership_status($application_id)) . '</div></div><div class="ssf-case-meta"><span>Sökande</span><strong>' . esc_html((string) ($data['applicant_name'] ?? '')) . '</strong><span>Ansökningsväg</span><strong>' . esc_html((string) ($data['application_path'] ?? '')) . '</strong></div></header>';
+        echo '<header class="ssf-case-hero"><div><p class="ssf-portal-kicker">' . esc_html((string) get_post_meta($application_id, '_ssf_application_number', true)) . '</p><h1>' . esc_html($data['ship_name'] ?? get_the_title($application_id)) . '</h1><div class="ssf-chip-row">' . $this->status_chip($status) . $this->membership_chip(SSF_Medlemsprocess_Application::membership_status($application_id)) . $this->payment_chip($application_id) . '</div></div><div class="ssf-case-meta"><span>Sökande</span><strong>' . esc_html((string) ($data['applicant_name'] ?? '')) . '</strong><span>Ansökningsväg</span><strong>' . esc_html((string) ($data['application_path'] ?? '')) . '</strong></div></header>';
         $this->render_process($status);
         echo '<nav class="ssf-case-tabs">';
         foreach (array('overview' => 'Översikt', 'application' => 'Ansökan', 'documents' => 'Dokument', 'inspection' => 'Inspektion', 'history' => 'Historik') as $key => $label) {
@@ -671,8 +671,16 @@ class SSF_Medlemsprocess_Portal
     private function payment_form(int $application_id): string
     {
         $checked = SSF_Medlemsprocess_Application::payment_received($application_id) ? ' checked' : '';
-        $fields = '<label class="ssf-checkbox"><input type="checkbox" name="payment_received" value="1"' . $checked . '> Betalning mottagen</label><button class="ssf-portal-button" type="submit">Spara betalningsstatus</button>';
+        $date = SSF_Medlemsprocess_Application::payment_received_date($application_id);
+        $fields = '<label class="ssf-checkbox"><input type="checkbox" name="payment_received" value="1"' . $checked . '> Betalning mottagen</label><label>Betaldatum<input type="date" name="payment_received_date" value="' . esc_attr($date) . '"></label><button class="ssf-portal-button" type="submit">Spara betalningsstatus</button>';
         return $this->action_form($application_id, 'payment', $fields);
+    }
+
+    private function payment_chip(int $application_id): string
+    {
+        if (! SSF_Medlemsprocess_Application::payment_received($application_id)) { return ''; }
+        $date = SSF_Medlemsprocess_Application::payment_received_date($application_id);
+        return '<span class="ssf-status-chip" title="' . esc_attr($date ? 'Betald ' . $date : 'Betald') . '">Betald ✓</span>';
     }
 
     private function kanban_columns(): array

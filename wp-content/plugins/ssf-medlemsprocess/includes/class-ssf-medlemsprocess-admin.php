@@ -56,6 +56,7 @@ class SSF_Medlemsprocess_Admin
         $linked_ship = (int) get_post_meta($post->ID, '_ssf_linked_ship_id', true);
         $membership_status = SSF_Medlemsprocess_Application::membership_status($post->ID);
         $payment_received = SSF_Medlemsprocess_Application::payment_received($post->ID);
+        $payment_received_date = SSF_Medlemsprocess_Application::payment_received_date($post->ID);
         $decision_date = (string) get_post_meta($post->ID, '_ssf_decision_date', true);
         $aspirant_start = (string) get_post_meta($post->ID, '_ssf_aspirant_started_at', true);
         $aspirant_review = (string) get_post_meta($post->ID, '_ssf_aspirant_review_due_at', true);
@@ -68,7 +69,7 @@ class SSF_Medlemsprocess_Admin
             <div><span class="ssf-process-admin-label">Sökande</span><strong><?php echo esc_html($data['applicant_name'] ?? ''); ?></strong><a href="mailto:<?php echo esc_attr($data['applicant_email'] ?? ''); ?>"><?php echo esc_html($data['applicant_email'] ?? ''); ?></a></div>
             <div><span class="ssf-process-admin-label">Ansökningsväg</span><strong><?php echo esc_html(class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route); ?></strong><?php if ($linked_ship) : ?><a href="<?php echo esc_url(get_edit_post_link($linked_ship)); ?>">Visa fartygsuppgifter</a><?php endif; ?></div>
             <div><span class="ssf-process-admin-label">Medlemsstatus</span><strong><?php echo esc_html(SSF_Medlemsprocess_Application::membership_status_label($membership_status)); ?></strong></div>
-            <div><span class="ssf-process-admin-label">Betalning</span><strong><?php echo esc_html($payment_received ? 'Mottagen' : 'Inte mottagen'); ?></strong></div>
+            <div><span class="ssf-process-admin-label">Betalning</span><strong><?php echo esc_html($payment_received ? ('Mottagen ' . $payment_received_date) : 'Inte mottagen'); ?></strong></div>
             <div><span class="ssf-process-admin-label">Beslutsdatum</span><strong><?php echo esc_html($decision_date ?: 'Inte fastställt'); ?></strong></div>
             <div><span class="ssf-process-admin-label">Aspirant från</span><strong><?php echo esc_html($aspirant_start ?: '–'); ?></strong></div>
             <div><span class="ssf-process-admin-label">Aspirant uppföljning</span><strong><?php echo esc_html($aspirant_review ?: '–'); ?></strong></div>
@@ -79,6 +80,7 @@ class SSF_Medlemsprocess_Admin
         <div class="ssf-process-admin-grid">
             <label>Ansökningsstatus<select name="ssf_process_status"><?php foreach ($available_statuses as $key) : $item = SSF_Medlemsprocess_Application::statuses()[$key] ?? null; if (! $item || in_array($key, array('approved_aspirant', 'rejected'), true)) { continue; } ?><option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>><?php echo esc_html($item['label']); ?></option><?php endforeach; ?><?php if (in_array($status, array('approved_aspirant', 'rejected'), true)) : ?><option value="<?php echo esc_attr($status); ?>" selected><?php echo esc_html(SSF_Medlemsprocess_Application::status_label($status)); ?></option><?php endif; ?></select><small>Endast tillåtna nästa steg visas. Beslut fattas i beslutspanelen.</small></label>
             <label class="ssf-process-check"><input type="checkbox" name="ssf_payment_received" value="1" <?php checked($payment_received); ?>> Betalning mottagen<small>Intern administrativ markering.</small></label>
+            <label>Betaldatum<input type="date" name="ssf_payment_received_date" value="<?php echo esc_attr($payment_received_date); ?>"></label>
             <label>Ansvarig handläggare<?php wp_dropdown_users(array('name' => 'ssf_assigned_user', 'selected' => $assigned, 'show_option_none' => 'Ej tilldelad', 'role__in' => array('administrator', 'ssf_inspector', 'ssf_inspektor', 'ssf_beslutsfattare'))); ?></label>
             <label>Nästa åtgärd<input type="text" name="ssf_next_action" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_next_action', true)); ?>" placeholder="Exempel: inväntar registreringsbevis"></label>
             <label>Publikt statusmeddelande<textarea name="ssf_status_message" rows="3" placeholder="Visas för sökanden vid statusändring"></textarea></label>
@@ -248,7 +250,7 @@ class SSF_Medlemsprocess_Admin
     {
         if (! isset($_POST['ssf_application_admin_nonce']) || ! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_application_admin_nonce'])), 'ssf_save_application_' . $post_id) || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || ! current_user_can('edit_ssf_application', $post_id)) { return; }
         $status = sanitize_key(wp_unslash($_POST['ssf_process_status'] ?? SSF_Medlemsprocess_Application::status($post_id)));
-        $payment_changed = SSF_Medlemsprocess_Application::set_payment_received($post_id, ! empty($_POST['ssf_payment_received']), 'wordpress_admin');
+        $payment_changed = SSF_Medlemsprocess_Application::set_payment_received($post_id, ! empty($_POST['ssf_payment_received']), 'wordpress_admin', sanitize_text_field(wp_unslash($_POST['ssf_payment_received_date'] ?? '')));
         if ($payment_changed) {
             $this->payment_saved_post_id = $post_id;
         }

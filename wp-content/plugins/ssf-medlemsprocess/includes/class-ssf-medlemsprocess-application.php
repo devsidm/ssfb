@@ -152,13 +152,25 @@ class SSF_Medlemsprocess_Application
         return '1' === (string) get_post_meta($application_id, '_ssf_payment_received', true);
     }
 
-    public static function set_payment_received(int $application_id, bool $received, string $source = 'wordpress_admin'): bool
+    public static function payment_received_date(int $application_id): string
     {
-        if (self::payment_received($application_id) === $received) {
+        $date = (string) get_post_meta($application_id, '_ssf_payment_received_date', true);
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : '';
+    }
+
+    public static function set_payment_received(int $application_id, bool $received, string $source = 'wordpress_admin', string $date = ''): bool
+    {
+        $was_received = self::payment_received($application_id);
+        $old_date = self::payment_received_date($application_id);
+        $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : '';
+        $new_date = $received ? ($date ?: ($old_date ?: wp_date('Y-m-d'))) : $old_date;
+        if ($was_received === $received && $old_date === $new_date) {
             return false;
         }
         update_post_meta($application_id, '_ssf_payment_received', $received ? '1' : '0');
-        self::add_history($application_id, 'payment', $received ? 'Betalning markerad som mottagen.' : 'Betalning markerad som ej mottagen.', false, array('source' => $source, 'payment_received' => $received ? '1' : '0'));
+        if ($received && $new_date) { update_post_meta($application_id, '_ssf_payment_received_date', $new_date); }
+        $message = ! $received ? 'Betalning markerad som ej mottagen.' : ($was_received ? 'Betaldatum ändrat till ' . $new_date . '.' : 'Betalning mottagen – ' . $new_date . '.');
+        self::add_history($application_id, 'payment', $message, false, array('source' => $source, 'payment_received' => $received ? '1' : '0', 'payment_received_date' => $new_date));
         return true;
     }
 
