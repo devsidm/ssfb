@@ -2,15 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.6",
-    "built_at":  "2026-09-22T07:29:45.1677708Z",
+    "build":  "20260922.7",
+    "built_at":  "2026-09-22T07:34:14.5316920Z",
     "source":  "codex",
-    "source_revision":  "bd902521ab18a356355f5a10121943e148ce9270",
-    "description":  "Improve external news invitations and previews",
+    "source_revision":  "861d331ece1944e9940443e76aef421c46409665",
+    "description":  "Restore editorial homepage layout",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "site-customizations",
-                       "theme"
+                       "site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
