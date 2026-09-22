@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.7",
-    "built_at":  "2026-09-22T07:34:14.5316920Z",
+    "build":  "20260922.8",
+    "built_at":  "2026-09-22T07:39:17.9092959Z",
     "source":  "codex",
-    "source_revision":  "861d331ece1944e9940443e76aef421c46409665",
-    "description":  "Restore editorial homepage layout",
+    "source_revision":  "323659a70f8c65ba0e9ddf56bc622371e591a8be",
+    "description":  "Refresh public stylesheet cache version",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "site-customizations"
