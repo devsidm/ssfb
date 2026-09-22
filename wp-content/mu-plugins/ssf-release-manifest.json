@@ -2,15 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.1",
-    "built_at":  "2026-09-22T05:00:48.1103880Z",
+    "build":  "20260922.2",
+    "built_at":  "2026-09-22T06:23:46.1859469Z",
     "source":  "codex",
-    "source_revision":  "110dc79e1245dd7bb16a3bfe3f45d37083dcfddf",
-    "description":  "Add internal payment received status",
+    "source_revision":  "05cbddd8b35050d19f7ec8d86f249c9ab1ef4d63",
+    "description":  "Add secure external news author links",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "release-tooling",
-                       "ssf-medlemsprocess"
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
