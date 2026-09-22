@@ -51,10 +51,10 @@ function ssf_site_home_shortcode(): string
     <section class="ssf-section">
         <div class="ssf-wrap">
             <h2>Vad vill du göra?</h2>
-            <div class="ssf-home-choices">
-                <?php echo ssf_site_home_choice('Ansöka som fartygsombud', 'Testa om ditt fartyg kan gå vidare till ansökan', home_url('/ansokan/')); ?>
-                <?php echo ssf_site_home_choice('Bli stödmedlem', 'Stöd arbetet för Sveriges segelfartyg', home_url('/medlemskap/')); ?>
-                <?php echo ssf_site_home_choice('Kontakta SSF', 'Ställ en fråga till förbundet', home_url('/kontakta-oss/')); ?>
+            <div class="ssf-card-grid ssf-card-grid--three">
+                <?php echo ssf_site_feature_card('Ansöka som fartygsombud', 'Testa om ditt fartyg kan gå vidare till ansökan', home_url('/ansokan/')); ?>
+                <?php echo ssf_site_feature_card('Bli stödmedlem', 'Stöd arbetet för Sveriges segelfartyg', home_url('/medlemskap/')); ?>
+                <?php echo ssf_site_feature_card('Kontakta SSF', 'Ställ en fråga till förbundet', home_url('/kontakta-oss/')); ?>
             </div>
         </div>
     </section>
@@ -63,10 +63,10 @@ function ssf_site_home_shortcode(): string
         <div class="ssf-wrap">
             <h2>Förbundet för traditionella segelfartyg</h2>
             <p>Sveriges Segelfartygsförbund arbetar för att stärka förutsättningarna för traditionella segelfartyg i Sverige. Vi samlar fartygsombud, stödmedlemmar och andra som vill att segelfartygen fortsatt ska brukas, underhållas och synas.</p>
-            <div class="ssf-home-values">
-                <?php echo ssf_site_home_value('Fartyg', 'Traditionsfartyg som brukas, vårdas och utvecklas.'); ?>
-                <?php echo ssf_site_home_value('Gemenskap', 'Ett nätverk för fartygsombud, stödmedlemmar och engagerade.'); ?>
-                <?php echo ssf_site_home_value('Kunskap', 'Erfarenhet, stadgar och samverkan för maritimt kulturarv.'); ?>
+            <div class="ssf-card-grid ssf-card-grid--three">
+                <?php echo ssf_site_plain_card('Fartyg', 'Traditionsfartyg som brukas, vårdas och utvecklas.'); ?>
+                <?php echo ssf_site_plain_card('Gemenskap', 'Ett nätverk för fartygsombud, stödmedlemmar och engagerade.'); ?>
+                <?php echo ssf_site_plain_card('Kunskap', 'Erfarenhet, stadgar och samverkan för maritimt kulturarv.'); ?>
             </div>
         </div>
     </section>
@@ -132,17 +132,6 @@ function ssf_site_feature_card(string $title, string $text, string $url): string
 {
     list($title, $text, $url) = ssf_site_application_destination($title, $text, $url);
     return sprintf('<a class="ssf-card ssf-card--link" href="%s"><h3>%s</h3><p>%s</p><span>Läs mer</span></a>', esc_url($url), esc_html($title), esc_html($text));
-}
-
-function ssf_site_home_choice(string $title, string $text, string $url): string
-{
-    list($title, $text, $url) = ssf_site_application_destination($title, $text, $url);
-    return sprintf('<a class="ssf-home-choice" href="%s"><h3>%s</h3><p>%s</p><span>Läs mer <b aria-hidden="true">→</b></span></a>', esc_url($url), esc_html($title), esc_html($text));
-}
-
-function ssf_site_home_value(string $title, string $text): string
-{
-    return sprintf('<div class="ssf-home-value"><h3>%s</h3><p>%s</p></div>', esc_html($title), esc_html($text));
 }
 
 function ssf_site_plain_card(string $title, string $text): string

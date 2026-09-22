@@ -165,31 +165,6 @@ h3, h4, .site-title {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.ssf-home-choices,
-.ssf-home-values {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 30px;
-}
-
-.ssf-home-choice {
-  min-height: 220px;
-  padding: 24px 28px;
-  border-top: 2px solid var(--ssf-blue-deep);
-  border-right: 1px solid var(--ssf-border);
-  color: inherit;
-  text-decoration: none;
-}
-
-.ssf-home-choice:first-child { border-left: 1px solid var(--ssf-border); }
-.ssf-home-choice:hover { background: var(--ssf-white); }
-.ssf-home-choice h3, .ssf-home-value h3 { margin: 0 0 12px; color: var(--ssf-blue-deep); font-size: 1.25rem; }
-.ssf-home-choice p, .ssf-home-value p { margin: 0; font-size: 1rem; }
-.ssf-home-choice span { display: inline-block; margin-top: 26px; color: var(--ssf-gold-dark); font-size: .9rem; font-weight: 700; }
-.ssf-home-choice b { font-size: 1.1rem; }
-.ssf-home-values { gap: 32px; }
-.ssf-home-value { padding: 0 0 0 20px; border-left: 3px solid var(--ssf-gold-dark); }
-
 .ssf-card,
 .ssf-news-card,
 .ssf-form {
@@ -732,8 +707,6 @@ h3, h4, .site-title {
 
 @media (max-width: 900px) {
   .ssf-card-grid--three,
-  .ssf-home-choices,
-  .ssf-home-values,
   .ssf-news-grid,
   .ssf-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -758,15 +731,10 @@ h3, h4, .site-title {
 
   .ssf-card-grid--three,
   .ssf-card-grid--two,
-  .ssf-home-choices,
-  .ssf-home-values,
   .ssf-news-grid,
   .ssf-steps {
     grid-template-columns: 1fr;
   }
-
-  .ssf-home-choices { gap: 12px; }
-  .ssf-home-choice, .ssf-home-choice:first-child { min-height: 0; border: 1px solid var(--ssf-border); border-top: 2px solid var(--ssf-blue-deep); }
 
   .ssf-step {
     padding: 14px 0;
