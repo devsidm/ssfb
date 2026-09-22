@@ -101,7 +101,7 @@ $report.authentication = [ordered]@{
 }
 
 if (-not $SkipLogin) {
-    $loginJson = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'ssf-wp-login.ps1') -Json
+    $loginJson = & (Join-Path $PSScriptRoot 'ssf-wp-login.ps1') -Json
     if ($LASTEXITCODE -eq 0) {
         $login = $loginJson | ConvertFrom-Json
         $report.wordpress_login = if ($login.result -eq 'PASS') { 'PASS' } else { 'FAIL' }
