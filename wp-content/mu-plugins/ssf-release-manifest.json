@@ -2,14 +2,13 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.2",
-    "built_at":  "2026-09-22T06:23:46.1859469Z",
+    "build":  "20260922.3",
+    "built_at":  "2026-09-22T06:26:41.3603823Z",
     "source":  "codex",
-    "source_revision":  "05cbddd8b35050d19f7ec8d86f249c9ab1ef4d63",
-    "description":  "Add secure external news author links",
+    "source_revision":  "5cf01b8e0542b669febe50678c750a3fb76fbb12",
+    "description":  "Fix external author link administration",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
-                       "release-tooling",
                        "ssf-site-customizations"
                    ],
     "status":  "development",
