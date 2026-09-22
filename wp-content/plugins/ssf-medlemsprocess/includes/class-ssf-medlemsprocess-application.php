@@ -147,6 +147,21 @@ class SSF_Medlemsprocess_Application
         return self::membership_statuses()[$status] ?? $status;
     }
 
+    public static function payment_received(int $application_id): bool
+    {
+        return '1' === (string) get_post_meta($application_id, '_ssf_payment_received', true);
+    }
+
+    public static function set_payment_received(int $application_id, bool $received, string $source = 'wordpress_admin'): bool
+    {
+        if (self::payment_received($application_id) === $received) {
+            return false;
+        }
+        update_post_meta($application_id, '_ssf_payment_received', $received ? '1' : '0');
+        self::add_history($application_id, 'payment', $received ? 'Betalning markerad som mottagen.' : 'Betalning markerad som ej mottagen.', false, array('source' => $source, 'payment_received' => $received ? '1' : '0'));
+        return true;
+    }
+
     public static function status(int $application_id): string
     {
         $status = (string) get_post_meta($application_id, '_ssf_process_status', true);
@@ -206,6 +221,7 @@ class SSF_Medlemsprocess_Application
         update_post_meta($application_id, '_ssf_application_files', array_map('intval', $attachments));
         update_post_meta($application_id, '_ssf_process_status', 'received');
         update_post_meta($application_id, '_ssf_membership_status', 'not_member');
+        update_post_meta($application_id, '_ssf_payment_received', '0');
         update_post_meta($application_id, '_ssf_submitted_at', current_time('mysql'));
         if ($profile_data && class_exists('SSF_Medlemsfartyg_Profile')) {
             $ship_id = SSF_Medlemsfartyg_Profile::create_for_application((int) $application_id, $route, $profile_data, $data);

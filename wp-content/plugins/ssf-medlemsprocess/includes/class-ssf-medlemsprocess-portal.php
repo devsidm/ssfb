@@ -145,6 +145,12 @@ class SSF_Medlemsprocess_Portal
                 $ok = $this->handle_membership_decision($application_id);
                 $message = $ok ? 'updated' : 'failed';
                 break;
+            case 'payment':
+                $received = ! empty($_POST['payment_received']);
+                $was_received = SSF_Medlemsprocess_Application::payment_received($application_id);
+                $ok = SSF_Medlemsprocess_Application::set_payment_received($application_id, $received, 'membership_portal');
+                $message = $ok ? 'payment_updated' : ($was_received === $received ? 'payment_unchanged' : 'failed');
+                break;
             case 'note':
                 $note = sanitize_textarea_field(wp_unslash($_POST['internal_note'] ?? ''));
                 if ($note) {
@@ -292,13 +298,23 @@ class SSF_Medlemsprocess_Portal
     private function render_case_overview(int $application_id, array $data): void
     {
         echo '<div class="ssf-case-grid"><section class="ssf-portal-panel" id="next-step"><h2>Nästa steg</h2>';
-        $this->render_notice();
+        if (! in_array(sanitize_key((string) ($_GET['portal_message'] ?? '')), array('payment_updated', 'payment_unchanged'), true)) {
+            $this->render_notice();
+        }
         $this->render_actions($application_id);
         echo '</section><section class="ssf-portal-panel"><h2>Snabböversikt</h2><dl class="ssf-definition-grid">';
         foreach (array('Fartygsombud' => 'applicant_name', 'E-post' => 'applicant_email', 'Telefon' => 'applicant_phone', 'Hemmahamn' => 'ship_home_port', 'Byggår' => 'ship_build_year', 'Rigg' => 'ship_rig') as $label => $key) {
             echo '<div><dt>' . esc_html($label) . '</dt><dd>' . esc_html((string) ($data[$key] ?? '')) . '</dd></div>';
         }
         echo '</dl></section></div>';
+        echo '<section class="ssf-portal-panel" id="payment-status"><h2>Betalning</h2>';
+        if (in_array(sanitize_key((string) ($_GET['portal_message'] ?? '')), array('payment_updated', 'payment_unchanged'), true)) {
+            $this->render_notice();
+        }
+        if (current_user_can('edit_ssf_application', $application_id)) {
+            echo $this->payment_form($application_id);
+        }
+        echo '</section>';
         echo '<section class="ssf-portal-panel"><h2>Intern notering</h2>' . $this->action_form($application_id, 'note', '<label>Intern notering<textarea name="internal_note" rows="4" required></textarea></label><button class="ssf-portal-button" type="submit">Lägg till anteckning</button>') . '</section>';
     }
 
@@ -574,7 +590,8 @@ class SSF_Medlemsprocess_Portal
 
     private function redirect(int $application_id, string $message): void
     {
-        wp_safe_redirect(add_query_arg('portal_message', $message, self::review_url($application_id)) . '#next-step');
+        $anchor = in_array($message, array('payment_updated', 'payment_unchanged'), true) ? '#payment-status' : '#next-step';
+        wp_safe_redirect(add_query_arg('portal_message', $message, self::review_url($application_id)) . $anchor);
         exit;
     }
 
@@ -585,6 +602,8 @@ class SSF_Medlemsprocess_Portal
             'updated' => 'Status uppdaterad.',
             'aspirant_approved' => '✓ Fartyget är nu aspirant. Planera inspektion under aspirantåret.',
             'note_added' => 'Intern notering sparad.',
+            'payment_updated' => 'Betalningsstatus sparad.',
+            'payment_unchanged' => 'Betalningsstatus är oförändrad.',
             'changed' => 'Ärendet har uppdaterats av någon annan. Ladda om sidan innan du fortsätter.',
             'drag_opened' => 'Välj och bekräfta rätt nästa steg för ärendet.',
             'failed' => 'Åtgärden kunde inte genomföras. Kontrollera att arbetsflödet tillåter steget.',
@@ -647,6 +666,13 @@ class SSF_Medlemsprocess_Portal
     {
         $fields = '<button class="ssf-portal-button ssf-portal-button-primary" type="submit" name="membership_decision" value="member_ship">Godkänn som medlemsfartyg</button><button class="ssf-portal-button" type="submit" name="membership_decision" value="closed">Avsluta</button>';
         return $this->action_form($application_id, 'membership_decision', $fields);
+    }
+
+    private function payment_form(int $application_id): string
+    {
+        $checked = SSF_Medlemsprocess_Application::payment_received($application_id) ? ' checked' : '';
+        $fields = '<label class="ssf-checkbox"><input type="checkbox" name="payment_received" value="1"' . $checked . '> Betalning mottagen</label><button class="ssf-portal-button" type="submit">Spara betalningsstatus</button>';
+        return $this->action_form($application_id, 'payment', $fields);
     }
 
     private function kanban_columns(): array
