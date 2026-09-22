@@ -2,13 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.8",
-    "built_at":  "2026-09-22T07:39:17.9092959Z",
+    "build":  "20260922.9",
+    "built_at":  "2026-09-22T07:47:28.6848772Z",
     "source":  "codex",
-    "source_revision":  "323659a70f8c65ba0e9ddf56bc622371e591a8be",
-    "description":  "Refresh public stylesheet cache version",
+    "source_revision":  "ea80966d5fae2501f99a828bc9b37c7e68da46a5",
+    "description":  "Add external news review notifications",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
+                       "office365-mailer",
                        "site-customizations"
                    ],
     "status":  "development",
