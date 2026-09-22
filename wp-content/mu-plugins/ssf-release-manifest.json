@@ -2,15 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.0",
-    "build":  "20260922.4",
-    "built_at":  "2026-09-22T06:30:35.1507090Z",
+    "build":  "20260922.5",
+    "built_at":  "2026-09-22T06:43:03.0719150Z",
     "source":  "codex",
-    "source_revision":  "bb42c00052fee943e040257e7a41b89c942cff9c",
-    "description":  "Allow external news links in DEV",
+    "source_revision":  "6e0dd869a5278f67688492f29a6d4be749fc63f3",
+    "description":  "Add payment dates and case status chip",
     "notes":  "Protect PROD SharePoint configuration and include production MU plugin assets in deployment safety checks.",
     "components":  [
                        "release-tooling",
-                       "ssf-dev-protection"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
