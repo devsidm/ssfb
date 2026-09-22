@@ -436,6 +436,7 @@ verify_and_prepare_dev() {
   section "DEV RELEASE"
   local env manifest before_build before_version
   env="$(wp_eval_dev 'echo wp_get_environment_type();')"
+  env="${env//$'\r'/}"
   [[ "$env" == "development" ]] || fail "DEV environment must be development. Got $env"
   manifest="$DEV/wp-content/mu-plugins/ssf-release-manifest.json"
   [[ -f "$manifest" ]] || fail "DEV release manifest missing."
