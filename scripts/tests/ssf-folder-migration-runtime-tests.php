@@ -45,7 +45,13 @@ namespace {
         $file = array('id' => 'TARGET_FILE', 'name' => 'ansokan.pdf', 'size' => 5, 'file' => array('mimeType' => 'application/pdf'), 'listItem' => array('id' => '3', 'fields' => $GLOBALS['fields']['3']));
 
         if ($method === 'GET' && str_contains($path, '/columns?')) {
-            return response(200, array('value' => array(array('name' => 'ApplicationNumber', 'text' => array()))));
+            return response(200, array('value' => $GLOBALS['target_columns']));
+        }
+        if ($method === 'POST' && str_contains($path, '/lists/TARGET_LIST/columns')) {
+            $column = json_decode($args['body'], true);
+            $GLOBALS['target_columns'][] = $column;
+            ++$GLOBALS['column_create_calls'];
+            return response(201, $column);
         }
         if ($method === 'GET' && str_contains($path, '/items/TARGET_ROOT/children?')) return response(200, array('value' => array($folder)));
         if ($method === 'GET' && str_contains($path, '/items/TARGET_2026/children?')) {
@@ -88,12 +94,14 @@ namespace {
     $GLOBALS['copied'] = false;
     $GLOBALS['copy_calls'] = 0;
     $GLOBALS['monitor_calls'] = 0;
+    $GLOBALS['column_create_calls'] = 0;
+    $GLOBALS['target_columns'] = array(array('name' => 'ApplicationNumber', 'text' => array()));
 
     $source = array('site_id' => 'SOURCE_SITE', 'drive_id' => 'SOURCE_DRIVE', 'list_id' => 'SOURCE_LIST', 'folder_id' => 'SOURCE_2026', 'folder_name' => '2026');
     $target = array('site_id' => 'TARGET_SITE', 'drive_id' => 'TARGET_DRIVE', 'list_id' => 'TARGET_LIST', 'folder_id' => 'TARGET_ROOT', 'drive_name' => 'Medlemsansökningar', 'destination_folder_name' => '2026');
-    $folder = array('id' => 'SOURCE_2026', 'parent_id' => 'SOURCE_ROOT', 'name' => '2026', 'path' => '2026', 'depth' => 0, 'type' => 'folder', 'size' => 5, 'metadata' => array('ApplicationNumber' => 'SSF-2026'));
-    $file = array('id' => 'SOURCE_FILE', 'parent_id' => 'SOURCE_2026', 'name' => 'ansokan.pdf', 'path' => '2026/ansokan.pdf', 'depth' => 1, 'type' => 'file', 'size' => 5, 'metadata' => array('ApplicationNumber' => 'SSF-2026'));
-    $inventory = array('ok' => true, 'items' => array($folder, $file), 'columns' => array('value' => array(array('name' => 'ApplicationNumber', 'text' => array()))), 'populated_fields' => array('ApplicationNumber'), 'summary' => array('folders' => 1, 'files' => 1, 'bytes' => 5));
+    $folder = array('id' => 'SOURCE_2026', 'parent_id' => 'SOURCE_ROOT', 'name' => '2026', 'path' => '2026', 'depth' => 0, 'type' => 'folder', 'size' => 5, 'metadata' => array('ApplicationNumber' => 'SSF-2026', 'VesselName' => 'Jumba'));
+    $file = array('id' => 'SOURCE_FILE', 'parent_id' => 'SOURCE_2026', 'name' => 'ansokan.pdf', 'path' => '2026/ansokan.pdf', 'depth' => 1, 'type' => 'file', 'size' => 5, 'metadata' => array('ApplicationNumber' => 'SSF-2026', 'VesselName' => 'Jumba'));
+    $inventory = array('ok' => true, 'items' => array($folder, $file), 'columns' => array('value' => array(array('name' => 'ApplicationNumber', 'text' => array()), array('name' => 'VesselName', 'displayName' => 'Fartyg', 'text' => array()))), 'populated_fields' => array('ApplicationNumber', 'VesselName'), 'summary' => array('folders' => 1, 'files' => 1, 'bytes' => 5));
     $GLOBALS['options']['ssf_sharepoint_folder_migration_state'] = array(
         'context' => hash('sha256', 'SOURCE_DRIVE|SOURCE_2026|TARGET_DRIVE|TARGET_2026'),
         'items' => array('SOURCE_2026' => array('state' => 'ERROR', 'source_id' => 'SOURCE_2026')),
@@ -111,13 +119,13 @@ namespace {
 
     $core = new FolderMigrationCore($graph);
     $plan = $core->dry_run($source, $target, $inventory);
-    check(! is_wp_error($plan) && $plan['ok'] && $plan['resume_existing'], 'Existing 2026 test folder was not resumable.');
+    check(! is_wp_error($plan) && $plan['ok'] && $plan['resume_existing'] && count($plan['schema']['create']) === 1, 'Existing 2026 test folder was not resumable or missing schema was not planned.');
     $prepared = $core->prepare($target, $plan);
-    check(! is_wp_error($prepared) && $prepared['target_folder_id'] === 'TARGET_2026', 'Existing 2026 folder was not prepared.');
+    check(! is_wp_error($prepared) && $prepared['target_folder_id'] === 'TARGET_2026' && $prepared['created_columns'] === array('VesselName') && $GLOBALS['column_create_calls'] === 1, 'Existing 2026 folder was not prepared with the missing schema.');
     $result = $core->migrate($source, $target, $inventory, 'TARGET_2026');
     check(! is_wp_error($result) && $result['ok'], is_wp_error($result) ? $result->get_error_message() : 'Test migration failed.');
     check($GLOBALS['copy_calls'] === 1 && $GLOBALS['monitor_calls'] === 1, 'File was not copied and monitored exactly once.');
-    check($GLOBALS['fields']['2']['ApplicationNumber'] === 'SSF-2026' && $GLOBALS['fields']['3']['ApplicationNumber'] === 'SSF-2026', 'Folder or file metadata was not written.');
+    check($GLOBALS['fields']['2']['ApplicationNumber'] === 'SSF-2026' && $GLOBALS['fields']['3']['ApplicationNumber'] === 'SSF-2026' && $GLOBALS['fields']['2']['VesselName'] === 'Jumba' && $GLOBALS['fields']['3']['VesselName'] === 'Jumba', 'Folder or file metadata was not written.');
 
     $state = $GLOBALS['options']['ssf_sharepoint_folder_migration_state'];
     $state['items']['SOURCE_FILE'] = array('state' => 'COPYING', 'source_id' => 'SOURCE_FILE', 'monitor_url' => 'https://tenant.sharepoint.com/monitor/expired');

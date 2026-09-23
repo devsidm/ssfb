@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
 final class FolderMigrationCore
 {
     private const STATE_OPTION = 'ssf_sharepoint_folder_migration_state';
-    private const SYSTEM_FIELDS = array('id', '@odata.etag', 'ContentType', 'ContentTypeId', 'Created', 'Modified', 'Author', 'AuthorLookupId', 'Editor', 'EditorLookupId', 'AppAuthorLookupId', 'AppEditorLookupId', 'ParentVersionStringLookupId', 'ParentLeafNameLookupId', '_UIVersionString', 'FileRef', 'FileLeafRef', 'FSObjType', 'LinkFilename', 'LinkFilenameNoMenu', 'Edit', 'DocIcon', 'FileSizeDisplay', 'ItemChildCount', 'FolderChildCount', 'ComplianceAssetId');
+    private const SYSTEM_FIELDS = array('id', '@odata.etag', 'ContentType', 'ContentTypeId', 'Created', 'Modified', 'Author', 'AuthorLookupId', 'Editor', 'EditorLookupId', 'AppAuthorLookupId', 'AppEditorLookupId', 'ParentVersionStringLookupId', 'ParentLeafNameLookupId', '_UIVersionString', 'FileRef', 'FileLeafRef', 'FSObjType', 'LinkFilename', 'LinkFilenameNoMenu', 'Edit', 'DocIcon', 'FileSizeDisplay', 'ItemChildCount', 'FolderChildCount', 'ComplianceAssetId', 'MediaServiceImageTags');
     private const MEMBERSHIP_CANONICAL_SIGNATURE = array('ApplicationNumber', 'ApplicationStatus', 'VesselName', 'ApplicationPath', 'ReceivedDate');
     private const MEMBERSHIP_LEGACY_FIELDS = array('Ansokningsnummer', 'Status', 'Fartyg', 'InkommenDatum', 'Ansokningsvag');
 
@@ -107,7 +107,7 @@ final class FolderMigrationCore
         $blockers = (array) $schema['blockers'];
         $warnings = array();
         if (! empty($schema['create'])) {
-            $blockers[] = 'Målet saknar ' . count((array) $schema['create']) . ' nödvändiga kolumner. Skapa dem manuellt i målbiblioteket och kör torrkörningen igen.';
+            $warnings[] = 'Målet saknar ' . count((array) $schema['create']) . ' kolumner. De skapas och verifieras i steg 5 innan någon mapp skapas.';
         }
         $confirmed_existing = ! empty($existing['id'])
             && 'replace_files' === (string) ($target['existing_target_policy'] ?? '')
@@ -165,12 +165,9 @@ final class FolderMigrationCore
         );
     }
 
-    /** Verify the complete schema before creating any destination folder. */
+    /** Provision the supported source schema, then create the destination folder. */
     public function prepare(array $target, array $dry_run)
     {
-        if (! empty($dry_run['schema']['create'])) {
-            return new \WP_Error('migration_schema_provisioning_required', 'Målet saknar nödvändiga kolumner. Inga måländringar gjordes. Skapa kolumnerna manuellt och kör torrkörningen igen.');
-        }
         if (empty($dry_run['ok'])) {
             return new \WP_Error('migration_prepare_blocked', 'Torrkörningen har blockerande fel. Inga måländringar gjordes.');
         }
@@ -179,6 +176,10 @@ final class FolderMigrationCore
         if ($planned_existing_id && (empty($dry_run['resume_existing']) || ! $this->is_resumable_target((array) ($dry_run['source_ref'] ?? array()), $target, $planned_existing_id))
             && (! $confirmed_existing_id || ! hash_equals($planned_existing_id, $confirmed_existing_id))) {
             return new \WP_Error('migration_existing_target_unconfirmed', 'Den befintliga målmappen är inte uttryckligen bekräftad. Inga måländringar gjordes.');
+        }
+        $created_columns = $this->create_missing_columns($target, (array) ($dry_run['schema']['create'] ?? array()));
+        if (is_wp_error($created_columns)) {
+            return $created_columns;
         }
         $verified_columns = $this->columns($target);
         if (is_wp_error($verified_columns)) {
@@ -191,6 +192,22 @@ final class FolderMigrationCore
         foreach ((array) ($dry_run['schema']['exact'] ?? array()) as $name) {
             if (empty($verified_names[(string) $name])) {
                 return new \WP_Error('migration_schema_verify_failed', 'En verifierad målkolumn saknas nu: ' . $name . '. Inga målmappar skapades. Kör torrkörningen igen.');
+            }
+        }
+        foreach ((array) ($dry_run['schema']['create'] ?? array()) as $column) {
+            $name = (string) ($column['name'] ?? '');
+            $target_column = array();
+            foreach ((array) ($verified_columns['value'] ?? array()) as $candidate) {
+                if ($name === (string) ($candidate['name'] ?? '')) {
+                    $target_column = (array) $candidate;
+                    break;
+                }
+            }
+            if (! $name || empty($target_column) || (string) ($column['type'] ?? '') !== $this->column_type($target_column)) {
+                return new \WP_Error('migration_schema_verify_failed', 'En skapad målkolumn kunde inte verifieras: ' . $name . '. Inga målmappar skapades.');
+            }
+            if ('choice' === (string) ($column['type'] ?? '') && array_diff((array) ($column['payload']['choice']['choices'] ?? array()), (array) ($target_column['choice']['choices'] ?? array()))) {
+                return new \WP_Error('migration_schema_verify_failed', 'Den skapade Choice-kolumnen har inte rätt värden: ' . $name . '. Inga målmappar skapades.');
             }
         }
 
@@ -215,7 +232,7 @@ final class FolderMigrationCore
         if (is_wp_error($read) || empty($read['folder'])) {
             return is_wp_error($read) ? $read : new \WP_Error('migration_prepare_verify_failed', 'Målroten kunde inte läsas tillbaka.');
         }
-        return array('ok' => true, 'prepared_at' => gmdate('c'), 'target_folder_id' => $parent, 'target_folder_web_url' => esc_url_raw((string) ($read['webUrl'] ?? '')), 'created_source_children' => 0, 'schema_verified' => true);
+        return array('ok' => true, 'prepared_at' => gmdate('c'), 'target_folder_id' => $parent, 'target_folder_web_url' => esc_url_raw((string) ($read['webUrl'] ?? '')), 'created_source_children' => 0, 'created_columns' => $created_columns, 'schema_verified' => true);
     }
 
     /** A real, self-cleaning write probe against the prepared migration root. */
@@ -537,6 +554,26 @@ final class FolderMigrationCore
     private function columns(array $location)
     {
         return $this->graph->request('GET', 'sites/' . rawurlencode((string) $location['site_id']) . '/lists/' . rawurlencode((string) $location['list_id']) . '/columns?$select=id,name,displayName,description,hidden,readOnly,required,choice,text,number,currency,boolean,dateTime,personOrGroup,lookup,hyperlinkOrPicture');
+    }
+
+    /** Create only columns planned from populated, supported source metadata. */
+    private function create_missing_columns(array $target, array $columns)
+    {
+        $created = array();
+        foreach ($columns as $column) {
+            $name = (string) ($column['name'] ?? '');
+            $type = (string) ($column['type'] ?? '');
+            $payload = (array) ($column['payload'] ?? array());
+            if (! $name || ! $payload || ! in_array($type, array('text', 'choice', 'number', 'currency', 'boolean', 'dateTime'), true)) {
+                return new \WP_Error('migration_schema_create_invalid', 'En saknad målkolumn har ett ogiltigt schema: ' . ($name ?: 'okänd') . '.');
+            }
+            $result = $this->graph->request('POST', 'sites/' . rawurlencode((string) $target['site_id']) . '/lists/' . rawurlencode((string) $target['list_id']) . '/columns', $payload);
+            if (is_wp_error($result)) {
+                return new \WP_Error('migration_schema_create_failed', 'Målkolumnen kunde inte skapas: ' . $name . '. ' . $result->get_error_message());
+            }
+            $created[] = $name;
+        }
+        return $created;
     }
 
     private function schema_plan(array $source_columns, array $target_columns, array $used): array

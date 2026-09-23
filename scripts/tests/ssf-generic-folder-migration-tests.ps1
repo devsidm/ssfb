@@ -44,6 +44,7 @@ Assert-Contains 'Graph etag ignored as system metadata' $core "'@odata.etag'"
 Assert-Contains 'SharePoint author lookup ignored as system metadata' $core "'AuthorLookupId'"
 Assert-Contains 'SharePoint editor lookup ignored as system metadata' $core "'EditorLookupId'"
 Assert-Contains 'SharePoint file presentation fields ignored' $core "'DocIcon', 'FileSizeDisplay'"
+Assert-Contains 'SharePoint AI image tags ignored' $core "'MediaServiceImageTags'"
 Assert-Contains 'Schema plan defensively skips system metadata' $core 'in_array($name, self::SYSTEM_FIELDS, true)'
 Assert-Contains 'Canonical membership signature' $core 'MEMBERSHIP_CANONICAL_SIGNATURE'
 Assert-Contains 'Legacy membership aliases are isolated' $core 'MEMBERSHIP_LEGACY_FIELDS'
@@ -53,9 +54,9 @@ Assert-Contains 'Legacy fields are removed before writes' $core 'unset($metadata
 Assert-Contains 'Canonical status is required for legacy filtering' $core "empty(`$column_names['ApplicationStatus'])"
 Assert-Contains 'UI explains canonical membership metadata' $archive 'Kanonisk medlemsmetadata:'
 Assert-Contains 'Dry run has zero writes' $core "'writes' => 0"
-Assert-Contains 'Missing columns block dry run' $core "if (! empty(`$schema['create']))"
-Assert-Contains 'Old approved plans cannot create a folder' $core 'migration_schema_provisioning_required'
-Assert-NotContains 'Runtime must not create SharePoint columns' $core 'migration_schema_create_failed'
+Assert-Contains 'Missing columns are planned as warnings' $core 'De skapas och verifieras i steg 5'
+Assert-Contains 'Prepare creates planned source columns' $core 'create_missing_columns($target'
+Assert-Contains 'Runtime reports column creation failures' $core 'migration_schema_create_failed'
 Assert-Contains 'Destination inspection is read only' $core 'public function inspect_destination(array $source, array $target)'
 Assert-Contains 'Direct library root creates no duplicate source folder' $core "'segments' => array()"
 Assert-Contains 'Direct library root is verified specially' $core "'verification_result' => 'target-library-root'"
@@ -65,7 +66,7 @@ Assert-Contains 'Confirmed file conflicts use replace' $core "?@microsoft.graph.
 Assert-Contains 'Prepare only root path' $core "'created_source_children' => 0"
 Assert-Contains 'Schema is verified before prepare' $core 'migration_schema_verify_failed'
 Assert-Matches 'Schema verification precedes folder creation' $core '(?s)\$verified_columns = \$this->columns\(\$target\).*?\$parent = \(string\) \$target\[''folder_id''\]'
-Assert-Contains 'Missing columns have manual details' $archive '$choice_values = (array)'
+Assert-Contains 'Missing columns are shown as automatic preparation details' $archive 'Skapar <?php echo esc_html((string) count($create_columns)); ?> saknade kolumner i steg 5'
 Assert-Contains 'Choice object is normalized before display' $archive '$choice_config = (array)'
 Assert-Contains 'Live preview recalculates' $archive 'data-ssf-migration-preview'
 Assert-Contains 'Resumable verified state' $core "'state' => 'VERIFIED'"
