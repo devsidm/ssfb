@@ -66,7 +66,7 @@ Assert-Contains 'maintenance active verified by curl' $script 'verify_maintenanc
 Assert-Contains 'maintenance inactive verified after deactivate' $script 'verify_maintenance_inactive'
 Assert-Contains 'maintenance grace before backup' $script 'maintenance_grace_period'
 Assert-Contains 'failure handler keeps mutated site paused' $script 'PROD_MUTATED" == "1"'
-Assert-True 'failure before PROD mutation removes maintenance' ($script.Contains('elif [[ "$PROD_MUTATED" == "1" ]]; then') -and $script.Contains("else`n    deactivate_maintenance"))
+Assert-True 'failure before PROD mutation removes maintenance' ($script -match '(?s)elif \[\[ "\$PROD_MUTATED" == "1" \]\]; then.*?else\s+deactivate_maintenance')
 Assert-Contains 'public smoke failure relocks site' $script 'public_smoke_failed'
 Assert-NotContains 'no naive trap always deactivates maintenance' $script 'trap cleanup EXIT;'
 Assert-Contains 'cleanup reads exit status' $script 'local status=$?'
