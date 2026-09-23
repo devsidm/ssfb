@@ -155,6 +155,8 @@ Assert-Contains 'gzip integrity check exists' $script 'gzip -t "$BACKUP_DIR/data
 Assert-Contains 'database backup sha256 exists' $script 'sha256_file "$BACKUP_DIR/database.sql.gz"'
 Assert-Contains 'database dump sanity validation exists' $script "rg -q 'CREATE TABLE|INSERT INTO|DROP TABLE'"
 Assert-Contains 'file archive exists' $script 'prod-wp-content-targets.tar.gz'
+Assert-Contains 'file backup skips absent new PROD plugins' $script 'PROD plugin absent before deployment (new component, no files to back up): $plugin'
+Assert-Contains 'file backup skips absent new PROD themes' $script 'PROD theme absent before deployment (new component, no files to back up): $theme'
 Assert-Contains 'tar integrity check exists' $script 'tar -tzf "$archive" >/dev/null'
 Assert-Contains 'archive listing file exists' $script 'archive_list="$BACKUP_DIR/.prod-wp-content-targets.list"'
 Assert-Contains 'archive listing written before membership checks' $script 'tar -tzf "$archive" > "$archive_list"'

@@ -946,13 +946,25 @@ file_backup() {
   section "FILE BACKUP"
   local paths=()
   paths+=("wp-content/mu-plugins")
-  while IFS= read -r plugin; do paths+=("wp-content/plugins/$plugin"); done < <(json_array "production.plugins")
+  while IFS= read -r plugin; do
+    if [[ -d "$PROD/wp-content/plugins/$plugin" ]]; then
+      paths+=("wp-content/plugins/$plugin")
+    else
+      echo "PROD plugin absent before deployment (new component, no files to back up): $plugin"
+    fi
+  done < <(json_array "production.plugins")
   while IFS= read -r plugin; do
     if [[ -d "$PROD/wp-content/plugins/$plugin" ]]; then
       paths+=("wp-content/plugins/$plugin")
     fi
   done < <(plugin_plan_array "touched_plugins")
-  while IFS= read -r theme; do paths+=("wp-content/themes/$theme"); done < <(json_array "production.themes")
+  while IFS= read -r theme; do
+    if [[ -d "$PROD/wp-content/themes/$theme" ]]; then
+      paths+=("wp-content/themes/$theme")
+    else
+      echo "PROD theme absent before deployment (new component, no files to back up): $theme"
+    fi
+  done < <(json_array "production.themes")
   mapfile -t paths < <(printf '%s\n' "${paths[@]}" | sort -u)
   local archive archive_list
   archive="$BACKUP_DIR/prod-wp-content-targets.tar.gz"
