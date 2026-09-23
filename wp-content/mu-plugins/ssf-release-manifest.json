@@ -1,16 +1,18 @@
 {
-  "schema_version": 1,
-  "release_name": "SSF Web",
-  "version": "0.14.0",
-  "build": "20260923.1",
-  "built_at": "2026-09-23T09:25:39.5109074Z",
-  "source": "manual",
-  "source_revision": "fdc39c3afaacb72d437cec481b6d83861a66c538",
-  "description": "Harden deploy validation and prepare current SSF changes for production",
-  "notes": "Production release 20260923.1",
-  "components": [
-    "release-tooling"
-  ],
-  "status": "prepared",
-  "prepared_at": "2026-09-23T09:26:10.0755129Z"
+    "schema_version":  1,
+    "release_name":  "SSF Web",
+    "version":  "0.14.1",
+    "build":  "20260923.2",
+    "built_at":  "2026-09-23T14:15:32.9493293Z",
+    "source":  "codex",
+    "source_revision":  "46173864eda7f3f23c274e3e534480fcf2e1481c",
+    "description":  "Provision migration metadata columns during target preparation",
+    "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
+    "components":  [
+                       "release-tooling",
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal"
+                   ],
+    "status":  "prepared",
+    "prepared_at":  "2026-09-23T14:15:33.5547991Z"
 }
