@@ -2,16 +2,15 @@
   "schema_version": 1,
   "release_name": "SSF Web",
   "version": "0.14.0",
-  "build": "20260922.17",
-  "built_at": "2026-09-22T21:26:57.7892661Z",
+  "build": "20260923.1",
+  "built_at": "2026-09-23T09:25:39.5109074Z",
   "source": "manual",
-  "source_revision": "927ec585f5394837cd6a2923dd6cdf47e5e43244",
-  "description": "Prepare current SSF changes for production",
-  "notes": "Production release 20260922.17",
+  "source_revision": "fdc39c3afaacb72d437cec481b6d83861a66c538",
+  "description": "Harden deploy validation and prepare current SSF changes for production",
+  "notes": "Production release 20260923.1",
   "components": [
-    "microsoft-id-login",
     "release-tooling"
   ],
   "status": "prepared",
-  "prepared_at": "2026-09-22T21:28:35.1965816Z"
+  "prepared_at": "2026-09-23T09:26:10.0755129Z"
 }
