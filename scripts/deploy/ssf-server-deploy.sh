@@ -122,6 +122,68 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+validate_deploy_config() {
+  section "DEPLOY CONFIG"
+
+  [[ -f "$CONFIG" ]] || fail "Deploy config missing: $CONFIG"
+
+  php -r '
+    $file = $argv[1];
+    $raw = file_get_contents($file);
+
+    if ($raw === false) {
+      fwrite(STDERR, "Cannot read deploy config.\n");
+      exit(2);
+    }
+
+    if (strncmp($raw, "\xEF\xBB\xBF", 3) === 0) {
+      fwrite(STDERR, "Deploy config must be UTF-8 without BOM.\n");
+      exit(3);
+    }
+
+    $data = json_decode($raw, true);
+
+    if (!is_array($data)) {
+      fwrite(STDERR, "Invalid deploy config JSON: " . json_last_error_msg() . "\n");
+      exit(4);
+    }
+
+    $required = array(
+      "production.plugins",
+      "production.themes",
+      "production.mu_files",
+      "production.mu_asset_dirs"
+    );
+
+    foreach ($required as $requiredPath) {
+      $node = $data;
+
+      foreach (explode(".", $requiredPath) as $part) {
+        if (!is_array($node) || !array_key_exists($part, $node)) {
+          fwrite(STDERR, "Missing deploy config path: " . $requiredPath . "\n");
+          exit(5);
+        }
+
+        $node = $node[$part];
+      }
+
+      if (!is_array($node)) {
+        fwrite(STDERR, "Deploy config path is not an array: " . $requiredPath . "\n");
+        exit(6);
+      }
+
+      foreach ($node as $value) {
+        if (!is_string($value) || trim($value) === "") {
+          fwrite(STDERR, "Invalid value in deploy config path: " . $requiredPath . "\n");
+          exit(7);
+        }
+      }
+    }
+  ' "$CONFIG" || fail "Deploy component configuration is invalid."
+
+  echo "Deploy config: PASS"
+}
+
 json_array() {
   local path="$1"
   php -r '
@@ -1233,6 +1295,7 @@ REPORT
 main() {
   require_tools
   update_repo
+  validate_deploy_config
   run_tests
   php_lint
   sync_to_dev

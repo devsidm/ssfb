@@ -1,4 +1,4 @@
-﻿param(
+param(
   [Parameter(Mandatory = $true)]
   [string]$PdfPath,
   [string]$BaseUrl = "https://ssfb.se/dev",

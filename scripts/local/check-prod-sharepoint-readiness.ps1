@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string] $BaseUrl = 'https://ssfb.se/dev',
     [Parameter(Mandatory = $true)]
     [string] $Username,
