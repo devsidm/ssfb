@@ -2,12 +2,12 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.1",
-    "build":  "20260924.3",
-    "built_at":  "2026-09-24T12:33:30.2928893Z",
+    "build":  "20260924.4",
+    "built_at":  "2026-09-24T12:52:22.7059973Z",
     "source":  "codex",
-    "source_revision":  "14f43c756d8c44097e85915d61c5fdcf5466cd7d",
-    "description":  "Simplify annual meeting section visibility",
-    "notes":  "TorrkÃ¶rning kontrollerar mÃ¥l och skapar stÃ¶dda saknade metadatafÃ¤lt i steg 5.",
+    "source_revision":  "66c9c45b7a9cfe15b20a38452f5776bf7459c907",
+    "description":  "Hide annual meeting registration when no registration choices exist",
+    "notes":  "TorrkÃƒÂ¶rning kontrollerar mÃƒÂ¥l och skapar stÃƒÂ¶dda saknade metadatafÃƒÂ¤lt i steg 5.",
     "components":  [
                        "ssf-member-portal"
                    ],
