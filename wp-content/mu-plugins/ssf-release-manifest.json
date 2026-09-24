@@ -2,14 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.1",
-    "build":  "20260924.4",
-    "built_at":  "2026-09-24T12:52:22.7059973Z",
+    "build":  "20260924.5",
+    "built_at":  "2026-09-24T14:35:45.7017860Z",
     "source":  "codex",
-    "source_revision":  "66c9c45b7a9cfe15b20a38452f5776bf7459c907",
-    "description":  "Hide annual meeting registration when no registration choices exist",
-    "notes":  "TorrkÃƒÂ¶rning kontrollerar mÃƒÂ¥l och skapar stÃƒÂ¶dda saknade metadatafÃƒÂ¤lt i steg 5.",
+    "source_revision":  "5039e8d0598581ce141df7c43d781760a41d3fff",
+    "description":  "Improve membership application PDF layout and SSF branding",
+    "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
-                       "ssf-member-portal"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
