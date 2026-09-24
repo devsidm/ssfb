@@ -90,7 +90,8 @@ Assert-Contains 'Submit-idempotens' $public 'ssf_application_submit_'
 Assert-True 'Antispam ska köras före Application::create' ($public.IndexOf("SSF_Antispam::validate('membership_application')") -lt $public.IndexOf('SSF_Medlemsprocess_Application::create($data)'))
 Assert-Contains 'PDF-signatur' $pdf '%PDF-1.4'
 Assert-Contains 'PDF-ansökningsnummer' $pdf 'Ansökningsnummer'
-Assert-Contains 'PDF-SSF-identitet' $pdf '(SSF) Tj'
+Assert-Contains 'PDF-SSF-logotyp' $pdf '/Logo Do'
+Assert-Contains 'PDF-temalogotyp' $pdf "get_theme_file_path('/assets/images/ssf-logo.svg')"
 foreach ($folder in @("'Bilder'", "'Bilagor'")) { Assert-Contains "SharePoint-mapp $folder" $sharepoint $folder }
 foreach ($meta in @('_ssf_sp_application_folder_id', '_ssf_sp_application_list_item_id', '_ssf_sp_pdf_drive_item_id', '_ssf_sp_pdf_list_item_id')) { Assert-Contains "Stabilt Graph-ID $meta" $sharepoint $meta }
 foreach ($meta in @('_ssf_sp_site_id', '_ssf_sp_drive_id', '_ssf_sp_list_id')) {

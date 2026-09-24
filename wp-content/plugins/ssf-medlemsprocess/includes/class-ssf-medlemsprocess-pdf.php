@@ -1,9 +1,5 @@
 <?php
-/**
- * Small archive-PDF writer for membership applications.
- *
- * @package SSF_Medlemsprocess
- */
+/** Archive PDF for membership applications. */
 
 if (! defined('ABSPATH')) {
     exit;
@@ -21,7 +17,13 @@ class SSF_Medlemsprocess_PDF
         $number = (string) get_post_meta($application_id, '_ssf_application_number', true);
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $filename = sanitize_file_name('Ansokan-' . $number . '-' . ($data['ship_name'] ?? 'fartyg') . '.pdf');
-        $upload = wp_upload_bits($filename, null, $this->render($application_id));
+        try {
+            $content = $this->render($application_id);
+        } catch (RuntimeException $error) {
+            SSF_Medlemsprocess_Application::add_history($application_id, 'pdf_error', 'Ansöknings-PDF kunde inte skapas.', false);
+            return 0;
+        }
+        $upload = wp_upload_bits($filename, null, $content);
         if (! empty($upload['error'])) {
             SSF_Medlemsprocess_Application::add_history($application_id, 'pdf_error', 'Ansöknings-PDF kunde inte skapas.', false);
             return 0;
@@ -50,11 +52,10 @@ class SSF_Medlemsprocess_PDF
         $data = SSF_Medlemsprocess_Application::data($application_id);
         $profile = (array) get_post_meta($application_id, '_ssf_application_vessel_snapshot', true);
         $route = (string) get_post_meta($application_id, '_ssf_application_route', true);
-        $lines = array(
-            array('title', 'Ansökan om medlemskap som fartygsombud'),
-            array('field', 'Ansökningsnummer', $number),
-            array('field', 'Inkommet datum', $submitted ? mysql2date('j F Y, H:i', $submitted) : ''),
-            array('field', 'Medlemsväg', class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route),
+        $items = array(
+            array('summary', 'Ansökningsnummer', $number),
+            array('summary', 'Inkommet', $submitted ? mysql2date('j F Y, H:i', $submitted) : ''),
+            array('summary', 'Medlemsväg', class_exists('SSF_Medlemsfartyg_Profile') ? SSF_Medlemsfartyg_Profile::route_label($route) : $route),
             array('section', 'Fartygsombud'),
             array('field', 'Namn', $data['applicant_name'] ?? ''),
             array('field', 'Organisation', $data['applicant_organization'] ?? ''),
@@ -68,35 +69,41 @@ class SSF_Medlemsprocess_PDF
         if (class_exists('SSF_Medlemsfartyg_Profile')) {
             $schema = SSF_Medlemsfartyg_Profile::schema();
             $groups = array(
-                'Fartyget' => array('basic', 'dimensions', 'rig'),
-                'Fartygets historia och nuvarande användning' => array('history', 'presentation'),
-                'Särskilda uppgifter' => array('registration', 'restoration', 'traditional'),
+                'Fartyget' => 'basic',
+                'Mått och dimensioner' => 'dimensions',
+                'Rigg och maskin' => 'rig',
+                'Historia och tidigare användning' => 'history',
+                'Nuvarande verksamhet och presentation' => 'presentation',
+                'Registrering' => 'registration',
+                'Restaurering' => 'restoration',
+                'Traditionell utformning' => 'traditional',
             );
-            foreach ($groups as $heading => $sections) {
+            foreach ($groups as $heading => $section) {
                 $rows = array();
                 foreach ($schema as $key => $field) {
-                    if (! in_array($field['section'], $sections, true) || ! array_key_exists($key, $profile)) {
+                    if (($field['section'] ?? '') !== $section || ! array_key_exists($key, $profile)) {
                         continue;
                     }
                     $value = $this->display_value($profile[$key], $field);
                     if ('' !== $value) {
-                        $rows[] = array('field', (string) $field['label'], $value);
+                        $kind = 'textarea' === ($field['type'] ?? '') || strlen($value) > 170 ? 'paragraph' : 'field';
+                        $rows[] = array($kind, (string) $field['label'], $value);
                     }
                 }
                 if ($rows) {
-                    $lines[] = array('section', $heading);
-                    $lines = array_merge($lines, $rows);
+                    $items[] = array('section', $heading);
+                    $items = array_merge($items, $rows);
                 }
             }
         }
 
-        $lines[] = array('section', 'Bilder');
-        $lines[] = array('body', $this->attachment_list((array) get_post_meta($application_id, '_ssf_application_gallery_ids', true), (int) get_post_meta($application_id, '_ssf_application_main_image_id', true), 'Inga bilder bifogades.'));
-        $lines[] = array('section', 'Bilagor');
-        $lines[] = array('body', $this->attachment_list((array) get_post_meta($application_id, '_ssf_application_document_ids', true), 0, 'Inga bilagor bifogades.'));
-        $lines[] = array('body', 'PDF-filen är en arkiverad sammanställning. Strukturerade fartygsuppgifter och ärendestatus hanteras i WordPress.');
+        $items[] = array('section', 'Bilder');
+        $items[] = array('paragraph', 'Bifogade bilder', $this->attachment_list((array) get_post_meta($application_id, '_ssf_application_gallery_ids', true), (int) get_post_meta($application_id, '_ssf_application_main_image_id', true), 'Inga bilder bifogades.'));
+        $items[] = array('section', 'Bilagor');
+        $items[] = array('paragraph', 'Bifogade dokument', $this->attachment_list((array) get_post_meta($application_id, '_ssf_application_document_ids', true), 0, 'Inga bilagor bifogades.'));
+        $items[] = array('note', 'PDF-filen är en arkiverad sammanställning. Strukturerade fartygsuppgifter och ärendestatus hanteras i WordPress.');
 
-        return $this->build_pdf($lines, $number, (string) ($data['ship_name'] ?? ''));
+        return $this->build_pdf($items, $number, (string) ($data['ship_name'] ?? ''));
     }
 
     private function display_value($value, array $field): string
@@ -131,43 +138,111 @@ class SSF_Medlemsprocess_PDF
     {
         $pages = array(array());
         $page = 0;
-        $y = 748;
+        $y = 738;
+        $pending = null;
+        $summaries = array();
+
         foreach ($items as $item) {
             $type = $item[0];
-            $label = (string) ($item[1] ?? '');
-            $value = (string) ($item[2] ?? '');
-            $font_size = 'title' === $type ? 20 : ('section' === $type ? 13 : 10);
-            $line_height = 'title' === $type ? 26 : ('section' === $type ? 22 : 14);
-            $text = 'field' === $type ? $label . ': ' . $value : $label;
-            $wrapped = $this->wrap($text, 'title' === $type ? 48 : ('section' === $type ? 72 : 92));
-            $needed = max($line_height, count($wrapped) * $line_height) + ('section' === $type ? 5 : 2);
-            if ($y - $needed < 65) {
-                ++$page;
-                $pages[$page] = array();
-                $y = 760;
+            if ('summary' === $type) {
+                $summaries[] = $item;
+                if (3 === count($summaries)) {
+                    foreach ($summaries as $index => $summary) {
+                        $x = 48 + $index * 170;
+                        $pages[$page][] = '0.94 0.96 0.99 rg ' . $x . ' 679 160 59 re f';
+                        $pages[$page][] = $this->text($x + 10, 718, $this->uppercase($summary[1]), 8, true, '0.30 0.39 0.53');
+                        foreach ($this->wrap((string) $summary[2], 24) as $line_index => $line) {
+                            $pages[$page][] = $this->text($x + 10, 699 - $line_index * 12, $line, 10, true);
+                        }
+                    }
+                    $y = 656;
+                }
+                continue;
             }
+
+            if ('field' === $type) {
+                if ('' === trim((string) ($item[2] ?? ''))) {
+                    continue;
+                }
+                if (null === $pending) {
+                    $pending = $item;
+                    continue;
+                }
+                $this->field_row($pages, $page, $y, $pending, $item);
+                $pending = null;
+                continue;
+            }
+            if (null !== $pending) {
+                $this->field_row($pages, $page, $y, $pending, null);
+                $pending = null;
+            }
+
             if ('section' === $type) {
-                $pages[$page][] = '0.93 0.96 1 rg 48 ' . ($y - 5) . ' 499 20 re f';
+                $this->new_page_if_needed($pages, $page, $y, 62);
+                $y -= 17;
+                $pages[$page][] = $this->text(48, $y, $this->uppercase((string) $item[1]), 11, true);
+                $pages[$page][] = sprintf('0.19 0.39 0.72 RG 0.8 w 48 %d m 547 %d l S', $y - 9, $y - 9);
+                $y -= 27;
+                continue;
             }
-            foreach ($wrapped as $line_index => $line) {
-                $font = in_array($type, array('title', 'section'), true) || ('field' === $type && 0 === $line_index) ? 'F2' : 'F1';
-                $color = in_array($type, array('title', 'section'), true) ? '0.04 0.13 0.29' : '0.12 0.15 0.19';
-                $pages[$page][] = sprintf('BT /%s %d Tf %s rg 54 %d Td (%s) Tj ET', $font, $font_size, $color, $y, $this->escape($line));
-                $y -= $line_height;
+
+            if ('note' === $type) {
+                $note_lines = $this->wrap((string) $item[1], 97);
+                $height = 18 + count($note_lines) * 13;
+                $this->new_page_if_needed($pages, $page, $y, $height + 10);
+                $pages[$page][] = sprintf('0.94 0.96 0.99 rg 48 %d 499 %d re f', $y - $height, $height);
+                foreach ($note_lines as $index => $line) {
+                    $pages[$page][] = $this->text(60, $y - 17 - $index * 13, $line, 9, false, '0.30 0.39 0.53');
+                }
+                $y -= $height + 10;
+                continue;
             }
-            $y -= 'section' === $type ? 7 : 3;
+
+            $label = (string) $item[1];
+            $value = (string) ($item[2] ?? '');
+            $lines = $this->wrap($value, 91, true);
+            $first = true;
+            while ($lines) {
+                $this->new_page_if_needed($pages, $page, $y, 58);
+                if ('' !== $label) {
+                    $pages[$page][] = $this->text(54, $y, $first ? $label : $label . ' (forts.)', 9, true, '0.30 0.39 0.53');
+                    $y -= 17;
+                }
+                $room = max(1, (int) floor(($y - 68) / 14));
+                $chunk = array_splice($lines, 0, $room);
+                foreach ($chunk as $line) {
+                    $pages[$page][] = $this->text(54, $y, $line, 10, false, '0.13 0.19 0.29');
+                    $y -= 14;
+                }
+                $y -= 12;
+                $first = false;
+                if ($lines) {
+                    $this->new_page_if_needed($pages, $page, $y, 1000);
+                }
+            }
+        }
+        if (null !== $pending) {
+            $this->field_row($pages, $page, $y, $pending, null);
         }
 
+        // The JPEG is a raster export of the exact theme SVG, not a redrawn logo.
+        $theme_logo = function_exists('get_theme_file_path') ? get_theme_file_path('/assets/images/ssf-logo.svg') : '';
+        $logo = dirname(__DIR__) . '/assets/ssf-logo-pdf.jpg';
+        if (! is_file($theme_logo) || ! is_file($logo)) {
+            throw new RuntimeException('SSF theme logo or PDF raster is missing.');
+        }
+        $image = file_get_contents($logo);
         foreach ($pages as $page_index => &$commands) {
             array_unshift($commands,
-                '0.04 0.13 0.29 rg 48 786 m 48 816 l 66 824 l 84 816 l 84 786 l 66 776 l h f',
-                '0.92 0.68 0.05 rg 50 819 8 6 re f 62 824 8 6 re f 74 819 8 6 re f',
-                '1 1 1 RG 1.6 w 66 813 m 66 789 l S 59 806 m 73 806 l S 61 813 m 61 816 71 816 71 813 c 71 810 61 810 61 813 c S 55 794 m 58 787 63 784 66 784 c 69 784 74 787 77 794 c S 55 794 m 60 795 l S 77 794 m 72 795 l S',
-                'BT /F2 24 Tf 0.04 0.13 0.29 rg 98 795 Td (SSF) Tj ET',
-                'BT /F1 9 Tf 0.25 0.29 0.35 rg 98 782 Td (' . $this->escape('Sveriges Segelfartygsförbund') . ') Tj ET',
-                '0.19 0.39 0.72 RG 48 768 m 547 768 l S'
+                'q 68 0 0 70 48 763 cm /Logo Do Q',
+                $this->text(132, 809, 'SVERIGES SEGELFARTYGSFÖRBUND', 9, true, '0.19 0.39 0.72'),
+                $this->text(132, 788, 'Ansökan om medlemskap', 17, true),
+                $this->text(132, 768, 'som fartygsombud', 17, true),
+                '0.19 0.39 0.72 RG 0.8 w 48 752 m 547 752 l S'
             );
-            $commands[] = 'BT /F1 8 Tf 0.4 0.43 0.48 rg 54 35 Td (' . $this->escape($number . ' - ' . $ship_name . ' - Sida ' . ($page_index + 1) . ' av ' . count($pages)) . ') Tj ET';
+            $commands[] = '0.84 0.89 0.95 RG 0.6 w 48 55 m 547 55 l S';
+            $commands[] = $this->text(48, 40, trim($number . '  ·  ' . $ship_name), 8, false, '0.35 0.43 0.54');
+            $commands[] = $this->text(498, 40, 'Sida ' . ($page_index + 1) . ' av ' . count($pages), 8, false, '0.35 0.43 0.54');
         }
         unset($commands);
 
@@ -176,19 +251,19 @@ class SSF_Medlemsprocess_PDF
             2 => '',
             3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
             4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+            5 => '<< /Type /XObject /Subtype /Image /Width 944 /Height 974 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' . strlen($image) . " >>\nstream\n" . $image . "\nendstream",
         );
         $kids = array();
         foreach ($pages as $page_index => $commands) {
-            $page_id = 5 + ($page_index * 2);
+            $page_id = 6 + $page_index * 2;
             $content_id = $page_id + 1;
             $stream = implode("\n", $commands);
             $kids[] = $page_id . ' 0 R';
-            $objects[$page_id] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ' . $content_id . ' 0 R >>';
+            $objects[$page_id] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents ' . $content_id . ' 0 R >>';
             $objects[$content_id] = '<< /Length ' . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream";
         }
         $objects[2] = '<< /Type /Pages /Kids [' . implode(' ', $kids) . '] /Count ' . count($kids) . ' >>';
         ksort($objects);
-
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
         $offsets = array(0 => 0);
         foreach ($objects as $id => $object) {
@@ -196,36 +271,103 @@ class SSF_Medlemsprocess_PDF
             $pdf .= $id . " 0 obj\n" . $object . "\nendobj\n";
         }
         $xref = strlen($pdf);
-        $pdf .= 'xref' . "\n0 " . (count($objects) + 1) . "\n0000000000 65535 f \n";
+        $pdf .= "xref\n0 " . (count($objects) + 1) . "\n0000000000 65535 f \n";
         foreach (array_keys($objects) as $id) {
             $pdf .= sprintf("%010d 00000 n \n", $offsets[$id]);
         }
-        $pdf .= 'trailer << /Size ' . (count($objects) + 1) . ' /Root 1 0 R >>' . "\nstartxref\n" . $xref . "\n%%EOF";
-        return $pdf;
+        return $pdf . 'trailer << /Size ' . (count($objects) + 1) . " /Root 1 0 R >>\nstartxref\n" . $xref . "\n%%EOF";
     }
 
-    private function wrap(string $text, int $limit): array
+    private function field_row(array &$pages, int &$page, int &$y, array $left, ?array $right): void
     {
-        $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
-        if ('' === $text) {
-            return array('–');
+        $left_labels = $this->wrap((string) $left[1], 39);
+        $left_lines = $this->wrap((string) $left[2], 39);
+        $right_labels = null === $right ? array() : $this->wrap((string) $right[1], 39);
+        $right_lines = null === $right ? array() : $this->wrap((string) $right[2], 39);
+        $height = 10 + max(count($left_labels) + count($left_lines), count($right_labels) + count($right_lines)) * 13 + 9;
+        $this->new_page_if_needed($pages, $page, $y, $height);
+        $this->field_cell($pages[$page], 54, $y, $left_labels, $left_lines);
+        if (null !== $right) {
+            $this->field_cell($pages[$page], 305, $y, $right_labels, $right_lines);
         }
+        $y -= $height;
+    }
+
+    private function field_cell(array &$commands, int $x, int $y, array $labels, array $lines): void
+    {
+        foreach ($labels as $index => $label) {
+            $commands[] = $this->text($x, $y - $index * 12, $label, 9, true, '0.30 0.39 0.53');
+        }
+        foreach ($lines as $index => $line) {
+            $commands[] = $this->text($x, $y - count($labels) * 13 - 4 - $index * 13, $line, 10, false, '0.13 0.19 0.29');
+        }
+    }
+
+    private function new_page_if_needed(array &$pages, int &$page, int &$y, int $needed): void
+    {
+        if ($y - $needed < 68) {
+            ++$page;
+            $pages[$page] = array();
+            $y = 738;
+        }
+    }
+
+    private function wrap(string $text, int $limit, bool $preserve_breaks = false): array
+    {
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $paragraphs = $preserve_breaks ? preg_split('/\R/u', $text) : array($text);
+        $max_width = array(24 => 142, 39 => 232, 91 => 476, 97 => 470)[$limit] ?? 470;
         $lines = array();
-        $line = '';
-        foreach (preg_split('/\s+/u', $text) as $word) {
-            $candidate = '' === $line ? $word : $line . ' ' . $word;
-            $length = function_exists('mb_strlen') ? mb_strlen($candidate) : strlen($candidate);
-            if ($length > $limit && '' !== $line) {
-                $lines[] = $line;
-                $line = $word;
-            } else {
-                $line = $candidate;
+        foreach ($paragraphs as $paragraph) {
+            $line = '';
+            foreach (preg_split('/\s+/u', trim($paragraph), -1, PREG_SPLIT_NO_EMPTY) as $word) {
+                $candidate = '' === $line ? $word : $line . ' ' . $word;
+                if ($this->approx_width($candidate) <= $max_width) {
+                    $line = $candidate;
+                    continue;
+                }
+                if ('' !== $line) {
+                    $lines[] = $line;
+                    $line = '';
+                }
+                foreach (preg_split('//u', $word, -1, PREG_SPLIT_NO_EMPTY) as $char) {
+                    if ('' !== $line && $this->approx_width($line . $char) > $max_width) {
+                        $lines[] = $line;
+                        $line = '';
+                    }
+                    $line .= $char;
+                }
             }
-        }
-        if ('' !== $line) {
             $lines[] = $line;
         }
-        return $lines;
+        return $lines ?: array('');
+    }
+
+    private function approx_width(string $text): float
+    {
+        $width = 0.0;
+        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) as $char) {
+            if (false !== strpos('WMÅÄÖ@mw', $char)) {
+                $width += 10;
+            } elseif (false !== strpos('ilI.,:;!|\'` ', $char)) {
+                $width += 3.4;
+            } elseif (preg_match('/[A-Z0-9]/u', $char)) {
+                $width += 7.6;
+            } else {
+                $width += 6.2;
+            }
+        }
+        return $width;
+    }
+
+    private function text(int $x, int $y, string $value, int $size, bool $bold = false, string $color = '0.04 0.13 0.29'): string
+    {
+        return sprintf('BT /%s %d Tf %s rg %d %d Td (%s) Tj ET', $bold ? 'F2' : 'F1', $size, $color, $x, $y, $this->escape($value));
+    }
+
+    private function uppercase(string $text): string
+    {
+        return strtr(strtoupper($text), array('å' => 'Å', 'ä' => 'Ä', 'ö' => 'Ö'));
     }
 
     private function escape(string $text): string
