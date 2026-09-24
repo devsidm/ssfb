@@ -288,7 +288,7 @@ Assert-Contains 'absolute DEV URL detected' $devLinkGuard 'ssfb\\.se/dev'
 Assert-Contains 'runtime scan uses production plugins' $devLinkGuard '$config["production"]["plugins"]'
 Assert-Contains 'runtime scan uses production themes' $devLinkGuard '$config["production"]["themes"]'
 Assert-Contains 'runtime scan uses production MU files' $devLinkGuard '$config["production"]["mu_files"]'
-Assert-Contains 'docs excluded from runtime scan' $devLinkGuard 'preg_match("~/docs?/|\\.md$~i"'
+Assert-Contains 'docs and CLI tests excluded from runtime scan' $devLinkGuard 'preg_match("~/(?:docs?|tests)/|\\.md$~i"'
 Assert-NotContains 'no automatic DB search replace' $devLinkGuard 'search-replace'
 Assert-NotContains 'no SQL update mutation' $devLinkGuard 'UPDATE '
 Assert-NotContains 'no SQL delete mutation' $devLinkGuard 'DELETE '
@@ -373,6 +373,38 @@ Assert-True 'SharePoint post-check after deployment before opening site' ($mainO
 $phpCommand = Get-Command php -ErrorAction SilentlyContinue
 $phpPath = if ($phpCommand) { $phpCommand.Source } else { Join-Path ([IO.Path]::GetTempPath()) 'ssf-codex-php-8.5.10\php.exe' }
 if (Test-Path -LiteralPath $phpPath) {
+    $scannerMatch = [regex]::Match($devLinkGuard, '(?s)ssf_dev_link_source_check\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$runtime_root"')
+    Assert-True 'embedded DEV-link source scanner extracted' $scannerMatch.Success
+    if ($scannerMatch.Success) {
+        $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('ssf-dev-link-guard-' + [guid]::NewGuid().ToString('N'))
+        $pluginRoot = Join-Path $fixtureRoot 'plugins\ssf-example'
+        $testRoot = Join-Path $pluginRoot 'tests'
+        $runtimeRoot = Join-Path $pluginRoot 'includes'
+        $fixtureConfig = Join-Path $fixtureRoot 'deploy-components.json'
+        $scannerFile = Join-Path $fixtureRoot 'source-scanner.php'
+        $testFile = Join-Path $testRoot 'cli-fixture.php'
+        $runtimeFile = Join-Path $runtimeRoot 'runtime.php'
+        try {
+            New-Item -ItemType Directory -Path $testRoot, $runtimeRoot -Force | Out-Null
+            [IO.File]::WriteAllText($fixtureConfig, '{"production":{"plugins":["ssf-example"],"themes":[],"mu_files":[]}}', [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($scannerFile, '<?php' + [Environment]::NewLine + $scannerMatch.Groups['code'].Value, [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($testFile, '<?php $url = "https://ssfb.se/dev/";')
+            [IO.File]::WriteAllText($runtimeFile, '<?php $url = "https://ssfb.se/";')
+            $scanOutput = & $phpPath $scannerFile $fixtureConfig $fixtureRoot 2>&1
+            Assert-True 'CLI test DEV link ignored' ($LASTEXITCODE -eq 0 -and -not $scanOutput)
+            [IO.File]::WriteAllText($runtimeFile, '<?php $url = "https://ssfb.se/dev/";')
+            $scanOutput = & $phpPath $scannerFile $fixtureConfig $fixtureRoot 2>&1
+            Assert-True 'runtime DEV link still blocked' ($LASTEXITCODE -eq 5 -and (($scanOutput -join "`n") -match 'includes/runtime\.php'))
+            $scanOutput = & $phpPath $scannerFile $configPath (Join-Path $repo 'wp-content') 2>&1
+            Assert-True 'repository runtime source has no DEV links' ($LASTEXITCODE -eq 0 -and -not $scanOutput)
+        } finally {
+            $resolvedFixture = [IO.Path]::GetFullPath($fixtureRoot)
+            $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+            if ($resolvedFixture.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $fixtureRoot)) {
+                Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
+            }
+        }
+    }
     $patterns = @{
         initial = '(?s)build_plugin_parity_plan\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$dev_plugins" "\$prod_plugins" "\$PLUGIN_PLAN"'
         decide = '(?s)plugin_plan_set_action\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN" "\$name" "\$action"'

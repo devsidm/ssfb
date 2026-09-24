@@ -93,7 +93,8 @@ ssf_dev_link_source_check() {
     $failures = array();
     $scan_file = function ($file) use ($pattern, $root, &$failures) {
       $normalized = str_replace("\\", "/", $file);
-      if (preg_match("~/docs?/|\\.md$~i", $normalized)) {
+      // CLI fixtures are not runtime source; keep scanning all other plugin files.
+      if (preg_match("~/(?:docs?|tests)/|\\.md$~i", $normalized)) {
         return;
       }
       $lines = @file($file, FILE_IGNORE_NEW_LINES);
