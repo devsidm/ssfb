@@ -136,16 +136,18 @@ The component source of truth is:
 config/deploy-components.json
 ```
 
-All active DEV plugins are production dependencies by default. Before the
-single production confirmation, the deploy script compares every normal
+Before the single production confirmation, the deploy script compares every normal
 WordPress plugin in DEV and PROD using WP-CLI:
 
 ```bash
 wp plugin list --format=json
 ```
 
-If a normal plugin is active in DEV, it must exist and be active in PROD unless
-it is explicitly listed as DEV-only in `config/deploy-components.json`.
+For each missing plugin or newer DEV version, the operator chooses whether to
+install or update it in PROD. The default answer is No; a skipped plugin keeps
+its previous PROD version and activation status. A new selected plugin that is
+active in DEV may be activated in PROD. Existing plugins keep their PROD
+activation status. The final `DEPLOY` confirmation is still required.
 
 Plugin policy exceptions live under:
 
@@ -162,31 +164,29 @@ checked with the same seriousness as SSF plugins.
 
 Production receives:
 
-- configured SSF plugins
+- only plugins selected in the current interactive deployment plan
 - configured SSF theme
 - configured production MU plugin files
-- active DEV normal plugins that the generated deployment plan marks for copy,
-  update or activation
 
 Production does not receive:
 
 - `wp-config.php`
 - uploads
 - WordPress core
-- `ssf-promotions`
 - DEV-only MU plugins
 - DEV database
 
 The deployment uses `rsync -a` and never uses `rsync --delete`.
 
-PROD-only plugins, or plugins that are inactive in DEV but active in PROD, are
-reported as warnings. They are not automatically deactivated, because removing a
-production-specific plugin can be more dangerous than leaving it alone.
+PROD-only plugins and plugins with differing activation status are not
+automatically deactivated. A newer PROD plugin is never downgraded. If files
+differ despite equal version numbers, deployment warns and leaves that plugin
+unchanged until its version is bumped.
 
-The deployment never downloads plugins from wordpress.org. If an active DEV
-plugin is missing in PROD and its files exist in DEV, the plan may copy that
-exact tested DEV plugin directory to PROD and activate it. If the plugin cannot
-be safely copied from DEV, deployment stops before confirmation.
+The deployment never downloads plugins from wordpress.org. A selected plugin
+is copied from the tested DEV directory; a selected new plugin active in DEV
+may then be activated. Missing selected DEV files stop deployment before the
+final confirmation.
 
 Environment-specific plugin configuration is never copied from DEV. API keys,
 secrets and WordPress options must remain per environment.

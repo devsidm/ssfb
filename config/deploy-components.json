@@ -36,9 +36,7 @@
     ]
   },
   "excluded": {
-    "plugins": [
-      "ssf-promotions"
-    ]
+    "plugins": []
   },
   "plugin_policy": {
     "dev_only": [

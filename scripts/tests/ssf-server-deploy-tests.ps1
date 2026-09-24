@@ -94,7 +94,7 @@ Assert-True 'eight production MU files configured' (@($config.production.mu_file
 Assert-True 'central Microsoft 365 config MU file deploys' (@($config.production.mu_files) -contains 'ssf-microsoft365-config.php')
 Assert-True 'one production MU asset directory configured' (@($config.production.mu_asset_dirs).Count -eq 1)
 Assert-True 'production MU assets includes assets directory' (@($config.production.mu_asset_dirs) -contains 'assets')
-Assert-True 'ssf-promotions excluded' (@($config.excluded.plugins) -contains 'ssf-promotions')
+Assert-True 'ssf-promotions is eligible for interactive installation' (-not (@($config.excluded.plugins) -contains 'ssf-promotions'))
 Assert-True 'Microsoft ID Login production capable' (@($config.production.plugins) -contains 'microsoft-id-login')
 Assert-True 'Old Microsoft login slug removed from production policy' (-not (@($config.production.plugins + $config.excluded.plugins + $config.plugin_policy.dev_only) -contains 'ssf-microsoft-login'))
 Assert-True 'plugin policy dev_only exists' ($null -ne $config.plugin_policy.dev_only)
@@ -119,17 +119,39 @@ Assert-Contains 'PHP lint exists' $script 'php -l "$file"'
 Assert-Contains 'PROD db check exists' $script 'wp_prod db check'
 Assert-Contains 'all normal DEV plugins enumerated' $script 'wp_dev plugin list --format=json --fields=name,status,version,update,update_version'
 Assert-Contains 'all normal PROD plugins enumerated' $script 'wp_prod plugin list --format=json --fields=name,status,version,update,update_version'
-Assert-Contains 'active DEV missing PROD detected' $script 'DEV_ACTIVE_PROD_MISSING'
-Assert-Contains 'active DEV inactive PROD detected' $script 'DEV_ACTIVE_PROD_INACTIVE'
-Assert-Contains 'active DEV version difference detected' $script 'DEV_ACTIVE_VERSION_DIFFERS'
+Assert-Contains 'missing DEV plugin is an installation candidate' $script '$candidate = "install";'
+Assert-Contains 'newer DEV plugin is an update candidate' $script '$candidate = "update";'
+Assert-Contains 'PROD newer version never downgraded' $script 'version_compare($devVersion, $prodVersion, "<")'
+Assert-Contains 'same version checks file contents' $script 'rsync -rcni --no-perms --no-times'
+Assert-Contains 'same version mismatch warns instead of copying' $script 'Bump the plugin version before deploying these changes.'
 Assert-Contains 'dev-only plugin config exception works' $script 'DEV_ONLY_ALLOWED'
-Assert-Contains 'production plugin copy enumerates configured plugins' $script 'json_array "production.plugins"'
+Assert-Contains 'plugin install prompt defaults no' $script 'Installera %s %s i PROD? [y/N]:'
+Assert-Contains 'plugin update prompt defaults no' $script 'Uppdatera %s i PROD %s -> %s? [y/N]:'
+Assert-Contains 'Enter becomes skip' $script 'answer=""'
+Assert-Contains 'only affirmative answers select plugin' $script 'if [[ "$answer" == "y" || "$answer" == "Y" ]]; then'
+Assert-Contains 'runtime plan tracks installs' $script '"install_plugins" => array()'
+Assert-Contains 'runtime plan tracks updates' $script '"update_plugins" => array()'
+Assert-Contains 'runtime plan tracks skipped plugins' $script '"skipped_plugins" => array()'
+Assert-Contains 'selected plugin copy comes from plan' $script 'done < <(plugin_plan_array "deploy_plugins")'
+Assert-Contains 'skipped plugin version is verified against original PROD version' $script '$entry["prodVersion"]'
+Assert-Contains 'selected plugin version is verified against DEV version' $script '$entry["devVersion"]'
+Assert-Contains 'updates preserve PROD activation status' $script '$entry["prodStatus"]'
+Assert-Contains 'new active DEV installation can activate' $script 'if ($entry["devStatus"] === "active") { $data["activate_plugins"][] = $name; }'
+Assert-Contains 'plugin plan printed before dry run' $script 'section "PLUGIN DEPLOYMENT PLAN"'
 Assert-Contains 'PROD-only plugin warning exists' $script 'PROD_ONLY'
-Assert-Contains 'DEV inactive PROD active warning exists' $script 'DEV_INACTIVE_PROD_ACTIVE'
-Assert-Contains 'missing active DEV plugin cannot pass silently' $script 'Active DEV plugin cannot be deployed safely'
+Assert-Contains 'missing selected DEV plugin cannot pass silently' $script 'Selected DEV plugin files are missing:'
 Assert-Contains 'plugin activation from plan only' $script 'plugin_plan_array "activate_plugins"'
 Assert-Contains 'touched plugin backup plan exists' $script 'plugin_plan_array "touched_plugins"'
 Assert-Contains 'post-deploy plugin parity check exists' $script 'post_deploy_plugin_parity'
+$pluginDryRun = [regex]::Match($script, '(?ms)^prod_dry_run\(\) \{.*?^\}').Value
+$pluginCopy = [regex]::Match($script, '(?ms)^deploy_files_to_prod\(\) \{.*?^\}').Value
+$pluginBackup = [regex]::Match($script, '(?ms)^file_backup\(\) \{.*?^\}').Value
+$pluginVerify = [regex]::Match($script, '(?ms)^verify_prod_components\(\) \{.*?^\}').Value
+Assert-True 'plugin dry-run uses only the selected plan' ($pluginDryRun.Contains('plugin_plan_array "deploy_plugins"') -and -not $pluginDryRun.Contains('json_array "production.plugins"'))
+Assert-True 'plugin file copy uses only the selected plan' ($pluginCopy.Contains('plugin_plan_array "deploy_plugins"') -and -not $pluginCopy.Contains('json_array "production.plugins"'))
+Assert-True 'plugin file backup uses only touched plugins' ($pluginBackup.Contains('plugin_plan_array "touched_plugins"') -and -not $pluginBackup.Contains('json_array "production.plugins"'))
+Assert-True 'plugin verification does not impose DEV version on every configured plugin' (-not $pluginVerify.Contains('json_array "production.plugins"'))
+Assert-Contains 'backup component list uses selected plugins' $script 'plugin_plan_array "deploy_plugins" > "$BACKUP_DIR/components-plugins.txt"'
 Assert-Contains 'Turnstile config check exists' $script 'validate_turnstile_prod_config'
 Assert-Contains 'Turnstile site key redacted label' $script 'Site key: '
 Assert-Contains 'Turnstile secret key redacted label' $script 'Secret key: '
@@ -200,7 +222,8 @@ Assert-NotContains 'no rsync delete flag' $script '--delete'
 Assert-Contains 'wp-config not touched in summary' $script 'wp-config.php'
 Assert-Contains 'uploads not touched in summary' $script 'uploads'
 Assert-Contains 'WordPress core not touched in summary' $script 'WordPress core'
-Assert-Contains 'ssf-promotions not deployed' $script 'ssf-promotions'
+Assert-NotContains 'no plugin-specific hardcoded promotions exclusion' $script 'ssf-promotions'
+Assert-NotContains 'no plugin-specific hardcoded Microsoft login exclusion' $script 'ssf-microsoft-login'
 Assert-Contains 'DEV MU not deployed to prod' $script 'DEV-only MU files'
 Assert-Contains 'release deploy exists' $script 'ssf release deploy --expected-build="$BUILD"'
 Assert-Contains 'release verify exists' $script 'ssf release verify --expected-build="$BUILD"'
@@ -227,12 +250,16 @@ Assert-True 'DEV-link safety after PROD mutation before opening site' ($mainOrde
 Assert-True 'maintenance removed before public curl smoke' ($mainOrder.IndexOf('open_site_for_public_smoke') -lt $mainOrder.IndexOf('http_prod_smoke'))
 Assert-True 'plugin activation after file deploy' ($mainOrder.IndexOf('activate_planned_plugins') -gt $mainOrder.IndexOf('deploy_files_to_prod'))
 Assert-True 'plugin parity before confirmation' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('confirm_once'))
+Assert-True 'plugin plan and questions before dry run' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('prod_dry_run'))
+Assert-True 'no mutation before final confirmation' ($mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('deploy_files_to_prod'))
 
 Assert-Contains 'docs wrapper command' $doc '$HOME/tools/ssf-deploy'
 Assert-Contains 'docs one command' $doc 'ssf-deploy'
 Assert-Contains 'docs rollback' $doc 'Rollback'
 Assert-Contains 'docs backups' $doc '$HOME/ssf-backups'
-Assert-Contains 'docs active DEV plugins principle' $doc 'All active DEV plugins are production dependencies by default.'
+Assert-Contains 'docs interactive plugin choices' $doc 'the operator chooses whether to'
+Assert-Contains 'docs no is the default' $doc 'The default answer is No'
+Assert-Contains 'docs final confirmation remains' $doc 'The final `DEPLOY` confirmation is still required.'
 Assert-Contains 'docs Turnstile example' $doc 'simple-cloudflare-turnstile'
 Assert-Contains 'docs no option copy' $doc 'never copied from DEV'
 Assert-Contains 'docs rollback command' $doc 'ssf-rollback'
@@ -341,6 +368,124 @@ Assert-True 'old flat SharePoint assumption fails against real wrapped schema' (
 Assert-True 'SharePoint preflight before confirmation' ($mainOrder.IndexOf('validate_sharepoint_config "preflight"') -gt $mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -and $mainOrder.IndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'SharePoint snapshot before PROD mutation' ($mainOrder.IndexOf('create_backup_dir') -lt $mainOrder.LastIndexOf('validate_sharepoint_config "preflight"') -and $mainOrder.LastIndexOf('validate_sharepoint_config "preflight"') -lt $mainOrder.IndexOf('activate_maintenance'))
 Assert-True 'SharePoint post-check after deployment before opening site' ($mainOrder.IndexOf('validate_sharepoint_config "post"') -gt $mainOrder.IndexOf('verify_prod_components') -and $mainOrder.IndexOf('validate_sharepoint_config "post"') -lt $mainOrder.IndexOf('open_site_for_public_smoke'))
+
+# Exercise the embedded PHP planner with fake inventories; no WordPress or PROD calls.
+$phpCommand = Get-Command php -ErrorAction SilentlyContinue
+$phpPath = if ($phpCommand) { $phpCommand.Source } else { Join-Path ([IO.Path]::GetTempPath()) 'ssf-codex-php-8.5.10\php.exe' }
+if (Test-Path -LiteralPath $phpPath) {
+    $patterns = @{
+        initial = '(?s)build_plugin_parity_plan\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$dev_plugins" "\$prod_plugins" "\$PLUGIN_PLAN"'
+        decide = '(?s)plugin_plan_set_action\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN" "\$name" "\$action"'
+        finalize = '(?s)plugin_plan_finalize\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN"'
+        baseline = '(?s)plugin_plan_verify_baseline\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN" "\$inventory"'
+        verify = '(?s)post_deploy_plugin_parity\(\) \{.*?if ! php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN" "\$prod_plugins"'
+    }
+    $phpCode = @{}
+    foreach ($key in $patterns.Keys) {
+        $match = [regex]::Match($script, $patterns[$key])
+        Assert-True "embedded PHP $key found" $match.Success
+        $phpCode[$key] = $match.Groups['code'].Value
+    }
+    if (@($phpCode.Values | Where-Object { -not $_ }).Count -eq 0) {
+        $testDir = Join-Path ([IO.Path]::GetTempPath()) ('ssf-plugin-plan-test-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $testDir | Out-Null
+        $devFile = Join-Path $testDir 'dev.json'
+        $prodFile = Join-Path $testDir 'prod.json'
+        $planFile = Join-Path $testDir 'plan.json'
+        $afterFile = Join-Path $testDir 'after.json'
+        $codeFiles = @{}
+        foreach ($key in $phpCode.Keys) {
+            $codeFiles[$key] = Join-Path $testDir ($key + '.php')
+            [IO.File]::WriteAllText($codeFiles[$key], '<?php' + [Environment]::NewLine + $phpCode[$key])
+        }
+        try {
+            function New-Plugin([string]$Name, [string]$Version, [string]$Status = 'active') {
+                return @{ name = $Name; version = $Version; status = $Status }
+            }
+            function Set-Inventory([object[]]$Dev, [object[]]$Prod) {
+                [IO.File]::WriteAllText($devFile, (ConvertTo-Json -InputObject @($Dev) -Depth 5))
+                [IO.File]::WriteAllText($prodFile, (ConvertTo-Json -InputObject @($Prod) -Depth 5))
+                & $phpPath $codeFiles.initial $configPath $devFile $prodFile $planFile | Out-Null
+                Assert-True 'embedded plugin inventory planner succeeds' ($LASTEXITCODE -eq 0)
+                return Get-Content -Raw -LiteralPath $planFile | ConvertFrom-Json
+            }
+            function Select-Plugin([string]$Name, [string]$Action) {
+                & $phpPath $codeFiles.decide $planFile $Name $Action | Out-Null
+                & $phpPath $codeFiles.finalize $planFile | Out-Null
+                return Get-Content -Raw -LiteralPath $planFile | ConvertFrom-Json
+            }
+            function Test-AfterInventory([object[]]$Plugins) {
+                [IO.File]::WriteAllText($afterFile, (ConvertTo-Json -InputObject @($Plugins) -Depth 5))
+                $previousPreference = $ErrorActionPreference
+                try {
+                    $ErrorActionPreference = 'Continue'
+                    & $phpPath $codeFiles.verify $planFile $afterFile 2>$null | Out-Null
+                    return $LASTEXITCODE -eq 0
+                } finally {
+                    $ErrorActionPreference = $previousPreference
+                }
+            }
+            function Test-BaselineInventory([object[]]$Plugins) {
+                [IO.File]::WriteAllText($afterFile, (ConvertTo-Json -InputObject @($Plugins) -Depth 5))
+                $previousPreference = $ErrorActionPreference
+                try {
+                    $ErrorActionPreference = 'Continue'
+                    & $phpPath $codeFiles.baseline $planFile $afterFile 2>$null | Out-Null
+                    return $LASTEXITCODE -eq 0
+                } finally {
+                    $ErrorActionPreference = $previousPreference
+                }
+            }
+
+            $dev = New-Plugin 'ssf-example' '2.0.0'
+            $old = New-Plugin 'ssf-example' '1.0.0' 'inactive'
+            $plan = Set-Inventory @($dev) @($old)
+            Assert-True 'DEV v2 / PROD v1 prompts update' ($plan.entries[0].candidate -eq 'update')
+            Assert-True 'pre-mutation baseline matches original PROD' (Test-BaselineInventory @($old))
+            Assert-True 'changed PROD before mutation stops the plan' (-not (Test-BaselineInventory @($dev)))
+            $plan = Select-Plugin 'ssf-example' 'update'
+            Assert-True 'yes creates update and touched plan' (@($plan.update_plugins) -contains 'ssf-example' -and @($plan.touched_plugins) -contains 'ssf-example')
+            Assert-True 'update never auto-activates existing PROD plugin' (@($plan.activate_plugins).Count -eq 0)
+            Assert-True 'updated plugin verifies at DEV version with prior inactive status' (Test-AfterInventory @((New-Plugin 'ssf-example' '2.0.0' 'inactive')))
+            Assert-True 'selected update rejects old version' (-not (Test-AfterInventory @($old)))
+            Assert-True 'selected update rejects changed activation status' (-not (Test-AfterInventory @($dev)))
+
+            $null = Set-Inventory @($dev) @($old)
+            $plan = Select-Plugin 'ssf-example' 'skip'
+            Assert-True 'no update means no copy and no touched backup' (@($plan.deploy_plugins).Count -eq 0 -and @($plan.touched_plugins).Count -eq 0 -and @($plan.skipped_plugins) -contains 'ssf-example')
+            Assert-True 'skipped plugin verifies unchanged PROD version and status' (Test-AfterInventory @($old))
+            Assert-True 'skipped plugin rejects unexpected update' (-not (Test-AfterInventory @((New-Plugin 'ssf-example' '2.0.0' 'inactive'))))
+
+            $plan = Set-Inventory @($dev) @()
+            Assert-True 'missing PROD plugin prompts install' ($plan.entries[0].candidate -eq 'install')
+            $plan = Select-Plugin 'ssf-example' 'install'
+            Assert-True 'yes install copies and activates active DEV plugin' (@($plan.install_plugins) -contains 'ssf-example' -and @($plan.activate_plugins) -contains 'ssf-example')
+            Assert-True 'installed active plugin verifies against DEV' (Test-AfterInventory @($dev))
+            $null = Set-Inventory @($dev) @()
+            $plan = Select-Plugin 'ssf-example' 'skip'
+            Assert-True 'no install leaves PROD untouched' (@($plan.deploy_plugins).Count -eq 0 -and @($plan.skipped_plugins) -contains 'ssf-example' -and (Test-AfterInventory @()))
+            Assert-True 'skipped install rejects unexpected files in PROD' (-not (Test-AfterInventory @($dev)))
+
+            $same = New-Plugin 'ssf-example' '1.0.0'
+            $plan = Set-Inventory @($same) @($same)
+            Assert-True 'same version needs no install/update question' ($plan.entries[0].candidate -eq 'same')
+            $plan = Select-Plugin 'ssf-example' 'files_differ'
+            Assert-True 'same version with different files is skipped and not touched' (@($plan.skipped_plugins) -contains 'ssf-example' -and @($plan.deploy_plugins).Count -eq 0)
+            $newer = New-Plugin 'ssf-example' '3.0.0'
+            $plan = Set-Inventory @($dev) @($newer)
+            Assert-True 'newer PROD has no downgrade candidate' ($plan.entries[0].classification -eq 'PROD_NEWER' -and $plan.entries[0].candidate -eq 'none')
+            $mustUse = New-Plugin 'ssf-mu-example' '1.0.0' 'must-use'
+            $plan = Set-Inventory @($mustUse) @($mustUse)
+            Assert-True 'MU plugins are not prompted as normal plugins' ($plan.entries[0].candidate -eq 'none')
+        } finally {
+            foreach ($path in @($devFile, $prodFile, $planFile, $afterFile)) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+            foreach ($path in $codeFiles.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+            Remove-Item -LiteralPath $testDir -Force -ErrorAction SilentlyContinue
+        }
+    }
+} else {
+    Fail 'PHP CLI required for embedded plugin-planner tests.'
+}
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }

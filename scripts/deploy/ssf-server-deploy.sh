@@ -102,6 +102,7 @@ handle_failure_maintenance() {
 
 cleanup() {
   local status=$?
+  [[ -z "$PLUGIN_PLAN" ]] || rm -f "$PLUGIN_PLAN"
   if [[ "$status" == "0" && "$DEPLOY_SUCCESS" == "1" ]]; then
     if [[ -e "$PROD/.maintenance" ]]; then
       echo "Internal state error: successful deployment left .maintenance present." >&2
@@ -334,9 +335,9 @@ capture_pre_deploy_state() {
   [[ -n "$PRE_DEPLOY_BUILD" ]] || fail "Unable to determine current PROD release build before deployment."
   [[ -n "$PRE_DEPLOY_VERSION" ]] || fail "Unable to determine current PROD release version before deployment."
   wp_prod plugin list --format=json --fields=name,status,version > "$BACKUP_DIR/plugins-before.json"
+  plugin_plan_verify_baseline "$BACKUP_DIR/plugins-before.json"
   wp_prod theme list --format=json --fields=name,status,version > "$BACKUP_DIR/themes-before.json"
   {
-    while IFS= read -r plugin; do printf 'wp-content/plugins/%s\n' "$plugin"; done < <(json_array "production.plugins")
     while IFS= read -r plugin; do printf 'wp-content/plugins/%s\n' "$plugin"; done < <(plugin_plan_array "touched_plugins")
     while IFS= read -r theme; do printf 'wp-content/themes/%s\n' "$theme"; done < <(json_array "production.themes")
     while IFS= read -r file; do printf 'wp-content/mu-plugins/%s\n' "$file"; done < <(json_array "production.mu_files")
@@ -585,7 +586,7 @@ plugin_list_json() {
 }
 
 build_plugin_parity_plan() {
-  section "PLUGIN PARITY"
+  section "DEV/PROD PLUGIN INVENTORY"
   local dev_plugins prod_plugins
   dev_plugins="$(mktemp)"
   prod_plugins="$(mktemp)"
@@ -600,21 +601,12 @@ build_plugin_parity_plan() {
     $policy = $config["plugin_policy"] ?? array();
     $devOnly = array_flip($policy["dev_only"] ?? array());
     $ignoreVersion = array_flip($policy["ignore_version"] ?? array());
-    $excluded = array_flip($config["excluded"]["plugins"] ?? array());
-    $configured = array_flip($config["production"]["plugins"] ?? array());
     $prodByName = array();
     foreach ($prod as $plugin) { $prodByName[$plugin["name"]] = $plugin; }
     $devByName = array();
     foreach ($dev as $plugin) { $devByName[$plugin["name"]] = $plugin; }
 
     $entries = array();
-    $deploy = array();
-    $activate = array();
-    $touch = array();
-    $missingBefore = array();
-    $unresolved = array();
-    $counts = array("matches" => 0, "actions" => 0, "warnings" => 0, "unresolved" => 0);
-
     foreach ($dev as $plugin) {
       $name = $plugin["name"];
       $devStatus = $plugin["status"];
@@ -622,47 +614,35 @@ build_plugin_parity_plan() {
       $prodPlugin = $prodByName[$name] ?? null;
       $prodStatus = $prodPlugin["status"] ?? "missing";
       $prodVersion = $prodPlugin ? (string)($prodPlugin["version"] ?? "") : "";
-      $classification = "MATCH";
+      $classification = "SAME_VERSION";
       $action = "none";
-      $severity = "PASS";
-
-      if (isset($devOnly[$name])) {
+      $candidate = "same";
+      if (in_array($devStatus, array("must-use", "dropin", "drop-in"), true)) {
+        $classification = "NONSTANDARD_PLUGIN";
+        $candidate = "none";
+      } elseif (isset($devOnly[$name])) {
         $classification = "DEV_ONLY_ALLOWED";
-        $severity = "PASS";
-      } elseif ($devStatus === "active") {
-        if (!$prodPlugin) {
-          $classification = "DEV_ACTIVE_PROD_MISSING";
-          $action = "copy_activate";
-          $severity = "ACTION";
-          $deploy[] = $name;
-          $activate[] = $name;
-          $missingBefore[] = $name;
-        } elseif ($prodStatus !== "active") {
-          $classification = "DEV_ACTIVE_PROD_INACTIVE";
-          $action = "activate";
-          $severity = "ACTION";
-          $activate[] = $name;
-          $touch[] = $name;
-        } elseif ($devVersion !== $prodVersion && !isset($ignoreVersion[$name])) {
-          $classification = "DEV_ACTIVE_VERSION_DIFFERS";
-          $action = "copy_update";
-          $severity = "ACTION";
-          $deploy[] = $name;
-          $touch[] = $name;
-        }
-      } elseif ($prodPlugin && $prodStatus === "active") {
-        $classification = "DEV_INACTIVE_PROD_ACTIVE";
-        $severity = "WARNING";
-      } elseif ($prodPlugin && $devVersion !== $prodVersion && !isset($ignoreVersion[$name])) {
-        $classification = "VERSION_DIFFERS_INACTIVE";
-        $severity = "WARNING";
+        $candidate = "none";
+      } elseif ($devVersion === "") {
+        $classification = "UNKNOWN_VERSION";
+        $candidate = "none";
+      } elseif (!$prodPlugin) {
+        $classification = "DEV_PLUGIN_MISSING";
+        $candidate = "install";
+      } elseif (isset($ignoreVersion[$name]) && $devVersion !== $prodVersion) {
+        $classification = "VERSION_IGNORED";
+        $candidate = "none";
+      } elseif ($prodVersion === "") {
+        $classification = "UNKNOWN_VERSION";
+        $candidate = "none";
+      } elseif (version_compare($devVersion, $prodVersion, ">")) {
+        $classification = "DEV_VERSION_NEWER";
+        $candidate = "update";
+      } elseif (version_compare($devVersion, $prodVersion, "<")) {
+        $classification = "PROD_NEWER";
+        $candidate = "none";
       }
-
-      if ($classification === "MATCH") { $counts["matches"]++; }
-      if ($severity === "ACTION") { $counts["actions"]++; }
-      if ($severity === "WARNING") { $counts["warnings"]++; }
-      if ($severity === "ERROR") { $counts["unresolved"]++; $unresolved[] = $name; }
-      $entries[] = compact("name", "devStatus", "devVersion", "prodStatus", "prodVersion", "classification", "action", "severity");
+      $entries[] = compact("name", "devStatus", "devVersion", "prodStatus", "prodVersion", "classification", "candidate", "action");
     }
 
     foreach ($prod as $plugin) {
@@ -675,51 +655,139 @@ build_plugin_parity_plan() {
           "prodStatus" => $plugin["status"],
           "prodVersion" => (string)($plugin["version"] ?? ""),
           "classification" => "PROD_ONLY",
-          "action" => "none",
-          "severity" => "WARNING"
+          "candidate" => "none",
+          "action" => "none"
         );
-        $counts["warnings"]++;
       }
     }
-
-    $deploy = array_values(array_unique($deploy));
-    $activate = array_values(array_unique($activate));
-    $touch = array_values(array_unique(array_merge($touch, $deploy)));
     file_put_contents($argv[4], json_encode(array(
       "entries" => $entries,
-      "deploy_plugins" => $deploy,
-      "activate_plugins" => $activate,
-      "touched_plugins" => $touch,
-      "missing_before" => array_values(array_unique($missingBefore)),
-      "unresolved" => $unresolved,
-      "counts" => $counts
+      "deploy_plugins" => array(),
+      "install_plugins" => array(),
+      "update_plugins" => array(),
+      "activate_plugins" => array(),
+      "skipped_plugins" => array(),
+      "touched_plugins" => array(),
+      "missing_before" => array()
     ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
     foreach ($entries as $entry) {
-      printf("%s\n  DEV:  %s %s\n  PROD: %s %s\n  %s %s\n",
+      printf("%s\n  DEV:  %s %s\n  PROD: %s %s\n",
         $entry["name"],
         $entry["devStatus"],
         $entry["devVersion"],
         $entry["prodStatus"],
-        $entry["prodVersion"],
-        $entry["severity"],
-        $entry["classification"]
+        $entry["prodVersion"]
       );
+      if ($entry["classification"] === "PROD_NEWER") {
+        echo "  WARNING: PROD has newer version than DEV. Keeping PROD unchanged.\n";
+      }
+      if ($entry["classification"] === "UNKNOWN_VERSION") {
+        echo "  WARNING: Plugin version is unknown. Keeping PROD unchanged.\n";
+      }
+      if ($entry["classification"] === "DEV_ONLY_ALLOWED") {
+        echo "  DEV-only policy: no PROD action.\n";
+      }
     }
   ' "$CONFIG" "$dev_plugins" "$prod_plugins" "$PLUGIN_PLAN"
 
   rm -f "$dev_plugins" "$prod_plugins"
 
-  while IFS= read -r plugin; do
-    [[ -z "$plugin" ]] && continue
-    [[ -d "$DEV/wp-content/plugins/$plugin" ]] || fail "Active DEV plugin cannot be deployed safely because files are missing in DEV: $plugin"
-    json_contains "excluded.plugins" "$plugin" && fail "Active DEV plugin is excluded from production deployment: $plugin"
-  done < <(plugin_plan_array "deploy_plugins")
-
-  if [[ "$(plugin_plan_count "unresolved")" != "0" ]]; then
-    fail "Unresolved plugin parity differences found."
-  fi
+  local name candidate dev_version prod_version answer output
+  exec 3<&0
+  while IFS=$'\t' read -r name candidate dev_version prod_version; do
+    [[ -d "$DEV/wp-content/plugins/$name" ]] || fail "DEV plugin files are missing: $name"
+    if [[ "$candidate" == "same" ]]; then
+      output="$(rsync -rcni --no-perms --no-times "$DEV/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/")"
+      if [[ -n "$output" ]]; then
+        echo "WARNING: $name is version $dev_version in both DEV and PROD but files differ. Bump the plugin version before deploying these changes."
+        plugin_plan_set_action "$name" "files_differ"
+      else
+        plugin_plan_set_action "$name" "no_change"
+      fi
+      continue
+    fi
+    if [[ "$candidate" == "install" ]]; then
+      printf 'Installera %s %s i PROD? [y/N]: ' "$name" "$dev_version"
+    elif [[ "$candidate" == "update" ]]; then
+      printf 'Uppdatera %s i PROD %s -> %s? [y/N]: ' "$name" "$prod_version" "$dev_version"
+    else
+      continue
+    fi
+    answer=""
+    IFS= read -r answer <&3 || true
+    if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+      plugin_plan_set_action "$name" "$candidate"
+    else
+      plugin_plan_set_action "$name" "skip"
+    fi
+  done < <(plugin_plan_candidates)
+  exec 3<&-
+  plugin_plan_finalize
+  plugin_plan_summary
   PLUGIN_PARITY_STATUS="PASS"
+}
+
+plugin_plan_candidates() {
+  php -r '
+    $data = json_decode(file_get_contents($argv[1]), true);
+    foreach ($data["entries"] as $entry) {
+      if (in_array($entry["candidate"], array("same", "install", "update"), true)) {
+        printf("%s\t%s\t%s\t%s\n", $entry["name"], $entry["candidate"], $entry["devVersion"], $entry["prodVersion"] ?: "-");
+      }
+    }
+  ' "$PLUGIN_PLAN"
+}
+
+plugin_plan_set_action() {
+  local name="$1" action="$2"
+  php -r '
+    $data = json_decode(file_get_contents($argv[1]), true);
+    foreach ($data["entries"] as &$entry) {
+      if ($entry["name"] === $argv[2]) {
+        $entry["action"] = $argv[3];
+        break;
+      }
+    }
+    file_put_contents($argv[1], json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+  ' "$PLUGIN_PLAN" "$name" "$action"
+}
+
+plugin_plan_finalize() {
+  php -r '
+    $data = json_decode(file_get_contents($argv[1]), true);
+    foreach ($data["entries"] as $entry) {
+      $name = $entry["name"];
+      $action = $entry["action"];
+      if ($action === "install" || $action === "update") {
+        $data["deploy_plugins"][] = $name;
+        $data["touched_plugins"][] = $name;
+        $data[$action . "_plugins"][] = $name;
+        if ($action === "install") {
+          $data["missing_before"][] = $name;
+          if ($entry["devStatus"] === "active") { $data["activate_plugins"][] = $name; }
+        }
+      } elseif ($action === "skip" || $action === "files_differ") {
+        $data["skipped_plugins"][] = $name;
+      }
+    }
+    file_put_contents($argv[1], json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+  ' "$PLUGIN_PLAN"
+  while IFS= read -r plugin; do
+    [[ -d "$DEV/wp-content/plugins/$plugin" ]] || fail "Selected DEV plugin files are missing: $plugin"
+  done < <(plugin_plan_array "deploy_plugins")
+}
+
+php_lint_selected_plugins() {
+  section "SELECTED PLUGIN PHP LINT"
+  local plugin file checked=0
+  while IFS= read -r plugin; do
+    while IFS= read -r -d '' file; do
+      php -l "$file" >/dev/null || fail "PHP lint failed in selected plugin: $plugin"
+      checked=$((checked + 1))
+    done < <(find "$DEV/wp-content/plugins/$plugin" -type f -name '*.php' -print0)
+  done < <(plugin_plan_array "deploy_plugins")
+  echo "$checked selected plugin PHP files checked: PASS"
 }
 
 plugin_plan_array() {
@@ -739,28 +807,47 @@ plugin_plan_count() {
 
 plugin_plan_summary() {
   [[ -n "$PLUGIN_PLAN" && -f "$PLUGIN_PLAN" ]] || return 0
+  section "PLUGIN DEPLOYMENT PLAN"
   php -r '
     $data = json_decode(file_get_contents($argv[1]), true);
-    $counts = $data["counts"] ?? array();
-    printf("PLUGIN PARITY\n----------------------------------------\n");
-    printf("%d active/inactive plugin matches       PASS\n", (int)($counts["matches"] ?? 0));
-    printf("%d plugin actions planned              %s\n", count($data["deploy_plugins"] ?? array()) + count($data["activate_plugins"] ?? array()), (count($data["deploy_plugins"] ?? array()) + count($data["activate_plugins"] ?? array())) ? "ACTION" : "PASS");
-    printf("%d plugin warnings                      %s\n", (int)($counts["warnings"] ?? 0), ((int)($counts["warnings"] ?? 0)) ? "WARNING" : "PASS");
-    printf("%d unresolved plugin differences        %s\n\n", count($data["unresolved"] ?? array()), count($data["unresolved"] ?? array()) ? "FAIL" : "PASS");
-    foreach ($data["entries"] as $entry) {
-      if ($entry["action"] !== "none") {
-        printf("%s\n  DEV:  %s %s\n  PROD: %s %s\n  ACTION: %s\n\n", $entry["name"], $entry["devStatus"], $entry["devVersion"], $entry["prodStatus"], $entry["prodVersion"], $entry["action"]);
+    $groups = array("install" => "WILL INSTALL", "update" => "WILL UPDATE", "keep" => "KEEP PROD UNCHANGED", "same" => "NO CHANGE");
+    foreach ($groups as $group => $title) {
+      echo $title, "\n";
+      foreach ($data["entries"] as $entry) {
+        $action = $entry["action"];
+        $classification = $entry["classification"];
+        $selected = $group === "install" ? $action === "install"
+          : ($group === "update" ? $action === "update"
+          : ($group === "keep" ? ($action === "skip" || $action === "files_differ" || $classification === "PROD_NEWER" || $classification === "PROD_ONLY" || $classification === "VERSION_IGNORED" || $classification === "UNKNOWN_VERSION")
+          : $action === "no_change"));
+        if (!$selected) { continue; }
+        $from = $entry["prodVersion"] ?: "not installed";
+        $to = $entry["devVersion"] ?: "not installed";
+        printf("  %-28s %s%s\n", $entry["name"], $from, $group === "install" || $group === "update" ? " -> " . $to : "");
+        if ($action === "install" && $entry["devStatus"] === "active") { echo "    install + activate\n"; }
       }
-    }
-    $prodOnly = array_values(array_filter($data["entries"], function ($entry) {
-      return $entry["classification"] === "PROD_ONLY" || $entry["classification"] === "DEV_INACTIVE_PROD_ACTIVE";
-    }));
-    if ($prodOnly) {
-      echo "Production-only or production-active differences:\n";
-      foreach ($prodOnly as $entry) { echo "- {$entry["name"]}: {$entry["classification"]}. No automatic deactivation.\n"; }
       echo "\n";
     }
   ' "$PLUGIN_PLAN"
+}
+
+plugin_plan_verify_baseline() {
+  local inventory="$1"
+  php -r '
+    $plan = json_decode(file_get_contents($argv[1]), true);
+    $plugins = json_decode(file_get_contents($argv[2]), true);
+    $byName = array();
+    foreach ($plugins as $plugin) { $byName[$plugin["name"]] = $plugin; }
+    foreach ($plan["entries"] as $entry) {
+      $actual = $byName[$entry["name"]] ?? null;
+      $status = $actual["status"] ?? "missing";
+      $version = $actual ? (string)($actual["version"] ?? "") : "";
+      if ($status !== $entry["prodStatus"] || $version !== $entry["prodVersion"]) {
+        fwrite(STDERR, "PROD plugin changed after selection: {$entry["name"]}\n");
+        exit(1);
+      }
+    }
+  ' "$PLUGIN_PLAN" "$inventory" || fail "PROD plugin inventory changed after interactive selection."
 }
 
 validate_turnstile_prod_config() {
@@ -822,13 +909,7 @@ prod_dry_run() {
     local output count
     output="$(rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
-    echo "PLUGIN $plugin $count files changed / added"
-  done < <(json_array "production.plugins")
-  while IFS= read -r plugin; do
-    local output count
-    output="$(rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" dry)"
-    count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
-    echo "PLUGIN $plugin $count files changed / added (parity plan)"
+    echo "PLUGIN $plugin $count files changed / added (selected plan)"
   done < <(plugin_plan_array "deploy_plugins")
   while IFS= read -r theme; do
     local output count
@@ -852,14 +933,12 @@ prod_dry_run() {
     echo "MU-ASSET-DIR $dir $count files changed / added"
   done < <(json_array "production.mu_asset_dirs")
   echo "NOT DEPLOYED:"
-  echo "ssf-microsoft-login"
-  echo "ssf-promotions"
+  echo "unselected plugins"
   echo "DEV-only MU files"
   echo "wp-config.php"
   echo "database"
   echo "uploads"
   echo "WordPress core"
-  echo "third-party plugins"
 }
 
 record_error_log_baseline() {
@@ -876,7 +955,6 @@ record_error_log_baseline() {
 
 confirm_once() {
   section "SSF PRODUCTION DEPLOYMENT"
-  plugin_plan_summary
   cat <<SUMMARY
 Git HEAD:          $GIT_HEAD
 Build:             $BUILD
@@ -894,9 +972,9 @@ PROD target:       $PROD_TARGET_STATUS
 Dry run:           $DRY_RUN_STATUS
 
 Will deploy:
-7 SSF plugins
+$(plugin_plan_count "deploy_plugins") selected plugins
 1 SSF theme
-7 PROD MU files
+8 PROD MU files
 1 PROD MU asset directory
 
 Will NOT touch:
@@ -904,8 +982,7 @@ database contents
 wp-config.php
 uploads
 WordPress core
-unplanned plugins
-ssf-promotions
+unselected plugins
 DEV-only MU plugins
 WordPress options
 
@@ -951,11 +1028,6 @@ file_backup() {
       paths+=("wp-content/plugins/$plugin")
     else
       echo "PROD plugin absent before deployment (new component, no files to back up): $plugin"
-    fi
-  done < <(json_array "production.plugins")
-  while IFS= read -r plugin; do
-    if [[ -d "$PROD/wp-content/plugins/$plugin" ]]; then
-      paths+=("wp-content/plugins/$plugin")
     fi
   done < <(plugin_plan_array "touched_plugins")
   while IFS= read -r theme; do
@@ -1063,7 +1135,7 @@ INFO
     );
     file_put_contents($backupDir . "/BACKUP-INFO.json", json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
   ' "$BACKUP_DIR" "$GIT_HEAD" "$BUILD" "$VERSION" "$PRE_DEPLOY_BUILD" "$PRE_DEPLOY_VERSION" "$PROD" "$EXPECTED_PROD_URL" "$prod_home" "$prod_siteurl" "$prod_env" "$db_prefix" "$db_size" "$db_sha" "$file_size_bytes" "$file_sha"
-  json_array "production.plugins" > "$BACKUP_DIR/components-plugins.txt"
+  plugin_plan_array "deploy_plugins" > "$BACKUP_DIR/components-plugins.txt"
   json_array "production.themes" > "$BACKUP_DIR/components-themes.txt"
   json_array "production.mu_files" > "$BACKUP_DIR/components-mu-files.txt"
   json_array "production.mu_asset_dirs" > "$BACKUP_DIR/components-mu-asset-dirs.txt"
@@ -1114,7 +1186,6 @@ deploy_files_to_prod() {
   DEPLOYMENT_STARTED=1
   PROD_MUTATED=1
   update_backup_state "deployment_started" "true"
-  while IFS= read -r plugin; do rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real >/dev/null; done < <(json_array "production.plugins")
   while IFS= read -r plugin; do rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real >/dev/null; done < <(plugin_plan_array "deploy_plugins")
   while IFS= read -r theme; do rsync_component "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" real >/dev/null; done < <(json_array "production.themes")
   while IFS= read -r file; do rsync_component "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
@@ -1153,15 +1224,6 @@ release_registration() {
 
 verify_prod_components() {
   section "PROD COMPONENTS"
-  while IFS= read -r plugin; do
-    [[ -d "$PROD/wp-content/plugins/$plugin" ]] || fail "Missing PROD plugin: $plugin"
-    wp_prod plugin is-active "$plugin" >/dev/null || fail "PROD plugin is not active: $plugin"
-    local dev_version prod_version
-    dev_version="$(wp_dev plugin get "$plugin" --field=version 2>/dev/null || true)"
-    prod_version="$(wp_prod plugin get "$plugin" --field=version 2>/dev/null || true)"
-    [[ "$dev_version" == "$prod_version" ]] || fail "Plugin version mismatch for $plugin: DEV=$dev_version PROD=$prod_version"
-  done < <(json_array "production.plugins")
-  PLUGIN_VERIFY_STATUS="PASS"
   while IFS= read -r theme; do
     [[ -d "$PROD/wp-content/themes/$theme" ]] || fail "Missing PROD theme: $theme"
     wp_prod theme is-active "$theme" >/dev/null || fail "PROD theme is not active: $theme"
@@ -1181,20 +1243,47 @@ verify_prod_components() {
     done < <(find "$DEV/wp-content/mu-plugins/$dir" -type f | sort)
   done < <(json_array "production.mu_asset_dirs")
   while IFS= read -r file; do [[ ! -e "$PROD/wp-content/mu-plugins/$file" ]] || fail "DEV-only MU file exists in PROD: $file"; done < <(json_array "dev_only.mu_files")
-  [[ ! -e "$PROD/wp-content/plugins/ssf-promotions" ]] || fail "Excluded plugin exists in PROD: ssf-promotions"
   post_deploy_plugin_parity
+  PLUGIN_VERIFY_STATUS="PASS"
   validate_turnstile_prod_config "post"
   echo "Plugin verification PASS"
   echo "Theme verification: PASS"
 }
 
 post_deploy_plugin_parity() {
-  section "POST-DEPLOY PLUGIN PARITY"
-  build_plugin_parity_plan
-  if [[ "$(plugin_plan_count "deploy_plugins")" != "0" || "$(plugin_plan_count "activate_plugins")" != "0" ]]; then
-    fail "Post-deploy plugin parity still has pending actions."
+  section "POST-DEPLOY PLUGIN PLAN VERIFICATION"
+  local prod_plugins
+  prod_plugins="$(mktemp)"
+  plugin_list_json prod > "$prod_plugins"
+  if ! php -r '
+    $plan = json_decode(file_get_contents($argv[1]), true);
+    $plugins = json_decode(file_get_contents($argv[2]), true);
+    $byName = array();
+    foreach ($plugins as $plugin) { $byName[$plugin["name"]] = $plugin; }
+    $failed = false;
+    foreach ($plan["entries"] as $entry) {
+      if ($entry["classification"] === "DEV_ONLY_ALLOWED") { continue; }
+      $name = $entry["name"];
+      $action = $entry["action"];
+      $expectedVersion = in_array($action, array("install", "update"), true) ? $entry["devVersion"] : $entry["prodVersion"];
+      $expectedStatus = $action === "install" ? ($entry["devStatus"] === "active" ? "active" : "inactive") : $entry["prodStatus"];
+      $actual = $byName[$name] ?? null;
+      if ($expectedStatus === "missing") {
+        if ($actual) { fwrite(STDERR, "Skipped plugin unexpectedly installed: $name\n"); $failed = true; }
+        continue;
+      }
+      if (!$actual || (string)($actual["version"] ?? "") !== $expectedVersion || $actual["status"] !== $expectedStatus) {
+        fwrite(STDERR, "Plugin changed contrary to deployment plan: $name; expected $expectedVersion/$expectedStatus, got " . ($actual["version"] ?? "missing") . "/" . ($actual["status"] ?? "missing") . "\n");
+        $failed = true;
+      }
+    }
+    exit($failed ? 1 : 0);
+  ' "$PLUGIN_PLAN" "$prod_plugins"; then
+    rm -f "$prod_plugins"
+    fail "Post-deploy plugin plan verification failed."
   fi
-  echo "Post-deploy plugin parity: PASS"
+  rm -f "$prod_plugins"
+  echo "Post-deploy plugin plan: PASS"
 }
 
 http_prod_smoke() {
@@ -1315,6 +1404,7 @@ main() {
   dev_smoke
   prod_target_safety
   build_plugin_parity_plan
+  php_lint_selected_plugins
   validate_turnstile_prod_config "preflight"
   validate_sharepoint_config "preflight"
   prod_dev_link_safety "$REPO/wp-content" "pre_deploy"
