@@ -2,12 +2,12 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.1",
-    "build":  "20260924.2",
-    "built_at":  "2026-09-24T11:25:26.7563350Z",
+    "build":  "20260924.3",
+    "built_at":  "2026-09-24T12:33:30.2928893Z",
     "source":  "codex",
-    "source_revision":  "4d534928ac8c4055f0faf92ec737cbb848470dbb",
-    "description":  "Add hidden open and closed annual meeting registration modes",
-    "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
+    "source_revision":  "14f43c756d8c44097e85915d61c5fdcf5466cd7d",
+    "description":  "Simplify annual meeting section visibility",
+    "notes":  "TorrkÃ¶rning kontrollerar mÃ¥l och skapar stÃ¶dda saknade metadatafÃ¤lt i steg 5.",
     "components":  [
                        "ssf-member-portal"
                    ],
