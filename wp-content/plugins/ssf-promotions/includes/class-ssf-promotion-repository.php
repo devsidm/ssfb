@@ -48,16 +48,8 @@ final class SSF_Promotion_Repository
     public function active_ids(string $location = 'home'): array
     {
         $location = sanitize_key($location) ?: 'home';
-        $version = (int) get_option(self::CACHE_VERSION_OPTION, 1);
-        $cache_key = 'active_' . $version . '_' . $location;
-        $ids = wp_cache_get($cache_key, 'ssf_promotions');
-        if (false === $ids) {
-            $ids = get_transient('ssf_promotions_' . md5($cache_key));
-        }
-        if (is_array($ids)) {
-            return array_map('absint', $ids);
-        }
-
+        // A cached list can keep a promotion visible past its end time or hide
+        // one after its start time. Evaluate the current site time on each view.
         $now = current_datetime()->getTimestamp();
         $query = new WP_Query(array(
             'post_type' => self::POST_TYPE,
@@ -102,8 +94,6 @@ final class SSF_Promotion_Repository
             return 0 !== $start ? $start : $right <=> $left;
         });
 
-        wp_cache_set($cache_key, $ids, 'ssf_promotions', 5 * MINUTE_IN_SECONDS);
-        set_transient('ssf_promotions_' . md5($cache_key), $ids, 5 * MINUTE_IN_SECONDS);
         return $ids;
     }
 
@@ -113,6 +103,18 @@ final class SSF_Promotion_Repository
         $related_id = (int) get_post_meta($post_id, '_ssf_promotion_related_id', true);
         $anchor = sanitize_key((string) get_post_meta($post_id, '_ssf_promotion_anchor', true));
         $relation = $this->relations->resolve($related_type, $related_id, $anchor);
+        $link_mode = (string) get_post_meta($post_id, '_ssf_promotion_link_mode', true);
+        $page_id = (int) get_post_meta($post_id, '_ssf_promotion_page_id', true);
+        $manual_url = (string) get_post_meta($post_id, '_ssf_promotion_url', true);
+        $url = ! empty($relation['url']) ? (string) $relation['url'] : $manual_url;
+        if ('none' === $link_mode) {
+            $url = '';
+        } elseif ('page' === $link_mode) {
+            $page = get_post($page_id);
+            $url = $page && 'page' === $page->post_type && 'publish' === $page->post_status ? (string) get_permalink($page) : '';
+        } elseif ('url' === $link_mode) {
+            $url = $manual_url;
+        }
         $locations = get_post_meta($post_id, '_ssf_promotion_locations', true);
         if (! is_array($locations) || ! $locations) {
             $locations = array('home');
@@ -125,8 +127,10 @@ final class SSF_Promotion_Repository
             'start' => (int) get_post_meta($post_id, '_ssf_promotion_start', true),
             'end' => (int) get_post_meta($post_id, '_ssf_promotion_end', true),
             'cta_text' => (string) get_post_meta($post_id, '_ssf_promotion_cta_text', true),
-            'url' => ! empty($relation['url']) ? (string) $relation['url'] : (string) get_post_meta($post_id, '_ssf_promotion_url', true),
-            'manual_url' => (string) get_post_meta($post_id, '_ssf_promotion_url', true),
+            'url' => $url,
+            'manual_url' => $manual_url,
+            'link_mode' => $link_mode,
+            'page_id' => $page_id,
             'related_type' => $related_type,
             'related_id' => $related_id,
             'anchor' => $anchor,

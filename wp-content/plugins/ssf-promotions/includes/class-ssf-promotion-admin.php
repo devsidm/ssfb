@@ -86,7 +86,7 @@ final class SSF_Promotion_Admin
     {
         wp_nonce_field('ssf_save_promotion', 'ssf_promotion_nonce');
         $data = $this->form_data($post);
-        $providers = $this->relations->providers();
+        $pages = get_pages(array('post_status' => 'publish', 'sort_column' => 'post_title'));
         ?>
         <div class="ssf-promotion-editor" data-ssf-promotion-editor>
             <div class="ssf-promotion-field ssf-promotion-field--wide">
@@ -95,67 +95,24 @@ final class SSF_Promotion_Admin
                 <p class="description"><?php esc_html_e('Skriv högst två korta meningar.', 'ssf-promotions'); ?></p>
             </div>
 
-            <div class="ssf-promotion-field">
-                <label for="ssf-promotion-type"><?php esc_html_e('Typ', 'ssf-promotions'); ?></label>
-                <select id="ssf-promotion-type" name="ssf_promotion_type" data-preview-type>
-                    <?php foreach ($this->type_labels() as $key => $label) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected($data['type'], $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="ssf-promotion-field">
-                <label for="ssf-promotion-priority"><?php esc_html_e('Prioritet', 'ssf-promotions'); ?></label>
-                <select id="ssf-promotion-priority" name="ssf_promotion_priority" data-preview-priority>
-                    <?php foreach ($this->priority_labels() as $key => $label) : ?><option value="<?php echo esc_attr((string) $key); ?>" <?php selected($data['priority'], $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?>
-                </select>
-            </div>
-
             <fieldset class="ssf-promotion-field ssf-promotion-field--wide">
-                <legend><?php esc_html_e('Länk', 'ssf-promotions'); ?></legend>
-                <div class="ssf-promotion-grid">
-                    <div class="ssf-promotion-field">
-                        <label for="ssf-promotion-related-type"><?php esc_html_e('Relaterat innehåll', 'ssf-promotions'); ?></label>
-                        <select id="ssf-promotion-related-type" name="ssf_promotion_related_type" data-related-type>
-                            <option value=""><?php esc_html_e('Ingen koppling / egen länk', 'ssf-promotions'); ?></option>
-                            <?php foreach ($providers as $key => $provider) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected($data['related_type'], $key); ?>><?php echo esc_html($provider->label()); ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                    <?php foreach ($providers as $key => $provider) : ?>
-                        <div class="ssf-promotion-field" data-related-provider="<?php echo esc_attr($key); ?>">
-                            <label for="ssf-related-<?php echo esc_attr($key); ?>"><?php echo esc_html($provider->label()); ?></label>
-                            <select id="ssf-related-<?php echo esc_attr($key); ?>" name="ssf_promotion_related_ids[<?php echo esc_attr($key); ?>]">
-                                <option value="0"><?php esc_html_e('Välj innehåll', 'ssf-promotions'); ?></option>
-                                <?php foreach ($provider->options() as $id => $label) : ?><option value="<?php echo esc_attr((string) $id); ?>" <?php selected($data['related_type'] === $key ? $data['related_id'] : 0, $id); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?>
-                            </select>
-                        </div>
-                    <?php endforeach; ?>
-                    <div class="ssf-promotion-field" data-annual-anchor>
-                        <label for="ssf-promotion-anchor"><?php esc_html_e('Länka till del', 'ssf-promotions'); ?></label>
-                        <select id="ssf-promotion-anchor" name="ssf_promotion_anchor">
-                            <?php $annual = $this->relations->provider('annual_meeting'); ?>
-                            <?php foreach ($annual ? $annual->anchors() : array() as $key => $label) : ?><option value="<?php echo esc_attr($key); ?>" <?php selected($data['anchor'], $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="ssf-promotion-field" data-manual-url>
-                        <label for="ssf-promotion-url"><?php esc_html_e('Egen länk', 'ssf-promotions'); ?></label>
-                        <input id="ssf-promotion-url" name="ssf_promotion_url" type="url" value="<?php echo esc_attr($data['manual_url']); ?>" placeholder="https://">
-                    </div>
+                <legend><?php esc_html_e('Länka till', 'ssf-promotions'); ?></legend>
+                <p><label><input type="radio" name="ssf_promotion_link_mode" value="page" <?php checked($data['link_mode'], 'page'); ?>> <?php esc_html_e('Sida på webbplatsen', 'ssf-promotions'); ?></label><br>
+                <label><input type="radio" name="ssf_promotion_link_mode" value="url" <?php checked($data['link_mode'], 'url'); ?>> <?php esc_html_e('Egen länk', 'ssf-promotions'); ?></label><br>
+                <label><input type="radio" name="ssf_promotion_link_mode" value="none" <?php checked($data['link_mode'], 'none'); ?>> <?php esc_html_e('Ingen länk', 'ssf-promotions'); ?></label></p>
+                <div class="ssf-promotion-field" data-link-field="page" <?php echo 'page' === $data['link_mode'] ? '' : 'hidden'; ?>>
+                    <label for="ssf-promotion-page"><?php esc_html_e('Välj sida', 'ssf-promotions'); ?></label>
+                    <select id="ssf-promotion-page" name="ssf_promotion_page_id"><option value="0"><?php esc_html_e('Välj en publicerad sida', 'ssf-promotions'); ?></option><?php foreach ($pages as $page) : ?><option value="<?php echo esc_attr((string) $page->ID); ?>" <?php selected($data['page_id'], $page->ID); ?>><?php echo esc_html(get_the_title($page)); ?></option><?php endforeach; ?></select>
                 </div>
-                <?php if ($data['relation_missing']) : ?><p class="ssf-promotion-warning"><?php esc_html_e('Relaterat innehåll saknas. Den egna länken används om den finns.', 'ssf-promotions'); ?></p><?php endif; ?>
+                <div class="ssf-promotion-field" data-link-field="url" <?php echo 'url' === $data['link_mode'] ? '' : 'hidden'; ?>>
+                    <label for="ssf-promotion-url"><?php esc_html_e('Länk', 'ssf-promotions'); ?></label>
+                    <input id="ssf-promotion-url" name="ssf_promotion_url" type="url" value="<?php echo esc_attr($data['manual_url']); ?>" placeholder="https://">
+                </div>
+                <div class="ssf-promotion-field" data-link-field="cta" <?php echo 'none' === $data['link_mode'] ? 'hidden' : ''; ?>>
+                    <label for="ssf-promotion-cta"><?php esc_html_e('Text på länk', 'ssf-promotions'); ?></label>
+                    <input id="ssf-promotion-cta" name="ssf_promotion_cta_text" type="text" value="<?php echo esc_attr($data['cta_text']); ?>" placeholder="<?php esc_attr_e('Läs mer', 'ssf-promotions'); ?>" data-preview-cta>
+                </div>
             </fieldset>
-
-            <div class="ssf-promotion-field">
-                <label for="ssf-promotion-cta"><?php esc_html_e('Text på knapp', 'ssf-promotions'); ?></label>
-                <input id="ssf-promotion-cta" name="ssf_promotion_cta_text" type="text" value="<?php echo esc_attr($data['cta_text']); ?>" list="ssf-promotion-cta-options" placeholder="<?php esc_attr_e('Läs mer', 'ssf-promotions'); ?>" data-preview-cta>
-                <datalist id="ssf-promotion-cta-options"><option value="Läs mer"><option value="Anmäl dig"><option value="Till årsmötet"><option value="Lämna motion"><option value="Läs nyhetsbrev"><option value="Visa program"><option value="Ladda ner"></datalist>
-            </div>
-
-            <div class="ssf-promotion-field">
-                <label for="ssf-promotion-layout"><?php esc_html_e('Utseende', 'ssf-promotions'); ?></label>
-                <select id="ssf-promotion-layout" name="ssf_promotion_layout" data-preview-layout>
-                    <option value="banner" <?php selected($data['layout'], 'banner'); ?>><?php esc_html_e('Banner', 'ssf-promotions'); ?></option>
-                    <option value="card" <?php selected($data['layout'], 'card'); ?>><?php esc_html_e('Kort', 'ssf-promotions'); ?></option>
-                </select>
-            </div>
         </div>
         <?php
     }
@@ -169,14 +126,7 @@ final class SSF_Promotion_Admin
             <p><label for="ssf-promotion-start"><strong><?php esc_html_e('Visas från', 'ssf-promotions'); ?></strong></label><br><input id="ssf-promotion-start" name="ssf_promotion_start" type="datetime-local" value="<?php echo esc_attr($this->format_datetime($data['start'])); ?>"></p>
             <p><label for="ssf-promotion-end"><strong><?php esc_html_e('Visas till', 'ssf-promotions'); ?></strong></label><br><input id="ssf-promotion-end" name="ssf_promotion_end" type="datetime-local" value="<?php echo esc_attr($this->format_datetime($data['end'])); ?>"></p>
             <p class="description"><?php esc_html_e('Tom start betyder direkt. Tomt slut betyder tills vidare.', 'ssf-promotions'); ?></p>
-            <fieldset><legend><strong><?php esc_html_e('Placering', 'ssf-promotions'); ?></strong></legend>
-                <?php foreach (array('home' => __('Startsida', 'ssf-promotions'), 'annual' => __('Årsmötessida', 'ssf-promotions'), 'all' => __('Alla sidor', 'ssf-promotions')) as $key => $label) : ?>
-                    <label class="ssf-promotion-checkbox"><input type="checkbox" name="ssf_promotion_locations[]" value="<?php echo esc_attr($key); ?>" <?php checked(in_array($key, $data['locations'], true)); ?>> <?php echo esc_html($label); ?></label>
-                <?php endforeach; ?>
-            </fieldset>
-            <p><label class="ssf-promotion-checkbox"><input type="checkbox" name="ssf_promotion_show_countdown" value="1" <?php checked($data['show_countdown']); ?>> <?php esc_html_e('Visa återstående tid', 'ssf-promotions'); ?></label></p>
-            <p><label class="ssf-promotion-checkbox"><input type="checkbox" name="ssf_promotion_archived" value="1" <?php checked($data['archived']); ?>> <?php esc_html_e('Arkivera budskapet', 'ssf-promotions'); ?></label></p>
-            <?php if ($data['needs_review']) : ?><div class="notice notice-warning inline"><p><?php esc_html_e('Detta är en kopia. Kontrollera datum och relaterat innehåll innan publicering.', 'ssf-promotions'); ?></p></div><?php endif; ?>
+            <?php if ($data['needs_review']) : ?><div class="notice notice-warning inline"><p><?php esc_html_e('Detta är en kopia. Kontrollera länken och visningstiden innan publicering.', 'ssf-promotions'); ?></p></div><?php endif; ?>
         </div>
         <?php
     }
@@ -215,17 +165,14 @@ final class SSF_Promotion_Admin
             return;
         }
 
-        $types = array_keys($this->type_labels());
-        $type = sanitize_key(wp_unslash($_POST['ssf_promotion_type'] ?? 'information'));
-        $type = in_array($type, $types, true) ? $type : 'information';
-        $priorities = array_keys($this->priority_labels());
-        $priority = (int) ($_POST['ssf_promotion_priority'] ?? 50);
-        $priority = in_array($priority, $priorities, true) ? $priority : 50;
-        $related_type = sanitize_key(wp_unslash($_POST['ssf_promotion_related_type'] ?? ''));
-        $provider = $this->relations->provider($related_type);
-        $related_ids = isset($_POST['ssf_promotion_related_ids']) ? (array) wp_unslash($_POST['ssf_promotion_related_ids']) : array();
-        $related_id = $provider ? absint($related_ids[$related_type] ?? 0) : 0;
-        $anchor = $provider ? sanitize_key(wp_unslash($_POST['ssf_promotion_anchor'] ?? '')) : '';
+        $link_mode = sanitize_key(wp_unslash($_POST['ssf_promotion_link_mode'] ?? 'page'));
+        $link_mode = in_array($link_mode, array('page', 'url', 'none'), true) ? $link_mode : 'page';
+        $page_id = absint($_POST['ssf_promotion_page_id'] ?? 0);
+        $page = $page_id ? get_post($page_id) : null;
+        if (! $page || 'page' !== $page->post_type || 'publish' !== $page->post_status) {
+            $page_id = 0;
+        }
+        $manual_url = esc_url_raw(wp_unslash($_POST['ssf_promotion_url'] ?? ''));
         $start = $this->parse_datetime(sanitize_text_field(wp_unslash($_POST['ssf_promotion_start'] ?? '')));
         $end = $this->parse_datetime(sanitize_text_field(wp_unslash($_POST['ssf_promotion_end'] ?? '')));
         if ($start && $end && $end <= $start) {
@@ -233,26 +180,16 @@ final class SSF_Promotion_Admin
             $this->date_error = true;
             set_transient('ssf_promotions_notice_' . get_current_user_id(), 'date', MINUTE_IN_SECONDS);
         }
-        $locations = array_values(array_intersect(array('home', 'annual', 'all'), array_map('sanitize_key', (array) wp_unslash($_POST['ssf_promotion_locations'] ?? array()))));
-        if (! $locations) {
-            $locations = array('home');
-        }
-
         $values = array(
-            '_ssf_promotion_type' => $type,
-            '_ssf_promotion_priority' => $priority,
+            '_ssf_promotion_link_mode' => $link_mode,
+            '_ssf_promotion_page_id' => 'page' === $link_mode ? $page_id : 0,
             '_ssf_promotion_start' => $start,
             '_ssf_promotion_end' => $end,
-            '_ssf_promotion_cta_text' => sanitize_text_field(wp_unslash($_POST['ssf_promotion_cta_text'] ?? '')),
-            '_ssf_promotion_url' => esc_url_raw(wp_unslash($_POST['ssf_promotion_url'] ?? '')),
-            '_ssf_promotion_related_type' => $related_type,
-            '_ssf_promotion_related_id' => $related_id,
-            '_ssf_promotion_anchor' => $anchor,
-            '_ssf_promotion_layout' => in_array(($_POST['ssf_promotion_layout'] ?? ''), array('banner', 'card'), true) ? sanitize_key(wp_unslash($_POST['ssf_promotion_layout'])) : 'banner',
-            '_ssf_promotion_locations' => $locations,
-            '_ssf_promotion_show_countdown' => ! empty($_POST['ssf_promotion_show_countdown']) ? 1 : 0,
-            '_ssf_promotion_archived' => ! empty($_POST['ssf_promotion_archived']) ? 1 : 0,
+            '_ssf_promotion_cta_text' => 'none' === $link_mode ? (string) get_post_meta($post_id, '_ssf_promotion_cta_text', true) : sanitize_text_field(wp_unslash($_POST['ssf_promotion_cta_text'] ?? '')),
         );
+        if ('url' === $link_mode) {
+            $values['_ssf_promotion_url'] = $manual_url;
+        }
 
         foreach ($values as $key => $value) {
             if (in_array($key, array('_ssf_promotion_start', '_ssf_promotion_end'), true) && ! $value) {
@@ -260,6 +197,9 @@ final class SSF_Promotion_Admin
             } else {
                 update_post_meta($post_id, $key, $value);
             }
+        }
+        if (! metadata_exists('post', $post_id, '_ssf_promotion_locations')) {
+            update_post_meta($post_id, '_ssf_promotion_locations', array('home'));
         }
         delete_post_meta($post_id, '_ssf_promotion_needs_review');
     }
@@ -478,16 +418,23 @@ final class SSF_Promotion_Admin
     {
         $data = $this->repository->data($post->ID);
         $meeting = $this->prefill_meeting($post);
-        if ($meeting && ! $data['related_id']) {
+        if ($meeting && ! $data['url']) {
             $relation = $this->relations->resolve('annual_meeting', $meeting->ID, 'dinner');
-            $data['type'] = 'annual_meeting';
-            $data['priority'] = 80;
-            $data['related_type'] = 'annual_meeting';
-            $data['related_id'] = $meeting->ID;
-            $data['anchor'] = 'dinner';
+            $data['link_mode'] = 'url';
+            $data['manual_url'] = (string) ($relation['url'] ?? '');
             $data['cta_text'] = __('Till årsmötet', 'ssf-promotions');
-            $data['start'] = (int) ($relation['start'] ?? 0);
-            $data['end'] = (int) ($relation['end'] ?? 0);
+        }
+        if (! $data['link_mode']) {
+            $related_post = $data['related_id'] ? get_post($data['related_id']) : null;
+            if ($related_post && 'page' === $related_post->post_type && 'post' === $data['related_type']) {
+                $data['link_mode'] = 'page';
+                $data['page_id'] = $related_post->ID;
+            } elseif ($data['url']) {
+                $data['link_mode'] = 'url';
+                $data['manual_url'] = $data['url'];
+            } else {
+                $data['link_mode'] = $post->ID && 'auto-draft' !== $post->post_status ? 'none' : 'page';
+            }
         }
         return $data;
     }
@@ -543,7 +490,7 @@ final class SSF_Promotion_Admin
         return array(
             '_ssf_promotion_type', '_ssf_promotion_priority', '_ssf_promotion_start', '_ssf_promotion_end', '_ssf_promotion_cta_text', '_ssf_promotion_url',
             '_ssf_promotion_related_type', '_ssf_promotion_related_id', '_ssf_promotion_anchor', '_ssf_promotion_layout', '_ssf_promotion_locations',
-            '_ssf_promotion_show_countdown', '_ssf_promotion_archived',
+            '_ssf_promotion_show_countdown', '_ssf_promotion_archived', '_ssf_promotion_link_mode', '_ssf_promotion_page_id',
         );
     }
 }
