@@ -238,4 +238,12 @@ $admin_html = ob_get_clean();
 check(str_contains($admin_html, 'name="ssf_meeting_registration_visible" value="1" checked="checked"') && str_contains($admin_html, 'name="ssf_meeting_registration_status" value="open"') && str_contains($admin_html, 'name="ssf_meeting_registration_status" value="closed" checked="checked"'), 'Admin did not separate visibility from registration status.');
 check(str_contains($admin_html, 'name="ssf_meeting_advance_notice[visible]"') && str_contains($admin_html, 'name="ssf_meeting_modules[dinner]"') && str_contains($admin_html, 'name="ssf_meeting_modules[contact]"'), 'Admin did not expose component visibility controls.');
 
+update_post_meta(10, '_ssf_am_modules', array('meeting' => 1, 'day2' => 0, 'dinner' => 0, 'calendar' => 1));
+$meeting = $module->data(10);
+check($meeting['registration_visible'] && ! $module->registration_visible($meeting), 'Registration without choices was still publicly visible.');
+$no_choices_state = $service->registration_state($meeting, get_post(10));
+$no_choices_html = $render($meeting, $no_choices_state);
+check(! str_contains($no_choices_html, 'id="ssf-am-registration"') && ! str_contains($no_choices_html, 'Anmälan är stängd'), 'Registration CTA or status remained without any registration choice.');
+check($frontend->registration_shortcode() === '', 'Registration form remained visible without any registration choice.');
+
 echo "PASS: independent visibility, advance notice, registration, legacy data and frontend.\n";

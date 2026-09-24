@@ -475,9 +475,11 @@ final class Module
 
     public function registration_visible(array $meeting): bool
     {
-        return array_key_exists('registration_visible', $meeting)
+        $enabled = array_key_exists('registration_visible', $meeting)
             ? (bool) $meeting['registration_visible']
             : 'hidden' !== ($meeting['registration_mode'] ?? '');
+
+        return $enabled && (bool) $this->registration_choices($meeting);
     }
 
     public function registration_choices(array $meeting): array

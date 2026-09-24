@@ -160,7 +160,7 @@ final class Editor
                     <label>Gallra personuppgifter efter<input type="number" min="1" max="60" name="ssf_meeting_retention_months" value="<?php echo esc_attr((string) $data['retention_months']); ?>"><small>Månader efter årsmötets slut.</small></label>
                 </div>
                 <fieldset><legend><strong>Anmälan</strong></legend>
-                    <p><label><input type="checkbox" name="ssf_meeting_registration_visible" value="1" <?php checked($data['registration_visible']); ?>> Visa anmälan på sidan</label><br><span class="description">Av betyder att inget om anmälan visas för besökaren.</span></p>
+                    <p><label><input type="checkbox" name="ssf_meeting_registration_visible" value="1" <?php checked($data['registration_visible']); ?>> Visa anmälan på sidan</label><br><span class="description">Av betyder att inget om anmälan visas för besökaren. För att visa delen krävs också minst ett synligt anmälningsval i programmet.</span></p>
                     <p><strong>Status när anmälan visas</strong></p>
                     <p><label><input type="radio" name="ssf_meeting_registration_status" value="open" <?php checked($data['registration_mode'], 'open'); ?>> Öppen</label><br><span class="description">Befintliga anmälningslänkar och formulär används.</span></p>
                     <p><label><input type="radio" name="ssf_meeting_registration_status" value="closed" <?php checked('open' !== $data['registration_mode']); ?>> Stängd</label><br><span class="description">Anmälan visas som stängd och kan inte skickas in.</span></p>
