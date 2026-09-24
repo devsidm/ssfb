@@ -251,6 +251,9 @@ final class Module
         if ($program) {
             $modules['day2'] = 1;
         }
+        $submitted_registration_mode = sanitize_key(wp_unslash($_POST['ssf_meeting_registration_mode'] ?? ''));
+        $registration_mode = in_array($submitted_registration_mode, array('hidden', 'open', 'closed'), true)
+            ? $submitted_registration_mode : $current['registration_mode'];
         $values = array(
             'year' => $year,
             'meeting_date' => $start_at ? wp_date('Y-m-d', $start_at, wp_timezone()) : $legacy_meeting_date,
@@ -275,7 +278,8 @@ final class Module
             'motion_contact_email' => (string) $current['motion_contact_email'],
             'contact_name' => (string) $current['contact_name'],
             'contact_email' => (string) $current['contact_email'],
-            'registration_open' => ! empty($_POST['ssf_meeting_registration_open']) ? 1 : 0,
+            'registration_mode' => $registration_mode,
+            'registration_open' => 'open' === $registration_mode ? 1 : 0,
             'allow_guest' => ! empty($_POST['ssf_meeting_allow_guest']) ? 1 : 0,
             'allow_edits' => ! empty($_POST['ssf_meeting_allow_edits']) ? 1 : 0,
             'capacity' => max(0, absint($_POST['ssf_meeting_capacity'] ?? 0)),
@@ -336,6 +340,12 @@ final class Module
             'documents' => ! empty($documents),
             'calendar' => 1,
         ));
+        $stored_registration_mode = (string) $meta('registration_mode', '');
+        $registration_mode_explicit = in_array($stored_registration_mode, array('hidden', 'open', 'closed'), true);
+        $meeting_post = get_post($meeting_id);
+        $registration_mode = $registration_mode_explicit
+            ? $stored_registration_mode
+            : ($meeting_post && 'auto-draft' === $meeting_post->post_status ? 'hidden' : ((bool) $meta('registration_open', 0) ? 'open' : 'closed'));
         return array(
             'id' => $meeting_id,
             'year' => (int) $meta('year', $legacy_year),
@@ -363,6 +373,8 @@ final class Module
             'contact_name' => (string) $meta('contact_name', ''),
             'contact_email' => (string) $meta('contact_email', ''),
             'registration_open' => (bool) $meta('registration_open', 0),
+            'registration_mode' => $registration_mode,
+            'registration_mode_explicit' => $registration_mode_explicit,
             'allow_guest' => (bool) $meta('allow_guest', 0),
             'allow_edits' => (bool) $meta('allow_edits', 1),
             'capacity' => (int) $meta('capacity', 0),

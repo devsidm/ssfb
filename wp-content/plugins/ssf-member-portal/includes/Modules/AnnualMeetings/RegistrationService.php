@@ -346,7 +346,10 @@ final class RegistrationService
         $close_at = (int) ($meeting['registration_closes_at'] ?? 0);
 
         $status = self::AVAILABILITY_OPEN;
-        if ($meeting_post && 'publish' !== $meeting_post->post_status) {
+        if (! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '')) {
+            $status = self::AVAILABILITY_CLOSED;
+            $close_at = 0;
+        } elseif ($meeting_post && 'publish' !== $meeting_post->post_status) {
             $status = self::AVAILABILITY_DISABLED;
         } elseif ($meeting_post && (int) $meeting_post->ID !== (int) get_option('ssf_member_portal_active_meeting_id', 0)) {
             $status = self::AVAILABILITY_DISABLED;
@@ -408,7 +411,10 @@ final class RegistrationService
         $full = $capacity > 0 && $count >= $capacity;
         $status = self::AVAILABILITY_OPEN;
 
-        if (empty($meeting['registration_open'])) {
+        if (! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '')) {
+            $status = self::AVAILABILITY_CLOSED;
+            $close_at = 0;
+        } elseif (empty($meeting['registration_open'])) {
             $status = self::AVAILABILITY_DISABLED;
         } elseif ($meeting_end && $now > $meeting_end) {
             $status = self::AVAILABILITY_MEETING_PASSED;

@@ -32,9 +32,11 @@ final class CalendarService
         $url = $this->meetings->meeting_url(array('meeting' => (int) ($meeting['id'] ?? 0)));
         $description = trim((string) ($meeting['calendar_description'] ?? ''));
         if (! $description) {
-            $description = sprintf(__('SSF:s årsmöteshelg %d.', 'ssf-member-portal'), $year) . "\n"
-                . __('Anmäl gärna om du deltar i själva årsmötet, även om det inte är ett krav.', 'ssf-member-portal') . "\n"
-                . __('Middag och vissa aktiviteter behöver bokas.', 'ssf-member-portal');
+            $description = sprintf(__('SSF:s årsmöteshelg %d.', 'ssf-member-portal'), $year);
+            if ('hidden' !== ($meeting['registration_mode'] ?? '')) {
+                $description .= "\n" . __('Anmäl gärna om du deltar i själva årsmötet, även om det inte är ett krav.', 'ssf-member-portal') . "\n"
+                    . __('Middag och vissa aktiviteter behöver bokas.', 'ssf-member-portal');
+            }
         }
 
         $start_date = (new \DateTimeImmutable('@' . $start))->setTimezone(wp_timezone())->setTime(0, 0);

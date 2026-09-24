@@ -25,6 +25,7 @@ final class Frontend
         add_shortcode('ssf_member_portal_annual_meetings', array($this, 'archive_shortcode'));
         add_filter('the_content', array($this, 'append_archive_to_page'), 20);
         add_shortcode('ssf_member_portal_annual_meeting_registration', array($this, 'registration_shortcode'));
+        add_action('template_redirect', array($this, 'redirect_hidden_registration'));
         add_action('admin_post_nopriv_ssf_member_portal_submit_meeting_registration', array($this, 'submit'));
         add_action('admin_post_ssf_member_portal_submit_meeting_registration', array($this, 'submit'));
         add_action('admin_post_nopriv_ssf_member_portal_cancel_meeting_registration', array($this, 'cancel'));
@@ -107,9 +108,6 @@ final class Frontend
         if (! $this->feature_enabled('annual_meetings')) {
             return $this->message(__('Information om nästa årsmöte publiceras här.', 'ssf-member-portal'));
         }
-        if (! $this->feature_enabled('annual_meeting_registration')) {
-            return $this->message(__('Anmälan till årsmöteshelgen är inte öppen just nu.', 'ssf-member-portal'));
-        }
         $meeting_post = $this->public_meeting();
         if (! $meeting_post) {
             return $this->message(__('Det finns inget aktuellt årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
@@ -117,6 +115,12 @@ final class Frontend
         $meeting = $this->meetings->data($meeting_post->ID);
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
             return $this->message(__('Det finns inget aktuellt årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
+        }
+        if ('hidden' === ($meeting['registration_mode'] ?? '')) {
+            return '';
+        }
+        if (! $this->feature_enabled('annual_meeting_registration')) {
+            return $this->message(__('Anmälan till årsmöteshelgen är inte öppen just nu.', 'ssf-member-portal'));
         }
         $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
         $registration_post = $token ? $this->registrations->find_by_token($token) : null;
@@ -138,6 +142,19 @@ final class Frontend
         ob_start();
         include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/form.php';
         return (string) ob_get_clean();
+    }
+
+    public function redirect_hidden_registration(): void
+    {
+        $registration_page_id = (int) get_option('ssf_member_portal_annual_meeting_registration_page_id', 0);
+        if (! $registration_page_id || ! is_page($registration_page_id)) {
+            return;
+        }
+        $meeting_post = $this->public_meeting();
+        if ($meeting_post && 'hidden' === ($this->meetings->data($meeting_post->ID)['registration_mode'] ?? '')) {
+            wp_safe_redirect($this->meetings->meeting_url(), 302);
+            exit;
+        }
     }
 
     public function submit(): void

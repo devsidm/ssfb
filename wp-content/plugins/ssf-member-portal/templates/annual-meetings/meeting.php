@@ -56,6 +56,8 @@ $documents = array_values(array_filter((array) $meeting['documents'], static fun
     return ! empty($item['visible']) && ! empty($item['attachment_id']);
 }));
 $show_documents = $this->meetings->module_enabled($meeting, 'documents') && $documents;
+$registration_hidden = 'hidden' === ($meeting['registration_mode'] ?? '');
+$registration_closed = ! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '');
 $document_types = array('agenda' => 'Dagordning', 'annual_report' => 'Verksamhetsberättelse', 'financial_report' => 'Ekonomisk rapport', 'budget' => 'Budget', 'motions' => 'Motioner', 'board_response' => 'Styrelsens yttranden', 'minutes' => 'Protokoll', 'other' => 'Dokument');
 $resources = array();
 
@@ -154,10 +156,10 @@ $resources = array_values(array_filter($resources, static function (array $resou
                     <article class="ssf-am-activity">
                         <div class="ssf-am-activity__time"><?php if (! empty($item['start'])) : ?><time><?php echo esc_html($item['start']); ?><?php if (! empty($item['end'])) : ?>–<?php echo esc_html($item['end']); ?><?php endif; ?></time><?php endif; ?></div>
                         <div class="ssf-am-activity__main">
-                            <div class="ssf-am-activity__title"><h4><?php echo esc_html($item['title']); ?></h4><?php if ($requires_registration) : ?><span class="ssf-am-badge"><?php esc_html_e('Anmälan krävs', 'ssf-member-portal'); ?></span><?php elseif ($is_annual_meeting) : ?><span class="ssf-am-badge ssf-am-badge--open"><?php esc_html_e('Anmäl gärna', 'ssf-member-portal'); ?></span><?php endif; ?></div>
+                            <div class="ssf-am-activity__title"><h4><?php echo esc_html($item['title']); ?></h4><?php if (! $registration_hidden && $requires_registration) : ?><span class="ssf-am-badge"><?php esc_html_e('Anmälan krävs', 'ssf-member-portal'); ?></span><?php elseif (! $registration_hidden && $is_annual_meeting) : ?><span class="ssf-am-badge ssf-am-badge--open"><?php esc_html_e('Anmäl gärna', 'ssf-member-portal'); ?></span><?php endif; ?></div>
                             <?php if (! empty($item['description'])) : ?><p><?php echo esc_html($item['description']); ?></p><?php endif; ?>
                             <?php $meta = array_filter(array((string) ($item['location'] ?? ''), (string) ($item['price'] ?? ''))); if ($meta) : ?><p class="ssf-am-activity__details"><?php echo esc_html(implode(' · ', $meta)); ?></p><?php endif; ?>
-                            <?php if ($requires_registration && ! empty($state['full'])) : ?><p class="ssf-am-activity__status"><?php esc_html_e('Fullbokad', 'ssf-member-portal'); ?></p><?php elseif ($requires_registration && empty($state['registration_open']) && ! empty($state['message'])) : ?><p class="ssf-am-activity__status"><?php echo esc_html((string) $state['message']); ?></p><?php elseif ($requires_registration && ! empty($state['capacity'])) : ?><p class="ssf-am-activity__status"><?php echo esc_html(sprintf(__('%1$d av %2$d platser bokade', 'ssf-member-portal'), (int) $state['count'], (int) $state['capacity'])); ?></p><?php endif; ?>
+                            <?php if (! $registration_hidden && $requires_registration && ! empty($state['full'])) : ?><p class="ssf-am-activity__status"><?php esc_html_e('Fullbokad', 'ssf-member-portal'); ?></p><?php elseif (! $registration_hidden && $requires_registration && empty($state['registration_open']) && ! empty($state['message'])) : ?><p class="ssf-am-activity__status"><?php echo esc_html((string) $state['message']); ?></p><?php elseif (! $registration_hidden && $requires_registration && ! empty($state['capacity'])) : ?><p class="ssf-am-activity__status"><?php echo esc_html(sprintf(__('%1$d av %2$d platser bokade', 'ssf-member-portal'), (int) $state['count'], (int) $state['capacity'])); ?></p><?php endif; ?>
                         </div>
                     </article>
                 <?php endforeach; ?>
@@ -165,8 +167,9 @@ $resources = array_values(array_filter($resources, static function (array $resou
         </section>
     <?php endif; ?>
 
+    <?php if (! $registration_hidden) : ?>
     <section id="ssf-am-registration" class="ssf-am-registration-cta" aria-label="<?php esc_attr_e('Anmälan', 'ssf-member-portal'); ?>">
-        <div><strong><?php esc_html_e('Anmäl gärna att du kommer', 'ssf-member-portal'); ?></strong><p><?php esc_html_e('Anmälan till själva årsmötet är frivillig men hjälper oss att planera. I samma formulär väljer du middag och aktiviteter.', 'ssf-member-portal'); ?></p></div>
+        <div><strong><?php $registration_closed ? esc_html_e('Anmälan', 'ssf-member-portal') : esc_html_e('Anmäl gärna att du kommer', 'ssf-member-portal'); ?></strong><?php if (! $registration_closed) : ?><p><?php esc_html_e('Anmälan till själva årsmötet är frivillig men hjälper oss att planera. I samma formulär väljer du middag och aktiviteter.', 'ssf-member-portal'); ?></p><?php endif; ?></div>
         <?php if (! empty($registration_state['can_register'])) : ?>
             <a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Gå till anmälan', 'ssf-member-portal'); ?></a>
         <?php else : ?>
@@ -174,6 +177,7 @@ $resources = array_values(array_filter($resources, static function (array $resou
         <?php endif; ?>
     </section>
     <?php if (empty($registration_state['can_register']) && ! empty($registration_state['message'])) : ?><p class="ssf-am-message" role="status"><?php echo esc_html((string) $registration_state['message']); ?></p><?php endif; ?>
+    <?php endif; ?>
 
     <p class="ssf-am-contact"><strong><?php esc_html_e('Har du frågor om årsmötet?', 'ssf-member-portal'); ?></strong><br><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($contact_url); ?>"><?php esc_html_e('Kontakta styrelsen', 'ssf-member-portal'); ?></a></p>
 </section>
