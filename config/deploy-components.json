@@ -8,6 +8,7 @@
       "ssf-member-portal",
       "microsoft-id-login",
       "ssf-office365-mailer",
+      "ssf-promotions",
       "ssf-site-customizations",
       "ssf-stadgar"
     ],
@@ -15,6 +16,7 @@
       "ssf"
     ],
     "mu_files": [
+      "ssf-admin-feedback.php",
       "ssf-admin-navigation.php",
       "ssf-antispam.php",
       "ssf-email-router.php",

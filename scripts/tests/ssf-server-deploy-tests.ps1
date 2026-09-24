@@ -88,13 +88,14 @@ Assert-True 'empty maintenance marker fails' (-not (Test-MaintenanceMarker '<?ph
 Assert-True 'quoted numeric maintenance marker fails' (-not (Test-MaintenanceMarker '<?php $upgrading = "1789501000"; ?>'))
 
 Assert-True 'deploy component schema version' ($config.schema_version -eq 1)
-Assert-True 'eight production plugins configured' (@($config.production.plugins).Count -eq 8)
+Assert-True 'production plugins configured' (@($config.production.plugins).Count -ge 9)
 Assert-True 'one production theme configured' (@($config.production.themes).Count -eq 1)
-Assert-True 'eight production MU files configured' (@($config.production.mu_files).Count -eq 8)
+Assert-True 'admin feedback MU file is deployed' (@($config.production.mu_files) -contains 'ssf-admin-feedback.php')
+Assert-True 'production MU files configured' (@($config.production.mu_files).Count -ge 9)
 Assert-True 'central Microsoft 365 config MU file deploys' (@($config.production.mu_files) -contains 'ssf-microsoft365-config.php')
 Assert-True 'one production MU asset directory configured' (@($config.production.mu_asset_dirs).Count -eq 1)
 Assert-True 'production MU assets includes assets directory' (@($config.production.mu_asset_dirs) -contains 'assets')
-Assert-True 'ssf-promotions is eligible for interactive installation' (-not (@($config.excluded.plugins) -contains 'ssf-promotions'))
+Assert-True 'ssf-promotions is included in production candidate scope' (@($config.production.plugins) -contains 'ssf-promotions')
 Assert-True 'Microsoft ID Login production capable' (@($config.production.plugins) -contains 'microsoft-id-login')
 Assert-True 'Old Microsoft login slug removed from production policy' (-not (@($config.production.plugins + $config.excluded.plugins + $config.plugin_policy.dev_only) -contains 'ssf-microsoft-login'))
 Assert-True 'plugin policy dev_only exists' ($null -ne $config.plugin_policy.dev_only)
@@ -103,6 +104,18 @@ Assert-True 'plugin policy prod_only exists' ($null -ne $config.plugin_policy.pr
 Assert-True 'plugin policy ignore_version exists' ($null -ne $config.plugin_policy.ignore_version)
 foreach ($file in @('ssf-dev-annual-meeting-registration.php','ssf-dev-login-protection.php','ssf-dev-protection.php')) {
     Assert-True "DEV-only MU excluded $file" (@($config.dev_only.mu_files) -contains $file)
+}
+$trackedWordPress = @(& git -C $repo ls-files -- wp-content)
+Assert-True 'tracked WordPress files exist' ($trackedWordPress.Count -gt 0)
+foreach ($tracked in $trackedWordPress) {
+    $parts = $tracked -split '/'
+    $classified = switch ($parts[1]) {
+        'plugins' { @($config.production.plugins + $config.excluded.plugins + $config.plugin_policy.dev_only) -contains $parts[2] }
+        'themes' { @($config.production.themes) -contains $parts[2] }
+        'mu-plugins' { @($config.production.mu_files + $config.production.mu_asset_dirs + $config.dev_only.mu_files) -contains $parts[2] }
+        default { $false }
+    }
+    Assert-True "tracked WordPress file classified: $tracked" $classified
 }
 
 Assert-Contains 'exact DEV path' $script '$HOME_DIR/ssfb.se/public_html/dev'
@@ -122,12 +135,23 @@ Assert-Contains 'all normal PROD plugins enumerated' $script 'wp_prod plugin lis
 Assert-Contains 'missing DEV plugin is an installation candidate' $script '$candidate = "install";'
 Assert-Contains 'newer DEV plugin is an update candidate' $script '$candidate = "update";'
 Assert-Contains 'PROD newer version never downgraded' $script 'version_compare($devVersion, $prodVersion, "<")'
-Assert-Contains 'same version checks file contents' $script 'rsync -rcni --no-perms --no-times'
-Assert-Contains 'same version mismatch warns instead of copying' $script 'Bump the plugin version before deploying these changes.'
+Assert-Contains 'same version checks file contents' $script 'rsync -rcni --no-perms --no-times --no-owner --no-group'
+Assert-Contains 'same version mismatch stops before PROD' $script 'has changed files but the same version $dev_version in DEV and PROD. Bump the plugin version before deploying.'
+Assert-Contains 'checksum-based DEV dry run' $script 'rsync -acni --no-perms --no-times --no-owner --no-group "$source" "$destination"'
+Assert-Contains 'checksum-based file copy' $script 'rsync -ac --no-perms --no-times --no-owner --no-group "$source" "$destination"'
+Assert-Contains 'checksum-based byte verification' $script 'verify_component_bytes()'
+Assert-Contains 'all tracked WordPress files audited' $script 'audit_tracked_wordpress_scope()'
+Assert-Contains 'audit runs before tests and synchronization' $script "  audit_tracked_wordpress_scope`n  run_tests"
+Assert-Contains 'stale files checked without deletion' $script 'verify_no_stale_component_files()'
+Assert-Contains 'stale plugin files checked before PROD mutation' $script 'verify_no_stale_component_files "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/"'
+Assert-Contains 'stale files stop deployment' $script 'contains files absent from the source. Review them before deploying; no files were deleted.'
+Assert-Contains 'DEV plugin bytes verified' $script 'verify_component_bytes "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/"'
+Assert-Contains 'PROD selected plugin bytes verified' $script 'verify_component_bytes "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/"'
+Assert-Contains 'PROD theme bytes verified' $script 'verify_component_bytes "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/"'
 Assert-Contains 'dev-only plugin config exception works' $script 'DEV_ONLY_ALLOWED'
-Assert-Contains 'plugin install prompt defaults no' $script 'Installera %s %s i PROD? [y/N]:'
-Assert-Contains 'plugin update prompt defaults no' $script 'Uppdatera %s i PROD %s -> %s? [y/N]:'
-Assert-Contains 'Enter becomes skip' $script 'answer=""'
+Assert-Contains 'plugin install requires explicit choice' $script 'Installera %s %s i PROD? [y/SKIP]:'
+Assert-Contains 'plugin update requires explicit choice' $script 'Uppdatera %s i PROD %s -> %s? [y/SKIP]:'
+Assert-Contains 'blank plugin choice is rejected' $script 'answer=""'
 Assert-Contains 'only affirmative answers select plugin' $script 'if [[ "$answer" == "y" || "$answer" == "Y" ]]; then'
 Assert-Contains 'runtime plan tracks installs' $script '"install_plugins" => array()'
 Assert-Contains 'runtime plan tracks updates' $script '"update_plugins" => array()'
@@ -258,7 +282,11 @@ Assert-Contains 'docs one command' $doc 'ssf-deploy'
 Assert-Contains 'docs rollback' $doc 'Rollback'
 Assert-Contains 'docs backups' $doc '$HOME/ssf-backups'
 Assert-Contains 'docs interactive plugin choices' $doc 'the operator chooses whether to'
-Assert-Contains 'docs no is the default' $doc 'The default answer is No'
+Assert-Contains 'docs require explicit plugin choice' $doc 'Each choice requires an explicit `y` or `SKIP`'
+Assert-Contains 'plugin prompts do not default to skip' $script 'Enter y or SKIP; blank never skips a plugin.'
+Assert-Contains 'plugin choices abort on EOF' $script 'No explicit plugin choice for $name. Aborting before PROD changes.'
+Assert-Contains 'final confirmation names selected plugins' $script 'Selected plugins:'
+Assert-Contains 'final confirmation names skipped plugins' $script 'Explicitly skipped plugins:'
 Assert-Contains 'docs final confirmation remains' $doc 'The final `DEPLOY` confirmation is still required.'
 Assert-Contains 'docs Turnstile example' $doc 'simple-cloudflare-turnstile'
 Assert-Contains 'docs no option copy' $doc 'never copied from DEV'
@@ -501,8 +529,7 @@ if (Test-Path -LiteralPath $phpPath) {
             $same = New-Plugin 'ssf-example' '1.0.0'
             $plan = Set-Inventory @($same) @($same)
             Assert-True 'same version needs no install/update question' ($plan.entries[0].candidate -eq 'same')
-            $plan = Select-Plugin 'ssf-example' 'files_differ'
-            Assert-True 'same version with different files is skipped and not touched' (@($plan.skipped_plugins) -contains 'ssf-example' -and @($plan.deploy_plugins).Count -eq 0)
+            Assert-NotContains 'same-version differences never become skippable plan actions' $script 'plugin_plan_set_action "$name" "files_differ"'
             $newer = New-Plugin 'ssf-example' '3.0.0'
             $plan = Set-Inventory @($dev) @($newer)
             Assert-True 'newer PROD has no downgrade candidate' ($plan.entries[0].classification -eq 'PROD_NEWER' -and $plan.entries[0].candidate -eq 'none')

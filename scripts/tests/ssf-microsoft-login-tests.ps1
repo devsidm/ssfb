@@ -14,8 +14,14 @@ $failures = [Collections.Generic.List[string]]::new()
 
 function Fail([string]$Message) { $failures.Add($Message) | Out-Null }
 function Assert-True([string]$Name, [bool]$Condition) { if (-not $Condition) { Fail $Name } }
-function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
-function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
+function Decode-TestLiteral([string]$Text) {
+    if ($PSVersionTable.PSVersion.Major -lt 6) {
+        return [Text.Encoding]::UTF8.GetString([Text.Encoding]::GetEncoding(1252).GetBytes($Text))
+    }
+    return $Text
+}
+function Assert-Contains([string]$Name, [string]$Content, [string]$Expected) { $Expected = Decode-TestLiteral $Expected; if (-not $Content.Contains($Expected)) { Fail "$Name missing: $Expected" } }
+function Assert-NotContains([string]$Name, [string]$Content, [string]$Unexpected) { $Unexpected = Decode-TestLiteral $Unexpected; if ($Content.Contains($Unexpected)) { Fail "$Name contains forbidden text: $Unexpected" } }
 
 $plugin = Get-Content -Raw -Encoding UTF8 -LiteralPath $pluginPath
 $js = Get-Content -Raw -Encoding UTF8 -LiteralPath $jsPath

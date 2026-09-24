@@ -144,7 +144,8 @@ wp plugin list --format=json
 ```
 
 For each missing plugin or newer DEV version, the operator chooses whether to
-install or update it in PROD. The default answer is No; a skipped plugin keeps
+install or update it in PROD. Each choice requires an explicit `y` or `SKIP`;
+an empty answer aborts before PROD changes. A skipped plugin keeps
 its previous PROD version and activation status. A new selected plugin that is
 active in DEV may be activated in PROD. Existing plugins keep their PROD
 activation status. The final `DEPLOY` confirmation is still required.
@@ -176,12 +177,19 @@ Production does not receive:
 - DEV-only MU plugins
 - DEV database
 
-The deployment uses `rsync -a` and never uses `rsync --delete`.
+The deployment uses checksum-based `rsync -ac` and never uses `rsync --delete`.
 
 PROD-only plugins and plugins with differing activation status are not
 automatically deactivated. A newer PROD plugin is never downgraded. If files
-differ despite equal version numbers, deployment warns and leaves that plugin
-unchanged until its version is bumped.
+differ despite equal version numbers, deployment stops before PROD mutation.
+Bump the plugin version, test and sync DEV, then rerun. Source-to-DEV and
+selected DEV-to-PROD files are checksum-verified after copying.
+Every tracked WordPress plugin, theme and MU file must also be classified in
+`config/deploy-components.json`. Unclassified files stop deployment. Files
+present in a managed destination but absent from its source stop deployment
+before PROD mutation; the script does not delete them automatically. `ssf-promotions`
+(SSF Aktuellt) is included in the PROD plugin candidate set and still requires
+an explicit install/update choice if it differs from PROD.
 
 The deployment never downloads plugins from wordpress.org. A selected plugin
 is copied from the tested DEV directory; a selected new plugin active in DEV

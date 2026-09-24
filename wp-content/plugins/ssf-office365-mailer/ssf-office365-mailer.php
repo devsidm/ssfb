@@ -3,7 +3,7 @@
  * Plugin Name: SSF Microsoft 365 Mailer
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Skickar WordPress e-post via Microsoft 365 och Microsoft Graph med OAuth 2.0.
- * Version: 0.1.4
+ * Version: 0.1.5
  * Author: SIDM
  * Text Domain: ssf-office365-mailer
  * Requires at least: 5.8

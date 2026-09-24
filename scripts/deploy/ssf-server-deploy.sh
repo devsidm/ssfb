@@ -185,6 +185,51 @@ validate_deploy_config() {
   echo "Deploy config: PASS"
 }
 
+audit_tracked_wordpress_scope() {
+  section "TRACKED WORDPRESS SCOPE"
+  git ls-files -z -- wp-content | php -r '
+    $config = json_decode(file_get_contents($argv[1]), true);
+    $paths = array_filter(explode("\0", stream_get_contents(STDIN)));
+    $unclassified = array();
+    $seen = array();
+    foreach ($paths as $path) {
+      $seen[$path] = true;
+      $parts = explode("/", $path);
+      $group = $parts[1] ?? "";
+      $name = $parts[2] ?? "";
+      if ($group === "plugins") {
+        $allowed = array_merge($config["production"]["plugins"] ?? array(), $config["dev_only"]["plugins"] ?? array(), $config["excluded"]["plugins"] ?? array());
+      } elseif ($group === "themes") {
+        $allowed = array_merge($config["production"]["themes"] ?? array(), $config["excluded"]["themes"] ?? array());
+      } elseif ($group === "mu-plugins") {
+        $allowed = array_merge($config["production"]["mu_files"] ?? array(), $config["production"]["mu_asset_dirs"] ?? array(), $config["dev_only"]["mu_files"] ?? array(), $config["excluded"]["mu_files"] ?? array());
+      } else {
+        $allowed = array();
+      }
+      if (!in_array($name, $allowed, true)) {
+        $unclassified[] = $path;
+      }
+    }
+    foreach (array("plugins", "themes", "mu_files", "mu_asset_dirs") as $type) {
+      foreach ($config["production"][$type] ?? array() as $name) {
+        $prefix = "wp-content/" . ($type === "plugins" ? "plugins/" : ($type === "themes" ? "themes/" : "mu-plugins/")) . $name;
+        $found = $type === "mu_files" ? isset($seen[$prefix]) : false;
+        if (!$found) {
+          foreach ($paths as $path) {
+            if (strpos($path, $prefix . "/") === 0) { $found = true; break; }
+          }
+        }
+        if (!$found) { $unclassified[] = "configured but not tracked: " . $prefix; }
+      }
+    }
+    if ($unclassified) {
+      foreach ($unclassified as $path) { fwrite(STDERR, "Unclassified WordPress file: " . $path . PHP_EOL); }
+      exit(1);
+    }
+    echo count($paths), " tracked WordPress files classified: PASS", PHP_EOL;
+  ' "$CONFIG" || fail "Tracked WordPress scope is incomplete; classify every plugin, theme and MU file before PROD."
+}
+
 json_array() {
   local path="$1"
   php -r '
@@ -445,10 +490,35 @@ rsync_component() {
   [[ -e "$source" ]] || fail "Missing source path: $source"
   mkdir -p "$(dirname "$destination")"
   if [[ "$mode" == "dry" ]]; then
-    rsync -ani "$source" "$destination"
+    rsync -acni --no-perms --no-times --no-owner --no-group "$source" "$destination"
   else
-    rsync -a "$source" "$destination"
+    rsync -ac --no-perms --no-times --no-owner --no-group "$source" "$destination"
   fi
+}
+
+verify_component_bytes() {
+  local source="$1" destination="$2" label="$3" differences
+  differences="$(rsync -acni --no-perms --no-times --no-owner --no-group "$source" "$destination")" || fail "Cannot verify $label."
+  if [[ -n "$differences" ]]; then
+    printf '%s\n' "$differences" | sed -n '1,25p' >&2
+    fail "$label differs after synchronization."
+  fi
+  if [[ "$source" == */ && -d "$destination" ]]; then
+    verify_no_stale_component_files "$source" "$destination" "$label"
+  fi
+}
+
+verify_no_stale_component_files() {
+  local source="$1" destination="$2" label="$3" path relative stale=0
+  [[ -d "$destination" ]] || return 0
+  while IFS= read -r -d '' path; do
+    relative="${path#"$destination"}"
+    if [[ ! -e "$source$relative" && ! -L "$source$relative" ]]; then
+      printf 'Stale %s file: %s\n' "$label" "$relative" >&2
+      stale=1
+    fi
+  done < <(find "$destination" \( -type f -o -type l \) -print0)
+  [[ "$stale" == "0" ]] || fail "$label contains files absent from the source. Review them before deploying; no files were deleted."
 }
 
 sync_mu_asset_dirs() {
@@ -491,6 +561,11 @@ sync_to_dev() {
   while IFS= read -r file; do rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
   sync_mu_asset_dirs "$REPO" "$DEV" real >/dev/null
   while IFS= read -r file; do rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "dev_only.mu_files")
+  while IFS= read -r plugin; do verify_component_bytes "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/" "DEV plugin $plugin"; done < <(json_array "production.plugins")
+  while IFS= read -r theme; do verify_component_bytes "$REPO/wp-content/themes/$theme/" "$DEV/wp-content/themes/$theme/" "DEV theme $theme"; done < <(json_array "production.themes")
+  while IFS= read -r file; do verify_component_bytes "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" "DEV MU file $file"; done < <(json_array "production.mu_files")
+  while IFS= read -r dir; do verify_component_bytes "$REPO/wp-content/mu-plugins/$dir/" "$DEV/wp-content/mu-plugins/$dir/" "DEV MU assets $dir"; done < <(json_array "production.mu_asset_dirs")
+  while IFS= read -r file; do verify_component_bytes "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" "DEV-only MU file $file"; done < <(json_array "dev_only.mu_files")
   DEV_SYNC_STATUS="PASS"
   echo "DEV sync: PASS"
 }
@@ -698,28 +773,31 @@ build_plugin_parity_plan() {
   while IFS=$'\t' read -r name candidate dev_version prod_version; do
     [[ -d "$DEV/wp-content/plugins/$name" ]] || fail "DEV plugin files are missing: $name"
     if [[ "$candidate" == "same" ]]; then
-      output="$(rsync -rcni --no-perms --no-times "$DEV/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/")"
+      verify_no_stale_component_files "$DEV/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/" "PROD plugin $name"
+      output="$(rsync -rcni --no-perms --no-times --no-owner --no-group "$DEV/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/")"
       if [[ -n "$output" ]]; then
-        echo "WARNING: $name is version $dev_version in both DEV and PROD but files differ. Bump the plugin version before deploying these changes."
-        plugin_plan_set_action "$name" "files_differ"
+        printf '%s\n' "$output" | sed -n '1,25p' >&2
+        fail "$name has changed files but the same version $dev_version in DEV and PROD. Bump the plugin version before deploying."
       else
         plugin_plan_set_action "$name" "no_change"
       fi
       continue
     fi
     if [[ "$candidate" == "install" ]]; then
-      printf 'Installera %s %s i PROD? [y/N]: ' "$name" "$dev_version"
+      printf 'Installera %s %s i PROD? [y/SKIP]: ' "$name" "$dev_version"
     elif [[ "$candidate" == "update" ]]; then
-      printf 'Uppdatera %s i PROD %s -> %s? [y/N]: ' "$name" "$prod_version" "$dev_version"
+      printf 'Uppdatera %s i PROD %s -> %s? [y/SKIP]: ' "$name" "$prod_version" "$dev_version"
     else
       continue
     fi
     answer=""
-    IFS= read -r answer <&3 || true
+    IFS= read -r answer <&3 || fail "No explicit plugin choice for $name. Aborting before PROD changes."
     if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
       plugin_plan_set_action "$name" "$candidate"
-    else
+    elif [[ "$answer" == "SKIP" ]]; then
       plugin_plan_set_action "$name" "skip"
+    else
+      fail "Invalid plugin choice for $name. Enter y or SKIP; blank never skips a plugin."
     fi
   done < <(plugin_plan_candidates)
   exec 3<&-
@@ -767,7 +845,7 @@ plugin_plan_finalize() {
           $data["missing_before"][] = $name;
           if ($entry["devStatus"] === "active") { $data["activate_plugins"][] = $name; }
         }
-      } elseif ($action === "skip" || $action === "files_differ") {
+      } elseif ($action === "skip") {
         $data["skipped_plugins"][] = $name;
       }
     }
@@ -818,7 +896,7 @@ plugin_plan_summary() {
         $classification = $entry["classification"];
         $selected = $group === "install" ? $action === "install"
           : ($group === "update" ? $action === "update"
-          : ($group === "keep" ? ($action === "skip" || $action === "files_differ" || $classification === "PROD_NEWER" || $classification === "PROD_ONLY" || $classification === "VERSION_IGNORED" || $classification === "UNKNOWN_VERSION")
+          : ($group === "keep" ? ($action === "skip" || $classification === "PROD_NEWER" || $classification === "PROD_ONLY" || $classification === "VERSION_IGNORED" || $classification === "UNKNOWN_VERSION")
           : $action === "no_change"));
         if (!$selected) { continue; }
         $from = $entry["prodVersion"] ?: "not installed";
@@ -907,12 +985,14 @@ prod_dry_run() {
   DRY_RUN_STATUS="PASS"
   while IFS= read -r plugin; do
     local output count
+    verify_no_stale_component_files "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" "PROD plugin $plugin"
     output="$(rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
     echo "PLUGIN $plugin $count files changed / added (selected plan)"
   done < <(plugin_plan_array "deploy_plugins")
   while IFS= read -r theme; do
     local output count
+    verify_no_stale_component_files "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" "PROD theme $theme"
     output="$(rsync_component "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
     echo "THEME $theme $count files changed / added"
@@ -928,6 +1008,7 @@ prod_dry_run() {
   done < <(json_array "production.mu_files")
   while IFS= read -r dir; do
     local output count
+    verify_no_stale_component_files "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" "PROD MU assets $dir"
     output="$(rsync_component "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
     echo "MU-ASSET-DIR $dir $count files changed / added"
@@ -974,8 +1055,14 @@ Dry run:           $DRY_RUN_STATUS
 Will deploy:
 $(plugin_plan_count "deploy_plugins") selected plugins
 1 SSF theme
-8 PROD MU files
-1 PROD MU asset directory
+$(json_array "production.mu_files" | wc -l) PROD MU files
+$(json_array "production.mu_asset_dirs" | wc -l) PROD MU asset directories
+
+Selected plugins:
+$(plugin_plan_array "deploy_plugins" | sed 's/^/  - /')
+
+Explicitly skipped plugins:
+$(plugin_plan_array "skipped_plugins" | sed 's/^/  - /')
 
 Will NOT touch:
 database contents
@@ -1234,6 +1321,9 @@ verify_prod_components() {
   done < <(json_array "production.themes")
   THEME_VERIFY_STATUS="PASS"
   while IFS= read -r file; do [[ -f "$PROD/wp-content/mu-plugins/$file" ]] || fail "Missing PROD MU file: $file"; done < <(json_array "production.mu_files")
+  while IFS= read -r plugin; do verify_component_bytes "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" "PROD plugin $plugin"; done < <(plugin_plan_array "deploy_plugins")
+  while IFS= read -r theme; do verify_component_bytes "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" "PROD theme $theme"; done < <(json_array "production.themes")
+  while IFS= read -r file; do verify_component_bytes "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" "PROD MU file $file"; done < <(json_array "production.mu_files")
   while IFS= read -r dir; do
     [[ -d "$DEV/wp-content/mu-plugins/$dir" ]] || fail "Missing DEV MU asset directory: $dir"
     while IFS= read -r source_file; do
@@ -1241,6 +1331,7 @@ verify_prod_components() {
       [[ -f "$PROD/$relative" ]] || fail "Missing PROD MU asset: $relative"
       cmp -s "$source_file" "$PROD/$relative" || fail "PROD MU asset differs from DEV: $relative"
     done < <(find "$DEV/wp-content/mu-plugins/$dir" -type f | sort)
+    verify_component_bytes "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" "PROD MU assets $dir"
   done < <(json_array "production.mu_asset_dirs")
   while IFS= read -r file; do [[ ! -e "$PROD/wp-content/mu-plugins/$file" ]] || fail "DEV-only MU file exists in PROD: $file"; done < <(json_array "dev_only.mu_files")
   post_deploy_plugin_parity
@@ -1397,6 +1488,7 @@ main() {
   require_tools
   update_repo
   validate_deploy_config
+  audit_tracked_wordpress_scope
   run_tests
   php_lint
   sync_to_dev
