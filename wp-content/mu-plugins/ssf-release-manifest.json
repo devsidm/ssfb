@@ -1,15 +1,21 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.1",
-    "build":  "20260924.5",
-    "built_at":  "2026-09-24T14:35:45.7017860Z",
+    "version":  "0.14.2",
+    "build":  "20260924.6",
+    "built_at":  "2026-09-24T16:58:50.3311311Z",
     "source":  "codex",
-    "source_revision":  "5039e8d0598581ce141df7c43d781760a41d3fff",
-    "description":  "Improve membership application PDF layout and SSF branding",
+    "source_revision":  "e65a1a065ca88236f6d33590eb284d29abb59743",
+    "description":  "Harden production deployment component coverage and verification",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
-                       "ssf-medlemsprocess"
+                       "release-tooling",
+                       "ssf-admin-feedback",
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal",
+                       "ssf-office365-mailer",
+                       "ssf-promotions",
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
