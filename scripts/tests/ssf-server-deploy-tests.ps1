@@ -9,6 +9,8 @@ $scriptPath = Join-Path $repo 'scripts\deploy\ssf-server-deploy.sh'
 $rollbackPath = Join-Path $repo 'scripts\deploy\ssf-server-rollback.sh'
 $devLinkGuardPath = Join-Path $repo 'scripts\deploy\ssf-dev-link-guard.sh'
 $sharePointGuardPath = Join-Path $repo 'scripts\deploy\ssf-sharepoint-config-guard.sh'
+$releaseFilesPath = Join-Path $repo 'scripts\deploy\ssf-release-files.sh'
+$releaseFilesTestPath = Join-Path $repo 'scripts\tests\ssf-release-files-tests.sh'
 $configPath = Join-Path $repo 'config\deploy-components.json'
 $docPath = Join-Path $repo 'docs\SERVER-DEPLOYMENT.md'
 $agentsPath = Join-Path $repo 'AGENTS.md'
@@ -30,22 +32,34 @@ function Invoke-DeployCleanupModel([bool]$ProdMutated, [bool]$DeploySuccess, [bo
 $script = Read-RepoFile 'scripts\deploy\ssf-server-deploy.sh'
 $devLinkGuard = Read-RepoFile 'scripts\deploy\ssf-dev-link-guard.sh'
 $sharePointGuard = Read-RepoFile 'scripts\deploy\ssf-sharepoint-config-guard.sh'
+$releaseFiles = Read-RepoFile 'scripts\deploy\ssf-release-files.sh'
 $doc = Read-RepoFile 'docs\SERVER-DEPLOYMENT.md'
 $agents = Read-RepoFile 'AGENTS.md'
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
 
 $bash = Get-Command bash -ErrorAction SilentlyContinue
+$gitBashPath = Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe'
+if ((-not $bash -or $bash.Source -match '\\System32\\bash\.exe$') -and (Test-Path -LiteralPath $gitBashPath)) {
+    $bash = Get-Command $gitBashPath
+}
 Assert-True 'Bash script exists' (Test-Path -LiteralPath $scriptPath)
 Assert-True 'Rollback script exists' (Test-Path -LiteralPath $rollbackPath)
 Assert-True 'DEV-link guard exists' (Test-Path -LiteralPath $devLinkGuardPath)
 Assert-True 'SharePoint config guard exists' (Test-Path -LiteralPath $sharePointGuardPath)
+Assert-True 'release file verification helper exists' (Test-Path -LiteralPath $releaseFilesPath)
+Assert-True 'release file fixture test exists' (Test-Path -LiteralPath $releaseFilesTestPath)
 if ($bash) {
     $wslStubWithoutDistro = $bash.Source -match '\\System32\\bash\.exe$'
     if (-not $wslStubWithoutDistro) {
         & $bash.Source -n $scriptPath 2>$null
+        & $bash.Source -n $releaseFilesPath 2>$null
+        & $bash.Source -n $releaseFilesTestPath 2>$null
         $bashUsable = $LASTEXITCODE -eq 0
         if (-not $bashUsable) {
             Fail 'Bash script syntax'
+        } else {
+            & $bash.Source $releaseFilesTestPath 2>$null | Out-Null
+            Assert-True 'release file fixture scenarios' ($LASTEXITCODE -eq 0)
         }
     }
 } else {
@@ -135,19 +149,31 @@ Assert-Contains 'all normal PROD plugins enumerated' $script 'wp_prod plugin lis
 Assert-Contains 'missing DEV plugin is an installation candidate' $script '$candidate = "install";'
 Assert-Contains 'newer DEV plugin is an update candidate' $script '$candidate = "update";'
 Assert-Contains 'PROD newer version never downgraded' $script 'version_compare($devVersion, $prodVersion, "<")'
-Assert-Contains 'same version checks file contents' $script 'rsync -rcni --no-perms --no-times --no-owner --no-group'
-Assert-Contains 'same version mismatch stops before PROD' $script 'has changed files but the same version $dev_version in DEV and PROD. Bump the plugin version before deploying.'
-Assert-Contains 'checksum-based DEV dry run' $script 'rsync -acni --no-perms --no-times --no-owner --no-group "$source" "$destination"'
-Assert-Contains 'checksum-based file copy' $script 'rsync -ac --no-perms --no-times --no-owner --no-group "$source" "$destination"'
+Assert-Contains 'same version checks frozen release files' $script 'rsync -rcni --no-perms --no-times --no-owner --no-group "$RELEASE_SOURCE/wp-content/plugins/$name/"'
+Assert-Contains 'same version mismatch stops before PROD' $script 'has changed release files but the same version $dev_version in RELEASE and PROD. Bump the plugin version before deploying.'
+Assert-Contains 'checksum-based itemized file copy' $script 'rsync -aci --no-perms --no-times --no-owner --no-group "$source" "$destination"'
 Assert-Contains 'checksum-based byte verification' $script 'verify_component_bytes()'
 Assert-Contains 'all tracked WordPress files audited' $script 'audit_tracked_wordpress_scope()'
-Assert-Contains 'audit runs before tests and synchronization' $script "  audit_tracked_wordpress_scope`n  run_tests"
-Assert-Contains 'stale files checked without deletion' $script 'verify_no_stale_component_files()'
-Assert-Contains 'stale plugin files checked before PROD mutation' $script 'verify_no_stale_component_files "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/"'
-Assert-Contains 'stale files stop deployment' $script 'contains files absent from the source. Review them before deploying; no files were deleted.'
-Assert-Contains 'DEV plugin bytes verified' $script 'verify_component_bytes "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/"'
-Assert-Contains 'PROD selected plugin bytes verified' $script 'verify_component_bytes "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/"'
-Assert-Contains 'PROD theme bytes verified' $script 'verify_component_bytes "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/"'
+Assert-Contains 'audit uses frozen revision' $script 'git ls-tree -r -z --name-only "$SOURCE_REVISION" -- wp-content'
+Assert-Contains 'Git archive uses source revision' $script 'git archive "$SOURCE_REVISION" | tar -x -C "$RELEASE_SOURCE"'
+Assert-Contains 'registered manifest verified' $script 'Prepared DEV manifest does not match any registered Git release manifest.'
+Assert-Contains 'source revision must be a full commit' $script 'SOURCE_REVISION" =~ ^[0-9a-f]{40}$'
+Assert-Contains 'source revision must be ancestor of current checkout' $script 'git merge-base --is-ancestor "$SOURCE_REVISION" "$GIT_HEAD"'
+Assert-Contains 'archive source can differ from HEAD' $script 'git archive "$SOURCE_REVISION"'
+Assert-Contains 'frozen component config selected' $script 'CONFIG="$RELEASE_SOURCE/config/deploy-components.json"'
+Assert-Contains 'release versions read from frozen plugin files' $script '$file = "$root/wp-content/plugins/$name/$name.php";'
+Assert-Contains 'planner uses release versions' $script '$releaseVersions = json_decode(file_get_contents($argv[5]), true);'
+Assert-Contains 'DEV release subset verification' $script 'release_verify_subset "$RELEASE_SOURCE/wp-content/plugins/$plugin" "$DEV/wp-content/plugins/$plugin"'
+Assert-Contains 'additional DEV files are informational' $script 'Additional DEV-only files: $additional; deployed: NO'
+Assert-Contains 'helper checks SHA256 content' $releaseFiles 'release_sha256 "$file"'
+Assert-Contains 'helper counts extra files' $releaseFiles 'release_count_additional()'
+Assert-NotContains 'DEV extras never fail deployment' $script 'verify_no_stale_component_files'
+Assert-NotContains 'server deploy never copies repo to live DEV' $script 'sync_to_dev()'
+Assert-NotContains 'no DEV plugin copy to PROD' $script 'rsync_component "$DEV/wp-content/plugins/'
+Assert-NotContains 'no DEV theme copy to PROD' $script 'rsync_component "$DEV/wp-content/themes/'
+Assert-Contains 'unknown PROD files are reported and preserved' $script 'Unmanaged PROD files preserved:'
+Assert-Contains 'PROD selected plugin bytes verified against release' $script 'verify_component_bytes "$RELEASE_SOURCE/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/"'
+Assert-Contains 'PROD theme bytes verified against release' $script 'verify_component_bytes "$RELEASE_SOURCE/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/"'
 Assert-Contains 'dev-only plugin config exception works' $script 'DEV_ONLY_ALLOWED'
 Assert-Contains 'plugin install requires explicit choice' $script 'Installera %s %s i PROD? [y/SKIP]:'
 Assert-Contains 'plugin update requires explicit choice' $script 'Uppdatera %s i PROD %s -> %s? [y/SKIP]:'
@@ -161,12 +187,14 @@ Assert-Contains 'skipped plugin version is verified against original PROD versio
 Assert-Contains 'selected plugin version is verified against DEV version' $script '$entry["devVersion"]'
 Assert-Contains 'updates preserve PROD activation status' $script '$entry["prodStatus"]'
 Assert-Contains 'new active DEV installation can activate' $script 'if ($entry["devStatus"] === "active") { $data["activate_plugins"][] = $name; }'
-Assert-Contains 'plugin plan printed before dry run' $script 'section "PLUGIN DEPLOYMENT PLAN"'
+Assert-Contains 'plugin plan printed before dry run' $script 'section "PRODUCTION PLAN / PLUGIN SELECTION"'
 Assert-Contains 'PROD-only plugin warning exists' $script 'PROD_ONLY'
-Assert-Contains 'missing selected DEV plugin cannot pass silently' $script 'Selected DEV plugin files are missing:'
+Assert-Contains 'missing selected release plugin cannot pass silently' $script 'Selected release plugin files are missing:'
 Assert-Contains 'plugin activation from plan only' $script 'plugin_plan_array "activate_plugins"'
 Assert-Contains 'touched plugin backup plan exists' $script 'plugin_plan_array "touched_plugins"'
 Assert-Contains 'post-deploy plugin parity check exists' $script 'post_deploy_plugin_parity'
+Assert-Contains 'migration hook audit exists' $script 'report_plugin_migration_hooks()'
+Assert-Contains 'database/data migration risk appears before confirmation' $script 'Potential automatic schema/data write: REVIEW'
 $pluginDryRun = [regex]::Match($script, '(?ms)^prod_dry_run\(\) \{.*?^\}').Value
 $pluginCopy = [regex]::Match($script, '(?ms)^deploy_files_to_prod\(\) \{.*?^\}').Value
 $pluginBackup = [regex]::Match($script, '(?ms)^file_backup\(\) \{.*?^\}').Value
@@ -176,6 +204,11 @@ Assert-True 'plugin file copy uses only the selected plan' ($pluginCopy.Contains
 Assert-True 'plugin file backup uses only touched plugins' ($pluginBackup.Contains('plugin_plan_array "touched_plugins"') -and -not $pluginBackup.Contains('json_array "production.plugins"'))
 Assert-True 'plugin verification does not impose DEV version on every configured plugin' (-not $pluginVerify.Contains('json_array "production.plugins"'))
 Assert-Contains 'backup component list uses selected plugins' $script 'plugin_plan_array "deploy_plugins" > "$BACKUP_DIR/components-plugins.txt"'
+Assert-Contains 'backup identifies release source revision' $script '"deployment_source_revision" => $argv[17]'
+Assert-Contains 'backup preserves current repo head separately' $script '"server_repo_head" => $argv[2]'
+Assert-Contains 'backup saves plugin selection plan' $script 'plugin-selection-plan.json'
+Assert-Contains 'backup saves release file checksums' $script 'release-managed-files.sha256'
+Assert-Contains 'backup records actually copied managed files' $script 'release-changed-files.txt'
 Assert-Contains 'Turnstile config check exists' $script 'validate_turnstile_prod_config'
 Assert-Contains 'Turnstile site key redacted label' $script 'Site key: '
 Assert-Contains 'Turnstile secret key redacted label' $script 'Secret key: '
@@ -232,13 +265,12 @@ Assert-Contains 'runtime path existence captured' $script 'runtime-paths-before.
 Assert-Contains 'runtime paths include production MU asset dirs' $script 'json_array "production.mu_asset_dirs"'
 Assert-Contains 'deployment state records new paths reversible' $script 'exists_before=false'
 Assert-Contains 'MU asset sync helper exists' $script 'sync_mu_asset_dirs()'
-Assert-Contains 'sync to DEV includes production MU asset dirs' $script 'sync_mu_asset_dirs "$REPO" "$DEV" real'
-Assert-Contains 'deploy to PROD includes production MU asset dirs' $script 'sync_mu_asset_dirs "$DEV" "$PROD" real'
+Assert-Contains 'deploy to PROD includes frozen production MU asset dirs' $script 'sync_mu_asset_dirs "$RELEASE_SOURCE" "$PROD" real'
 Assert-Contains 'PROD dry run reports MU asset dirs' $script 'MU-ASSET-DIR'
 Assert-Contains 'backup manifest records MU asset dirs' $script 'components-mu-asset-dirs.txt'
-Assert-Contains 'missing DEV MU asset dir blocks verification' $script 'Missing DEV MU asset directory:'
+Assert-Contains 'missing release MU asset dir blocks verification' $script 'Missing release MU asset directory:'
 Assert-Contains 'missing MU asset blocks verification' $script 'Missing PROD MU asset:'
-Assert-Contains 'different MU asset blocks verification' $script 'PROD MU asset differs from DEV:'
+Assert-Contains 'different MU asset blocks verification' $script 'PROD MU asset differs from release:'
 Assert-Contains 'exact DEPLOY confirmation exists' $script '[[ "$confirmation" == "DEPLOY" ]]'
 Assert-True 'only one interactive read' (([regex]::Matches($script, 'read -r confirmation')).Count -eq 1)
 Assert-NotContains 'no rsync delete' $script 'rsync --delete'
@@ -259,11 +291,14 @@ Assert-NotContains 'script avoids Invoke-WebRequest' $script 'Invoke-WebRequest'
 Assert-NotContains 'script avoids Invoke-RestMethod' $script 'Invoke-RestMethod'
 
 $mainOrder = [regex]::Match($script, '(?s)main\(\).*?\{(?<body>.*?)\n\}', 'Singleline').Groups['body'].Value
+Assert-True 'DEV prepared build controls frozen source before component checks' ($mainOrder.IndexOf('verify_and_prepare_dev') -gt 0 -and $mainOrder.IndexOf('create_release_source') -gt $mainOrder.IndexOf('verify_and_prepare_dev') -and $mainOrder.IndexOf('validate_deploy_config') -gt $mainOrder.IndexOf('create_release_source'))
+Assert-True 'DEV release checked before PROD plan' ($mainOrder.IndexOf('verify_dev_release') -gt $mainOrder.IndexOf('create_release_source') -and $mainOrder.IndexOf('verify_dev_release') -lt $mainOrder.IndexOf('build_plugin_parity_plan'))
+Assert-True 'migration hooks reported before final confirmation' ($mainOrder.IndexOf('report_plugin_migration_hooks') -gt $mainOrder.IndexOf('build_plugin_parity_plan') -and $mainOrder.IndexOf('report_plugin_migration_hooks') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'database backup before file deploy in main' ($mainOrder.IndexOf('database_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('database_backup'))
 Assert-True 'file backup before file deploy in main' ($mainOrder.IndexOf('file_backup') -ge 0 -and $mainOrder.IndexOf('deploy_files_to_prod') -gt $mainOrder.IndexOf('file_backup'))
 Assert-True 'confirmation before backup and deploy' ($mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('database_backup') -and $mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('deploy_files_to_prod'))
 Assert-True 'Turnstile preflight before confirmation' ($mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -lt $mainOrder.IndexOf('confirm_once'))
-Assert-True 'DEV-link safety before confirmation' ($mainOrder.IndexOf('prod_dev_link_safety "$REPO/wp-content" "pre_deploy"') -gt $mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -and $mainOrder.IndexOf('prod_dev_link_safety "$REPO/wp-content" "pre_deploy"') -lt $mainOrder.IndexOf('confirm_once'))
+Assert-True 'DEV-link safety scans frozen release before confirmation' ($mainOrder.IndexOf('prod_dev_link_safety "$RELEASE_SOURCE/wp-content" "pre_deploy"') -gt $mainOrder.IndexOf('validate_turnstile_prod_config "preflight"') -and $mainOrder.IndexOf('prod_dev_link_safety "$RELEASE_SOURCE/wp-content" "pre_deploy"') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'maintenance starts after confirmation' ($mainOrder.IndexOf('activate_maintenance') -gt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'maintenance starts before database backup' ($mainOrder.IndexOf('activate_maintenance') -lt $mainOrder.IndexOf('database_backup'))
 Assert-True 'grace period before database backup' ($mainOrder.IndexOf('maintenance_grace_period') -gt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('maintenance_grace_period') -lt $mainOrder.IndexOf('database_backup'))
@@ -276,6 +311,9 @@ Assert-True 'plugin activation after file deploy' ($mainOrder.IndexOf('activate_
 Assert-True 'plugin parity before confirmation' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('confirm_once'))
 Assert-True 'plugin plan and questions before dry run' ($mainOrder.IndexOf('build_plugin_parity_plan') -lt $mainOrder.IndexOf('prod_dry_run'))
 Assert-True 'no mutation before final confirmation' ($mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('activate_maintenance') -and $mainOrder.IndexOf('confirm_once') -lt $mainOrder.IndexOf('deploy_files_to_prod'))
+Assert-NotContains 'no DEV database import' $script 'wp_prod db import'
+Assert-NotContains 'no DEV uploads copy' $script '$DEV/wp-content/uploads'
+Assert-NotContains 'no PROD config copy' $script '$PROD/wp-config.php" real'
 
 Assert-Contains 'docs wrapper command' $doc '$HOME/tools/ssf-deploy'
 Assert-Contains 'docs one command' $doc 'ssf-deploy'
@@ -401,6 +439,55 @@ Assert-True 'SharePoint post-check after deployment before opening site' ($mainO
 $phpCommand = Get-Command php -ErrorAction SilentlyContinue
 $phpPath = if ($phpCommand) { $phpCommand.Source } else { Join-Path ([IO.Path]::GetTempPath()) 'ssf-codex-php-8.5.10\php.exe' }
 if (Test-Path -LiteralPath $phpPath) {
+    $manifestMatch = [regex]::Match($script, '(?s)verify_registered_release\(\) \{.*?if php -r ''(?<code>.*?)'' "\$registered" "\$dev_manifest"')
+    Assert-True 'registered release manifest comparison extracted' $manifestMatch.Success
+    if ($manifestMatch.Success) {
+        $manifestFixture = Join-Path ([IO.Path]::GetTempPath()) ('ssf-manifest-compare-' + [guid]::NewGuid().ToString('N'))
+        try {
+            New-Item -ItemType Directory -Path $manifestFixture -Force | Out-Null
+            $expectedFile = Join-Path $manifestFixture 'expected.json'
+            $actualFile = Join-Path $manifestFixture 'actual.json'
+            $compareFile = Join-Path $manifestFixture 'compare.php'
+            [IO.File]::WriteAllText($compareFile, '<?php' + [Environment]::NewLine + $manifestMatch.Groups['code'].Value)
+            [IO.File]::WriteAllText($expectedFile, '{"build":"20260924.6","version":"0.14.2","built_at":"2026-09-24T16:58:50.3311311Z","source_revision":"abcdef","status":"development","prepared_at":""}')
+            [IO.File]::WriteAllText($actualFile, '{"build":"20260924.6","version":"0.14.2","built_at":"2026-09-24T16:58:50+00:00","source_revision":"abcdef","status":"prepared","prepared_at":"2026-09-24T17:00:00+00:00"}')
+            & $phpPath $compareFile $expectedFile $actualFile | Out-Null
+            Assert-True 'prepared manifest matches registered build despite timestamp normalization' ($LASTEXITCODE -eq 0)
+            [IO.File]::WriteAllText($actualFile, '{"build":"20260924.6","version":"0.14.2","built_at":"2026-09-24T16:58:50+00:00","source_revision":"different","status":"prepared","prepared_at":"2026-09-24T17:00:00+00:00"}')
+            & $phpPath $compareFile $expectedFile $actualFile | Out-Null
+            Assert-True 'manifest source revision mismatch is rejected' ($LASTEXITCODE -ne 0)
+        } finally {
+            $resolvedFixture = [IO.Path]::GetFullPath($manifestFixture)
+            $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+            if ($resolvedFixture.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $manifestFixture)) {
+                Remove-Item -LiteralPath $manifestFixture -Recurse -Force
+            }
+        }
+    }
+    $versionMatch = [regex]::Match($script, '(?s)create_release_source\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$RELEASE_SOURCE" "\$RELEASE_PLUGIN_VERSIONS"')
+    Assert-True 'frozen release plugin version parser extracted' $versionMatch.Success
+    if ($versionMatch.Success) {
+        $versionFixture = Join-Path ([IO.Path]::GetTempPath()) ('ssf-release-version-' + [guid]::NewGuid().ToString('N'))
+        try {
+            $fixturePlugin = Join-Path $versionFixture 'wp-content\plugins\ssf-example'
+            New-Item -ItemType Directory -Path $fixturePlugin -Force | Out-Null
+            $fixtureConfig = Join-Path $versionFixture 'components.json'
+            $fixtureResult = Join-Path $versionFixture 'versions.json'
+            $fixtureParser = Join-Path $versionFixture 'versions.php'
+            [IO.File]::WriteAllText($fixtureConfig, '{"production":{"plugins":["ssf-example"]}}')
+            [IO.File]::WriteAllText((Join-Path $fixturePlugin 'ssf-example.php'), "<?php`n/**`n * Plugin Name: Example`n * Version: 2.0.0`n */`n")
+            [IO.File]::WriteAllText($fixtureParser, '<?php' + [Environment]::NewLine + $versionMatch.Groups['code'].Value)
+            & $phpPath $fixtureParser $fixtureConfig $versionFixture $fixtureResult | Out-Null
+            $parsed = Get-Content -Raw -LiteralPath $fixtureResult | ConvertFrom-Json
+            Assert-True 'release plugin version comes from frozen source' ($LASTEXITCODE -eq 0 -and $parsed.'ssf-example' -eq '2.0.0')
+        } finally {
+            $resolvedFixture = [IO.Path]::GetFullPath($versionFixture)
+            $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+            if ($resolvedFixture.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $versionFixture)) {
+                Remove-Item -LiteralPath $versionFixture -Recurse -Force
+            }
+        }
+    }
     $scannerMatch = [regex]::Match($devLinkGuard, '(?s)ssf_dev_link_source_check\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$runtime_root"')
     Assert-True 'embedded DEV-link source scanner extracted' $scannerMatch.Success
     if ($scannerMatch.Success) {
@@ -434,7 +521,7 @@ if (Test-Path -LiteralPath $phpPath) {
         }
     }
     $patterns = @{
-        initial = '(?s)build_plugin_parity_plan\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$dev_plugins" "\$prod_plugins" "\$PLUGIN_PLAN"'
+        initial = '(?s)build_plugin_parity_plan\(\) \{.*?php -r ''(?<code>.*?)'' "\$CONFIG" "\$dev_plugins" "\$prod_plugins" "\$PLUGIN_PLAN" "\$RELEASE_PLUGIN_VERSIONS"'
         decide = '(?s)plugin_plan_set_action\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN" "\$name" "\$action"'
         finalize = '(?s)plugin_plan_finalize\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN"'
         baseline = '(?s)plugin_plan_verify_baseline\(\) \{.*?php -r ''(?<code>.*?)'' "\$PLUGIN_PLAN" "\$inventory"'
@@ -453,6 +540,10 @@ if (Test-Path -LiteralPath $phpPath) {
         $prodFile = Join-Path $testDir 'prod.json'
         $planFile = Join-Path $testDir 'plan.json'
         $afterFile = Join-Path $testDir 'after.json'
+        $fixtureConfig = Join-Path $testDir 'components.json'
+        $versionsFile = Join-Path $testDir 'release-versions.json'
+        [IO.File]::WriteAllText($fixtureConfig, '{"production":{"plugins":["ssf-example"]},"plugin_policy":{"dev_only":[],"ignore_version":[]}}')
+        [IO.File]::WriteAllText($versionsFile, '{"ssf-example":"2.0.0"}')
         $codeFiles = @{}
         foreach ($key in $phpCode.Keys) {
             $codeFiles[$key] = Join-Path $testDir ($key + '.php')
@@ -465,7 +556,7 @@ if (Test-Path -LiteralPath $phpPath) {
             function Set-Inventory([object[]]$Dev, [object[]]$Prod) {
                 [IO.File]::WriteAllText($devFile, (ConvertTo-Json -InputObject @($Dev) -Depth 5))
                 [IO.File]::WriteAllText($prodFile, (ConvertTo-Json -InputObject @($Prod) -Depth 5))
-                & $phpPath $codeFiles.initial $configPath $devFile $prodFile $planFile | Out-Null
+                & $phpPath $codeFiles.initial $fixtureConfig $devFile $prodFile $planFile $versionsFile | Out-Null
                 Assert-True 'embedded plugin inventory planner succeeds' ($LASTEXITCODE -eq 0)
                 return Get-Content -Raw -LiteralPath $planFile | ConvertFrom-Json
             }
@@ -527,17 +618,20 @@ if (Test-Path -LiteralPath $phpPath) {
             Assert-True 'skipped install rejects unexpected files in PROD' (-not (Test-AfterInventory @($dev)))
 
             $same = New-Plugin 'ssf-example' '1.0.0'
+            [IO.File]::WriteAllText($versionsFile, '{"ssf-example":"1.0.0"}')
             $plan = Set-Inventory @($same) @($same)
             Assert-True 'same version needs no install/update question' ($plan.entries[0].candidate -eq 'same')
             Assert-NotContains 'same-version differences never become skippable plan actions' $script 'plugin_plan_set_action "$name" "files_differ"'
             $newer = New-Plugin 'ssf-example' '3.0.0'
+            [IO.File]::WriteAllText($versionsFile, '{"ssf-example":"2.0.0"}')
             $plan = Set-Inventory @($dev) @($newer)
             Assert-True 'newer PROD has no downgrade candidate' ($plan.entries[0].classification -eq 'PROD_NEWER' -and $plan.entries[0].candidate -eq 'none')
             $mustUse = New-Plugin 'ssf-mu-example' '1.0.0' 'must-use'
+            [IO.File]::WriteAllText($versionsFile, '{}')
             $plan = Set-Inventory @($mustUse) @($mustUse)
             Assert-True 'MU plugins are not prompted as normal plugins' ($plan.entries[0].candidate -eq 'none')
         } finally {
-            foreach ($path in @($devFile, $prodFile, $planFile, $afterFile)) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+            foreach ($path in @($devFile, $prodFile, $planFile, $afterFile, $fixtureConfig, $versionsFile)) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
             foreach ($path in $codeFiles.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
             Remove-Item -LiteralPath $testDir -Force -ErrorAction SilentlyContinue
         }

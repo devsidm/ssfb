@@ -8,21 +8,27 @@ Normal operator command:
 ssf-deploy
 ```
 
-The command updates the production server checkout, runs the repository test
-suite, validates PHP, syncs the approved runtime from Git to DEV, verifies DEV,
+The command updates the production server checkout, validates the prepared DEV
+build against its registered Git `source_revision`, freezes that Git revision,
+runs the repository test suite, validates PHP and verifies DEV release files,
 performs a production dry-run, asks once for the exact word `DEPLOY`, creates
 full-site Production maintenance, creates real production backups, deploys the
-approved DEV artifact to production, verifies production internally, reopens the
+frozen Git release to production, verifies production internally, reopens the
 site and then runs public HTTP smoke tests.
 
 ## Flow
 
 ```text
-GitHub -> $HOME/repos/ssfb -> DEV WordPress -> PROD WordPress
+GitHub -> prepared DEV build/source_revision -> frozen Git release -> PROD WordPress
 ```
 
-GitHub is the code source of truth. DEV is the staging and prepared artifact.
-PROD receives only the configured SSF runtime components from DEV.
+GitHub is the code source of truth. DEV is the tested staging environment,
+never the source directory for PROD code. The prepared DEV manifest must match
+a registered Git build; `source_revision` must be an available ancestor of
+that build. The script archives that exact revision into a temporary release
+directory and removes it safely at the end. A newer `origin/main` does not
+silently replace the tested revision. The prepared manifest is the sole
+metadata overlay and is compared with its committed build before use.
 
 The production server GitHub key is read-only. The server can fetch and pull,
 but it cannot push code back to GitHub.
@@ -143,7 +149,7 @@ WordPress plugin in DEV and PROD using WP-CLI:
 wp plugin list --format=json
 ```
 
-For each missing plugin or newer DEV version, the operator chooses whether to
+For each missing plugin or newer release version, the operator chooses whether to
 install or update it in PROD. Each choice requires an explicit `y` or `SKIP`;
 an empty answer aborts before PROD changes. A skipped plugin keeps
 its previous PROD version and activation status. A new selected plugin that is
@@ -177,27 +183,39 @@ Production does not receive:
 - DEV-only MU plugins
 - DEV database
 
-The deployment uses checksum-based `rsync -ac` and never uses `rsync --delete`.
+The deployment uses checksum-based `rsync -ac` from the frozen Git release and
+never uses `rsync --delete`.
 
 PROD-only plugins and plugins with differing activation status are not
 automatically deactivated. A newer PROD plugin is never downgraded. If files
 differ despite equal version numbers, deployment stops before PROD mutation.
-Bump the plugin version, test and sync DEV, then rerun. Source-to-DEV and
-selected DEV-to-PROD files are checksum-verified after copying.
+Bump the plugin version, test and upload DEV, then rerun. Every release file
+must exist in DEV with identical content. Extra DEV files are counted but do
+not fail verification and are never copied to PROD. Selected PROD release
+files are checksum-verified after copying.
 Every tracked WordPress plugin, theme and MU file must also be classified in
-`config/deploy-components.json`. Unclassified files stop deployment. Files
-present in a managed destination but absent from its source stop deployment
-before PROD mutation; the script does not delete them automatically. `ssf-promotions`
+`config/deploy-components.json` at the frozen revision. Unclassified files stop
+deployment. Unknown files already in PROD are preserved. Removed old files are
+also retained unless a trustworthy previous-release file manifest proves they
+were managed; automatic managed-file deletion is not implemented yet. `ssf-promotions`
 (SSF Aktuellt) is included in the PROD plugin candidate set and still requires
 an explicit install/update choice if it differs from PROD.
 
 The deployment never downloads plugins from wordpress.org. A selected plugin
-is copied from the tested DEV directory; a selected new plugin active in DEV
-may then be activated. Missing selected DEV files stop deployment before the
-final confirmation.
+is copied from the frozen Git release; a selected new plugin active in DEV may
+then be activated. Existing plugins are not deactivated/reactivated. Missing
+or changed release files in DEV stop deployment before the final confirmation.
 
 Environment-specific plugin configuration is never copied from DEV. API keys,
 secrets and WordPress options must remain per environment.
+No DEV database, posts, postmeta, attachments, uploads or options are imported
+to PROD. Existing PROD content remains in the same PROD database. The SQL
+backup is created before any new code is copied or a new plugin activated.
+The plan reports possible plugin schema/data hooks. In particular,
+`ssf-medlemsfartyg` contains an `init`-time `dbDelta` table check, while
+`ssf-member-portal` may install missing pages and remove legacy configuration
+options on `init`; review these when
+selecting those plugins. The deploy does not perform a general data migration.
 
 Concrete example: `simple-cloudflare-turnstile` may be active in both DEV and
 PROD, but PROD must have its own Cloudflare Turnstile keys. DEV test keys must
@@ -392,5 +410,5 @@ bash -n scripts/deploy/ssf-server-rollback.sh
 ## First Dress Rehearsal
 
 After installing or updating the wrapper, run the command and stop before typing
-`DEPLOY` to confirm that Git, tests, PHP lint, DEV sync, DEV smoke, PROD target
+`DEPLOY` to confirm that Git, tests, PHP lint, DEV release verification, DEV smoke, PROD target
 safety and dry-run reporting all complete cleanly.

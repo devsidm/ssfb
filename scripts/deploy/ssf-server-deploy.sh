@@ -15,7 +15,7 @@ MAINTENANCE_GRACE_SECONDS="${SSF_MAINTENANCE_GRACE_SECONDS:-10}"
 
 TEST_STATUS="NOT RUN"
 PHP_STATUS="NOT RUN"
-DEV_SYNC_STATUS="NOT RUN"
+DEV_RELEASE_STATUS="NOT RUN"
 DEV_SMOKE_STATUS="NOT RUN"
 PROD_DB_STATUS="NOT RUN"
 PROD_TARGET_STATUS="NOT RUN"
@@ -52,6 +52,11 @@ TURNSTILE_SITE_FINGERPRINT=""
 TURNSTILE_SECRET_FINGERPRINT=""
 SHAREPOINT_CONFIG_FINGERPRINT=""
 PLUGIN_PLAN=""
+SOURCE_REVISION=""
+MANIFEST_COMMIT=""
+RELEASE_SOURCE=""
+RELEASE_TEMP_ROOT=""
+RELEASE_PLUGIN_VERSIONS=""
 
 fail() {
   echo "FAILURE: $*" >&2
@@ -103,6 +108,10 @@ handle_failure_maintenance() {
 cleanup() {
   local status=$?
   [[ -z "$PLUGIN_PLAN" ]] || rm -f "$PLUGIN_PLAN"
+  [[ -z "$RELEASE_PLUGIN_VERSIONS" ]] || rm -f "$RELEASE_PLUGIN_VERSIONS"
+  if [[ -n "$RELEASE_SOURCE" && -n "$RELEASE_TEMP_ROOT" && "$RELEASE_SOURCE" == "$RELEASE_TEMP_ROOT"/ssf-release.* && -d "$RELEASE_SOURCE" ]]; then
+    rm -rf -- "$RELEASE_SOURCE"
+  fi
   if [[ "$status" == "0" && "$DEPLOY_SUCCESS" == "1" ]]; then
     if [[ -e "$PROD/.maintenance" ]]; then
       echo "Internal state error: successful deployment left .maintenance present." >&2
@@ -187,7 +196,7 @@ validate_deploy_config() {
 
 audit_tracked_wordpress_scope() {
   section "TRACKED WORDPRESS SCOPE"
-  git ls-files -z -- wp-content | php -r '
+  git ls-tree -r -z --name-only "$SOURCE_REVISION" -- wp-content | php -r '
     $config = json_decode(file_get_contents($argv[1]), true);
     $paths = array_filter(explode("\0", stream_get_contents(STDIN)));
     $unclassified = array();
@@ -285,6 +294,7 @@ wp_eval_prod() {
 
 source "$REPO/scripts/deploy/ssf-dev-link-guard.sh"
 source "$REPO/scripts/deploy/ssf-sharepoint-config-guard.sh"
+source "$REPO/scripts/deploy/ssf-release-files.sh"
 
 sha256_file() {
   local file="$1"
@@ -432,6 +442,64 @@ update_repo() {
   echo "Branch:        $branch"
 }
 
+verify_registered_release() {
+  local dev_manifest="$DEV/wp-content/mu-plugins/ssf-release-manifest.json"
+  local registered candidate
+  [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || fail "DEV release source_revision is not a full Git commit ID."
+  git cat-file -e "$SOURCE_REVISION^{commit}" || fail "DEV release source_revision is not available locally."
+  git merge-base --is-ancestor "$SOURCE_REVISION" "$GIT_HEAD" || fail "DEV release source_revision is not an ancestor of origin/main."
+  registered="$(mktemp)"
+  while IFS= read -r candidate; do
+    git show "$candidate:wp-content/mu-plugins/ssf-release-manifest.json" > "$registered" || continue
+    if php -r '
+      $expected = json_decode(file_get_contents($argv[1]), true);
+      $actual = json_decode(file_get_contents($argv[2]), true);
+      if (!is_array($expected) || !is_array($actual) || ($actual["status"] ?? "") !== "prepared") { exit(1); }
+      $expected["built_at"] = gmdate("c", (int)strtotime((string)($expected["built_at"] ?? "")));
+      $actual["built_at"] = gmdate("c", (int)strtotime((string)($actual["built_at"] ?? "")));
+      unset($actual["status"], $actual["prepared_at"], $expected["status"], $expected["prepared_at"]);
+      ksort($actual); ksort($expected);
+      exit($actual === $expected ? 0 : 1);
+    ' "$registered" "$dev_manifest"; then
+      MANIFEST_COMMIT="$candidate"
+      break
+    fi
+  done < <(git log --format=%H -- wp-content/mu-plugins/ssf-release-manifest.json)
+  rm -f "$registered"
+  [[ -n "$MANIFEST_COMMIT" ]] || fail "Prepared DEV manifest does not match any registered Git release manifest."
+  git merge-base --is-ancestor "$SOURCE_REVISION" "$MANIFEST_COMMIT" || fail "Build manifest predates its source_revision."
+  echo "Registered manifest commit: $MANIFEST_COMMIT"
+}
+
+create_release_source() {
+  section "RELEASE SOURCE"
+  RELEASE_TEMP_ROOT="$(realpath "${TMPDIR:-/tmp}")"
+  RELEASE_SOURCE="$(mktemp -d "$RELEASE_TEMP_ROOT/ssf-release.XXXXXXXX")"
+  git archive "$SOURCE_REVISION" | tar -x -C "$RELEASE_SOURCE" || fail "Unable to extract frozen release source."
+  CONFIG="$RELEASE_SOURCE/config/deploy-components.json"
+  [[ -f "$CONFIG" ]] || fail "Frozen release has no component configuration."
+  # Build registration follows source_revision. The prepared manifest is the
+  # only metadata overlay, verified against a committed build above.
+  cp "$DEV/wp-content/mu-plugins/ssf-release-manifest.json" "$RELEASE_SOURCE/wp-content/mu-plugins/ssf-release-manifest.json"
+  RELEASE_PLUGIN_VERSIONS="$(mktemp)"
+  php -r '
+    $config = json_decode(file_get_contents($argv[1]), true);
+    $root = $argv[2]; $versions = array();
+    foreach ($config["production"]["plugins"] as $name) {
+      $file = "$root/wp-content/plugins/$name/$name.php";
+      if (!is_file($file)) { fwrite(STDERR, "Missing release plugin entrypoint: $name\n"); exit(1); }
+      $header = file_get_contents($file, false, null, 0, 8192);
+      if (!preg_match("/^[ \\t*]*Version:[ \\t]*([^\\r\\n]+)/mi", $header, $match)) {
+        fwrite(STDERR, "Missing release plugin version: $name\n"); exit(1);
+      }
+      $versions[$name] = trim($match[1]);
+    }
+    file_put_contents($argv[3], json_encode($versions, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+  ' "$CONFIG" "$RELEASE_SOURCE" "$RELEASE_PLUGIN_VERSIONS" || fail "Release plugin versions could not be read."
+  echo "Git revision: $SOURCE_REVISION"
+  echo "Release source created: PASS"
+}
+
 run_tests() {
   section "TEST SUITE"
   cd "$REPO"
@@ -448,20 +516,20 @@ run_tests() {
 collect_php_files() {
   local file
   while IFS= read -r plugin; do
-    [[ -d "$REPO/wp-content/plugins/$plugin" ]] || fail "Missing source plugin: $plugin"
-    find "$REPO/wp-content/plugins/$plugin" -type f -name '*.php'
+    [[ -d "$RELEASE_SOURCE/wp-content/plugins/$plugin" ]] || fail "Missing release plugin: $plugin"
+    find "$RELEASE_SOURCE/wp-content/plugins/$plugin" -type f -name '*.php'
   done < <(json_array "production.plugins")
   while IFS= read -r theme; do
-    [[ -d "$REPO/wp-content/themes/$theme" ]] || fail "Missing source theme: $theme"
-    find "$REPO/wp-content/themes/$theme" -type f -name '*.php'
+    [[ -d "$RELEASE_SOURCE/wp-content/themes/$theme" ]] || fail "Missing release theme: $theme"
+    find "$RELEASE_SOURCE/wp-content/themes/$theme" -type f -name '*.php'
   done < <(json_array "production.themes")
   while IFS= read -r file; do
-    [[ -f "$REPO/wp-content/mu-plugins/$file" ]] || fail "Missing source MU file: $file"
-    echo "$REPO/wp-content/mu-plugins/$file"
+    [[ -f "$RELEASE_SOURCE/wp-content/mu-plugins/$file" ]] || fail "Missing release MU file: $file"
+    [[ "$file" == 'ssf-release-manifest.json' ]] || echo "$RELEASE_SOURCE/wp-content/mu-plugins/$file"
   done < <(json_array "production.mu_files")
   while IFS= read -r file; do
-    [[ -f "$REPO/wp-content/mu-plugins/$file" ]] || fail "Missing source DEV-only MU file: $file"
-    echo "$REPO/wp-content/mu-plugins/$file"
+    [[ -f "$RELEASE_SOURCE/wp-content/mu-plugins/$file" ]] || fail "Missing release DEV-only MU file: $file"
+    echo "$RELEASE_SOURCE/wp-content/mu-plugins/$file"
   done < <(json_array "dev_only.mu_files")
 }
 
@@ -488,11 +556,11 @@ rsync_component() {
   local destination="$2"
   local mode="$3"
   [[ -e "$source" ]] || fail "Missing source path: $source"
-  mkdir -p "$(dirname "$destination")"
   if [[ "$mode" == "dry" ]]; then
     rsync -acni --no-perms --no-times --no-owner --no-group "$source" "$destination"
   else
-    rsync -ac --no-perms --no-times --no-owner --no-group "$source" "$destination"
+    mkdir -p "$(dirname "$destination")"
+    rsync -aci --no-perms --no-times --no-owner --no-group "$source" "$destination"
   fi
 }
 
@@ -503,71 +571,47 @@ verify_component_bytes() {
     printf '%s\n' "$differences" | sed -n '1,25p' >&2
     fail "$label differs after synchronization."
   fi
-  if [[ "$source" == */ && -d "$destination" ]]; then
-    verify_no_stale_component_files "$source" "$destination" "$label"
-  fi
-}
-
-verify_no_stale_component_files() {
-  local source="$1" destination="$2" label="$3" path relative stale=0
-  [[ -d "$destination" ]] || return 0
-  while IFS= read -r -d '' path; do
-    relative="${path#"$destination"}"
-    if [[ ! -e "$source$relative" && ! -L "$source$relative" ]]; then
-      printf 'Stale %s file: %s\n' "$label" "$relative" >&2
-      stale=1
-    fi
-  done < <(find "$destination" \( -type f -o -type l \) -print0)
-  [[ "$stale" == "0" ]] || fail "$label contains files absent from the source. Review them before deploying; no files were deleted."
 }
 
 sync_mu_asset_dirs() {
   local source_root="$1"
   local destination_root="$2"
   local mode="$3"
-  local output
+  local output line
   while IFS= read -r dir; do
     [[ -d "$source_root/wp-content/mu-plugins/$dir" ]] || fail "Missing source MU asset directory: $dir"
     output="$(rsync_component "$source_root/wp-content/mu-plugins/$dir/" "$destination_root/wp-content/mu-plugins/$dir/" "$mode")"
-    printf '%s\n' "$output"
+    if [[ -n "$output" ]]; then
+      while IFS= read -r line; do printf 'MU-ASSET %s %s\n' "$dir" "$line"; done <<< "$output"
+    fi
   done < <(json_array "production.mu_asset_dirs")
 }
 
-sync_to_dev() {
-  section "SOURCE TO DEV SYNC"
-  local changes=0 output
+verify_dev_release() {
+  section "DEV RELEASE VERIFICATION"
+  local plugin theme file dir additional
   while IFS= read -r plugin; do
-    output="$(rsync_component "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/" dry)"
-    [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
+    release_verify_subset "$RELEASE_SOURCE/wp-content/plugins/$plugin" "$DEV/wp-content/plugins/$plugin" "DEV plugin $plugin" || fail "DEV has not tested the same release code."
+    additional="$(release_count_additional "$RELEASE_SOURCE/wp-content/plugins/$plugin" "$DEV/wp-content/plugins/$plugin")"
+    echo "  Additional DEV-only files: $additional; deployed: NO"
   done < <(json_array "production.plugins")
   while IFS= read -r theme; do
-    output="$(rsync_component "$REPO/wp-content/themes/$theme/" "$DEV/wp-content/themes/$theme/" dry)"
-    [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
+    release_verify_subset "$RELEASE_SOURCE/wp-content/themes/$theme" "$DEV/wp-content/themes/$theme" "DEV theme $theme" || fail "DEV theme does not match the tested release."
+    additional="$(release_count_additional "$RELEASE_SOURCE/wp-content/themes/$theme" "$DEV/wp-content/themes/$theme")"
+    echo "  Additional DEV-only files: $additional; deployed: NO"
   done < <(json_array "production.themes")
   while IFS= read -r file; do
-    output="$(rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" dry)"
-    [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
+    verify_component_bytes "$RELEASE_SOURCE/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" "DEV MU file $file"
   done < <(json_array "production.mu_files")
-  output="$(sync_mu_asset_dirs "$REPO" "$DEV" dry)"
-  [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
+  while IFS= read -r dir; do
+    release_verify_subset "$RELEASE_SOURCE/wp-content/mu-plugins/$dir" "$DEV/wp-content/mu-plugins/$dir" "DEV MU assets $dir" || fail "DEV MU assets do not match the tested release."
+    echo "  Additional DEV-only files: $(release_count_additional "$RELEASE_SOURCE/wp-content/mu-plugins/$dir" "$DEV/wp-content/mu-plugins/$dir"); deployed: NO"
+  done < <(json_array "production.mu_asset_dirs")
   while IFS= read -r file; do
-    output="$(rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" dry)"
-    [[ -z "$output" ]] || changes=$((changes + $(printf '%s\n' "$output" | sed '/^$/d' | wc -l)))
+    verify_component_bytes "$RELEASE_SOURCE/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" "DEV-only MU file $file"
   done < <(json_array "dev_only.mu_files")
-  echo "DEV dry-run changed/added lines: $changes"
-
-  while IFS= read -r plugin; do rsync_component "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/" real >/dev/null; done < <(json_array "production.plugins")
-  while IFS= read -r theme; do rsync_component "$REPO/wp-content/themes/$theme/" "$DEV/wp-content/themes/$theme/" real >/dev/null; done < <(json_array "production.themes")
-  while IFS= read -r file; do rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
-  sync_mu_asset_dirs "$REPO" "$DEV" real >/dev/null
-  while IFS= read -r file; do rsync_component "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "dev_only.mu_files")
-  while IFS= read -r plugin; do verify_component_bytes "$REPO/wp-content/plugins/$plugin/" "$DEV/wp-content/plugins/$plugin/" "DEV plugin $plugin"; done < <(json_array "production.plugins")
-  while IFS= read -r theme; do verify_component_bytes "$REPO/wp-content/themes/$theme/" "$DEV/wp-content/themes/$theme/" "DEV theme $theme"; done < <(json_array "production.themes")
-  while IFS= read -r file; do verify_component_bytes "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" "DEV MU file $file"; done < <(json_array "production.mu_files")
-  while IFS= read -r dir; do verify_component_bytes "$REPO/wp-content/mu-plugins/$dir/" "$DEV/wp-content/mu-plugins/$dir/" "DEV MU assets $dir"; done < <(json_array "production.mu_asset_dirs")
-  while IFS= read -r file; do verify_component_bytes "$REPO/wp-content/mu-plugins/$file" "$DEV/wp-content/mu-plugins/$file" "DEV-only MU file $file"; done < <(json_array "dev_only.mu_files")
-  DEV_SYNC_STATUS="PASS"
-  echo "DEV sync: PASS"
+  DEV_RELEASE_STATUS="PASS"
+  echo "DEV release verification: PASS"
 }
 
 verify_and_prepare_dev() {
@@ -581,12 +625,11 @@ verify_and_prepare_dev() {
   VERSION="$(manifest_field "$manifest" version)"
   BUILD="$(manifest_field "$manifest" build)"
   MANIFEST_STATUS="$(manifest_field "$manifest" status)"
-  local source_revision
-  source_revision="$(manifest_field "$manifest" source_revision)"
+  SOURCE_REVISION="$(manifest_field "$manifest" source_revision)"
   echo "Version:         $VERSION"
   echo "Build:           $BUILD"
   echo "Status:          $MANIFEST_STATUS"
-  echo "Source revision: $source_revision"
+  echo "Source revision: $SOURCE_REVISION"
   before_build="$BUILD"
   before_version="$VERSION"
   if [[ "$MANIFEST_STATUS" == "development" ]]; then
@@ -602,6 +645,8 @@ verify_and_prepare_dev() {
   [[ "$BUILD" == "$before_build" ]] || fail "Build changed during prepare."
   [[ "$VERSION" == "$before_version" ]] || fail "Version changed during prepare."
   [[ "$MANIFEST_STATUS" == "prepared" ]] || fail "DEV manifest was not prepared."
+  [[ "$(manifest_field "$manifest" source_revision)" == "$SOURCE_REVISION" ]] || fail "DEV source_revision changed during prepare."
+  verify_registered_release
   local status
   status="$(wp_dev ssf release status --format=json 2>/dev/null || wp_dev ssf release status)"
   echo "$status" | rg -q "$BUILD" || fail "DEV release status does not mention expected build."
@@ -673,6 +718,7 @@ build_plugin_parity_plan() {
     $config = json_decode(file_get_contents($argv[1]), true);
     $dev = json_decode(file_get_contents($argv[2]), true);
     $prod = json_decode(file_get_contents($argv[3]), true);
+    $releaseVersions = json_decode(file_get_contents($argv[5]), true);
     $policy = $config["plugin_policy"] ?? array();
     $devOnly = array_flip($policy["dev_only"] ?? array());
     $ignoreVersion = array_flip($policy["ignore_version"] ?? array());
@@ -680,19 +726,28 @@ build_plugin_parity_plan() {
     foreach ($prod as $plugin) { $prodByName[$plugin["name"]] = $plugin; }
     $devByName = array();
     foreach ($dev as $plugin) { $devByName[$plugin["name"]] = $plugin; }
+    foreach ($releaseVersions as $name => $version) {
+      if (!isset($devByName[$name])) { fwrite(STDERR, "Release plugin is not installed in DEV: $name\n"); exit(1); }
+      if ((string)($devByName[$name]["version"] ?? "") !== $version) {
+        fwrite(STDERR, "DEV plugin version does not match frozen release: $name\n"); exit(1);
+      }
+    }
 
     $entries = array();
     foreach ($dev as $plugin) {
       $name = $plugin["name"];
       $devStatus = $plugin["status"];
-      $devVersion = (string)($plugin["version"] ?? "");
+      $devVersion = (string)($releaseVersions[$name] ?? ($plugin["version"] ?? ""));
       $prodPlugin = $prodByName[$name] ?? null;
       $prodStatus = $prodPlugin["status"] ?? "missing";
       $prodVersion = $prodPlugin ? (string)($prodPlugin["version"] ?? "") : "";
       $classification = "SAME_VERSION";
       $action = "none";
       $candidate = "same";
-      if (in_array($devStatus, array("must-use", "dropin", "drop-in"), true)) {
+      if (!isset($releaseVersions[$name])) {
+        $classification = "DEV_ONLY_ALLOWED";
+        $candidate = "none";
+      } elseif (in_array($devStatus, array("must-use", "dropin", "drop-in"), true)) {
         $classification = "NONSTANDARD_PLUGIN";
         $candidate = "none";
       } elseif (isset($devOnly[$name])) {
@@ -747,8 +802,9 @@ build_plugin_parity_plan() {
     ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
     foreach ($entries as $entry) {
-      printf("%s\n  DEV:  %s %s\n  PROD: %s %s\n",
+      printf("%s\n  RELEASE: %s\n  DEV:  %s %s\n  PROD: %s %s\n",
         $entry["name"],
+        $entry["devVersion"],
         $entry["devStatus"],
         $entry["devVersion"],
         $entry["prodStatus"],
@@ -764,20 +820,19 @@ build_plugin_parity_plan() {
         echo "  DEV-only policy: no PROD action.\n";
       }
     }
-  ' "$CONFIG" "$dev_plugins" "$prod_plugins" "$PLUGIN_PLAN"
+  ' "$CONFIG" "$dev_plugins" "$prod_plugins" "$PLUGIN_PLAN" "$RELEASE_PLUGIN_VERSIONS" || fail "Plugin release inventory could not be built."
 
   rm -f "$dev_plugins" "$prod_plugins"
 
   local name candidate dev_version prod_version answer output
   exec 3<&0
   while IFS=$'\t' read -r name candidate dev_version prod_version; do
-    [[ -d "$DEV/wp-content/plugins/$name" ]] || fail "DEV plugin files are missing: $name"
+    [[ -d "$RELEASE_SOURCE/wp-content/plugins/$name" ]] || fail "Release plugin files are missing: $name"
     if [[ "$candidate" == "same" ]]; then
-      verify_no_stale_component_files "$DEV/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/" "PROD plugin $name"
-      output="$(rsync -rcni --no-perms --no-times --no-owner --no-group "$DEV/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/")"
+      output="$(rsync -rcni --no-perms --no-times --no-owner --no-group "$RELEASE_SOURCE/wp-content/plugins/$name/" "$PROD/wp-content/plugins/$name/")"
       if [[ -n "$output" ]]; then
         printf '%s\n' "$output" | sed -n '1,25p' >&2
-        fail "$name has changed files but the same version $dev_version in DEV and PROD. Bump the plugin version before deploying."
+        fail "$name has changed release files but the same version $dev_version in RELEASE and PROD. Bump the plugin version before deploying."
       else
         plugin_plan_set_action "$name" "no_change"
       fi
@@ -852,7 +907,7 @@ plugin_plan_finalize() {
     file_put_contents($argv[1], json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
   ' "$PLUGIN_PLAN"
   while IFS= read -r plugin; do
-    [[ -d "$DEV/wp-content/plugins/$plugin" ]] || fail "Selected DEV plugin files are missing: $plugin"
+    [[ -d "$RELEASE_SOURCE/wp-content/plugins/$plugin" ]] || fail "Selected release plugin files are missing: $plugin"
   done < <(plugin_plan_array "deploy_plugins")
 }
 
@@ -863,7 +918,7 @@ php_lint_selected_plugins() {
     while IFS= read -r -d '' file; do
       php -l "$file" >/dev/null || fail "PHP lint failed in selected plugin: $plugin"
       checked=$((checked + 1))
-    done < <(find "$DEV/wp-content/plugins/$plugin" -type f -name '*.php' -print0)
+    done < <(find "$RELEASE_SOURCE/wp-content/plugins/$plugin" -type f -name '*.php' -print0)
   done < <(plugin_plan_array "deploy_plugins")
   echo "$checked selected plugin PHP files checked: PASS"
 }
@@ -885,7 +940,7 @@ plugin_plan_count() {
 
 plugin_plan_summary() {
   [[ -n "$PLUGIN_PLAN" && -f "$PLUGIN_PLAN" ]] || return 0
-  section "PLUGIN DEPLOYMENT PLAN"
+  section "PRODUCTION PLAN / PLUGIN SELECTION"
   php -r '
     $data = json_decode(file_get_contents($argv[1]), true);
     $groups = array("install" => "WILL INSTALL", "update" => "WILL UPDATE", "keep" => "KEEP PROD UNCHANGED", "same" => "NO CHANGE");
@@ -907,6 +962,24 @@ plugin_plan_summary() {
       echo "\n";
     }
   ' "$PLUGIN_PLAN"
+}
+
+report_plugin_migration_hooks() {
+  section "PLUGIN SCHEMA/DATA HOOKS"
+  local plugin directory
+  while IFS= read -r plugin; do
+    directory="$RELEASE_SOURCE/wp-content/plugins/$plugin"
+    echo "$plugin"
+    if rg -q -g '*.php' 'dbDelta\(|ALTER TABLE|CREATE TABLE|maybe_create_table|maybe_upgrade|install_pages\(|remove_legacy_' "$directory"; then
+      echo "  Potential automatic schema/data write: REVIEW (PROD DB backup occurs before new code is copied)"
+      rg -l -g '*.php' 'dbDelta\(|ALTER TABLE|CREATE TABLE|maybe_create_table|maybe_upgrade|install_pages\(|remove_legacy_' "$directory" | sed "s|$directory/|    |" | sed -n '1,12p'
+    else
+      echo "  No common schema/data migration pattern found."
+    fi
+    if rg -q -g '*.php' 'register_activation_hook\(' "$directory"; then
+      echo "  Activation hook exists; already-installed plugins will not be reactivated."
+    fi
+  done < <(plugin_plan_array "deploy_plugins")
 }
 
 plugin_plan_verify_baseline() {
@@ -985,22 +1058,22 @@ prod_dry_run() {
   DRY_RUN_STATUS="PASS"
   while IFS= read -r plugin; do
     local output count
-    verify_no_stale_component_files "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" "PROD plugin $plugin"
-    output="$(rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" dry)"
+    output="$(rsync_component "$RELEASE_SOURCE/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
     echo "PLUGIN $plugin $count files changed / added (selected plan)"
+    echo "  Unmanaged PROD files preserved: $(release_count_additional "$RELEASE_SOURCE/wp-content/plugins/$plugin" "$PROD/wp-content/plugins/$plugin")"
   done < <(plugin_plan_array "deploy_plugins")
   while IFS= read -r theme; do
     local output count
-    verify_no_stale_component_files "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" "PROD theme $theme"
-    output="$(rsync_component "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" dry)"
+    output="$(rsync_component "$RELEASE_SOURCE/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
     echo "THEME $theme $count files changed / added"
+    echo "  Unmanaged PROD files preserved: $(release_count_additional "$RELEASE_SOURCE/wp-content/themes/$theme" "$PROD/wp-content/themes/$theme")"
   done < <(json_array "production.themes")
   while IFS= read -r file; do
     if [[ ! -f "$PROD/wp-content/mu-plugins/$file" ]]; then
       echo "MU $file NEW"
-    elif cmp -s "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file"; then
+    elif cmp -s "$RELEASE_SOURCE/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file"; then
       echo "MU $file IDENTICAL"
     else
       echo "MU $file UPDATED"
@@ -1008,8 +1081,7 @@ prod_dry_run() {
   done < <(json_array "production.mu_files")
   while IFS= read -r dir; do
     local output count
-    verify_no_stale_component_files "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" "PROD MU assets $dir"
-    output="$(rsync_component "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" dry)"
+    output="$(rsync_component "$RELEASE_SOURCE/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" dry)"
     count="$(printf '%s\n' "$output" | sed '/^$/d' | wc -l)"
     echo "MU-ASSET-DIR $dir $count files changed / added"
   done < <(json_array "production.mu_asset_dirs")
@@ -1038,13 +1110,14 @@ confirm_once() {
   section "SSF PRODUCTION DEPLOYMENT"
   cat <<SUMMARY
 Git HEAD:          $GIT_HEAD
+Release revision:  $SOURCE_REVISION
 Build:             $BUILD
 Version:           $VERSION
 DEV status:        $MANIFEST_STATUS
 
 Repository tests:  $TEST_STATUS
 PHP lint:          $PHP_STATUS
-DEV sync:          $DEV_SYNC_STATUS
+DEV release:       $DEV_RELEASE_STATUS
 DEV smoke:         $DEV_SMOKE_STATUS
 Plugin parity:     $PLUGIN_PARITY_STATUS
 SharePoint config: $SHAREPOINT_CONFIG_STATUS
@@ -1146,6 +1219,8 @@ timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 build=$BUILD
 version=$VERSION
 git_head=$GIT_HEAD
+source_revision=$SOURCE_REVISION
+manifest_commit=$MANIFEST_COMMIT
 dev_path=$DEV
 prod_path=$PROD
 database_archive=database.sql.gz
@@ -1175,7 +1250,7 @@ INFO
       "schema_version" => 1,
       "backup_timestamp" => gmdate("c"),
       "git" => array(
-        "deployment_source_revision" => $argv[2],
+        "deployment_source_revision" => $argv[17],
         "server_repo_head" => $argv[2]
       ),
       "release" => array(
@@ -1221,7 +1296,18 @@ INFO
       )
     );
     file_put_contents($backupDir . "/BACKUP-INFO.json", json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
-  ' "$BACKUP_DIR" "$GIT_HEAD" "$BUILD" "$VERSION" "$PRE_DEPLOY_BUILD" "$PRE_DEPLOY_VERSION" "$PROD" "$EXPECTED_PROD_URL" "$prod_home" "$prod_siteurl" "$prod_env" "$db_prefix" "$db_size" "$db_sha" "$file_size_bytes" "$file_sha"
+  ' "$BACKUP_DIR" "$GIT_HEAD" "$BUILD" "$VERSION" "$PRE_DEPLOY_BUILD" "$PRE_DEPLOY_VERSION" "$PROD" "$EXPECTED_PROD_URL" "$prod_home" "$prod_siteurl" "$prod_env" "$db_prefix" "$db_size" "$db_sha" "$file_size_bytes" "$file_sha" "$SOURCE_REVISION"
+  cp "$PLUGIN_PLAN" "$BACKUP_DIR/plugin-selection-plan.json"
+  (
+    cd "$RELEASE_SOURCE"
+    local paths=()
+    while IFS= read -r plugin; do paths+=("wp-content/plugins/$plugin"); done < <(plugin_plan_array "deploy_plugins")
+    while IFS= read -r theme; do paths+=("wp-content/themes/$theme"); done < <(json_array "production.themes")
+    while IFS= read -r file; do paths+=("wp-content/mu-plugins/$file"); done < <(json_array "production.mu_files")
+    while IFS= read -r dir; do paths+=("wp-content/mu-plugins/$dir"); done < <(json_array "production.mu_asset_dirs")
+    find "${paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum
+  ) > "$BACKUP_DIR/release-managed-files.sha256"
+  [[ -s "$BACKUP_DIR/release-managed-files.sha256" ]] || fail "Release file checksum manifest is empty."
   plugin_plan_array "deploy_plugins" > "$BACKUP_DIR/components-plugins.txt"
   json_array "production.themes" > "$BACKUP_DIR/components-themes.txt"
   json_array "production.mu_files" > "$BACKUP_DIR/components-mu-files.txt"
@@ -1270,13 +1356,30 @@ mark_backup_result() {
 
 deploy_files_to_prod() {
   section "PROD FILE DEPLOY"
+  local plugin theme file output line
   DEPLOYMENT_STARTED=1
   PROD_MUTATED=1
   update_backup_state "deployment_started" "true"
-  while IFS= read -r plugin; do rsync_component "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real >/dev/null; done < <(plugin_plan_array "deploy_plugins")
-  while IFS= read -r theme; do rsync_component "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" real >/dev/null; done < <(json_array "production.themes")
-  while IFS= read -r file; do rsync_component "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" real >/dev/null; done < <(json_array "production.mu_files")
-  sync_mu_asset_dirs "$DEV" "$PROD" real >/dev/null
+  : > "$BACKUP_DIR/release-changed-files.txt"
+  while IFS= read -r plugin; do
+    output="$(rsync_component "$RELEASE_SOURCE/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" real)"
+    if [[ -n "$output" ]]; then
+      while IFS= read -r line; do printf 'PLUGIN %s %s\n' "$plugin" "$line"; done <<< "$output" >> "$BACKUP_DIR/release-changed-files.txt"
+    fi
+  done < <(plugin_plan_array "deploy_plugins")
+  while IFS= read -r theme; do
+    output="$(rsync_component "$RELEASE_SOURCE/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" real)"
+    if [[ -n "$output" ]]; then
+      while IFS= read -r line; do printf 'THEME %s %s\n' "$theme" "$line"; done <<< "$output" >> "$BACKUP_DIR/release-changed-files.txt"
+    fi
+  done < <(json_array "production.themes")
+  while IFS= read -r file; do
+    output="$(rsync_component "$RELEASE_SOURCE/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" real)"
+    if [[ -n "$output" ]]; then
+      while IFS= read -r line; do printf 'MU %s %s\n' "$file" "$line"; done <<< "$output" >> "$BACKUP_DIR/release-changed-files.txt"
+    fi
+  done < <(json_array "production.mu_files")
+  sync_mu_asset_dirs "$RELEASE_SOURCE" "$PROD" real >> "$BACKUP_DIR/release-changed-files.txt"
   FILES_DEPLOYED=1
   update_backup_state "files_deployed" "true"
   FILE_DEPLOY_STATUS="PASS"
@@ -1314,24 +1417,24 @@ verify_prod_components() {
   while IFS= read -r theme; do
     [[ -d "$PROD/wp-content/themes/$theme" ]] || fail "Missing PROD theme: $theme"
     wp_prod theme is-active "$theme" >/dev/null || fail "PROD theme is not active: $theme"
-    local dev_theme_version prod_theme_version
-    dev_theme_version="$(wp_dev theme get "$theme" --field=version 2>/dev/null || true)"
+    local release_theme_version prod_theme_version
+    release_theme_version="$(php -r '$h=file_get_contents($argv[1], false, null, 0, 8192); preg_match("/^Version:[ \\t]*(.+)$/mi", $h, $m); echo trim($m[1] ?? "");' "$RELEASE_SOURCE/wp-content/themes/$theme/style.css")"
     prod_theme_version="$(wp_prod theme get "$theme" --field=version 2>/dev/null || true)"
-    [[ "$dev_theme_version" == "$prod_theme_version" ]] || fail "Theme version mismatch for $theme: DEV=$dev_theme_version PROD=$prod_theme_version"
+    [[ "$release_theme_version" == "$prod_theme_version" ]] || fail "Theme version mismatch for $theme: RELEASE=$release_theme_version PROD=$prod_theme_version"
   done < <(json_array "production.themes")
   THEME_VERIFY_STATUS="PASS"
   while IFS= read -r file; do [[ -f "$PROD/wp-content/mu-plugins/$file" ]] || fail "Missing PROD MU file: $file"; done < <(json_array "production.mu_files")
-  while IFS= read -r plugin; do verify_component_bytes "$DEV/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" "PROD plugin $plugin"; done < <(plugin_plan_array "deploy_plugins")
-  while IFS= read -r theme; do verify_component_bytes "$DEV/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" "PROD theme $theme"; done < <(json_array "production.themes")
-  while IFS= read -r file; do verify_component_bytes "$DEV/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" "PROD MU file $file"; done < <(json_array "production.mu_files")
+  while IFS= read -r plugin; do verify_component_bytes "$RELEASE_SOURCE/wp-content/plugins/$plugin/" "$PROD/wp-content/plugins/$plugin/" "PROD plugin $plugin"; done < <(plugin_plan_array "deploy_plugins")
+  while IFS= read -r theme; do verify_component_bytes "$RELEASE_SOURCE/wp-content/themes/$theme/" "$PROD/wp-content/themes/$theme/" "PROD theme $theme"; done < <(json_array "production.themes")
+  while IFS= read -r file; do verify_component_bytes "$RELEASE_SOURCE/wp-content/mu-plugins/$file" "$PROD/wp-content/mu-plugins/$file" "PROD MU file $file"; done < <(json_array "production.mu_files")
   while IFS= read -r dir; do
-    [[ -d "$DEV/wp-content/mu-plugins/$dir" ]] || fail "Missing DEV MU asset directory: $dir"
+    [[ -d "$RELEASE_SOURCE/wp-content/mu-plugins/$dir" ]] || fail "Missing release MU asset directory: $dir"
     while IFS= read -r source_file; do
-      local relative="${source_file#$DEV/}"
+      local relative="${source_file#$RELEASE_SOURCE/}"
       [[ -f "$PROD/$relative" ]] || fail "Missing PROD MU asset: $relative"
-      cmp -s "$source_file" "$PROD/$relative" || fail "PROD MU asset differs from DEV: $relative"
-    done < <(find "$DEV/wp-content/mu-plugins/$dir" -type f | sort)
-    verify_component_bytes "$DEV/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" "PROD MU assets $dir"
+      cmp -s "$source_file" "$PROD/$relative" || fail "PROD MU asset differs from release: $relative"
+    done < <(find "$RELEASE_SOURCE/wp-content/mu-plugins/$dir" -type f | sort)
+    verify_component_bytes "$RELEASE_SOURCE/wp-content/mu-plugins/$dir/" "$PROD/wp-content/mu-plugins/$dir/" "PROD MU assets $dir"
   done < <(json_array "production.mu_asset_dirs")
   while IFS= read -r file; do [[ ! -e "$PROD/wp-content/mu-plugins/$file" ]] || fail "DEV-only MU file exists in PROD: $file"; done < <(json_array "dev_only.mu_files")
   post_deploy_plugin_parity
@@ -1454,6 +1557,7 @@ success_report() {
 Version:             $VERSION
 Build:               $BUILD
 Git HEAD:            $GIT_HEAD
+Release source:      $SOURCE_REVISION
 
 Tests:               $TEST_STATUS
 PHP lint:            $PHP_STATUS
@@ -1487,19 +1591,21 @@ REPORT
 main() {
   require_tools
   update_repo
+  verify_and_prepare_dev
+  create_release_source
   validate_deploy_config
   audit_tracked_wordpress_scope
   run_tests
   php_lint
-  sync_to_dev
-  verify_and_prepare_dev
+  verify_dev_release
   dev_smoke
   prod_target_safety
   build_plugin_parity_plan
   php_lint_selected_plugins
+  report_plugin_migration_hooks
   validate_turnstile_prod_config "preflight"
   validate_sharepoint_config "preflight"
-  prod_dev_link_safety "$REPO/wp-content" "pre_deploy"
+  prod_dev_link_safety "$RELEASE_SOURCE/wp-content" "pre_deploy"
   prod_dry_run
   record_error_log_baseline
   confirm_once
