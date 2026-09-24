@@ -19,6 +19,9 @@ $show_invitation = $this->meetings->module_enabled($meeting, 'invitation') && ! 
 $program = array_values(array_filter((array) $meeting['program'], static function (array $item): bool {
     return ! empty($item['visible']);
 }));
+$program = array_values(array_filter($program, function (array $item) use ($meeting): bool {
+    return ('dinner' !== ($item['type'] ?? '') && 'dinner' !== ($item['key'] ?? '')) || $this->meetings->module_enabled($meeting, 'dinner');
+}));
 $has_program_dinner = (bool) array_filter($program, static function (array $item): bool {
     return 'dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '');
 });
@@ -56,7 +59,7 @@ $documents = array_values(array_filter((array) $meeting['documents'], static fun
     return ! empty($item['visible']) && ! empty($item['attachment_id']);
 }));
 $show_documents = $this->meetings->module_enabled($meeting, 'documents') && $documents;
-$registration_hidden = 'hidden' === ($meeting['registration_mode'] ?? '');
+$registration_hidden = ! $this->meetings->registration_visible($meeting);
 $registration_closed = ! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '');
 $document_types = array('agenda' => 'Dagordning', 'annual_report' => 'Verksamhetsberättelse', 'financial_report' => 'Ekonomisk rapport', 'budget' => 'Budget', 'motions' => 'Motioner', 'board_response' => 'Styrelsens yttranden', 'minutes' => 'Protokoll', 'other' => 'Dokument');
 $resources = array();
@@ -120,6 +123,13 @@ $resources = array_values(array_filter($resources, static function (array $resou
 
     <?php if ($meeting_post->post_content) : ?><div class="ssf-am-content ssf-am-content--intro"><?php echo apply_filters('the_content', $meeting_post->post_content); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div><?php endif; ?>
 
+    <?php if (! empty($meeting['advance_notice']['visible'])) : ?>
+        <section class="ssf-am-message" aria-label="<?php echo esc_attr((string) $meeting['advance_notice']['title']); ?>">
+            <h2><?php echo esc_html((string) $meeting['advance_notice']['title']); ?></h2>
+            <p><?php echo esc_html((string) $meeting['advance_notice']['text']); ?></p>
+        </section>
+    <?php endif; ?>
+
     <?php if ($show_invitation && ! empty($invitation['text'])) : ?><div class="ssf-am-invitation-text"><?php echo wp_kses_post(wpautop((string) $invitation['text'])); ?></div><?php endif; ?>
 
     <?php if ($resources) : ?>
@@ -179,5 +189,5 @@ $resources = array_values(array_filter($resources, static function (array $resou
     <?php if (empty($registration_state['can_register']) && ! empty($registration_state['message'])) : ?><p class="ssf-am-message" role="status"><?php echo esc_html((string) $registration_state['message']); ?></p><?php endif; ?>
     <?php endif; ?>
 
-    <p class="ssf-am-contact"><strong><?php esc_html_e('Har du frågor om årsmötet?', 'ssf-member-portal'); ?></strong><br><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($contact_url); ?>"><?php esc_html_e('Kontakta styrelsen', 'ssf-member-portal'); ?></a></p>
+    <?php if ($this->meetings->module_enabled($meeting, 'contact')) : ?><p class="ssf-am-contact"><strong><?php esc_html_e('Har du frågor om årsmötet?', 'ssf-member-portal'); ?></strong><br><a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($contact_url); ?>"><?php esc_html_e('Kontakta styrelsen', 'ssf-member-portal'); ?></a></p><?php endif; ?>
 </section>

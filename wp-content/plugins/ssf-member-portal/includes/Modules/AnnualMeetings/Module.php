@@ -248,12 +248,17 @@ final class Module
         $dinner = isset($_POST['ssf_meeting_dinner']) ? $this->sanitize_dinner((array) wp_unslash($_POST['ssf_meeting_dinner'])) : $current['dinner'];
         $program = $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array()), $start_at, $duration_days);
         $program = $this->migrate_legacy_activities($program, $current, $start_at, $duration_days);
-        if ($program) {
-            $modules['day2'] = 1;
-        }
-        $submitted_registration_mode = sanitize_key(wp_unslash($_POST['ssf_meeting_registration_mode'] ?? ''));
-        $registration_mode = in_array($submitted_registration_mode, array('hidden', 'open', 'closed'), true)
-            ? $submitted_registration_mode : $current['registration_mode'];
+        $submitted_registration_mode = sanitize_key(wp_unslash($_POST['ssf_meeting_registration_status'] ?? ''));
+        $registration_mode = in_array($submitted_registration_mode, array('open', 'closed'), true)
+            ? $submitted_registration_mode : ('open' === $current['registration_mode'] ? 'open' : 'closed');
+        $registration_visible = ! empty($_POST['ssf_meeting_registration_visible']) ? 1 : 0;
+        $advance_notice_input = (array) wp_unslash($_POST['ssf_meeting_advance_notice'] ?? array());
+        $advance_notice = array(
+            'visible' => ! empty($advance_notice_input['visible']) ? 1 : 0,
+            'title' => sanitize_text_field($advance_notice_input['title'] ?? '') ?: 'Mer information kommer',
+            'text' => sanitize_textarea_field($advance_notice_input['text'] ?? '') ?: 'Vi publicerar mer information om årsmöteshelgen här löpande.',
+        );
+        $invitation['visible'] = $modules['invitation'];
         $values = array(
             'year' => $year,
             'meeting_date' => $start_at ? wp_date('Y-m-d', $start_at, wp_timezone()) : $legacy_meeting_date,
@@ -273,13 +278,14 @@ final class Module
             'motion_opens_at' => $opens_at,
             'motion_closes_at' => $closes_at,
             'allow_late_motions' => ! empty($_POST['ssf_meeting_allow_late_motions']) ? 1 : 0,
-            'motions_public' => ! empty($_POST['ssf_meeting_motions_public']) ? 1 : 0,
+            'motions_public' => $modules['motions'],
             'motion_instructions' => wp_kses_post(wp_unslash($_POST['ssf_meeting_motion_instructions'] ?? '')),
             'motion_contact_email' => (string) $current['motion_contact_email'],
             'contact_name' => (string) $current['contact_name'],
             'contact_email' => (string) $current['contact_email'],
             'registration_mode' => $registration_mode,
-            'registration_open' => 'open' === $registration_mode ? 1 : 0,
+            'registration_visible' => $registration_visible,
+            'registration_open' => $registration_visible && 'open' === $registration_mode ? 1 : 0,
             'allow_guest' => ! empty($_POST['ssf_meeting_allow_guest']) ? 1 : 0,
             'allow_edits' => ! empty($_POST['ssf_meeting_allow_edits']) ? 1 : 0,
             'capacity' => max(0, absint($_POST['ssf_meeting_capacity'] ?? 0)),
@@ -287,6 +293,8 @@ final class Module
             'calendar_title' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_calendar_title'] ?? '')),
             'calendar_description' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_calendar_description'] ?? '')),
             'modules' => $modules,
+            'visibility_version' => 1,
+            'advance_notice' => $advance_notice,
             'invitation' => $invitation,
             'dinner' => $dinner,
             'program' => $program,
@@ -330,22 +338,35 @@ final class Module
         $documents = (array) $meta('documents', array());
         $invitation = wp_parse_args((array) $meta('invitation', array()), array('title' => 'Kallelse', 'text' => '', 'publish_at' => 0, 'pdf_id' => 0, 'visible' => 1));
         $dinner = wp_parse_args((array) $meta('dinner', array()), array('title' => 'Middag', 'start_at' => 0, 'end_at' => 0, 'opens_at' => 0, 'location' => '', 'description' => '', 'price' => '', 'deadline' => 0, 'capacity' => 0, 'food_enabled' => 1, 'manual_open' => 0));
+        $advance_notice = wp_parse_args((array) $meta('advance_notice', array()), array('visible' => 0, 'title' => 'Mer information kommer', 'text' => 'Vi publicerar mer information om årsmöteshelgen här löpande.'));
         $stored_modules = (array) $meta('modules', array());
+        $meeting_post = get_post($meeting_id);
+        $is_new_meeting = $meeting_post && 'auto-draft' === $meeting_post->post_status;
         $modules = wp_parse_args($stored_modules, array(
             'invitation' => ! empty($invitation['text']) || ! empty($invitation['pdf_id']),
             'meeting' => 1,
             'dinner' => ! empty($dinner['start_at']),
-            'day2' => true,
-            'motions' => (bool) $meta('motions_public', 1),
+            'day2' => ! $is_new_meeting,
+            'motions' => ! $is_new_meeting && (bool) $meta('motions_public', 1),
             'documents' => ! empty($documents),
             'calendar' => 1,
+            'contact' => ! $is_new_meeting,
         ));
+        if (! $meta('visibility_version', 0)) {
+            foreach ($program as $item) {
+                if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
+                    $modules['dinner'] = true;
+                    break;
+                }
+            }
+        }
         $stored_registration_mode = (string) $meta('registration_mode', '');
         $registration_mode_explicit = in_array($stored_registration_mode, array('hidden', 'open', 'closed'), true);
-        $meeting_post = get_post($meeting_id);
         $registration_mode = $registration_mode_explicit
             ? $stored_registration_mode
-            : ($meeting_post && 'auto-draft' === $meeting_post->post_status ? 'hidden' : ((bool) $meta('registration_open', 0) ? 'open' : 'closed'));
+            : ($is_new_meeting ? 'hidden' : ((bool) $meta('registration_open', 0) ? 'open' : 'closed'));
+        $stored_registration_visible = $meta('registration_visible', '');
+        $registration_visible = '' === $stored_registration_visible ? 'hidden' !== $registration_mode : (bool) $stored_registration_visible;
         return array(
             'id' => $meeting_id,
             'year' => (int) $meta('year', $legacy_year),
@@ -375,6 +396,7 @@ final class Module
             'registration_open' => (bool) $meta('registration_open', 0),
             'registration_mode' => $registration_mode,
             'registration_mode_explicit' => $registration_mode_explicit,
+            'registration_visible' => $registration_visible,
             'allow_guest' => (bool) $meta('allow_guest', 0),
             'allow_edits' => (bool) $meta('allow_edits', 1),
             'capacity' => (int) $meta('capacity', 0),
@@ -382,6 +404,7 @@ final class Module
             'calendar_title' => (string) $meta('calendar_title', ''),
             'calendar_description' => (string) $meta('calendar_description', ''),
             'modules' => array_map('boolval', $modules),
+            'advance_notice' => $advance_notice,
             'invitation' => $invitation,
             'dinner' => $dinner,
             'program' => $program,
@@ -450,6 +473,13 @@ final class Module
         return ! empty($meeting['modules'][$module]);
     }
 
+    public function registration_visible(array $meeting): bool
+    {
+        return array_key_exists('registration_visible', $meeting)
+            ? (bool) $meeting['registration_visible']
+            : 'hidden' !== ($meeting['registration_mode'] ?? '');
+    }
+
     public function registration_choices(array $meeting): array
     {
         $choices = array();
@@ -457,6 +487,10 @@ final class Module
         if ($this->module_enabled($meeting, 'day2')) {
             foreach ((array) $meeting['program'] as $item) {
                 $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
+                $is_dinner = 'dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '');
+                if ($is_dinner && ! $this->module_enabled($meeting, 'dinner')) {
+                    continue;
+                }
                 if (empty($item['visible']) || (empty($item['requires_registration']) && ! $is_annual_meeting)) {
                     continue;
                 }
@@ -474,7 +508,7 @@ final class Module
                 ));
             }
         }
-        if ($this->module_enabled($meeting, 'dinner') && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
+        if ($this->module_enabled($meeting, 'day2') && $this->module_enabled($meeting, 'dinner') && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
             $dinner = $meeting['dinner'];
             $choices[] = array(
                 'key' => 'dinner',
@@ -617,7 +651,7 @@ final class Module
     private function sanitize_modules(array $values): array
     {
         $modules = array();
-        foreach (array('invitation', 'meeting', 'dinner', 'day2', 'motions', 'documents', 'calendar') as $key) {
+        foreach (array('invitation', 'meeting', 'dinner', 'day2', 'motions', 'documents', 'calendar', 'contact') as $key) {
             $modules[$key] = ! empty($values[$key]) ? 1 : 0;
         }
         $modules['meeting'] = 1;

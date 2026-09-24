@@ -346,7 +346,9 @@ final class RegistrationService
         $close_at = (int) ($meeting['registration_closes_at'] ?? 0);
 
         $status = self::AVAILABILITY_OPEN;
-        if (! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '')) {
+        if (! $this->meetings->registration_visible($meeting)) {
+            $status = self::AVAILABILITY_DISABLED;
+        } elseif (! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '')) {
             $status = self::AVAILABILITY_CLOSED;
             $close_at = 0;
         } elseif ($meeting_post && 'publish' !== $meeting_post->post_status) {
@@ -411,7 +413,9 @@ final class RegistrationService
         $full = $capacity > 0 && $count >= $capacity;
         $status = self::AVAILABILITY_OPEN;
 
-        if (! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '')) {
+        if (! $this->meetings->registration_visible($meeting)) {
+            $status = self::AVAILABILITY_DISABLED;
+        } elseif (! empty($meeting['registration_mode_explicit']) && 'closed' === ($meeting['registration_mode'] ?? '')) {
             $status = self::AVAILABILITY_CLOSED;
             $close_at = 0;
         } elseif (empty($meeting['registration_open'])) {

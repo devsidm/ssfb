@@ -116,7 +116,7 @@ final class Frontend
         if (! $this->is_publicly_configured($meeting_post, $meeting)) {
             return $this->message(__('Det finns inget aktuellt årsmöte att anmäla sig till just nu.', 'ssf-member-portal'));
         }
-        if ('hidden' === ($meeting['registration_mode'] ?? '')) {
+        if (! $this->meetings->registration_visible($meeting)) {
             return '';
         }
         if (! $this->feature_enabled('annual_meeting_registration')) {
@@ -151,7 +151,7 @@ final class Frontend
             return;
         }
         $meeting_post = $this->public_meeting();
-        if ($meeting_post && 'hidden' === ($this->meetings->data($meeting_post->ID)['registration_mode'] ?? '')) {
+        if ($meeting_post && ! $this->meetings->registration_visible($this->meetings->data($meeting_post->ID))) {
             wp_safe_redirect($this->meetings->meeting_url(), 302);
             exit;
         }

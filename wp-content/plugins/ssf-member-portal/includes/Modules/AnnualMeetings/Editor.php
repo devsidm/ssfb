@@ -25,6 +25,8 @@ final class Editor
         $this->meeting_id = (int) $post->ID;
         $this->selection_counts = $this->registrations->selection_counts($this->meeting_id);
         $data = $this->meetings->data($post->ID);
+        $data['modules']['invitation'] = ! empty($data['modules']['invitation']) && ! empty($data['invitation']['visible']);
+        $data['modules']['motions'] = ! empty($data['modules']['motions']) && ! empty($data['motions_public']);
         $program = $data['program'] ?: array($this->program_row());
         $documents = $data['documents'] ?: array($this->document_row());
         $questions = $data['questions'] ?: array($this->question_row());
@@ -33,6 +35,7 @@ final class Editor
             'invitation' => 'Kallelse',
             'time-place' => 'Helg & plats',
             'day2' => 'Program & aktiviteter',
+            'dinner' => 'Middag',
             'motions' => 'Motioner',
             'documents' => 'Handlingar',
             'publishing' => 'Anmälan & publicering',
@@ -50,11 +53,14 @@ final class Editor
                     <label>Kort ingress<textarea name="ssf_meeting_intro" rows="4"><?php echo esc_textarea($data['intro']); ?></textarea></label>
                 </div>
                 <label class="ssf-am-admin-switch"><input type="checkbox" name="ssf_meeting_active" value="1" <?php checked((int) get_option('ssf_member_portal_active_meeting_id', 0), $post->ID); ?>><span>Aktivt årsmöte</span><small>Detta årsmöte används på den publika huvudsidan och i anmälningsflödet.</small></label>
-                <h3>Aktiva moduler</h3>
+                <h3>Visa på sidan</h3>
                 <div class="ssf-am-module-switches">
-                    <?php foreach (array('invitation' => 'Kallelse', 'day2' => 'Program & aktiviteter', 'motions' => 'Motioner', 'documents' => 'Handlingar', 'calendar' => 'Kalender') as $key => $label) : ?><label><input type="checkbox" name="ssf_meeting_modules[<?php echo esc_attr($key); ?>]" value="1" <?php checked(! empty($data['modules'][$key])); ?> data-ssf-module-toggle="<?php echo esc_attr($key); ?>"> <span><?php echo esc_html($label); ?></span></label><?php endforeach; ?>
+                    <?php foreach (array('invitation' => 'Kallelse', 'day2' => 'Program & aktiviteter', 'dinner' => 'Middag', 'motions' => 'Motioner', 'documents' => 'Handlingar', 'calendar' => 'Kalender', 'contact' => 'Kontakt') as $key => $label) : ?><label><input type="checkbox" name="ssf_meeting_modules[<?php echo esc_attr($key); ?>]" value="1" <?php checked(! empty($data['modules'][$key])); ?> data-ssf-module-toggle="<?php echo esc_attr($key); ?>"> <span><?php echo esc_html($label); ?></span></label><?php endforeach; ?>
                     <input type="hidden" name="ssf_meeting_modules[meeting]" value="1">
                 </div>
+                <h3>Förhandsinformation</h3>
+                <label class="ssf-am-admin-switch"><input type="checkbox" name="ssf_meeting_advance_notice[visible]" value="1" <?php checked(! empty($data['advance_notice']['visible'])); ?>><span>Visa meddelande</span><small>En gemensam informationsyta, oberoende av de övriga delarna.</small></label>
+                <div class="ssf-am-admin-grid"><label>Rubrik<input name="ssf_meeting_advance_notice[title]" value="<?php echo esc_attr((string) $data['advance_notice']['title']); ?>"></label><label>Text<textarea rows="3" name="ssf_meeting_advance_notice[text]"><?php echo esc_textarea((string) $data['advance_notice']['text']); ?></textarea></label></div>
                 <p class="description">Titel, lång beskrivning och huvudbild hanteras med WordPress-fälten ovanför denna ruta.</p>
             </section>
 
@@ -65,7 +71,6 @@ final class Editor
                         <label>Rubrik<input name="ssf_meeting_invitation[title]" value="<?php echo esc_attr($data['invitation']['title']); ?>"></label>
                         <label>Publiceras från<input type="datetime-local" name="ssf_meeting_invitation[publish_at]" value="<?php echo esc_attr($this->input_date((int) $data['invitation']['publish_at'])); ?>"></label>
                     </div>
-                    <label class="ssf-am-admin-switch"><input type="checkbox" name="ssf_meeting_invitation[visible]" value="1" <?php checked(! empty($data['invitation']['visible'])); ?>><span>Visa kallelsen på webben</span></label>
                     <label class="ssf-am-editor-label">Kallelsetext</label>
                     <?php wp_editor((string) $data['invitation']['text'], 'ssf_meeting_invitation_text', array('textarea_name' => 'ssf_meeting_invitation[text]', 'textarea_rows' => 8, 'media_buttons' => false)); ?>
                     <?php $this->media_field('Kallelse PDF', 'ssf_meeting_invitation[pdf_id]', (int) $data['invitation']['pdf_id'], 'application/pdf'); ?>
@@ -88,7 +93,7 @@ final class Editor
             </section>
 
             <section id="ssf-am-tab-dinner" role="tabpanel" aria-labelledby="ssf-am-tab-button-dinner" data-ssf-admin-panel="dinner" class="ssf-am-admin-panel" hidden>
-                <?php $this->module_heading('dinner', 'Middag', 'Middagen har egen tid, kapacitet och anmälningsdeadline inom samma årsmöte.', $data); ?>
+                <?php $this->module_heading('dinner', 'Middag', 'Middagen har egen tid, kapacitet och anmälningsdeadline inom samma årsmöte. Visning av middagen kräver också att Program & aktiviteter visas.', $data); ?>
                 <div data-ssf-module-fields="dinner">
                     <div class="ssf-am-admin-grid">
                         <label>Rubrik<input name="ssf_meeting_dinner[title]" value="<?php echo esc_attr($data['dinner']['title']); ?>"></label>
@@ -125,7 +130,7 @@ final class Editor
                         <label>Motioner öppnar<input name="ssf_motion_opens_on" type="date" value="<?php echo esc_attr($this->input_day((int) $data['motion_opens_at'])); ?>"></label>
                         <label>Motioner stänger<input name="ssf_motion_closes_on" type="date" value="<?php echo esc_attr($this->input_day((int) $data['motion_closes_at'])); ?>"></label>
                     </div>
-                    <div class="ssf-am-admin-checks"><label><input type="checkbox" name="ssf_meeting_allow_late_motions" value="1" <?php checked($data['allow_late_motions']); ?>> Tillåt sena motioner</label><label><input type="checkbox" name="ssf_meeting_motions_public" value="1" <?php checked($data['motions_public']); ?>> Visa motionsinformation publikt</label></div>
+                    <div class="ssf-am-admin-checks"><label><input type="checkbox" name="ssf_meeting_allow_late_motions" value="1" <?php checked($data['allow_late_motions']); ?>> Tillåt sena motioner</label></div>
                     <label class="ssf-am-editor-label">Instruktion till medlem</label>
                     <?php wp_editor($data['motion_instructions'], 'ssf_meeting_motion_instructions', array('textarea_name' => 'ssf_meeting_motion_instructions', 'textarea_rows' => 7, 'media_buttons' => false)); ?>
                     <p><a class="button" href="<?php echo esc_url(admin_url('edit.php?post_type=ssf_motion&ssf_am_meeting=' . $post->ID)); ?>">Visa motioner för årsmötet</a></p>
@@ -155,9 +160,10 @@ final class Editor
                     <label>Gallra personuppgifter efter<input type="number" min="1" max="60" name="ssf_meeting_retention_months" value="<?php echo esc_attr((string) $data['retention_months']); ?>"><small>Månader efter årsmötets slut.</small></label>
                 </div>
                 <fieldset><legend><strong>Anmälan</strong></legend>
-                    <p><label><input type="radio" name="ssf_meeting_registration_mode" value="hidden" <?php checked($data['registration_mode'], 'hidden'); ?>> Dold</label><br><span class="description">Ingen information eller länk till anmälan visas för besökaren.</span></p>
-                    <p><label><input type="radio" name="ssf_meeting_registration_mode" value="open" <?php checked($data['registration_mode'], 'open'); ?>> Öppen</label><br><span class="description">Anmälan och anmälningslänkar visas.</span></p>
-                    <p><label><input type="radio" name="ssf_meeting_registration_mode" value="closed" <?php checked($data['registration_mode'], 'closed'); ?>> Stängd</label><br><span class="description">Anmälan går inte längre att göra och visas som stängd.</span></p>
+                    <p><label><input type="checkbox" name="ssf_meeting_registration_visible" value="1" <?php checked($data['registration_visible']); ?>> Visa anmälan på sidan</label><br><span class="description">Av betyder att inget om anmälan visas för besökaren.</span></p>
+                    <p><strong>Status när anmälan visas</strong></p>
+                    <p><label><input type="radio" name="ssf_meeting_registration_status" value="open" <?php checked($data['registration_mode'], 'open'); ?>> Öppen</label><br><span class="description">Befintliga anmälningslänkar och formulär används.</span></p>
+                    <p><label><input type="radio" name="ssf_meeting_registration_status" value="closed" <?php checked('open' !== $data['registration_mode']); ?>> Stängd</label><br><span class="description">Anmälan visas som stängd och kan inte skickas in.</span></p>
                 </fieldset>
                 <div class="ssf-am-admin-checks"><label><input type="checkbox" name="ssf_meeting_allow_edits" value="1" <?php checked($data['allow_edits']); ?>> Tillåt ändring och avbokning</label><label><input type="checkbox" name="ssf_meeting_allow_guest" value="1" <?php checked($data['allow_guest']); ?>> Tillåt inbjudna gäster</label><label><input type="checkbox" name="ssf_meeting_notify_each" value="1" <?php checked($data['notify_each']); ?>> Skicka e-post vid ny anmälan</label><label><input type="checkbox" name="ssf_meeting_waitlist" value="1" <?php checked($data['waitlist']); ?>> Använd reservlista för äldre gemensam kapacitet</label></div>
                 <input type="hidden" name="ssf_meeting_capacity" value="<?php echo esc_attr((string) $data['capacity']); ?>">
@@ -182,7 +188,7 @@ final class Editor
 
     private function module_heading(string $key, string $title, string $description, array $data): void
     {
-        ?><div class="ssf-am-admin-heading"><div><h2><?php echo esc_html($title); ?></h2><p><?php echo esc_html($description); ?></p></div><label class="ssf-am-module-toggle"><input type="checkbox" name="ssf_meeting_modules[<?php echo esc_attr($key); ?>]" value="1" <?php checked(! empty($data['modules'][$key])); ?> data-ssf-module-toggle="<?php echo esc_attr($key); ?>"><span>Aktiv</span></label></div><?php
+        ?><div class="ssf-am-admin-heading"><div><h2><?php echo esc_html($title); ?></h2><p><?php echo esc_html($description); ?></p></div><label class="ssf-am-module-toggle"><input type="checkbox" name="ssf_meeting_modules[<?php echo esc_attr($key); ?>]" value="1" <?php checked(! empty($data['modules'][$key])); ?> data-ssf-module-toggle="<?php echo esc_attr($key); ?>"><span>Visa på sidan</span></label></div><?php
     }
 
     private function media_field(string $label, string $name, int $attachment_id, string $mime): void
