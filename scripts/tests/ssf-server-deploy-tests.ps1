@@ -38,9 +38,11 @@ $agents = Read-RepoFile 'AGENTS.md'
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
 
 $bash = Get-Command bash -ErrorAction SilentlyContinue
-$gitBashPath = Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe'
-if ((-not $bash -or $bash.Source -match '\\System32\\bash\.exe$') -and (Test-Path -LiteralPath $gitBashPath)) {
-    $bash = Get-Command $gitBashPath
+if ($env:LOCALAPPDATA) {
+    $gitBashPath = Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe'
+    if ((-not $bash -or $bash.Source -match '\\System32\\bash\.exe$') -and (Test-Path -LiteralPath $gitBashPath)) {
+        $bash = Get-Command $gitBashPath
+    }
 }
 Assert-True 'Bash script exists' (Test-Path -LiteralPath $scriptPath)
 Assert-True 'Rollback script exists' (Test-Path -LiteralPath $rollbackPath)
