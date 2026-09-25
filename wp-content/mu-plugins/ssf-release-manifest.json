@@ -2,15 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.2",
-    "build":  "20260925.4",
-    "built_at":  "2026-09-25T08:44:57.1717748Z",
+    "build":  "20260925.5",
+    "built_at":  "2026-09-25T09:29:37.9362060Z",
     "source":  "codex",
-    "source_revision":  "3fee7ecba5996a9e2012bf0b600b35b72c80af38",
-    "description":  "Prevent duplicate headings across shortcode pages",
+    "source_revision":  "90cba701e2d4d9609e8e3dedbd6ad8479ee6eaaf",
+    "description":  "Prevent inspector portal failure on malformed history",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
                        "release-tooling",
-                       "ssf"
+                       "ssf-medlemsprocess"
                    ],
     "status":  "development",
     "prepared_at":  ""
