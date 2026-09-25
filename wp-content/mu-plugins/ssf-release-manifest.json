@@ -2,19 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.3",
-    "build":  "20260925.8",
-    "built_at":  "2026-09-25T18:39:48.5674496Z",
+    "build":  "20260925.9",
+    "built_at":  "2026-09-25T20:02:00.9843852Z",
     "source":  "codex",
-    "source_revision":  "e4ade4dd9b22fb91dde63a4666891a8100e49c8a",
-    "description":  "DEV-only SSF Arbetsyta frontend shell and service adapters",
-    "notes":  "TorrkÃƒÂ¶rning kontrollerar mÃƒÂ¥l och skapar stÃƒÂ¶dda saknade metadatafÃƒÂ¤lt i steg 5.",
+    "source_revision":  "180eff8e2c72aad619a07b4548099fc17cc809b4",
+    "description":  "DEV digitala fartygsinspektioner v2",
+    "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
-                       "microsoft-id-login",
+                       "release-tooling",
                        "ssf-access-control",
-                       "ssf-arbetsyta",
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal",
-                       "ssf-user-admin"
+                       "ssf-inspektioner"
                    ],
     "status":  "development",
     "prepared_at":  ""
