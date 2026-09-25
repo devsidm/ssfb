@@ -2,16 +2,15 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.2",
-    "build":  "20260925.2",
-    "built_at":  "2026-09-25T08:15:33.3671465Z",
+    "build":  "20260925.3",
+    "built_at":  "2026-09-25T08:36:28.3208549Z",
     "source":  "codex",
-    "source_revision":  "3b6b34082df553ee4e4c93945ee5fdc53753053c",
-    "description":  "Allow Microsoft login callback through DEV protection",
+    "source_revision":  "4ee76c29ca6b0493047d955e474d063a407e959c",
+    "description":  "Avoid duplicate Mina inspektioner heading",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
                        "release-tooling",
-                       "ssf-dev-login-protection",
-                       "ssf-dev-protection"
+                       "ssf"
                    ],
     "status":  "development",
     "prepared_at":  ""
