@@ -53,7 +53,6 @@ final class Configuration
     );
 
     private const TEXT_KEYS = array(
-        'tenant_id',
         'client_id',
         'site_id',
         'drive_id',
@@ -237,9 +236,6 @@ final class Configuration
     {
         $settings = self::stored();
         foreach (self::TEXT_KEYS as $key) {
-            if ('tenant_id' === $key) {
-                continue;
-            }
             unset($settings[$key]);
         }
         update_option(self::OPTION, $settings, false);

@@ -3,7 +3,7 @@
  * Plugin Name: SSF Microsoft 365 Mailer
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Skickar WordPress e-post via Microsoft 365 och Microsoft Graph med OAuth 2.0.
- * Version: 0.1.5
+ * Version: 0.1.6
  * Author: SIDM
  * Text Domain: ssf-office365-mailer
  * Requires at least: 5.8
@@ -75,6 +75,9 @@ final class SSF_Office365_Mailer
     public function register_settings(): void
     {
         register_setting('ssf_office365_mailer', self::OPTION_SETTINGS, array($this, 'sanitize_settings'));
+        add_filter('option_page_capability_ssf_office365_mailer', static function (): string {
+            return 'ssf_manage_microsoft_login';
+        });
     }
 
     public function register_oauth_callback(): void
@@ -99,7 +102,7 @@ final class SSF_Office365_Mailer
                 'methods' => 'GET',
                 'callback' => array($this, 'diagnostic_status'),
                 'permission_callback' => static function (): bool {
-                    return current_user_can('manage_options');
+                    return current_user_can('ssf_manage_microsoft_login') || current_user_can('manage_options');
                 },
             )
         );
@@ -153,7 +156,12 @@ final class SSF_Office365_Mailer
 
     public function render_settings_page(): void
     {
-        if (! current_user_can('manage_options')) {
+        $this->render_settings_section(false);
+    }
+
+    public function render_settings_section(bool $embedded = true): void
+    {
+        if (! $this->can_manage()) {
             return;
         }
 
@@ -165,9 +173,11 @@ final class SSF_Office365_Mailer
         $last_result = (array) get_option('ssf_office365_mailer_last_result', array());
         $test_recipient = sanitize_email((string) wp_get_current_user()->user_email);
         ?>
-        <div class="wrap">
+        <?php if (! $embedded) : ?><div class="wrap"><?php endif; ?>
+            <?php if (! $embedded) : ?>
             <h1><?php esc_html_e('SSF Microsoft 365 Mailer', 'ssf-office365-mailer'); ?></h1>
             <?php if (class_exists('SSF_Admin_Navigation')) { SSF_Admin_Navigation::render_system_tabs(self::MENU_SLUG); } ?>
+            <?php endif; ?>
             <p><?php esc_html_e('Skickar WordPress e-post via den Microsoft 365-postlåda som godkänner anslutningen.', 'ssf-office365-mailer'); ?></p>
 
             <form method="post" action="options.php">
@@ -240,13 +250,13 @@ final class SSF_Office365_Mailer
                 <li><?php esc_html_e('Under API permissions, lägg till Microsoft Graph delegated permissions Mail.Send och User.Read och bevilja administratörsgodkännande vid behov.', 'ssf-office365-mailer'); ?></li>
                 <li><?php esc_html_e('Anslut sedan med samma Microsoft 365-postlåda som ska skicka webbplatsens e-post.', 'ssf-office365-mailer'); ?></li>
             </ol>
-        </div>
+        <?php if (! $embedded) : ?></div><?php endif; ?>
         <?php
     }
 
     public function start_oauth(): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_office365_connect')) {
+        if (! $this->can_manage() || ! check_admin_referer('ssf_office365_connect')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-office365-mailer'));
         }
 
@@ -339,7 +349,7 @@ final class SSF_Office365_Mailer
 
     public function disconnect(): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_office365_disconnect')) {
+        if (! $this->can_manage() || ! check_admin_referer('ssf_office365_disconnect')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-office365-mailer'));
         }
 
@@ -350,7 +360,7 @@ final class SSF_Office365_Mailer
 
     public function test_token(): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_office365_test_token')) {
+        if (! $this->can_manage() || ! check_admin_referer('ssf_office365_test_token')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-office365-mailer'));
         }
         if (! $this->is_ready()) {
@@ -383,7 +393,7 @@ final class SSF_Office365_Mailer
 
     public function send_test(): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_office365_send_test')) {
+        if (! $this->can_manage() || ! check_admin_referer('ssf_office365_send_test')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-office365-mailer'));
         }
         $recipient = isset($_POST['test_email']) && is_scalar($_POST['test_email']) ? sanitize_email(wp_unslash($_POST['test_email'])) : '';
@@ -484,7 +494,7 @@ final class SSF_Office365_Mailer
 
     public function render_admin_notices(): void
     {
-        if (! current_user_can('manage_options')) {
+        if (! $this->can_manage()) {
             return;
         }
 
@@ -531,6 +541,26 @@ final class SSF_Office365_Mailer
         $settings = $this->settings();
         $tokens = $this->tokens();
         return 'yes' === $settings['enabled'] && '' !== $this->tenant_id() && ! empty($settings['client_id']) && ! empty($settings['client_secret']) && ! empty($tokens['refresh_token']) && ! empty($tokens['email']);
+    }
+
+    private function can_manage(): bool
+    {
+        return current_user_can('ssf_manage_microsoft_login') || current_user_can('manage_options');
+    }
+
+    public function public_configuration_status(): array
+    {
+        $settings = $this->settings();
+        $tokens = $this->tokens();
+        return array(
+            'enabled' => 'yes' === $settings['enabled'],
+            'tenant' => '' !== $this->tenant_id(),
+            'client_id' => '' !== (string) $settings['client_id'],
+            'client_secret' => '' !== (string) $settings['client_secret'],
+            'connected' => '' !== (string) $tokens['refresh_token'] && '' !== (string) $tokens['email'],
+            'ready' => $this->is_ready(),
+            'callback' => $this->callback_url(),
+        );
     }
 
     private function callback_url(): string
@@ -797,6 +827,10 @@ final class SSF_Office365_Mailer
 
     private function redirect_to_settings(): void
     {
+        if (class_exists('SSF_Admin_Navigation')) {
+            wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'email'), admin_url('admin.php')));
+            exit;
+        }
         $path = class_exists('SSF_Admin_Navigation') ? 'admin.php?page=' : 'options-general.php?page=';
         wp_safe_redirect(admin_url($path . self::MENU_SLUG));
         exit;

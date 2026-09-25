@@ -28,10 +28,12 @@ $js = Get-Content -Raw -Encoding UTF8 -LiteralPath $jsPath
 $css = Get-Content -Raw -Encoding UTF8 -LiteralPath $cssPath
 $doc = Get-Content -Raw -Encoding UTF8 -LiteralPath $docPath
 $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom-Json
+$access = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-access-control.php')
+$userAdmin = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-user-admin.php')
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.4'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.5'
 
 Assert-Contains 'Server force-off switch exists' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Server force-off switch is explicit' $plugin 'private function is_force_disabled()'
@@ -183,9 +185,9 @@ $missingProdPilot = $null
 $pilotClassification = if ($devOnlyPolicy.ContainsKey($activeDevPilot.name)) { 'DEV_ONLY_ALLOWED' } elseif ($activeDevPilot.status -eq 'active' -and -not $missingProdPilot) { 'PRODUCTION_CAPABLE' } else { 'MATCH' }
 Assert-True 'Production capable plugin is not treated as missing PROD parity' ($pilotClassification -eq 'PRODUCTION_CAPABLE')
 
-Assert-Contains 'Admin menu under SSF system' $plugin 'SSF_Admin_Navigation::SYSTEM'
-Assert-Contains 'Admin navigation system tab includes Microsoft login' (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-admin-navigation.php')) "'microsoft-id-login' => array('label' => 'Inloggning'"
-Assert-Contains 'Admin submenu label' $plugin "__('Inloggning'"
+Assert-Contains 'Users menu under SSF' $userAdmin 'SSF_Admin_Navigation::ROOT'
+Assert-Contains 'Users menu label' $userAdmin 'Användare & behörigheter'
+Assert-Contains 'Microsoft central menu' (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-admin-navigation.php')) 'Microsoft-konfiguration'
 Assert-Contains 'Manage login capability' $plugin 'ssf_manage_microsoft_login'
 Assert-Contains 'Manage permission groups capability' $plugin 'ssf_manage_permission_groups'
 Assert-Contains 'Admin assets loaded only on plugin page' $plugin "assets/js/admin.js"
@@ -259,23 +261,20 @@ Assert-Contains 'Last test status option exists' $plugin 'microsoft_id_login_tes
 Assert-Contains 'Technical test status persisted' $plugin "record_test_status('technical'"
 Assert-Contains 'Real login test status persisted' $plugin "record_test_status('real_login'"
 
-Assert-Contains 'Permission group model exists' $plugin 'permission_groups'
-Assert-Contains 'Permission groups stored in user meta' $plugin '_ssf_permission_groups'
-Assert-Contains 'Permission groups granted by user_has_cap' $plugin "add_filter('user_has_cap'"
-Assert-Contains 'Permission save action exists' $plugin 'ssf_save_permission_groups'
-Assert-Contains 'Profile permission save exists' $plugin 'save_profile_groups'
-Assert-Contains 'Permission audit option exists' $plugin 'ssf_microsoft_login_permission_audit'
-Assert-Contains 'Permission audit records actor' $plugin "'actor_user_id'"
-Assert-Contains 'Permission audit records target' $plugin "'target_user_id'"
-Assert-Contains 'Permission audit records added' $plugin "'added'"
-Assert-Contains 'Permission audit records removed' $plugin "'removed'"
-Assert-Contains 'Permission audit records timestamp' $plugin "'timestamp'"
-Assert-Contains 'Applications group includes review capability' $plugin 'ssf_review_applications'
-Assert-Contains 'Applications group includes decision capability' $plugin 'ssf_decide_applications'
-Assert-Contains 'Inspector group includes assigned applications capability' $plugin 'ssf_view_assigned_applications'
-Assert-Contains 'Motion group includes motion capability' $plugin 'ssf_manage_motions'
-Assert-Contains 'Annual meetings group includes annual meeting capability' $plugin 'manage_ssf_annual_meetings'
-Assert-Contains 'System group includes release capability' $plugin 'manage_ssf_releases'
+Assert-Contains 'Permission group model exists' $access 'function groups()'
+Assert-Contains 'Permission groups stored in user meta' $access '_ssf_permission_groups'
+Assert-Contains 'Permission groups granted by user_has_cap' $access "add_filter('user_has_cap'"
+Assert-Contains 'Permission save action exists' $userAdmin 'ssf_user_save_groups'
+Assert-Contains 'Permission audit option exists' $access 'ssf_microsoft_login_permission_audit'
+Assert-Contains 'Permission audit records actor' $access "'actor_user_id'"
+Assert-Contains 'Permission audit records target' $access "'target_user_id'"
+Assert-Contains 'Permission audit records timestamp' $access "'timestamp'"
+Assert-Contains 'Applications group includes review capability' $access 'ssf_review_applications'
+Assert-Contains 'Applications group includes decision capability' $access 'ssf_decide_applications'
+Assert-Contains 'Inspector group includes assigned applications capability' $access 'ssf_view_assigned_applications'
+Assert-Contains 'Motion group includes motion capability' $access 'ssf_manage_motions'
+Assert-Contains 'Annual meetings group includes annual meeting capability' $access 'manage_ssf_annual_meetings'
+Assert-Contains 'System group includes release capability' $access 'manage_ssf_releases'
 Assert-NotContains 'Permission groups do not assign administrator role' $plugin "set_role('administrator"
 Assert-NotContains 'Permission groups do not grant install_plugins' $plugin "'install_plugins'"
 Assert-NotContains 'Permission groups do not grant edit_plugins' $plugin "'edit_plugins'"

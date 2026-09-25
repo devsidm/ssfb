@@ -22,10 +22,8 @@ final class SSF_Admin_Navigation
     private const SYSTEM_PAGES = array(
         'ssf-system' => array('label' => 'Översikt', 'capability' => 'read'),
         'ssf-features' => array('label' => 'Funktioner', 'capability' => 'manage_ssf_features'),
-        'ssf-member-portal-microsoft365' => array('label' => 'Microsoft 365', 'capability' => 'ssf_manage_motions'),
-        'microsoft-id-login' => array('label' => 'Inloggning', 'capability' => 'ssf_manage_microsoft_login'),
+        'ssf-member-portal-microsoft365' => array('label' => 'Microsoft-konfiguration', 'capability' => 'ssf_manage_microsoft_login'),
         'ssf-application-archive-migration' => array('label' => 'Flytta kataloger', 'capability' => 'ssf_manage_application_settings'),
-        'ssf-office365-mailer' => array('label' => 'E-post', 'capability' => 'manage_options'),
         'ssf-antispam' => array('label' => 'Antispam', 'capability' => 'manage_options'),
         'ssf-release' => array('label' => 'Release', 'capability' => 'manage_ssf_releases'),
         'ssf-member-portal-status' => array('label' => 'Systemstatus', 'capability' => 'ssf_manage_member_portal'),
@@ -381,7 +379,7 @@ final class SSF_Admin_Navigation
         if ('ssf-office365-mailer' !== $page) {
             return;
         }
-        wp_safe_redirect(admin_url('admin.php?page=ssf-office365-mailer'));
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'email'), admin_url('admin.php')));
         exit;
     }
 
@@ -501,10 +499,8 @@ final class SSF_Admin_Navigation
     {
         $descriptions = array(
             'ssf-features' => 'Styr vilka publika funktioner som är aktiva.',
-            'ssf-member-portal-microsoft365' => 'Central Microsoft 365-organisation, appstatus och miljöseparerade SharePoint-destinationer.',
-            'microsoft-id-login' => 'Microsoft ID Login, Entra ID-appar och koppling mellan Microsoft-identitet och WordPress-behörigheter.',
+            'ssf-member-portal-microsoft365' => 'Microsoft-katalog, inloggning, SharePoint, e-post och kontokopplingar.',
             'ssf-application-archive-migration' => 'Flytta medlemsansökningarnas SharePoint-katalog på ett kontrollerat och verifierbart sätt.',
-            'ssf-office365-mailer' => 'Microsoft 365-transport för webbplatsens e-post.',
             'ssf-antispam' => 'Turnstile, honeypot och begränsning av formulärinlämningar.',
             'ssf-release' => 'Version, releasedatum, miljö och releasehistorik.',
             'ssf-member-portal-status' => 'Samlad miljö-, integrations- och diagnostikstatus.',

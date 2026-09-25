@@ -16,6 +16,7 @@
       "ssf"
     ],
     "mu_files": [
+      "ssf-access-control.php",
       "ssf-admin-feedback.php",
       "ssf-admin-navigation.php",
       "ssf-antispam.php",
@@ -24,7 +25,8 @@
       "ssf-microsoft365-config.php",
       "ssf-organization-info.php",
       "ssf-release-controls.php",
-      "ssf-release-manifest.json"
+      "ssf-release-manifest.json",
+      "ssf-user-admin.php"
     ],
     "mu_asset_dirs": [
       "assets"

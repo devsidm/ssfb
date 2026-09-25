@@ -93,7 +93,7 @@ Assert-Contains 'Login renders legacy tenant warnings' $login 'legacy_tenant_war
 Assert-Contains 'Central non-empty tenant is preserved' $central "'' !== (string) (`$settings['profiles'][`$environment]['tenant_id'] ?? '')"
 Assert-Contains 'Microsoft 365 admin renders central section' $admin 'SSF_Microsoft365_Config::render_admin_section()'
 Assert-NotContains 'SharePoint UI no longer edits tenant' $admin 'name="graph[tenant_id]"'
-foreach ($tab in @('overview', 'directory', 'integrations', 'diagnostics')) { Assert-Contains "Central tab $tab" $central "'$tab'" }
+foreach ($tab in @('overview', 'directory', 'login', 'sharepoint', 'email', 'accounts', 'diagnostics')) { Assert-Contains "Central tab $tab" $central "'$tab'" }
 Assert-Contains 'Environment banner derives from WordPress' $central 'self::environment()'
 Assert-Contains 'Login saves active environment only' $login 'foreach (array($this->active_profile_key()) as $profile_key)'
 Assert-NotContains 'Login no longer offers production preconfiguration' $login 'Production kan förkonfigureras här.'

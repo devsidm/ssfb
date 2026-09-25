@@ -81,7 +81,7 @@ class SSF_Medlemsprocess_Admin
             <label>Ansökningsstatus<select name="ssf_process_status"><?php foreach ($available_statuses as $key) : $item = SSF_Medlemsprocess_Application::statuses()[$key] ?? null; if (! $item || in_array($key, array('approved_aspirant', 'rejected'), true)) { continue; } ?><option value="<?php echo esc_attr($key); ?>" <?php selected($status, $key); ?>><?php echo esc_html($item['label']); ?></option><?php endforeach; ?><?php if (in_array($status, array('approved_aspirant', 'rejected'), true)) : ?><option value="<?php echo esc_attr($status); ?>" selected><?php echo esc_html(SSF_Medlemsprocess_Application::status_label($status)); ?></option><?php endif; ?></select><small>Endast tillåtna nästa steg visas. Beslut fattas i beslutspanelen.</small></label>
             <label class="ssf-process-check"><input type="checkbox" name="ssf_payment_received" value="1" <?php checked($payment_received); ?>> Betalning mottagen<small>Intern administrativ markering.</small></label>
             <label>Betaldatum<input type="date" name="ssf_payment_received_date" value="<?php echo esc_attr($payment_received_date); ?>"></label>
-            <label>Ansvarig handläggare<?php wp_dropdown_users(array('name' => 'ssf_assigned_user', 'selected' => $assigned, 'show_option_none' => 'Ej tilldelad', 'role__in' => array('administrator', 'ssf_inspector', 'ssf_inspektor', 'ssf_beslutsfattare'))); ?></label>
+            <label>Ansvarig handläggare<?php wp_dropdown_users(array('name' => 'ssf_assigned_user', 'selected' => $assigned, 'show_option_none' => 'Ej tilldelad', 'include' => $this->handler_user_ids($assigned))); ?><?php if ($assigned && ! $this->can_assign_handler($assigned)) : ?><small>Tidigare handläggare visas för historik men kan inte tilldelas nya ärenden.</small><?php endif; ?></label>
             <label>Nästa åtgärd<input type="text" name="ssf_next_action" value="<?php echo esc_attr((string) get_post_meta($post->ID, '_ssf_next_action', true)); ?>" placeholder="Exempel: inväntar registreringsbevis"></label>
             <label>Publikt statusmeddelande<textarea name="ssf_status_message" rows="3" placeholder="Visas för sökanden vid statusändring"></textarea></label>
         </div>
@@ -254,7 +254,11 @@ class SSF_Medlemsprocess_Admin
         if ($payment_changed) {
             $this->payment_saved_post_id = $post_id;
         }
-        update_post_meta($post_id, '_ssf_assigned_user', (int) ($_POST['ssf_assigned_user'] ?? 0));
+        $previous_handler = (int) get_post_meta($post_id, '_ssf_assigned_user', true);
+        $new_handler = isset($_POST['ssf_assigned_user']) ? absint(wp_unslash($_POST['ssf_assigned_user'])) : $previous_handler;
+        if (0 === $new_handler || $new_handler === $previous_handler || $this->can_assign_handler($new_handler)) {
+            update_post_meta($post_id, '_ssf_assigned_user', $new_handler);
+        }
         SSF_Medlemsprocess_Plugin::instance()->inspector->save_assignment($post_id, (array) wp_unslash($_POST));
         update_post_meta($post_id, '_ssf_next_action', sanitize_text_field(wp_unslash($_POST['ssf_next_action'] ?? '')));
         update_post_meta($post_id, '_ssf_review', $this->sanitize_checklist((array) wp_unslash($_POST['ssf_review'] ?? array())));
@@ -458,6 +462,22 @@ class SSF_Medlemsprocess_Admin
     private function render_checklist(string $name, array $groups, array $saved): void { foreach ($groups as $group => $points) { echo '<section class="ssf-process-checklist"><h3>' . esc_html($group) . '</h3>'; foreach ($points as $key => $label) { $value = (array) ($saved[$key] ?? array()); echo '<div class="ssf-process-check-row"><strong>' . esc_html($label) . '</strong><select name="' . esc_attr($name . '[' . $key . '][status]') . '">'; foreach (array('' => 'Inte bedömd', 'met' => 'Uppfyllt', 'not_met' => 'Uppfyller ej', 'completion' => 'Komplettering krävs', 'na' => 'Ej relevant') as $option => $option_label) { echo '<option value="' . esc_attr($option) . '" ' . selected($value['status'] ?? '', $option, false) . '>' . esc_html($option_label) . '</option>'; } echo '</select><input name="' . esc_attr($name . '[' . $key . '][comment]') . '" value="' . esc_attr($value['comment'] ?? '') . '" placeholder="Kommentar"></div>'; } echo '</section>'; } }
     private static function review_points(): array { return array('Ombud och formalia' => array('representative' => 'Fartygsombud är angivet', 'contact' => 'Kontaktuppgifter är kompletta', 'application' => 'Ansökan är komplett', 'consent' => 'Samtycke och GDPR är godkänt'), 'Grundkrav för fartyg' => array('sailing' => 'Segelfartyg eller segelfartyg med hjälpmotor', 'professional' => 'Seglande yrkeshistorik eller relevant traditionell nybyggnation', 'purpose' => 'Relevant för SSF:s syfte'), 'Mått och registrering' => array('length' => 'Längd i huvuddäck överstiger 12 meter', 'beam' => 'Bredd är minst 4 meter', 'register' => 'Registeruppgifter är angivna vid behov'), 'Dokumentation' => array('images' => 'Bilder finns', 'history' => 'Historik finns', 'technical' => 'Teknisk information finns'), 'Bedömning' => array('continue' => 'Ansökan kan gå vidare', 'inspection' => 'Inspektion rekommenderas', 'board' => 'Styrelsebeslut krävs')); }
     private static function inspection_points(): array { return array('Fartyg och identitet' => array('identity_name' => 'Fartygets namn stämmer', 'identity_port' => 'Hemmahamn stämmer', 'identity_type' => 'Fartygstyp stämmer', 'identity_register' => 'Registreringsuppgifter stämmer', 'identity_contact' => 'Ombudets uppgifter stämmer'), 'Skrov och däck' => array('hull' => 'Skrovets allmänna skick bedömt', 'deck' => 'Däckets allmänna skick bedömt', 'damage' => 'Synliga skador eller brister noterade', 'maintenance' => 'Underhållsbehov noterat'), 'Rigg och segel' => array('rig' => 'Riggens typ och skick bedömt', 'masts' => 'Master och rundhult bedömda', 'standing_rig' => 'Stående rigg bedömd', 'running_rig' => 'Löpande rigg bedömd', 'sails' => 'Segel finns och är relevanta'), 'Maskin och system' => array('engine' => 'Hjälpmotor bedömd vid behov', 'electric' => 'Elsystem översiktligt bedömt', 'pumps' => 'Läns- och pumpsystem översiktligt bedömt', 'fire' => 'Brandskydd översiktligt bedömt'), 'Säkerhet och användning' => array('usage' => 'Fartygets användning är beskriven', 'safety' => 'Säkerhetsnivå är översiktligt bedömd', 'staffing' => 'Bemanning och kompetens är beskriven vid behov'), 'Kulturhistoriskt värde' => array('history' => 'Fartygets historik är beskriven', 'professional_history' => 'Tidigare yrkesanvändning är beskriven', 'restorations' => 'Restaureringar och förändringar är beskrivna', 'heritage' => 'Kulturhistoriskt värde är bedömt'), 'Dokumentation' => array('documentation_images' => 'Bilder finns', 'documentation' => 'Dokumentation är tillräcklig', 'additional' => 'Kompletterande dokument behövs')); }
+    private function can_assign_handler(int $user_id): bool
+    {
+        return class_exists('SSF_Access_Control') && SSF_Access_Control::can_handle_membership($user_id);
+    }
+
+    private function handler_user_ids(int $historical_id): array
+    {
+        $ids = array_values(array_filter(array_map('intval', get_users(array('fields' => 'ids'))), function (int $user_id): bool {
+            return $this->can_assign_handler($user_id);
+        }));
+        if ($historical_id && get_userdata($historical_id) && ! in_array($historical_id, $ids, true)) {
+            $ids[] = $historical_id;
+        }
+        return $ids;
+    }
+
     private function sanitize_checklist(array $items): array { $clean = array(); foreach ($items as $key => $item) { $clean[sanitize_key($key)] = array('status' => sanitize_key($item['status'] ?? ''), 'comment' => sanitize_text_field($item['comment'] ?? '')); } return $clean; }
     private function sanitize_inspection(array $inspection): array { $clean = array(); foreach (array('date', 'place', 'inspector', 'attendees', 'type', 'conditions', 'summary', 'strengths', 'deficiencies', 'actions', 'board_comment', 'public_comment', 'recommendation') as $key) { $clean[$key] = sanitize_textarea_field($inspection[$key] ?? ''); } $clean['checks'] = $this->sanitize_checklist((array) ($inspection['checks'] ?? array())); return $clean; }
     private function sanitize_booking(array $booking): array { $clean = array(); foreach (array('date', 'start', 'end', 'location', 'type', 'participants', 'comment') as $key) $clean[$key] = sanitize_textarea_field($booking[$key] ?? ''); return $clean; }

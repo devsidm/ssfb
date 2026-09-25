@@ -60,7 +60,7 @@ final class Controller
     {
         add_submenu_page($parent, __('Alla motioner', 'ssf-member-portal'), __('Motioner', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'edit.php?post_type=' . MotionPostType::POST_TYPE);
         add_submenu_page($parent, __('Inställningar', 'ssf-member-portal'), __('Inställningar', 'ssf-member-portal'), Capabilities::MANAGE, 'ssf-member-portal-settings', array($this, 'render_settings'));
-        add_submenu_page(class_exists('SSF_Admin_Navigation') ? null : $parent, __('Microsoft 365', 'ssf-member-portal'), __('Microsoft 365', 'ssf-member-portal'), Capabilities::MANAGE_MOTIONS, 'ssf-member-portal-microsoft365', array($this, 'render_microsoft365'));
+        add_submenu_page(class_exists('SSF_Admin_Navigation') ? null : $parent, __('Microsoft-konfiguration', 'ssf-member-portal'), __('Microsoft-konfiguration', 'ssf-member-portal'), 'ssf_manage_microsoft_login', 'ssf-member-portal-microsoft365', array($this, 'render_microsoft365'));
     }
 
     public function render_dashboard(): void
@@ -192,12 +192,15 @@ final class Controller
         $poll = $this->service->sharepoint_status_poll_diagnostics();
         $next_poll = wp_next_scheduled('ssf_motion_sharepoint_status_poll');
         $tab = sanitize_key((string) ($_GET['m365_tab'] ?? 'overview'));
-        if (! in_array($tab, array('overview', 'directory', 'integrations', 'diagnostics'), true)) {
+        if ('integrations' === $tab) {
+            $tab = 'sharepoint';
+        }
+        if (! in_array($tab, array('overview', 'directory', 'login', 'sharepoint', 'email', 'accounts', 'diagnostics'), true)) {
             $tab = 'overview';
         }
         ?>
         <div class="wrap">
-            <h1><?php esc_html_e('Microsoft 365', 'ssf-member-portal'); ?></h1>
+            <h1><?php esc_html_e('Microsoft-konfiguration', 'ssf-member-portal'); ?></h1>
             <?php if (class_exists('SSF_Admin_Navigation')) { \SSF_Admin_Navigation::render_system_tabs('ssf-member-portal-microsoft365'); } ?>
             <?php if (class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_environment_banner(); \SSF_Microsoft365_Config::render_tabs($tab); } ?>
             <p><?php esc_html_e('Central administration för Microsoft-katalogen och installationens separata integrationer.', 'ssf-member-portal'); ?></p>
@@ -206,12 +209,17 @@ final class Controller
             <?php if ('overview' === $tab && class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_overview(); echo '</div>'; return; } ?>
             <?php if ('directory' === $tab && class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_admin_section(); echo '</div>'; return; } ?>
             <?php if ('diagnostics' === $tab && class_exists('SSF_Microsoft365_Config')) { \SSF_Microsoft365_Config::render_diagnostics(); echo '</div>'; return; } ?>
+            <?php if ('login' === $tab) { if (class_exists('SSF_Microsoft_ID_Login')) { \SSF_Microsoft_ID_Login::instance()->render_login_settings_section(); } echo '</div>'; return; } ?>
+            <?php if ('accounts' === $tab) { if (class_exists('SSF_Admin_Feedback')) { \SSF_Admin_Feedback::render_inline('accounts'); } if (class_exists('SSF_Microsoft_ID_Login')) { \SSF_Microsoft_ID_Login::instance()->render_account_links_section(); } echo '</div>'; return; } ?>
 
+            <?php if ('email' === $tab) : ?>
             <?php if (class_exists('SSF_Email_Router')) { \SSF_Email_Router::render_admin_section(); } ?>
 
             <?php if (class_exists('SSF_Email_Template')) { \SSF_Email_Template::render_admin_section(); } ?>
 
-            <?php if ('integrations' === $tab && current_user_can('manage_options')) : $mailer = (array) get_option('ssf_office365_mailer_settings', array()); ?>
+            <?php if (class_exists('SSF_Office365_Mailer')) { \SSF_Office365_Mailer::instance()->render_settings_section(); } ?>
+
+            <?php if ($this->can_manage_microsoft365()) : $mailer = (array) get_option('ssf_office365_mailer_settings', array()); ?>
                 <div class="postbox" style="max-width:980px;padding:20px">
                     <h2><?php esc_html_e('Nyhetsgranskning', 'ssf-member-portal'); ?></h2>
                     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="ssf_member_portal_save_external_news_review_recipient"><?php wp_nonce_field('ssf_member_portal_save_external_news_review_recipient'); ?>
@@ -219,8 +227,10 @@ final class Controller
                     </form>
                 </div>
             <?php endif; ?>
+            <?php endif; ?>
+            <?php if ('email' === $tab) { echo '</div>'; return; } ?>
 
-            <?php if (current_user_can(Capabilities::MANAGE)) { $this->sharepoint_admin->render(); } ?>
+            <?php $this->sharepoint_admin->render(); ?>
 
             <div class="postbox" style="max-width:980px;padding:20px">
                 <h2><?php esc_html_e('SharePoint motionsstatus', 'ssf-member-portal'); ?></h2>
@@ -278,19 +288,19 @@ final class Controller
 
     public function save_external_news_review_recipient(): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_member_portal_save_external_news_review_recipient')) { wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal')); }
+        if (! $this->can_manage_microsoft365() || ! check_admin_referer('ssf_member_portal_save_external_news_review_recipient')) { wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal')); }
         $recipient = sanitize_email(wp_unslash($_POST['external_news_review_recipient'] ?? ''));
         if (! empty($_POST['external_news_review_recipient']) && ! is_email($recipient)) { wp_die(esc_html__('Ange en giltig e-postadress.', 'ssf-member-portal')); }
         $settings = (array) get_option('ssf_office365_mailer_settings', array());
         $settings['external_news_review_recipient'] = $recipient;
         update_option('ssf_office365_mailer_settings', $settings, false);
-        wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations', 'ssf_external_news_saved' => '1'), admin_url('admin.php')));
+        wp_safe_redirect(add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'email', 'ssf_external_news_saved' => '1'), admin_url('admin.php')));
         exit;
     }
 
     public function save_microsoft365_configuration(): void
     {
-        if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_member_portal_save_microsoft365_configuration')) {
+        if (! $this->can_manage_microsoft365() || ! check_admin_referer('ssf_member_portal_save_microsoft365_configuration')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
         }
 
@@ -299,7 +309,7 @@ final class Controller
             ? array('type' => 'error', 'message' => $result->get_error_message())
             : array('type' => 'success', 'message' => __('Microsoft 365-konfigurationen har sparats.', 'ssf-member-portal'));
         if (class_exists('SSF_Admin_Feedback')) {
-            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', $notice['type'], $notice['message'], array('m365_tab' => 'integrations'));
+            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', $notice['type'], $notice['message'], array('m365_tab' => 'sharepoint'));
         }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
@@ -308,13 +318,13 @@ final class Controller
 
     public function reset_microsoft365_configuration(): void
     {
-        if (! current_user_can(Capabilities::MANAGE) || ! check_admin_referer('ssf_member_portal_reset_microsoft365_configuration')) {
+        if (! $this->can_manage_microsoft365() || ! check_admin_referer('ssf_member_portal_reset_microsoft365_configuration')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-member-portal'));
         }
 
         Configuration::reset_admin_defaults();
         if (class_exists('SSF_Admin_Feedback')) {
-            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', 'success', __('SSF-standardvärdena har återställts. Client secret har behållits.', 'ssf-member-portal'), array('m365_tab' => 'integrations'));
+            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', 'success', __('SSF-standardvärdena har återställts. Client secret har behållits.', 'ssf-member-portal'), array('m365_tab' => 'sharepoint'));
         }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), array('type' => 'success', 'message' => __('SSF-standardvärdena har återställts. Client secret har behållits.', 'ssf-member-portal')), MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
@@ -611,7 +621,7 @@ final class Controller
                 'code' => (string) ($diagnostics['graph_code'] ?? ''),
                 'http_status' => (int) ($diagnostics['http_status'] ?? 0),
             ) : array();
-            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', $notice['type'], $notice['message'], array('m365_tab' => 'integrations'), $details);
+            \SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint', $notice['type'], $notice['message'], array('m365_tab' => 'sharepoint'), $details);
         }
         set_transient('ssf_member_portal_sharepoint_notice_' . get_current_user_id(), $notice, MINUTE_IN_SECONDS);
         wp_safe_redirect(admin_url('admin.php?page=ssf-member-portal-microsoft365'));
@@ -650,7 +660,7 @@ final class Controller
 
     private function can_manage_microsoft365(): bool
     {
-        return current_user_can(Capabilities::MANAGE) || MotionPermissions::can_manage();
+        return current_user_can('ssf_manage_microsoft_login') || current_user_can('manage_options');
     }
 
     private function state_label(array $state): string

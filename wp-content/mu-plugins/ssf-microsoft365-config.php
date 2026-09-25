@@ -36,7 +36,7 @@ final class SSF_Microsoft365_Config
     public static function get_tenant_id(): string
     {
         $override = self::server_value(self::TENANT_CONSTANT);
-        return '' !== $override ? $override : (string) self::profile()['tenant_id'];
+        return self::valid_tenant_id($override) ? $override : (string) self::profile()['tenant_id'];
     }
 
     public static function get_authority_host(): string
@@ -71,8 +71,8 @@ final class SSF_Microsoft365_Config
 
     public static function render_tabs(string $active): void
     {
-        echo '<nav class="nav-tab-wrapper" aria-label="Microsoft 365">';
-        foreach (array('overview' => 'Översikt', 'directory' => 'Microsoft-katalog', 'integrations' => 'Integrationer', 'diagnostics' => 'Diagnostik') as $key => $label) {
+        echo '<nav class="nav-tab-wrapper" aria-label="Microsoft-konfiguration">';
+        foreach (array('overview' => 'Översikt', 'directory' => 'Microsoft-katalog', 'login' => 'Inloggning', 'sharepoint' => 'SharePoint', 'email' => 'E-post', 'accounts' => 'Kontokopplingar', 'diagnostics' => 'Diagnostik') as $key => $label) {
             $url = add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => $key), admin_url('admin.php'));
             echo '<a class="nav-tab ' . esc_attr($active === $key ? 'nav-tab-active' : '') . '" href="' . esc_url($url) . '">' . esc_html($label) . '</a>';
         }
@@ -82,19 +82,17 @@ final class SSF_Microsoft365_Config
     public static function render_overview(): void
     {
         $graph = class_exists('SSF\\MemberPortal\\Integrations\\Microsoft365\\Configuration') ? \SSF\MemberPortal\Integrations\Microsoft365\Configuration::public_status() : array();
-        $login = (array) get_option('ssf_microsoft_login_settings', array());
-        $login_profile = (array) ($login['profiles'][self::environment()] ?? array());
-        $mailer = (array) get_option('ssf_office365_mailer_settings', array());
-        $tokens = (array) get_option('ssf_office365_mailer_tokens', array());
+        $login = class_exists('SSF_Microsoft_ID_Login') ? SSF_Microsoft_ID_Login::instance()->public_configuration_status() : array();
+        $mailer = class_exists('SSF_Office365_Mailer') ? SSF_Office365_Mailer::instance()->public_configuration_status() : array();
         $items = array(
-            array('Microsoft ID Login', 'Inloggning med SSF-konto', ! empty($login_profile['enabled']) && ! empty($login_profile['client_id']) && ! empty($login_profile['client_secret']), ! empty($login_profile['client_id']), ! empty($login_profile['client_secret']), 'microsoft-id-login'),
-            array('SharePoint', 'Dokument, medlemsansökningar, motioner och årsmöten', ! empty($graph['client_id']['configured']) && ! empty($graph['client_secret']['configured']), ! empty($graph['client_id']['configured']), ! empty($graph['client_secret']['configured']), add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => 'integrations'), admin_url('admin.php'))),
-            array('E-post', 'Systemmail och notifieringar', 'yes' === ($mailer['enabled'] ?? 'no') && ! empty($tokens['refresh_token']), ! empty($mailer['client_id']), ! empty($mailer['client_secret']), 'ssf-office365-mailer'),
+            array('Microsoft ID Login', 'Inloggning med SSF-konto', ! empty($login['enabled']) && ! empty($login['tenant']) && ! empty($login['client_id']) && ! empty($login['client_secret']), ! empty($login['client_id']), ! empty($login['client_secret']), 'login'),
+            array('SharePoint', 'Dokument, medlemsansökningar, motioner och årsmöten', ! empty($graph['client_id']['configured']) && ! empty($graph['client_secret']['configured']), ! empty($graph['client_id']['configured']), ! empty($graph['client_secret']['configured']), 'sharepoint'),
+            array('E-post', 'Systemmail och notifieringar', ! empty($mailer['ready']), ! empty($mailer['client_id']), ! empty($mailer['client_secret']), 'email'),
         );
-        echo '<section class="postbox" style="max-width:1100px;padding:20px"><h2>Microsoft-katalog</h2><p><strong>' . esc_html(self::is_tenant_configured() ? '✓ Verifierad' : 'Saknas') . '</strong></p></section><div class="ssf-sp-overview">';
+        echo '<section class="postbox" style="max-width:1100px;padding:20px"><h2>Microsoft-katalog</h2><p><strong>' . esc_html(self::is_tenant_configured() ? 'Konfigurerad' : 'Saknas') . '</strong></p></section><div class="ssf-sp-overview">';
         foreach ($items as $item) {
-            $url = 0 === strpos((string) $item[5], 'http') ? (string) $item[5] : admin_url('admin.php?page=' . $item[5]);
-            echo '<article class="ssf-sp-destination"><h3>' . esc_html($item[0]) . '</h3><p><strong>' . esc_html($item[2] ? '✓ Aktiv/ansluten' : 'Ej komplett') . '</strong></p><p>' . esc_html($item[1]) . '</p><dl><div><dt>Microsoft-katalog</dt><dd>✓ Central</dd></div><div><dt>Application ID</dt><dd>' . esc_html($item[3] ? '✓ Konfigurerad' : 'Saknas') . '</dd></div><div><dt>Client Secret</dt><dd>' . esc_html($item[4] ? '✓ Konfigurerad' : 'Saknas') . '</dd></div></dl><p><a class="button" href="' . esc_url($url) . '">Hantera</a></p></article>';
+            $url = add_query_arg(array('page' => 'ssf-member-portal-microsoft365', 'm365_tab' => $item[5]), admin_url('admin.php'));
+            echo '<article class="ssf-sp-destination"><h3>' . esc_html($item[0]) . '</h3><p><strong>' . esc_html($item[2] ? 'Konfigurerad' : 'Ej komplett') . '</strong></p><p>' . esc_html($item[1]) . '</p><dl><div><dt>Microsoft-katalog</dt><dd>Central</dd></div><div><dt>Application ID</dt><dd>' . esc_html($item[3] ? 'Konfigurerad' : 'Saknas') . '</dd></div><div><dt>Client Secret</dt><dd>' . esc_html($item[4] ? 'Konfigurerad' : 'Saknas') . '</dd></div></dl><p><a class="button" href="' . esc_url($url) . '">Hantera</a></p></article>';
         }
         echo '</div>';
     }
@@ -103,16 +101,15 @@ final class SSF_Microsoft365_Config
     {
         $tenant = self::test_tenant();
         $graph = class_exists('SSF\\MemberPortal\\Integrations\\Microsoft365\\Configuration') ? \SSF\MemberPortal\Integrations\Microsoft365\Configuration::public_status() : array();
-        $login = (array) get_option('ssf_microsoft_login_settings', array());
-        $login_profile = (array) ($login['profiles'][self::environment()] ?? array());
-        $mailer = (array) get_option('ssf_office365_mailer_settings', array());
+        $login = class_exists('SSF_Microsoft_ID_Login') ? SSF_Microsoft_ID_Login::instance()->public_configuration_status() : array();
+        $mailer = class_exists('SSF_Office365_Mailer') ? SSF_Office365_Mailer::instance()->public_configuration_status() : array();
         echo '<section class="postbox" style="max-width:1100px;padding:20px"><h2>Microsoft-katalog</h2>';
         self::render_test_result($tenant);
         echo '<h2>Konfigurationskällor</h2><table class="widefat striped"><tbody>';
         foreach (array(
-            array('Tenant ID', self::is_tenant_configured(), '' !== self::server_value(self::TENANT_CONSTANT) ? 'Serverkonfiguration (SSF_MICROSOFT365_TENANT_ID)' : 'Central Microsoft 365-konfiguration'),
-            array('Microsoft ID Login Client ID', ! empty($login_profile['client_id']), defined('SSF_M365_LOGIN_CLIENT_ID') ? 'Serverkonfiguration (SSF_M365_LOGIN_CLIENT_ID)' : 'Microsoft ID Login'),
-            array('Microsoft ID Login Client Secret', ! empty($login_profile['client_secret']) || defined('SSF_M365_LOGIN_CLIENT_SECRET'), defined('SSF_M365_LOGIN_CLIENT_SECRET') ? 'Serverkonfiguration (SSF_M365_LOGIN_CLIENT_SECRET)' : 'Microsoft ID Login'),
+            array('Tenant ID', self::is_tenant_configured(), self::valid_tenant_id(self::server_value(self::TENANT_CONSTANT)) ? 'Serverkonfiguration (SSF_MICROSOFT365_TENANT_ID)' : 'Central Microsoft 365-konfiguration'),
+            array('Microsoft ID Login Client ID', ! empty($login['client_id']), $login['client_id_source'] ?? 'missing'),
+            array('Microsoft ID Login Client Secret', ! empty($login['client_secret']), $login['client_secret_source'] ?? 'missing'),
             array('SharePoint Client ID', ! empty($graph['client_id']['configured']), 'server' === ($graph['client_id']['source'] ?? '') ? 'Serverkonfiguration (SSF_GRAPH_CLIENT_ID)' : 'SharePoint'),
             array('SharePoint Client Secret', ! empty($graph['client_secret']['configured']), 'server' === ($graph['client_secret']['source'] ?? '') ? 'Serverkonfiguration (SSF_GRAPH_CLIENT_SECRET)' : 'SharePoint'),
             array('Mailer Client ID', ! empty($mailer['client_id']), 'E-postintegration'),
@@ -126,7 +123,7 @@ final class SSF_Microsoft365_Config
         self::maybe_migrate_legacy_tenant();
         $profile = self::profile();
         $tenant_id = self::get_tenant_id();
-        $override = '' !== self::server_value(self::TENANT_CONSTANT);
+        $override = self::valid_tenant_id(self::server_value(self::TENANT_CONSTANT));
         $authority_override = '' !== self::server_value(self::AUTHORITY_CONSTANT);
         $authority_host = self::get_authority_host();
         $settings = self::settings();
@@ -169,13 +166,13 @@ final class SSF_Microsoft365_Config
         $environment = self::environment();
         $current = self::profile();
         $tenant_input = trim((string) ($input['tenant_id'] ?? ''));
-        if (! self::server_value(self::TENANT_CONSTANT) && '' !== $tenant_input && ! self::valid_tenant_id($tenant_input)) {
+        if (! self::valid_tenant_id(self::server_value(self::TENANT_CONSTANT)) && '' !== $tenant_input && ! self::valid_tenant_id($tenant_input)) {
             self::redirect('Tenant ID har ogiltigt format och sparades inte.', 'error');
         }
         $settings['profiles'][$environment] = array(
             'organisation_name' => sanitize_text_field((string) ($input['organisation_name'] ?? $current['organisation_name'])),
             'primary_domain' => self::sanitize_domain((string) ($input['primary_domain'] ?? $current['primary_domain'])),
-            'tenant_id' => self::server_value(self::TENANT_CONSTANT) ? (string) $current['tenant_id'] : self::sanitize_tenant_id($tenant_input),
+            'tenant_id' => self::valid_tenant_id(self::server_value(self::TENANT_CONSTANT)) ? (string) $current['tenant_id'] : self::sanitize_tenant_id($tenant_input),
             'authority_host' => self::sanitize_host((string) ($input['authority_host'] ?? $current['authority_host'])),
         );
         $settings['migration'][$environment] = array('status' => 'central_saved', 'checked_at' => gmdate('c'));
@@ -217,7 +214,7 @@ final class SSF_Microsoft365_Config
     {
         $settings = self::settings();
         $environment = self::environment();
-        if ('' !== self::server_value(self::TENANT_CONSTANT) || '' !== (string) ($settings['profiles'][$environment]['tenant_id'] ?? '')) { return; }
+        if (self::valid_tenant_id(self::server_value(self::TENANT_CONSTANT)) || '' !== (string) ($settings['profiles'][$environment]['tenant_id'] ?? '')) { return; }
         $candidates = self::legacy_tenant_candidates($environment);
         $values = array_values(array_unique(array_filter(array_map(static function ($candidate) { return strtolower((string) $candidate['value']); }, $candidates))));
         if (1 === count($values)) {
@@ -350,7 +347,7 @@ final class SSF_Microsoft365_Config
 
     private static function guard(string $nonce): void
     {
-        if (! (current_user_can('ssf_manage_member_portal') || current_user_can('manage_options')) || ! check_admin_referer($nonce)) { wp_die('Du saknar behörighet.'); }
+        if (! (current_user_can('ssf_manage_microsoft_login') || current_user_can('manage_options')) || ! check_admin_referer($nonce)) { wp_die('Du saknar behörighet.'); }
     }
 
     private static function redirect(string $message, string $type): void

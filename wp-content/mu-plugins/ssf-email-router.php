@@ -164,7 +164,7 @@ final class SSF_Email_Router
         $definitions = self::definitions();
         $settings = self::settings();
         $environment = self::environment();
-        $can_manage = current_user_can('manage_options');
+        $can_manage = current_user_can('ssf_manage_microsoft_login') || current_user_can('manage_options');
         ?>
         <div id="ssf-email-recipients" class="postbox" style="max-width:1180px;padding:20px">
             <h2><?php esc_html_e('E-postmottagare', 'ssf-email-router'); ?></h2>
@@ -222,7 +222,7 @@ final class SSF_Email_Router
 
     public static function handle_save(): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer('ssf_email_router_save')) {
+        if ((! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) || ! check_admin_referer('ssf_email_router_save')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-email-router'));
         }
 
@@ -254,7 +254,7 @@ final class SSF_Email_Router
     public static function handle_test(): void
     {
         $key = isset($_POST['function_key']) && is_scalar($_POST['function_key']) ? sanitize_key(wp_unslash($_POST['function_key'])) : '';
-        if (! current_user_can('manage_options') || ! $key || ! check_admin_referer('ssf_email_router_test_' . $key)) {
+        if ((! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) || ! $key || ! check_admin_referer('ssf_email_router_test_' . $key)) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-email-router'));
         }
         $definitions = self::definitions();
@@ -284,7 +284,7 @@ final class SSF_Email_Router
 
     public static function render_admin_notice(): void
     {
-        if (! current_user_can('manage_options')) {
+        if (! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) {
             return;
         }
         $notice = get_transient(self::NOTICE_PREFIX . get_current_user_id());
@@ -315,7 +315,7 @@ final class SSF_Email_Router
 
     private static function redirect_to_admin(): void
     {
-        wp_safe_redirect(admin_url('admin.php?page=' . self::ADMIN_PAGE . '#ssf-email-recipients'));
+        wp_safe_redirect(admin_url('admin.php?page=' . self::ADMIN_PAGE . '&m365_tab=email#ssf-email-recipients'));
         exit;
     }
 }

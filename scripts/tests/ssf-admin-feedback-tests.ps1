@@ -57,7 +57,7 @@ Assert-Contains 'Microsoft Login inline feedback' $login "render_inline('microso
 Assert-Contains 'Microsoft Login nonce checks remain' $login "check_admin_referer('ssf_m365_save_settings')"
 Assert-Contains 'Microsoft Login repeated redirects preserve section' $login "admin_section_url('microsoft-login')"
 Assert-Contains 'SharePoint stable section' $sharepoint 'id="sharepoint"'
-Assert-Contains 'SharePoint integration tab preserved' $sharepoint "'m365_tab' => 'integrations'"
+Assert-Contains 'SharePoint integration tab preserved' $sharepoint "'m365_tab' => 'sharepoint'"
 Assert-Contains 'SharePoint destination state preserved' $sharepoint "'destination' => `$destination"
 Assert-Contains 'SharePoint nonce checks remain' $sharepoint "check_admin_referer('ssf_save_sharepoint_destination_"
 Assert-Contains 'Legacy Graph actions use safe feedback' $controller "SSF_Admin_Feedback::redirect('ssf-member-portal-microsoft365', 'sharepoint'"

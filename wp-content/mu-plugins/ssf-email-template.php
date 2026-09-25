@@ -282,7 +282,7 @@ final class SSF_Email_Template
 
     public static function render_admin_section(): void
     {
-        if (! current_user_can('manage_options')) {
+        if (! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) {
             return;
         }
         $brand = self::brand();
@@ -401,7 +401,7 @@ final class SSF_Email_Template
     {
         $template = sanitize_key((string) ($_GET['template'] ?? ''));
         $category = sanitize_key((string) ($_GET['category'] ?? ''));
-        if (! current_user_can('manage_options') || ! isset(self::templates()[$template]) || ! isset(self::categories()[$category]) || ! check_admin_referer('ssf_email_template_preview')) {
+        if ((! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) || ! isset(self::templates()[$template]) || ! isset(self::categories()[$category]) || ! check_admin_referer('ssf_email_template_preview')) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-email-template'));
         }
         nocache_headers();
@@ -428,7 +428,7 @@ final class SSF_Email_Template
 
     public static function render_admin_notice(): void
     {
-        if (! current_user_can('manage_options')) {
+        if (! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) {
             return;
         }
         $stored_unknown_types = (array) get_option(self::UNKNOWN_TYPES_OPTION, array());
@@ -624,7 +624,7 @@ final class SSF_Email_Template
 
     private static function guard(string $nonce): void
     {
-        if (! current_user_can('manage_options') || ! check_admin_referer($nonce)) {
+        if ((! current_user_can('ssf_manage_microsoft_login') && ! current_user_can('manage_options')) || ! check_admin_referer($nonce)) {
             wp_die(esc_html__('Du saknar behörighet.', 'ssf-email-template'));
         }
     }
@@ -636,7 +636,7 @@ final class SSF_Email_Template
 
     private static function redirect(): void
     {
-        wp_safe_redirect(admin_url('admin.php?page=' . self::ADMIN_PAGE . '#ssf-email-design'));
+        wp_safe_redirect(admin_url('admin.php?page=' . self::ADMIN_PAGE . '&m365_tab=email#ssf-email-design'));
         exit;
     }
 }
