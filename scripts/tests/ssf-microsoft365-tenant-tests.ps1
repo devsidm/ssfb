@@ -60,7 +60,8 @@ Assert-Contains 'Login backend shows MISSING state' $login "'MISSING'"
 Assert-Contains 'Login backend shows effective status' $login 'Effective status'
 Assert-Contains 'Login Client ID remains integration specific' $login "'client_id' => 'SSF_M365_LOGIN_CLIENT_ID'"
 Assert-Contains 'Login Client Secret remains integration specific' $login "'client_secret' => 'SSF_M365_LOGIN_CLIENT_SECRET'"
-Assert-Contains 'Login Client ID can come from backend setting' $login "return is_string(`$profile[`$key] ?? null) ? trim((string) `$profile[`$key]) : '';"
+Assert-Contains 'Login credentials can fall back to backend profile' $login "`$fallback = is_string(`$profile[`$key] ?? null) ? trim(`$profile[`$key]) : '';"
+Assert-Contains 'Login rejects invalid backend Client ID' $login "return 'client_id' === `$key && ! `$this->is_valid_client_id(`$fallback) ? '' : `$fallback;"
 Assert-Contains 'Login still validates state' $login 'STATE_PREFIX . $state'
 Assert-Contains 'Login still validates nonce' $login "`$claims['nonce']"
 Assert-Contains 'Login still uses PKCE' $login "'code_challenge_method' => 'S256'"
