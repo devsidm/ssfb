@@ -2,20 +2,16 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.2",
-    "build":  "20260924.6",
-    "built_at":  "2026-09-24T16:58:50.3311311Z",
+    "build":  "20260925.1",
+    "built_at":  "2026-09-25T07:48:04.1249377Z",
     "source":  "codex",
-    "source_revision":  "e65a1a065ca88236f6d33590eb284d29abb59743",
-    "description":  "Harden production deployment component coverage and verification",
+    "source_revision":  "d34d06e5b0398b9358f06f9034472b565a282e43",
+    "description":  "Fix Microsoft ID Login credential fallback",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
-                       "release-tooling",
-                       "ssf-admin-feedback",
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal",
-                       "ssf-office365-mailer",
-                       "ssf-promotions",
-                       "ssf-site-customizations"
+                       "documentation",
+                       "microsoft-id-login",
+                       "release-tooling"
                    ],
     "status":  "development",
     "prepared_at":  ""
