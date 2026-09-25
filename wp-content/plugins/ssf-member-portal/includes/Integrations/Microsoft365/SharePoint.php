@@ -486,6 +486,74 @@ final class SharePoint
         return $items;
     }
 
+    /**
+     * Read the existing Årsmöten/{year}/Motioner destination without creating it.
+     * This is deliberately separate from ensure_motion_folder(), which writes.
+     */
+    public function read_motion_folder(int $year)
+    {
+        $cache_key = 'ssf_workspace_motions_' . $year;
+        $cached = get_transient($cache_key);
+        if (is_array($cached) && time() - (int) ($cached['fetched_at'] ?? 0) < 5 * MINUTE_IN_SECONDS) {
+            $cached['stale'] = false;
+            return $cached;
+        }
+        if ($year < 2000 || $year > 2200 || ! $this->enabled()) {
+            return is_array($cached) ? array_merge($cached, array('stale' => true)) : $this->not_configured_error();
+        }
+        $root = Configuration::value('annual_meeting_folder_id');
+        $year_folder = $this->read_child_folder($root, (string) $year);
+        if (is_wp_error($year_folder)) {
+            return is_array($cached) ? array_merge($cached, array('stale' => true)) : $year_folder;
+        }
+        $motion_folder = $this->read_child_folder($year_folder, 'Motioner');
+        if (is_wp_error($motion_folder)) {
+            return is_array($cached) ? array_merge($cached, array('stale' => true)) : $motion_folder;
+        }
+        $items = array();
+        $next = $this->children_path($motion_folder) . '?$select=id,name,folder,file,webUrl,lastModifiedDateTime';
+        do {
+            $response = $this->graph->request('GET', $next);
+            if (is_wp_error($response)) {
+                return is_array($cached) ? array_merge($cached, array('stale' => true)) : $response;
+            }
+            foreach ((array) ($response['value'] ?? array()) as $item) {
+                if (! is_array($item) || ! isset($item['file']) || empty($item['id']) || empty($item['webUrl'])
+                    || 0 === strpos((string) ($item['name'] ?? ''), 'ssf-graph-test-')) {
+                    continue;
+                }
+                $items[] = array(
+                    'id' => sanitize_text_field((string) $item['id']),
+                    'name' => sanitize_text_field((string) ($item['name'] ?? 'Dokument')),
+                    'url' => esc_url_raw((string) $item['webUrl']),
+                    'modified' => sanitize_text_field((string) ($item['lastModifiedDateTime'] ?? '')),
+                );
+            }
+            $next = (string) ($response['@odata.nextLink'] ?? '');
+        } while ($next && count($items) < 500);
+        $result = array('items' => $items, 'fetched_at' => time(), 'stale' => false);
+        set_transient($cache_key, $result, HOUR_IN_SECONDS);
+        return $result;
+    }
+
+    private function read_child_folder(string $parent_id, string $name)
+    {
+        $next = $this->children_path($parent_id) . '?$select=id,name,folder';
+        do {
+            $response = $this->graph->request('GET', $next);
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            foreach ((array) ($response['value'] ?? array()) as $item) {
+                if (isset($item['folder']) && 0 === strcasecmp((string) ($item['name'] ?? ''), $name)) {
+                    return (string) $item['id'];
+                }
+            }
+            $next = (string) ($response['@odata.nextLink'] ?? '');
+        } while ($next);
+        return new \WP_Error('sharepoint_folder_missing', __('Motionsmappen finns inte i SharePoint.', 'ssf-member-portal'));
+    }
+
     private function ensure_motion_folder(int $year)
     {
         $year = max(2000, $year);

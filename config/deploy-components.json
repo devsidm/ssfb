@@ -44,6 +44,7 @@
   },
   "plugin_policy": {
     "dev_only": [
+      "ssf-arbetsyta"
     ],
     "prod_only": [],
     "ignore_version": []

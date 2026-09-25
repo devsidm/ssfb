@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.3.5
+ * Version: 0.3.6
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.3.5';
+    private const VERSION = '0.3.6';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -1756,7 +1756,7 @@ final class SSF_Microsoft_ID_Login
 
     private function safe_redirect(string $redirect_to): string
     {
-        $fallback = admin_url('/');
+        $fallback = (string) apply_filters('ssf_microsoft_login_default_redirect', admin_url('/'));
         return wp_validate_redirect($redirect_to, $fallback);
     }
 

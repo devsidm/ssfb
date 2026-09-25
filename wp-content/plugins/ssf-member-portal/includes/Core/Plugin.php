@@ -75,6 +75,17 @@ final class Plugin
         $this->meetings->render_dashboard();
     }
 
+    /** Existing annual-meeting owner exposed to the internal Workspace. */
+    public function workspace_meetings(): AnnualMeetings
+    {
+        return $this->meetings;
+    }
+
+    public function workspace_sharepoint(): \SSF\MemberPortal\Integrations\Microsoft365\SharePoint
+    {
+        return $this->meetings->workspace_sharepoint();
+    }
+
     public function render_system_status(): void
     {
         if (! current_user_can(Capabilities::MANAGE)) {

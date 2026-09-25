@@ -184,7 +184,7 @@ final class SSF_User_Admin
         }
         $groups = isset($_POST['groups']) && is_array($_POST['groups']) ? (array) wp_unslash($_POST['groups']) : array();
         SSF_Access_Control::save_groups($user_id, $groups, get_current_user_id());
-        wp_safe_redirect(add_query_arg('ssf_user_notice', 'saved', self::url('users', $user_id)));
+        wp_safe_redirect(add_query_arg('ssf_user_notice', 'saved', self::return_url($user_id)));
         exit;
     }
 
@@ -199,12 +199,21 @@ final class SSF_User_Admin
             wp_die('Administratörskonton kan inte inaktiveras här.');
         }
         if (! $active && self::open_assignments($user_id)) {
-            wp_safe_redirect(add_query_arg('ssf_user_notice', 'assigned', self::url('users', $user_id)));
+            wp_safe_redirect(add_query_arg('ssf_user_notice', 'assigned', self::return_url($user_id)));
             exit;
         }
         SSF_Access_Control::set_active($user_id, $active, get_current_user_id());
-        wp_safe_redirect(add_query_arg('ssf_user_notice', $active ? 'active' : 'inactive', self::url('users', $user_id)));
+        wp_safe_redirect(add_query_arg('ssf_user_notice', $active ? 'active' : 'inactive', self::return_url($user_id)));
         exit;
+    }
+
+    private static function return_url(int $user_id): string
+    {
+        $workspace_url = class_exists('SSF_Workspace') ? SSF_Workspace::url('anvandare/' . $user_id) : '';
+        $referer = wp_get_referer();
+        return $workspace_url && $referer && 0 === strpos($referer, $workspace_url)
+            ? $workspace_url
+            : self::url('users', $user_id);
     }
 
     public static function open_assignments(int $user_id): array

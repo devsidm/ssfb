@@ -43,6 +43,9 @@ class SSF_Medlemsprocess_Portal
 
     public static function page_url(array $args = array()): string
     {
+        if (class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'ansokningar')) {
+            return add_query_arg($args, SSF_Workspace::url('ansokningar'));
+        }
         $page_id = self::page_id();
         $url = $page_id ? get_permalink($page_id) : home_url('/medlemskap/handlaggning/');
         return add_query_arg($args, $url);
@@ -50,6 +53,9 @@ class SSF_Medlemsprocess_Portal
 
     public static function review_url(int $application_id): string
     {
+        if (class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'ansokningar')) {
+            return SSF_Workspace::url('ansokningar/' . $application_id);
+        }
         $number = (string) get_post_meta($application_id, '_ssf_application_number', true);
         $identifier = rawurlencode($number ?: (string) $application_id);
         $base = self::page_url();
@@ -591,7 +597,12 @@ class SSF_Medlemsprocess_Portal
     private function redirect(int $application_id, string $message): void
     {
         $anchor = in_array($message, array('payment_updated', 'payment_unchanged'), true) ? '#payment-status' : '#next-step';
-        wp_safe_redirect(add_query_arg('portal_message', $message, self::review_url($application_id)) . $anchor);
+        $target = self::review_url($application_id);
+        $referer = wp_get_referer();
+        if (class_exists('SSF_Workspace') && $referer && 0 === strpos($referer, SSF_Workspace::url('ansokningar/' . $application_id))) {
+            $target = SSF_Workspace::url('ansokningar/' . $application_id);
+        }
+        wp_safe_redirect(add_query_arg('portal_message', $message, $target) . $anchor);
         exit;
     }
 

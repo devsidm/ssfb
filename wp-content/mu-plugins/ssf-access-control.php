@@ -50,6 +50,11 @@ final class SSF_Access_Control
                 'description' => 'Tilldelade inspektioner utan övrig administration.',
                 'capabilities' => array('ssf_view_assigned_applications', 'ssf_view_application_details', 'ssf_edit_inspection', 'ssf_submit_inspection', 'ssf_send_application_message'),
             ),
+            'nyheter' => array(
+                'label' => 'Nyheter',
+                'description' => 'Skriva, granska och publicera nyheter.',
+                'capabilities' => array('ssf_manage_news', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'upload_files'),
+            ),
             'systemadministration' => array(
                 'label' => 'Systemadministration',
                 'description' => 'Användare, systeminställningar, Microsoft och diagnostik.',

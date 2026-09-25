@@ -220,6 +220,11 @@ final class RegistrationService
         ));
     }
 
+    public function workspace_sharepoint(): SharePoint
+    {
+        return $this->sharepoint;
+    }
+
     public function cancel(\WP_Post $registration, string $token)
     {
         $meeting_post = get_post((int) $registration->post_parent);

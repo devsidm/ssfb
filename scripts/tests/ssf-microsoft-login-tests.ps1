@@ -33,7 +33,7 @@ $userAdmin = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-c
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.5'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.6'
 
 Assert-Contains 'Server force-off switch exists' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Server force-off switch is explicit' $plugin 'private function is_force_disabled()'
@@ -345,6 +345,7 @@ function register_activation_hook() {}
 function register_deactivation_hook() {}
 function add_action() {}
 function add_filter() {}
+function apply_filters($name, $value) { return 'ssf_microsoft_login_default_redirect' === $name ? 'https://example.test/dev/arbetsyta/' : $value; }
 function get_option($key, $default = null) { global $options; return $options; }
 function wp_get_environment_type() { return 'production'; }
 function home_url($path) { return 'https://example.test' . $path; }
@@ -377,6 +378,8 @@ require $argv[1];
 $login = SSF_Microsoft_ID_Login::instance();
 function invoke($object, $name, ...$args) { return (new ReflectionMethod($object, $name))->invoke($object, ...$args); }
 function check($condition, $name) { if (!$condition) { throw new RuntimeException($name); } }
+check(invoke($login, 'safe_redirect', '') === 'https://example.test/dev/arbetsyta/', 'Workspace default landing');
+check(invoke($login, 'safe_redirect', 'https://example.test/dev/arbetsyta/ansokningar/123/') === 'https://example.test/dev/arbetsyta/ansokningar/123/', 'explicit Workspace deep link preserved');
 putenv('SSF_M365_LOGIN_CLIENT_ID');
 putenv('SSF_M365_LOGIN_CLIENT_SECRET');
 check(invoke($login, 'config', 'client_id') === $profileId, 'missing env Client ID fallback');

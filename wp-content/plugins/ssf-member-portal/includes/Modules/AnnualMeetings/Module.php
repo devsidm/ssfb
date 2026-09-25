@@ -431,6 +431,17 @@ final class Module
         return get_posts(array('post_type' => self::POST_TYPE, 'post_status' => array('publish', 'draft', 'private'), 'posts_per_page' => -1, 'meta_key' => '_ssf_am_start_at', 'orderby' => 'meta_value_num', 'order' => 'DESC'));
     }
 
+    /** Read-only adapters for the internal Workspace frontend. */
+    public function workspace_registration_service(): RegistrationService
+    {
+        return $this->registration_service;
+    }
+
+    public function workspace_sharepoint(): SharePoint
+    {
+        return $this->registration_service->workspace_sharepoint();
+    }
+
     public function registration_url(array $args = array()): string
     {
         $page_id = (int) get_option('ssf_member_portal_annual_meeting_registration_page_id');

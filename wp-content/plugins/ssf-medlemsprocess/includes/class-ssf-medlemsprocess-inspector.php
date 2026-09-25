@@ -209,7 +209,9 @@ class SSF_Medlemsprocess_Inspector
 
     public function portal(): string
     {
-        $portal_url = SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner');
+        $portal_url = class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'inspektioner')
+            ? SSF_Workspace::url('inspektioner')
+            : SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner');
         if (! is_user_logged_in()) {
             return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Mina inspektioner</h1><p>Logga in för att öppna dina tilldelade ärenden.</p><p><a class="ssf-process-button" href="' . esc_url(wp_login_url($portal_url)) . '">Logga in</a></p></section>';
         }
@@ -326,6 +328,14 @@ class SSF_Medlemsprocess_Inspector
 
     public function case_url(int $application_id): string
     {
+        if (class_exists('SSF_Workspace')) {
+            $path = (string) get_query_var('ssf_workspace_path');
+            $referer = wp_get_referer();
+            $workspace_url = SSF_Workspace::url('inspektioner/' . $application_id);
+            if (0 === strpos($path, 'inspektioner') || ($referer && 0 === strpos($referer, $workspace_url))) {
+                return $workspace_url;
+            }
+        }
         return SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner', array('case' => $application_id));
     }
 
@@ -357,7 +367,8 @@ class SSF_Medlemsprocess_Inspector
         );
     }
 
-    private function assigned_applications(int $user_id): array
+    /** Existing per-object assignment resolver, also used by Workspace tasks. */
+    public function assigned_applications(int $user_id): array
     {
         $ids = get_posts(array(
             'post_type' => SSF_Medlemsprocess_Application::POST_TYPE,
@@ -372,7 +383,8 @@ class SSF_Medlemsprocess_Inspector
         }));
     }
 
-    private function can_view_case(int $application_id, int $user_id): bool
+    /** Authoritative object-level inspector access, including legacy assignments. */
+    public function can_view_case(int $application_id, int $user_id): bool
     {
         if (! $application_id || SSF_Medlemsprocess_Application::POST_TYPE !== get_post_type($application_id)) {
             return false;
