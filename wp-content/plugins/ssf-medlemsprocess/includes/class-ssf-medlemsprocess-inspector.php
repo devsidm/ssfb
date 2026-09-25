@@ -508,8 +508,13 @@ class SSF_Medlemsprocess_Inspector
     {
         $safe_types = array('submitted', 'status', 'booking', 'completion', 'inspection_assignment', 'inspection_report', 'inspector_message');
         $history = (array) get_post_meta($application_id, '_ssf_application_history', true);
-        return array_values(array_filter($history, static function (array $item) use ($user_id, $safe_types): bool {
-            return ! empty($item['public']) || (int) ($item['author'] ?? 0) === $user_id || 'inspectors' === ($item['audience'] ?? '') || in_array($item['type'] ?? '', $safe_types, true);
+        return array_values(array_filter($history, static function ($item) use ($user_id, $safe_types): bool {
+            return is_array($item) && (
+                ! empty($item['public'])
+                || (int) ($item['author'] ?? 0) === $user_id
+                || 'inspectors' === ($item['audience'] ?? '')
+                || in_array($item['type'] ?? '', $safe_types, true)
+            );
         }));
     }
 
