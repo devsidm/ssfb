@@ -31,7 +31,7 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $configPath | ConvertFrom
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.3'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.4'
 
 Assert-Contains 'Server force-off switch exists' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Server force-off switch is explicit' $plugin 'private function is_force_disabled()'
@@ -67,7 +67,12 @@ Assert-Contains 'Legacy tenant warnings displayed on login page' $plugin 'legacy
 Assert-Contains 'Central tenant management link exists' $plugin 'Hantera Microsoft 365-inställningar'
 Assert-Contains 'Client ID constant exists' $plugin "SSF_M365_LOGIN_CLIENT_ID"
 Assert-Contains 'Client secret constant exists' $plugin "SSF_M365_LOGIN_CLIENT_SECRET"
-Assert-Contains 'Client ID falls back to backend profile' $plugin "return is_string(`$profile[`$key] ?? null) ? trim((string) `$profile[`$key]) : '';"
+Assert-Contains 'Client ID falls back to backend profile' $plugin "`$fallback = is_string(`$profile[`$key] ?? null) ? trim(`$profile[`$key]) : '';"
+Assert-NotContains 'Boolean credentials are never stringified' $plugin "return `$value ? 'true' : 'false';"
+Assert-Contains 'Client ID validated before authorization' $plugin 'if (! $this->is_valid_client_id($client_id))'
+Assert-Contains 'Authorization URL uses resolved Client ID' $plugin "'client_id' => `$client_id,"
+Assert-Contains 'Token exchange uses credential resolver' $plugin "'client_secret' => `$this->config('client_secret')"
+Assert-Contains 'Audience uses credential resolver' $plugin "`$claims['aud'] ?? '') !== `$this->config('client_id')"
 Assert-Contains 'Login settings save keeps backend enabled' $plugin "`$current['profiles'][`$profile_key]['enabled'] = ! empty(`$profile['enabled']);"
 Assert-Contains 'Login settings save keeps backend client ID' $plugin "`$current['profiles'][`$profile_key]['client_id']"
 Assert-Contains 'Login settings save keeps backend client secret' $plugin "`$current['profiles'][`$profile_key]['client_secret']"
@@ -316,6 +321,103 @@ Assert-Contains 'Documentation secret preservation' $doc 'Leaving the secret fie
 Assert-Contains 'Documentation permission model' $doc 'Authorization stays in WordPress'
 Assert-Contains 'Documentation PROD redirect URI' $doc 'https://ssfb.se/ssf-auth/microsoft/callback/'
 Assert-Contains 'Documentation audit option' $doc 'ssf_microsoft_login_permission_audit'
+
+# Exercise the real private resolver and OAuth methods with isolated WordPress stubs.
+$php = Get-Command php -ErrorAction SilentlyContinue
+$phpPath = if ($php) { $php.Source } else { Join-Path ([IO.Path]::GetTempPath()) 'ssf-codex-php-8.5.10\php.exe' }
+if (-not (Test-Path -LiteralPath $phpPath)) {
+    Fail 'PHP executable required for Microsoft ID Login runtime regression tests'
+} else {
+    $fixture = [IO.Path]::GetTempFileName()
+    try {
+        $runtimeTest = @'
+<?php
+define('ABSPATH', __DIR__);
+define('DAY_IN_SECONDS', 86400);
+define('HOUR_IN_SECONDS', 3600);
+define('MINUTE_IN_SECONDS', 60);
+$profileId = '8eeb0e82-1b9c-41c6-b2a1-c07b9be3768a';
+$overrideId = '935e4377-865a-4e7f-bf59-3d4f858ddc2a';
+$tenantId = 'ad928e8c-b976-4c84-a0b1-931341b5a512';
+$secret = 'test-secret-not-for-output';
+$options = array('profiles' => array('production' => array('enabled' => true, 'client_id' => $profileId, 'client_secret' => $secret)));
+$redirected = false;
+function register_activation_hook() {}
+function register_deactivation_hook() {}
+function add_action() {}
+function add_filter() {}
+function get_option($key, $default = null) { global $options; return $options; }
+function wp_get_environment_type() { return 'production'; }
+function home_url($path) { return 'https://example.test' . $path; }
+function admin_url($path) { return 'https://example.test/wp-admin/' . ltrim($path, '/'); }
+function wp_validate_redirect($url, $fallback) { return $url ?: $fallback; }
+function get_transient() { return false; }
+function set_transient() { return true; }
+function __($message) { return $message; }
+function esc_html($message) { return $message; }
+function esc_html__($message) { return $message; }
+function wp_die($message) { throw new RuntimeException('local-error'); }
+function is_wp_error($value) { return $value instanceof WP_Error; }
+function wp_remote_get() { global $tenantId; return array('code' => 200, 'body' => json_encode(array('issuer' => 'https://login.microsoftonline.com/' . $tenantId . '/v2.0', 'jwks_uri' => 'https://example.test/keys'))); }
+function wp_remote_post($url, $args) { global $tokenBody; $tokenBody = $args['body']; return array('code' => 200, 'body' => '{}'); }
+function wp_remote_retrieve_response_code($response) { return $response['code']; }
+function wp_remote_retrieve_body($response) { return $response['body']; }
+function add_query_arg($args, $url) { return $url . '?' . http_build_query($args); }
+function wp_redirect($url) { global $redirected; $redirected = $url; throw new RuntimeException('redirect'); }
+class WP_Error {
+    private $message;
+    public function __construct($code = '', $message = '') { $this->message = $message; }
+    public function get_error_message() { return $this->message; }
+}
+class SSF_Microsoft365_Config {
+    public static function get_tenant_id() { global $tenantId; return $tenantId; }
+    public static function get_authority_url($path) { global $tenantId; return 'https://login.microsoftonline.com/' . $tenantId . $path; }
+    public static function get_authority_host() { return 'login.microsoftonline.com'; }
+}
+require $argv[1];
+$login = SSF_Microsoft_ID_Login::instance();
+function invoke($object, $name, ...$args) { return (new ReflectionMethod($object, $name))->invoke($object, ...$args); }
+function check($condition, $name) { if (!$condition) { throw new RuntimeException($name); } }
+putenv('SSF_M365_LOGIN_CLIENT_ID');
+putenv('SSF_M365_LOGIN_CLIENT_SECRET');
+check(invoke($login, 'config', 'client_id') === $profileId, 'missing env Client ID fallback');
+check(invoke($login, 'config', 'client_secret') === $secret, 'missing env secret fallback');
+check(invoke($login, 'is_configured') === true, 'profile configured');
+putenv('SSF_M365_LOGIN_CLIENT_ID=' . $overrideId);
+check(invoke($login, 'config', 'client_id') === $overrideId, 'valid server override');
+putenv('SSF_M365_LOGIN_CLIENT_ID=false');
+check(invoke($login, 'config', 'client_id') === $profileId, 'false Client ID fallback');
+foreach (array('true', '0', '1', 'not-a-guid', '   ') as $invalid) {
+    putenv('SSF_M365_LOGIN_CLIENT_ID=' . $invalid);
+    check(invoke($login, 'config', 'client_id') === $profileId, 'invalid Client ID fallback');
+}
+putenv('SSF_M365_LOGIN_CLIENT_ID');
+$options['profiles']['production']['client_id'] = 'false';
+check(invoke($login, 'config', 'client_id') === '', 'invalid profile Client ID rejected');
+check(invoke($login, 'is_configured') === false, 'invalid profile not configured');
+check(invoke($login, 'run_connection_checks')['Client ID finns']['passed'] === false, 'diagnostics reject invalid Client ID');
+try { invoke($login, 'start_authorization', 'login', 0, ''); } catch (RuntimeException $e) { check($e->getMessage() === 'local-error', 'local authorization error'); }
+check($redirected === false, 'no Microsoft redirect with invalid ID');
+$options['profiles']['production']['client_id'] = $profileId;
+try { invoke($login, 'start_authorization', 'login', 0, ''); } catch (RuntimeException $e) { check($e->getMessage() === 'redirect', 'expected authorization redirect'); }
+parse_str((string) parse_url($redirected, PHP_URL_QUERY), $query);
+check(($query['client_id'] ?? '') === $profileId, 'authorization URL uses resolved Client ID');
+invoke($login, 'exchange_code', 'test-code', 'test-verifier');
+check($tokenBody['client_id'] === $profileId && $tokenBody['client_secret'] === $secret, 'token exchange uses resolver');
+putenv('SSF_M365_LOGIN_ENABLED=0');
+check(invoke($login, 'is_force_disabled') === true, 'force-disable preserved');
+check(invoke($login, 'enable_state')['active'] === false, 'force-disable prevents activation');
+echo 'PASS: Microsoft ID Login runtime credential regression tests.';
+'@
+        [IO.File]::WriteAllText($fixture, $runtimeTest, [Text.UTF8Encoding]::new($false))
+        $runtimeOutput = & $phpPath $fixture $pluginPath 2>&1
+        if ($LASTEXITCODE -ne 0) { Fail "Runtime regression tests failed: $runtimeOutput" }
+        elseif (($runtimeOutput -join "`n").Contains('test-secret-not-for-output')) { Fail 'Client Secret leaked to test output' }
+        else { Write-Host $runtimeOutput }
+    } finally {
+        Remove-Item -LiteralPath $fixture -Force
+    }
+}
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error $_ }

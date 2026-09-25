@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.3.3
+ * Version: 0.3.4
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.3.3';
+    private const VERSION = '0.3.4';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -943,6 +943,10 @@ final class SSF_Microsoft_ID_Login
         if (empty($enable_state['active'])) {
             wp_die(esc_html((string) $enable_state['message']));
         }
+        $client_id = $this->config('client_id');
+        if (! $this->is_valid_client_id($client_id)) {
+            wp_die(esc_html__('Microsoft-inloggningens Client ID är ogiltigt. Kontakta en administratör.', 'microsoft-id-login'));
+        }
         if (in_array($mode, array('link', 'test', 'invite'), true) && $user_id <= 0) {
             wp_die(esc_html__('Du måste vara inloggad för att koppla Microsoft 365-konto.', 'microsoft-id-login'));
         }
@@ -965,7 +969,7 @@ final class SSF_Microsoft_ID_Login
             10 * MINUTE_IN_SECONDS
         );
         $query = array(
-            'client_id' => $this->config('client_id'),
+            'client_id' => $client_id,
             'response_type' => 'code',
             'redirect_uri' => $this->callback_url(),
             'response_mode' => 'query',
@@ -1634,7 +1638,7 @@ final class SSF_Microsoft_ID_Login
     private function is_configured(): bool
     {
         return '' !== $this->config('tenant_id')
-            && '' !== $this->config('client_id')
+            && $this->is_valid_client_id($this->config('client_id'))
             && '' !== $this->config('client_secret')
             && false !== strpos($this->callback_url(), self::CALLBACK_PATH);
     }
@@ -1654,16 +1658,19 @@ final class SSF_Microsoft_ID_Login
             return '';
         }
         $value = defined($constant) ? constant($constant) : getenv($constant);
-        if (is_string($value) && '' !== trim($value)) {
+        if (is_string($value) && '' !== trim($value) && ('client_id' !== $key || $this->is_valid_client_id(trim($value)))) {
             return trim($value);
-        }
-        if (is_bool($value)) {
-            return $value ? 'true' : 'false';
         }
 
         $settings = $this->settings();
         $profile = $settings['profiles'][$this->active_profile_key()] ?? array();
-        return is_string($profile[$key] ?? null) ? trim((string) $profile[$key]) : '';
+        $fallback = is_string($profile[$key] ?? null) ? trim($profile[$key]) : '';
+        return 'client_id' === $key && ! $this->is_valid_client_id($fallback) ? '' : $fallback;
+    }
+
+    private function is_valid_client_id(string $value): bool
+    {
+        return 1 === preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value);
     }
 
     private function ensure_central_config_loaded(): void
