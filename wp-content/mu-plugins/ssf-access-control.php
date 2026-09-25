@@ -48,7 +48,12 @@ final class SSF_Access_Control
             'inspektorer' => array(
                 'label' => 'Inspektioner',
                 'description' => 'Tilldelade inspektioner utan övrig administration.',
-                'capabilities' => array('ssf_view_assigned_applications', 'ssf_view_application_details', 'ssf_edit_inspection', 'ssf_submit_inspection', 'ssf_send_application_message'),
+                'capabilities' => array('ssf_view_assigned_applications', 'ssf_view_application_details', 'ssf_edit_inspection', 'ssf_submit_inspection', 'ssf_send_application_message', 'ssf_inspect_v2'),
+            ),
+            'inspektionsadmin' => array(
+                'label' => 'Inspektionsadministration',
+                'description' => 'Administrera inspektionsmallar och inspektioner.',
+                'capabilities' => array('ssf_inspect_v2', 'ssf_manage_inspections'),
             ),
             'nyheter' => array(
                 'label' => 'Nyheter',
@@ -58,7 +63,7 @@ final class SSF_Access_Control
             'systemadministration' => array(
                 'label' => 'Systemadministration',
                 'description' => 'Användare, systeminställningar, Microsoft och diagnostik.',
-                'capabilities' => array('ssf_manage_microsoft_login', 'ssf_manage_permission_groups', self::MANAGE_USERS, 'ssf_manage_member_portal', 'manage_ssf_features', 'manage_ssf_releases'),
+                'capabilities' => array('ssf_manage_microsoft_login', 'ssf_manage_permission_groups', self::MANAGE_USERS, 'ssf_manage_member_portal', 'manage_ssf_features', 'manage_ssf_releases', 'ssf_inspect_v2', 'ssf_manage_inspections'),
             ),
         );
     }
@@ -158,6 +163,12 @@ final class SSF_Access_Control
             }
             if (! $administrator->has_cap('ssf_manage_microsoft_login')) {
                 $administrator->add_cap('ssf_manage_microsoft_login');
+            }
+            if (! $administrator->has_cap('ssf_inspect_v2')) {
+                $administrator->add_cap('ssf_inspect_v2');
+            }
+            if (! $administrator->has_cap('ssf_manage_inspections')) {
+                $administrator->add_cap('ssf_manage_inspections');
             }
         }
     }
