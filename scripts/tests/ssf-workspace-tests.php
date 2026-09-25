@@ -38,6 +38,7 @@ check(SSF_Workspace::register_service(array('id' => 'a', 'label' => 'A', 'route'
 check(SSF_Workspace::register_service(array('id' => 'b', 'label' => 'B', 'route' => 'b', 'capability' => 'view_b', 'render' => $render)), 'hidden service registers');
 check(! SSF_Workspace::register_service(array('id' => 'a', 'label' => 'Duplicate', 'route' => 'other', 'capability' => 'view_a', 'render' => $render)), 'duplicate id rejected');
 check(! SSF_Workspace::register_service(array('id' => 'bad', 'label' => 'Bad', 'route' => '../bad', 'capability' => 'view_a', 'render' => $render)), 'invalid route rejected');
+check(! SSF_Workspace::register_service(array('id' => 'reserved', 'label' => 'Reserved', 'route' => 'konto', 'capability' => 'view_a', 'render' => $render)), 'core route reserved');
 check(! SSF_Workspace::register_service(array('id' => 'broken', 'label' => 'Broken', 'route' => 'broken', 'capability' => 'view_a')), 'missing renderer rejected');
 check(array_keys(SSF_Workspace::services_for_user()) === array('a'), 'capability filters navigation');
 check(SSF_Workspace::match_service('b/5') === null, 'direct route without capability denied');

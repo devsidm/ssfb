@@ -52,12 +52,17 @@ final class SSF_Workspace
      */
     public static function register_service(array $service): bool
     {
-        $id = sanitize_key((string) ($service['id'] ?? ''));
-        $route = trim((string) ($service['route'] ?? ''), '/');
-        $capability = (string) ($service['capability'] ?? '');
-        if (! $id || ! preg_match('#^[a-z0-9][a-z0-9-]*(?:/[a-z0-9][a-z0-9-]*)*$#', $route)
+        if (! is_string($service['id'] ?? null) || ! is_string($service['route'] ?? null)
+            || ! is_string($service['capability'] ?? null) || ! is_string($service['label'] ?? null)) {
+            return false;
+        }
+        $id = sanitize_key($service['id']);
+        $route = trim($service['route'], '/');
+        $capability = $service['capability'];
+        if (! $id || $id !== $service['id'] || in_array($route, array('home', 'uppgifter', 'konto'), true)
+            || ! preg_match('#^[a-z0-9][a-z0-9-]*(?:/[a-z0-9][a-z0-9-]*)*$#', $route)
             || ! preg_match('/^[a-z_][a-z0-9_]*$/', $capability)
-            || empty($service['label']) || ! is_callable($service['render'] ?? null)
+            || '' === trim($service['label']) || ! is_callable($service['render'] ?? null)
             || isset(self::$services[$id])) {
             return false;
         }
@@ -133,7 +138,8 @@ final class SSF_Workspace
                     continue;
                 }
                 foreach (array_slice($provided, 0, 30) as $item) {
-                    if (! is_array($item) || empty($item['title']) || empty($item['url'])) {
+                    if (! is_array($item) || ! is_string($item['title'] ?? null) || '' === trim($item['title'])
+                        || ! is_string($item['url'] ?? null) || '' === $item['url']) {
                         continue;
                     }
                     $url = wp_validate_redirect((string) $item['url'], '');
@@ -163,6 +169,7 @@ final class SSF_Workspace
             return;
         }
         nocache_headers();
+        show_admin_bar(false);
         if (! is_user_logged_in()) {
             wp_safe_redirect(wp_login_url(self::current_url()));
             exit;
@@ -262,7 +269,8 @@ final class SSF_Workspace
         $groups = class_exists('SSF_Access_Control') ? SSF_Access_Control::user_groups((int) $user->ID) : array();
         $labels = class_exists('SSF_Access_Control') ? SSF_Access_Control::groups() : array();
         $names = array_map(static function (string $group) use ($labels): string { return (string) ($labels[$group]['label'] ?? $group); }, $groups);
-        $linked = (string) get_user_meta($user->ID, '_ssf_m365_oid', true) !== '';
+        $linked = (string) get_user_meta($user->ID, '_ssf_m365_tid', true) !== ''
+            && (string) get_user_meta($user->ID, '_ssf_m365_oid', true) !== '';
         return '<dl class="ssf-workspace-account"><dt>Namn</dt><dd>' . esc_html($user->display_name) . '</dd><dt>SSF-e-post</dt><dd>' . esc_html($user->user_email) . '</dd><dt>Microsoft-konto</dt><dd>' . ($linked ? 'Kopplat' : 'Inte kopplat') . '</dd><dt>Mina behörigheter</dt><dd>' . esc_html($names ? implode(', ', $names) : 'Inga verksamhetsbehörigheter') . '</dd></dl><p><a class="ssf-workspace-button" href="' . esc_url(wp_logout_url(home_url('/'))) . '">Logga ut</a></p>';
     }
 

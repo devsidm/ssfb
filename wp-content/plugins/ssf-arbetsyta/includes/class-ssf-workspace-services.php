@@ -383,12 +383,15 @@ final class SSF_Workspace_Services
             if (isset($_GET['ssf_user_notice'])) {
                 $html .= '<p role="status" class="ssf-workspace-confirmation">Ändringen har behandlats.</p>';
             }
-            $html .= '<p>SSF-status: <strong>' . ($active ? 'Aktiv' : 'Inaktiv') . '</strong> · Microsoft: <strong>' . (get_user_meta($id, '_ssf_m365_oid', true) ? 'Kopplat' : 'Ej kopplat') . '</strong></p>';
-            $html .= '<form class="ssf-workspace-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_user_save_groups"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_save_groups_' . $id, '_wpnonce', true, false) . '<fieldset><legend><h3>Behörighetsgrupper</h3></legend>';
-            foreach ($groups as $key => $group) {
-                $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"' . checked(in_array($key, $selected, true), true, false) . '> ' . esc_html($group['label']) . '</label>';
+            $linked = get_user_meta($id, '_ssf_m365_tid', true) && get_user_meta($id, '_ssf_m365_oid', true);
+            $html .= '<p>SSF-status: <strong>' . ($active ? 'Aktiv' : 'Inaktiv') . '</strong> · Microsoft: <strong>' . ($linked ? 'Kopplat' : 'Ej kopplat') . '</strong></p>';
+            if ($id !== get_current_user_id() || current_user_can('manage_options')) {
+                $html .= '<form class="ssf-workspace-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_user_save_groups"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_save_groups_' . $id, '_wpnonce', true, false) . '<fieldset><legend><h3>Behörighetsgrupper</h3></legend>';
+                foreach ($groups as $key => $group) {
+                    $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"' . checked(in_array($key, $selected, true), true, false) . '> ' . esc_html($group['label']) . '</label>';
+                }
+                $html .= '</fieldset><button class="ssf-workspace-button" type="submit">Spara behörigheter</button></form>';
             }
-            $html .= '</fieldset><button class="ssf-workspace-button" type="submit">Spara behörigheter</button></form>';
             $open = $active ? SSF_User_Admin::open_assignments($id) : array();
             if ($open) {
                 $html .= '<p role="status">Användaren ansvarar för ' . esc_html((string) count($open)) . ' öppna ärenden. Omfördela dem innan SSF-åtkomsten tas bort.</p>';
@@ -405,7 +408,8 @@ final class SSF_Workspace_Services
         $html .= '<div class="ssf-workspace-table-wrap"><table><thead><tr><th>Namn</th><th>E-post</th><th>Status</th><th>Behörigheter</th><th>Microsoft</th><th></th></tr></thead><tbody>';
         foreach ($users as $user) {
             $names = array_map(static function (string $key) use ($groups): string { return $groups[$key]['label'] ?? $key; }, SSF_Access_Control::user_groups((int) $user->ID));
-            $html .= '<tr><td>' . esc_html($user->display_name) . '</td><td>' . esc_html($user->user_email) . '</td><td>' . (SSF_Access_Control::is_active((int) $user->ID) ? 'Aktiv' : 'Inaktiv') . '</td><td>' . esc_html(implode(', ', $names)) . '</td><td>' . (get_user_meta($user->ID, '_ssf_m365_oid', true) ? 'Kopplat' : 'Ej kopplat') . '</td><td><a href="' . esc_url(SSF_Workspace::url('anvandare/' . (int) $user->ID)) . '">Hantera</a></td></tr>';
+            $linked = get_user_meta($user->ID, '_ssf_m365_tid', true) && get_user_meta($user->ID, '_ssf_m365_oid', true);
+            $html .= '<tr><td>' . esc_html($user->display_name) . '</td><td>' . esc_html($user->user_email) . '</td><td>' . (SSF_Access_Control::is_active((int) $user->ID) ? 'Aktiv' : 'Inaktiv') . '</td><td>' . esc_html(implode(', ', $names)) . '</td><td>' . ($linked ? 'Kopplat' : 'Ej kopplat') . '</td><td><a href="' . esc_url(SSF_Workspace::url('anvandare/' . (int) $user->ID)) . '">Hantera</a></td></tr>';
         }
         return $html . '</tbody></table></div>';
     }
