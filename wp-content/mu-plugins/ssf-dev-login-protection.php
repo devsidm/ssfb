@@ -33,6 +33,10 @@ add_action('template_redirect', static function (): void {
         return;
     }
 
+    if (function_exists('ssf_dev_protection_is_microsoft_callback_route') && ssf_dev_protection_is_microsoft_callback_route()) {
+        return;
+    }
+
     auth_redirect();
 });
 

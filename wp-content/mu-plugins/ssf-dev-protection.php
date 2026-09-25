@@ -74,8 +74,21 @@ function ssf_dev_protection_allows_anonymous_request(): bool
         return true;
     }
 
+    if (ssf_dev_protection_is_microsoft_callback_route()) {
+        return true;
+    }
+
     global $pagenow;
     return in_array($pagenow, array('wp-login.php', 'wp-cron.php'), true);
+}
+
+function ssf_dev_protection_is_microsoft_callback_route(): bool
+{
+    $request_path = (string) wp_parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+    $callback_path = (string) wp_parse_url(home_url('/ssf-auth/microsoft/callback/'), PHP_URL_PATH);
+
+    return trim($request_path, '/') === trim($callback_path, '/')
+        && '1' === (string) get_query_var('ssf_m365_login_callback');
 }
 
 function ssf_dev_protection_is_public_status_route(): bool
