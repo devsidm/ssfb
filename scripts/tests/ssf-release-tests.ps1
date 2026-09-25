@@ -93,6 +93,10 @@ try {
     Assert-Equal 'Deployment success check is encoding-safe' $true ($deploy.Contains("-notmatch 'markerad som lyckad'"))
     Assert-Equal 'DEV FTP root listing exists' $true ($deploy.Contains('--ftp-pasv --list-only'))
     Assert-Equal 'DEV FTP root verifies wp-content directly' $true ($deploy.Contains("`$ftpRootListing -notcontains 'wp-content'"))
+    Assert-Equal 'DEV uploads frozen Git release bytes without Windows CRLF conversion' $true ($deploy.Contains('git -C $repo -c core.autocrlf=false archive --format=tar'))
+    Assert-Equal 'DEV upload uses manifest source revision' $true ($deploy.Contains('$sourceRevision = [string]$manifest.source_revision'))
+    Assert-Equal 'DEV upload excludes newer checkout files' $true ($deploy.Contains('git -C $repo ls-tree -r --name-only $sourceRevision -- wp-content'))
+    Assert-Equal 'DEV manifest remains current build' $true ($deploy.Contains("`$file -eq 'wp-content/mu-plugins/ssf-release-manifest.json'"))
     Assert-Equal 'Nested ssfb.se is only reported' $true ($deploy.Contains("`$ftpRootListing -contains 'ssfb.se'"))
     Assert-Equal 'Production guard remains separate' $true ($deploy.Contains("if (`$Environment -eq 'production')"))
 

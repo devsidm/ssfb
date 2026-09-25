@@ -41,8 +41,18 @@ if ($Environment -eq 'production') {
 $dirty = @(git -C $repo status --porcelain)
 if ($dirty.Count -gt 0) { throw 'Git-trädet måste vara rent före deployment. Committera build-manifestet först.' }
 
-$trackedFiles = @(git -C $repo ls-files -- 'wp-content')
-if ($trackedFiles.Count -eq 0) { throw 'Inga versionsstyrda wp-content-filer hittades.' }
+$sourceRevision = [string]$manifest.source_revision
+if ($sourceRevision -notmatch '^[0-9a-f]{40}$') { throw 'Invalid release source_revision.' }
+& git -C $repo cat-file -e "${sourceRevision}^{commit}"
+if ($LASTEXITCODE -ne 0) { throw 'Release source commit is unavailable locally.' }
+& git -C $repo merge-base --is-ancestor $sourceRevision HEAD
+if ($LASTEXITCODE -ne 0) { throw 'Release source is not an ancestor of HEAD.' }
+
+# Upload the same Git blob bytes that the server later verifies. A Windows
+# checkout may have CRLF even when the frozen Git release contains LF.
+$releaseRoot = Join-Path ([IO.Path]::GetTempPath()) ('ssf-release-deploy-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $releaseRoot | Out-Null
+$archivePath = Join-Path $releaseRoot 'source.tar'
 
 $BaseUrl = $BaseUrl.TrimEnd('/')
 $remoteRootIsAbsolute = $RemoteRoot.StartsWith('/')
@@ -69,6 +79,13 @@ function Register-Failure {
 }
 
 try {
+    & git -C $repo -c core.autocrlf=false archive --format=tar "--output=$archivePath" $sourceRevision -- wp-content
+    if ($LASTEXITCODE -ne 0) { throw 'Could not archive the release source.' }
+    & tar -xf $archivePath -C $releaseRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Could not extract the release source.' }
+    $trackedFiles = @(git -C $repo ls-tree -r --name-only $sourceRevision -- wp-content)
+    if ($LASTEXITCODE -ne 0 -or $trackedFiles.Count -eq 0) { throw 'No tracked wp-content files in the release source.' }
+
     if ($Environment -eq 'development') {
         $ftpRootListing = @(& curl.exe -sS --fail --ftp-pasv --list-only -u ($FtpUser + ':' + $ftpPassword) ('ftp://' + $FtpHost.TrimEnd('/') + '/'))
         if ($LASTEXITCODE -ne 0 -or $ftpRootListing -notcontains 'wp-content') {
@@ -79,7 +96,11 @@ try {
         }
     }
     foreach ($file in $trackedFiles) {
-        $local = Join-Path $repo ($file -replace '/', [IO.Path]::DirectorySeparatorChar)
+        $local = if ($file -eq 'wp-content/mu-plugins/ssf-release-manifest.json') {
+            $manifestPath
+        } else {
+            Join-Path $releaseRoot ($file -replace '/', [IO.Path]::DirectorySeparatorChar)
+        }
         if (-not (Test-Path -LiteralPath $local)) { throw "Versionsstyrd fil saknas lokalt: $file" }
         $remotePath = if ($RemoteRoot) { "$RemoteRoot/$file" } else { $file }
         $ftpPathPrefix = if ($remoteRootIsAbsolute) { '//' } else { '/' }
@@ -137,5 +158,13 @@ try {
 } finally {
     foreach ($path in @($cookiePath, $pagePath)) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    }
+    if ($releaseRoot -and (Test-Path -LiteralPath $releaseRoot)) {
+        $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+        $resolvedReleaseRoot = [IO.Path]::GetFullPath($releaseRoot)
+        if ($resolvedReleaseRoot.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
+            (Split-Path $resolvedReleaseRoot -Leaf) -like 'ssf-release-deploy-*') {
+            Remove-Item -LiteralPath $resolvedReleaseRoot -Recurse -Force
+        }
     }
 }
