@@ -18,6 +18,7 @@ final class SSF_Medlemsprocess_Plugin
     public SSF_Medlemsprocess_Public $public;
     public SSF_Medlemsprocess_Admin $admin;
     public SSF_Medlemsprocess_Inspector $inspector;
+    public SSF_Medlemsprocess_Inspection_Template $inspection_template;
     public SSF_Medlemsprocess_Inspection $inspection;
     public SSF_Medlemsprocess_Portal $portal;
     public SSF_Medlemsprocess_PDF $pdf;
@@ -35,7 +36,7 @@ final class SSF_Medlemsprocess_Plugin
 
     private function __construct()
     {
-        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'archive-migration', 'public', 'admin', 'inspection', 'inspector', 'portal') as $file) {
+        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'archive-migration', 'public', 'admin', 'inspection-template', 'inspection', 'inspector', 'portal') as $file) {
             require_once SSF_MEDLEMSPROCESS_PATH . 'includes/class-ssf-medlemsprocess-' . $file . '.php';
         }
 
@@ -46,6 +47,7 @@ final class SSF_Medlemsprocess_Plugin
         $this->archive_migration = new SSF_Medlemsprocess_Archive_Migration();
         $this->public = new SSF_Medlemsprocess_Public();
         $this->admin = new SSF_Medlemsprocess_Admin();
+        $this->inspection_template = new SSF_Medlemsprocess_Inspection_Template();
         $this->inspection = new SSF_Medlemsprocess_Inspection();
         $this->inspector = new SSF_Medlemsprocess_Inspector();
         $this->portal = new SSF_Medlemsprocess_Portal();

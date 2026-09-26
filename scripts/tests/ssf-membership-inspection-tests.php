@@ -1,6 +1,10 @@
 <?php
 /** Targeted contracts for the integrated membership inspection. No WordPress writes. */
 define('ABSPATH', __DIR__ . '/');
+function wp_parse_args(array $value, array $defaults): array { return array_merge($defaults, $value); }
+function sanitize_key(string $value): string { return strtolower(preg_replace('/[^a-z0-9_\-]/i', '', $value)); }
+function absint($value): int { return abs((int) $value); }
+require __DIR__ . '/../../wp-content/plugins/ssf-medlemsprocess/includes/class-ssf-medlemsprocess-inspection-template.php';
 require __DIR__ . '/../../wp-content/plugins/ssf-medlemsprocess/includes/class-ssf-medlemsprocess-inspection.php';
 
 $failures = array();
@@ -10,7 +14,9 @@ $template = SSF_Medlemsprocess_Inspection::official_template();
 $questions = SSF_Medlemsprocess_Inspection::questions($template);
 check('Medlemsprövning av fartyg' === $template['name'], 'Official template name changed.');
 check('1.0' === $template['version'] && 'published' === $template['status'], 'Official template must be published version 1.0.');
-check('Fysisk inspektion ombord' === $template['type'], 'Inspection type changed.');
+check('physical_membership_inspection' === $template['type'], 'Inspection type changed.');
+check('Fysisk inspektion ombord' === $template['type_label'], 'Inspection type label changed.');
+check(! empty($template['blocks']), 'Canonical blocks are missing.');
 check(array_keys($questions) === array(1, 2, 3, 4, 5, 6, '7a', '7b', '7c', 8, 9, 10), 'Questions 1–10/7A–7C are not exact or ordered.');
 
 $expected = array(
