@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.3",
-    "build":  "20260926.1",
-    "built_at":  "2026-09-26T09:22:38.6767189Z",
+    "build":  "20260926.2",
+    "built_at":  "2026-09-26T21:27:58.8948676Z",
     "source":  "codex",
-    "source_revision":  "995e94d1ffde6b432adf4d701e789a76310b1d91",
-    "description":  "Persisted membership inspection template v1",
+    "source_revision":  "37fddd13132bd96838f604abc670ee1a08e85760",
+    "description":  "Versionerat mallbibliotek och blockredigerare för inspektioner",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
                        "ssf-medlemsprocess"
