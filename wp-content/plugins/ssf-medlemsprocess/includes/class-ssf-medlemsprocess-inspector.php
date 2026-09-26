@@ -44,10 +44,14 @@ class SSF_Medlemsprocess_Inspector
         $lead = (int) ($assigned[0] ?? 0); $co = (int) ($assigned[1] ?? 0);
         $deadline = (string) get_post_meta($application_id, '_ssf_inspector_deadline', true);
         $task = (string) get_post_meta($application_id, '_ssf_inspector_task', true);
+        $inspection_id = SSF_Medlemsprocess_Inspection::inspection_for_application($application_id);
+        $inspection_record = $inspection_id ? SSF_Medlemsprocess_Inspection::record($inspection_id) : array();
+        $eligible_templates = SSF_Medlemsprocess_Inspection_Template::eligible();
         $users = $this->inspector_users(); ?>
         <p class="description">Huvud- och medinspektör arbetar i samma protokoll. Huvudinspektören färdigställer.</p>
         <p><label for="ssf-lead-inspector">Huvudinspektör</label><select id="ssf-lead-inspector" name="ssf_lead_inspector_id" style="width:100%"><option value="0">Ej tilldelad</option><?php foreach ($users as $user) : ?><option value="<?php echo esc_attr((string) $user->ID); ?>" <?php selected($lead, $user->ID); ?>><?php echo esc_html($user->display_name); ?></option><?php endforeach; ?></select></p>
         <p><label for="ssf-co-inspector">Medinspektör (valfri)</label><select id="ssf-co-inspector" name="ssf_co_inspector_id" style="width:100%"><option value="0">Ingen</option><?php foreach ($users as $user) : ?><option value="<?php echo esc_attr((string) $user->ID); ?>" <?php selected($co, $user->ID); ?>><?php echo esc_html($user->display_name); ?></option><?php endforeach; ?></select></p>
+        <?php if ($inspection_id) : ?><p><strong>Mall:</strong><br><?php echo esc_html(($inspection_record['template']['name'] ?? '') . ' · ' . ($inspection_record['template_version'] ?? '')); ?> <small>(låst snapshot)</small></p><?php else : ?><p><label for="ssf-inspection-template">Inspektionsmall</label><select id="ssf-inspection-template" name="ssf_inspection_template_id" style="width:100%" required><?php foreach ($eligible_templates as $template) : ?><option value="<?php echo esc_attr($template['id']); ?>" <?php selected(! empty($template['is_default'])); ?>><?php echo esc_html($template['name'] . ' · ' . $template['version'] . (! empty($template['is_default']) ? ' (standard)' : '')); ?></option><?php endforeach; ?></select></p><?php endif; ?>
         <p><label for="ssf-inspector-deadline">Önskat klart-datum</label><input id="ssf-inspector-deadline" type="date" name="ssf_inspector_deadline" value="<?php echo esc_attr($deadline); ?>" style="width:100%"></p>
         <p><label for="ssf-inspector-task">Praktisk kommentar / uppdrag</label><textarea id="ssf-inspector-task" name="ssf_inspector_task" rows="4" style="width:100%"><?php echo esc_textarea($task); ?></textarea></p><?php
     }
@@ -64,7 +68,7 @@ class SSF_Medlemsprocess_Inspector
         update_post_meta($application_id, '_ssf_inspector_ids', $valid);
         update_post_meta($application_id, '_ssf_inspector_deadline', $this->date_value((string) ($request['ssf_inspector_deadline'] ?? '')));
         update_post_meta($application_id, '_ssf_inspector_task', sanitize_textarea_field((string) ($request['ssf_inspector_task'] ?? '')));
-        if ($valid) { SSF_Medlemsprocess_Inspection::ensure_real($application_id, (int) $valid[0], (int) ($valid[1] ?? 0)); }
+        if ($valid) { SSF_Medlemsprocess_Inspection::ensure_real($application_id, (int) $valid[0], (int) ($valid[1] ?? 0), sanitize_text_field((string) ($request['ssf_inspection_template_id'] ?? ''))); }
         if ($before !== $valid) {
             $names = array_map(static function (int $id): string { $user = get_userdata($id); return $user ? $user->display_name : ''; }, $valid);
             SSF_Medlemsprocess_Application::add_history($application_id, 'inspection_assignment', $names ? 'Inspektörer tilldelade: ' . implode(', ', array_filter($names)) . '.' : 'Inspektörstilldelning togs bort.', false, array('audience' => 'inspectors'));
