@@ -12,12 +12,17 @@ if (! defined('ABSPATH')) {
 final class SSF_Medlemsprocess_Inspection
 {
     public const POST_TYPE = 'ssf_membership_insp';
+    public const TEMPLATE_SLUG = 'membership-vessel-inspection';
     public const TEMPLATE_VERSION = '1.0';
+    private const TEMPLATE_OPTION = 'ssf_membership_inspection_templates';
     private const META = '_ssf_membership_inspection';
 
     public function __construct()
     {
         add_action('init', array($this, 'register_post_type'));
+        // Runs on every installed site, not only during plugin activation. This makes
+        // the published 1.0 template available after an ordinary code deployment.
+        add_action('init', array($this, 'seed_default_template'), 20);
         add_action('admin_menu', array($this, 'register_test_page'), 40);
         add_action('admin_post_ssf_start_test_inspection', array($this, 'start_test'));
         add_action('admin_post_ssf_delete_test_inspection', array($this, 'delete_test'));
@@ -41,7 +46,10 @@ final class SSF_Medlemsprocess_Inspection
     public static function official_template(): array
     {
         return array(
+            'id' => self::TEMPLATE_SLUG . '@' . self::TEMPLATE_VERSION,
+            'slug' => self::TEMPLATE_SLUG,
             'name' => 'Medlemsprövning av fartyg',
+            'protocol_title' => 'INSPEKTIONSPROTOKOLL – MEDLEMSPRÖVNING AV FARTYG',
             'version' => self::TEMPLATE_VERSION,
             'type' => 'Fysisk inspektion ombord',
             'status' => 'published',
@@ -94,19 +102,55 @@ final class SSF_Medlemsprocess_Inspection
     }
 
     /** Template registry. Published entries are immutable; inspections copy the full selected version. */
+    public static function seed_default_template(): bool
+    {
+        $stored = (array) get_option(self::TEMPLATE_OPTION, array());
+        $key = self::TEMPLATE_SLUG . '@' . self::TEMPLATE_VERSION;
+
+        foreach ($stored as $stored_key => $template) {
+            if (! is_array($template)) {
+                continue;
+            }
+            $is_default = self::TEMPLATE_SLUG === ($template['slug'] ?? '')
+                || (self::TEMPLATE_VERSION === (string) ($template['version'] ?? '') && 'Medlemsprövning av fartyg' === ($template['name'] ?? ''));
+            if (! $is_default) {
+                continue;
+            }
+            // Upgrade an early 1.0 representation in place without creating a second template.
+            $normalized = array_merge(self::official_template(), $template, array(
+                'id' => $key,
+                'slug' => self::TEMPLATE_SLUG,
+                'version' => self::TEMPLATE_VERSION,
+                'status' => 'published',
+            ));
+            if ($normalized !== $template || $stored_key !== $key) {
+                unset($stored[$stored_key]);
+                $stored[$key] = $normalized;
+                return update_option(self::TEMPLATE_OPTION, $stored, false);
+            }
+            return false;
+        }
+
+        $stored[$key] = self::official_template();
+        return update_option(self::TEMPLATE_OPTION, $stored, false);
+    }
+
     public static function templates(): array
     {
-        $templates = array(self::TEMPLATE_VERSION => self::official_template());
-        foreach ((array) get_option('ssf_membership_inspection_templates', array()) as $version => $template) {
-            if (is_array($template) && (string) ($template['version'] ?? '') === (string) $version) { $templates[(string) $version] = $template; }
+        $templates = array();
+        foreach ((array) get_option(self::TEMPLATE_OPTION, array()) as $key => $template) {
+            if (! is_array($template) || empty($template['slug']) || empty($template['version'])) {
+                continue;
+            }
+            $templates[(string) $key] = $template;
         }
-        uksort($templates, 'version_compare');
+        uasort($templates, static function (array $left, array $right): int { return version_compare((string) $left['version'], (string) $right['version']); });
         return $templates;
     }
 
     public static function published_template(): array
     {
-        $published = array_filter(self::templates(), static function (array $template): bool { return 'published' === ($template['status'] ?? ''); });
+        $published = array_filter(self::templates(), static function (array $template): bool { return self::TEMPLATE_SLUG === ($template['slug'] ?? '') && 'published' === ($template['status'] ?? ''); });
         return $published ? end($published) : self::official_template();
     }
 
@@ -114,18 +158,21 @@ final class SSF_Medlemsprocess_Inspection
     {
         if (! current_user_can('ssf_manage_application_settings') && ! current_user_can('manage_options')) { return false; }
         $templates = self::templates();
-        if (! isset($templates[$source_version]) || isset($templates[$new_version]) || ! preg_match('/^\d+\.\d+$/', $new_version)) { return false; }
-        $copy = $templates[$source_version]; $copy['version'] = $new_version; $copy['status'] = 'draft';
-        $stored = (array) get_option('ssf_membership_inspection_templates', array()); $stored[$new_version] = $copy;
-        return update_option('ssf_membership_inspection_templates', $stored, false);
+        $source_key = self::TEMPLATE_SLUG . '@' . $source_version;
+        $new_key = self::TEMPLATE_SLUG . '@' . $new_version;
+        if (! isset($templates[$source_key]) || isset($templates[$new_key]) || ! preg_match('/^\d+\.\d+$/', $new_version)) { return false; }
+        $copy = $templates[$source_key]; $copy['id'] = $new_key; $copy['version'] = $new_version; $copy['status'] = 'draft';
+        $stored = (array) get_option(self::TEMPLATE_OPTION, array()); $stored[$new_key] = $copy;
+        return update_option(self::TEMPLATE_OPTION, $stored, false);
     }
 
     public static function save_draft_template(string $version, array $template): bool
     {
         if (! current_user_can('ssf_manage_application_settings') && ! current_user_can('manage_options')) { return false; }
-        $stored = (array) get_option('ssf_membership_inspection_templates', array());
-        if ('draft' !== ($stored[$version]['status'] ?? '') || (string) ($template['version'] ?? '') !== $version || empty($template['sections'])) { return false; }
-        $clean = $stored[$version];
+        $key = self::TEMPLATE_SLUG . '@' . $version;
+        $stored = (array) get_option(self::TEMPLATE_OPTION, array());
+        if ('draft' !== ($stored[$key]['status'] ?? '') || (string) ($template['version'] ?? '') !== $version || empty($template['sections'])) { return false; }
+        $clean = $stored[$key];
         $clean['name'] = sanitize_text_field((string) ($template['name'] ?? $clean['name']));
         $clean['type'] = sanitize_text_field((string) ($template['type'] ?? $clean['type']));
         foreach ((array) $template['sections'] as $section_index => $section) {
@@ -143,18 +190,19 @@ final class SSF_Medlemsprocess_Inspection
                 unset($target);
             }
         }
-        $stored[$version] = $clean;
-        $current = (array) get_option('ssf_membership_inspection_templates', array());
-        return $current === $stored || update_option('ssf_membership_inspection_templates', $stored, false);
+        $stored[$key] = $clean;
+        $current = (array) get_option(self::TEMPLATE_OPTION, array());
+        return $current === $stored || update_option(self::TEMPLATE_OPTION, $stored, false);
     }
 
     public static function publish_template(string $version): bool
     {
         if (! current_user_can('ssf_manage_application_settings') && ! current_user_can('manage_options')) { return false; }
-        $stored = (array) get_option('ssf_membership_inspection_templates', array());
-        if ('draft' !== ($stored[$version]['status'] ?? '')) { return false; }
-        $stored[$version]['status'] = 'published';
-        return update_option('ssf_membership_inspection_templates', $stored, false);
+        $key = self::TEMPLATE_SLUG . '@' . $version;
+        $stored = (array) get_option(self::TEMPLATE_OPTION, array());
+        if ('draft' !== ($stored[$key]['status'] ?? '')) { return false; }
+        $stored[$key]['status'] = 'published';
+        return update_option(self::TEMPLATE_OPTION, $stored, false);
     }
 
     public static function ensure_real(int $application_id, int $lead_id, int $co_id = 0): int
@@ -199,6 +247,8 @@ final class SSF_Medlemsprocess_Inspection
             'source_application_id' => $application_id,
             'is_test' => $is_test,
             'template' => self::published_template(),
+            'template_slug' => self::published_template()['slug'],
+            'template_version' => self::published_template()['version'],
             'application_snapshot' => self::application_snapshot($application_id),
             'status' => 'draft',
             'lead_inspector_user_id' => $lead_id,
@@ -621,9 +671,10 @@ final class SSF_Medlemsprocess_Inspection
     {
         if (! current_user_can('ssf_manage_application_settings') && ! current_user_can('manage_options')) { wp_die('Du saknar behörighet.'); }
         echo '<div class="wrap"><h1>Inspektionsmall</h1><p>Publicerade versioner är låsta. Duplicera en version för att göra en ändring.</p>';
-        foreach (self::templates() as $version => $template) {
+        foreach (self::templates() as $template_key => $template) {
+            $version = (string) $template['version'];
             $draft = 'draft' === ($template['status'] ?? '');
-            echo '<section class="card" style="max-width:1000px"><h2>' . esc_html($template['name'] . ' · version ' . $version) . '</h2><p><strong>' . esc_html($draft ? 'Utkast' : 'Publicerad') . '</strong> · ' . esc_html($template['type']) . '</p>';
+            echo '<section id="template-' . esc_attr($template['slug'] . '-' . $version) . '" class="card" style="max-width:1000px"><h2>' . esc_html($template['name'] . ' · version ' . $version) . '</h2><p><code>' . esc_html($template['slug']) . '</code> · <strong>' . esc_html($draft ? 'Utkast' : 'Publicerad') . '</strong> · ' . esc_html($template['type']) . '</p><p><a class="button button-secondary" href="#template-' . esc_attr($template['slug'] . '-' . $version) . '">Visa mall</a></p>';
             if ($draft) { echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_save_inspection_template"><input type="hidden" name="version" value="' . esc_attr($version) . '">'; wp_nonce_field('ssf_save_inspection_template_' . $version); }
             foreach ($template['sections'] as $section_index => $section) {
                 echo '<h3>' . esc_html($section['title']) . '</h3>';
@@ -659,7 +710,7 @@ final class SSF_Medlemsprocess_Inspection
     {
         $version = sanitize_text_field(wp_unslash($_POST['version'] ?? '')); $submitted = (array) wp_unslash($_POST['template'] ?? array());
         if (! check_admin_referer('ssf_save_inspection_template_' . $version)) { wp_die('Ogiltig säkerhetskontroll.'); }
-        $templates = self::templates(); $template = $templates[$version] ?? array();
+        $templates = self::templates(); $template = $templates[self::TEMPLATE_SLUG . '@' . $version] ?? array();
         foreach ((array) ($submitted['sections'] ?? array()) as $section_index => $section) {
             foreach ((array) ($section['questions'] ?? array()) as $question_index => $question) {
                 if (! isset($template['sections'][$section_index]['questions'][$question_index])) { continue; }
