@@ -1,578 +1,243 @@
 <?php
-/**
- * Restricted front-end workspace for SSF inspectors.
- *
- * @package SSF_Medlemsprocess
- */
-
-if (! defined('ABSPATH')) {
-    exit;
-}
+/** Restricted mobile-first workspace for membership inspections. */
+if (! defined('ABSPATH')) { exit; }
 
 class SSF_Medlemsprocess_Inspector
 {
-    private const CHECK_STATUSES = array(
-        '' => 'Inte bedömd',
-        'met' => 'Uppfyllt',
-        'not_met' => 'Uppfyller ej',
-        'completion' => 'Komplettering krävs',
-        'na' => 'Ej relevant',
-    );
-
     public function __construct()
     {
         add_action('init', array($this, 'register_shortcodes'), 99);
         add_action('admin_init', array($this, 'redirect_from_admin'));
-        add_action('admin_post_ssf_inspector_save_report', array($this, 'save_report'));
-        add_action('admin_post_ssf_inspector_send_message', array($this, 'send_message'));
+        add_action('wp_ajax_ssf_membership_inspection_save', array($this, 'ajax_save'));
+        add_action('wp_ajax_ssf_membership_inspection_photo', array($this, 'ajax_photo'));
+        add_action('wp_ajax_ssf_membership_inspection_photo_update', array($this, 'ajax_photo_update'));
+        add_action('wp_ajax_ssf_membership_inspection_workflow', array($this, 'ajax_workflow'));
+        add_action('admin_post_ssf_membership_inspection_photo', array($this, 'serve_photo'));
+        add_action('admin_post_nopriv_ssf_membership_inspection_photo', array($this, 'serve_photo'));
     }
 
-    public function register_shortcodes(): void
-    {
-        add_shortcode('ssf_inspector_portal', array($this, 'portal'));
-    }
+    public function register_shortcodes(): void { add_shortcode('ssf_inspector_portal', array($this, 'portal')); }
 
     public function redirect_from_admin(): void
     {
         global $pagenow;
-        if ('admin-post.php' === $pagenow || wp_doing_ajax() || current_user_can('manage_options')) {
-            return;
-        }
-        if (current_user_can('ssf_view_assigned_applications')) {
-            wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner'));
-            exit;
-        }
+        if ('admin-post.php' === $pagenow || wp_doing_ajax() || current_user_can('manage_options')) { return; }
+        if (current_user_can('ssf_view_assigned_applications')) { wp_safe_redirect(SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner')); exit; }
     }
 
+    /** Legacy checklist reader retained for historical reports only. */
     public static function checklist_sections(): array
     {
-        return array(
-            'Fartyg och identitet' => array(
-                'identity_name' => 'Fartygets namn och identitet stämmer',
-                'identity_home_port' => 'Hemmahamn och registreringsuppgifter stämmer',
-                'identity_type' => 'Fartygstyp, rigg och huvudmått stämmer',
-                'identity_owner' => 'Fartygsombud och kontaktuppgifter är bekräftade',
-                'identity_use' => 'Nuvarande användning är tydligt beskriven',
-            ),
-            'Skrov, däck och överbyggnad' => array(
-                'hull_condition' => 'Skrovets allmänna skick är bedömt',
-                'hull_damage' => 'Synliga skador, röta eller korrosion är noterade',
-                'deck_condition' => 'Däck, överbyggnad och luckor är bedömda',
-                'watertight' => 'Genomföringar och täthet är översiktligt bedömda',
-                'maintenance' => 'Underhållsbehov och prioriteringar är noterade',
-            ),
-            'Rigg och segel' => array(
-                'rig_type' => 'Riggens typ och helhetsintryck är bedömt',
-                'masts' => 'Master, rundhult och infästningar är bedömda',
-                'standing_rig' => 'Stående rigg är bedömd',
-                'running_rig' => 'Löpande rigg är bedömd',
-                'sails' => 'Segel och segelhantering är relevanta för fartyget',
-            ),
-            'Maskin, el och system' => array(
-                'engine' => 'Hjälpmotor och maskinutrymme är översiktligt bedömda',
-                'fuel' => 'Bränslesystem och ventilation är översiktligt bedömda',
-                'electric' => 'Elsystem är översiktligt bedömt',
-                'pumps' => 'Läns- och pumpsystem är översiktligt bedömda',
-                'freshwater' => 'Vatten- och sanitetslösningar är relevanta och bedömda',
-            ),
-            'Säkerhet och drift' => array(
-                'fire' => 'Brandskydd och släckutrustning är översiktligt bedömda',
-                'lifesaving' => 'Livräddningsutrustning är översiktligt bedömd',
-                'navigation' => 'Navigations- och kommunikationsutrustning är relevant',
-                'emergency' => 'Nödrutiner och säkerhetsorganisation är beskrivna',
-                'staffing' => 'Bemanning och kompetens är rimliga för verksamheten',
-                'operation' => 'Fartygets praktiska drift är tydligt beskriven',
-            ),
-            'Kulturhistoriskt värde' => array(
-                'history' => 'Fartygets historik är dokumenterad',
-                'professional_history' => 'Tidigare yrkesanvändning är belagd eller beskriven',
-                'originality' => 'Bevarade originaldetaljer och karaktär är bedömda',
-                'restorations' => 'Restaureringar och förändringar är dokumenterade',
-                'heritage' => 'Kulturhistoriskt värde är sammantaget bedömt',
-            ),
-            'Dokumentation och underlag' => array(
-                'documentation_images' => 'Tillräckliga bilder finns',
-                'documentation_register' => 'Register- eller ägaruppgifter finns när det behövs',
-                'documentation_history' => 'Historiskt och tekniskt underlag är tillräckligt',
-                'documentation_missing' => 'Eventuella saknade underlag är tydligt angivna',
-            ),
-            'Samlad bedömning' => array(
-                'membership_fit' => 'Fartyget bedöms passa SSF:s ändamål',
-                'requirements' => 'Grundkraven är sammantaget bedömda',
-                'recommendation_ready' => 'Underlaget räcker för en rekommendation',
-            ),
-        );
+        return array('Äldre inspektionsformat' => array(
+            'identity_name' => 'Fartygets namn och identitet stämmer',
+            'identity_type' => 'Fartygstyp, rigg och huvudmått stämmer',
+            'history' => 'Fartygets historik är dokumenterad',
+            'professional_history' => 'Tidigare yrkesanvändning är belagd eller beskriven',
+            'heritage' => 'Kulturhistoriskt värde är sammantaget bedömt',
+            'recommendation_ready' => 'Underlaget räcker för en rekommendation',
+        ));
     }
 
     public function render_assignment_fields(int $application_id): void
     {
         $assigned = $this->assigned_ids($application_id);
+        $lead = (int) ($assigned[0] ?? 0); $co = (int) ($assigned[1] ?? 0);
         $deadline = (string) get_post_meta($application_id, '_ssf_inspector_deadline', true);
         $task = (string) get_post_meta($application_id, '_ssf_inspector_task', true);
-        $users = $this->inspector_users();
-        ?>
-        <p class="description">Tilldelade inspektörer ser ärendet i portalen Mina inspektioner, inte i WordPress admin.</p>
-        <?php if (! $users) : ?>
-            <p>Det finns inga användare med rollen Inspektör ännu.</p>
-        <?php else : ?>
-            <fieldset>
-                <legend class="screen-reader-text">Tilldelade inspektörer</legend>
-                <?php foreach ($users as $user) : ?>
-                    <label style="display:block;margin:7px 0"><input type="checkbox" name="ssf_inspector_ids[]" value="<?php echo esc_attr((string) $user->ID); ?>" <?php checked(in_array((int) $user->ID, $assigned, true)); ?>> <?php echo esc_html($user->display_name); ?></label>
-                <?php endforeach; ?>
-            </fieldset>
-        <?php endif; ?>
+        $users = $this->inspector_users(); ?>
+        <p class="description">Huvud- och medinspektör arbetar i samma protokoll. Huvudinspektören färdigställer.</p>
+        <p><label for="ssf-lead-inspector">Huvudinspektör</label><select id="ssf-lead-inspector" name="ssf_lead_inspector_id" style="width:100%"><option value="0">Ej tilldelad</option><?php foreach ($users as $user) : ?><option value="<?php echo esc_attr((string) $user->ID); ?>" <?php selected($lead, $user->ID); ?>><?php echo esc_html($user->display_name); ?></option><?php endforeach; ?></select></p>
+        <p><label for="ssf-co-inspector">Medinspektör (valfri)</label><select id="ssf-co-inspector" name="ssf_co_inspector_id" style="width:100%"><option value="0">Ingen</option><?php foreach ($users as $user) : ?><option value="<?php echo esc_attr((string) $user->ID); ?>" <?php selected($co, $user->ID); ?>><?php echo esc_html($user->display_name); ?></option><?php endforeach; ?></select></p>
         <p><label for="ssf-inspector-deadline">Önskat klart-datum</label><input id="ssf-inspector-deadline" type="date" name="ssf_inspector_deadline" value="<?php echo esc_attr($deadline); ?>" style="width:100%"></p>
-        <p><label for="ssf-inspector-task">Uppdrag till inspektören</label><textarea id="ssf-inspector-task" name="ssf_inspector_task" rows="4" style="width:100%" placeholder="Exempel: Kontrollera rigg och dokumentation inför styrelsebeslut."><?php echo esc_textarea($task); ?></textarea></p>
-        <?php
+        <p><label for="ssf-inspector-task">Praktisk kommentar / uppdrag</label><textarea id="ssf-inspector-task" name="ssf_inspector_task" rows="4" style="width:100%"><?php echo esc_textarea($task); ?></textarea></p><?php
     }
 
     public function save_assignment(int $application_id, array $request): void
     {
         $before = $this->assigned_ids($application_id);
-        $ids = array_values(array_unique(array_filter(array_map('absint', (array) ($request['ssf_inspector_ids'] ?? array())))));
-        $valid_ids = array();
-        foreach ($ids as $user_id) {
-            $user = get_userdata($user_id);
-            if ($user && $this->is_inspector($user)) {
-                $valid_ids[] = $user_id;
-            }
-        }
-
-        update_post_meta($application_id, '_ssf_inspector_ids', $valid_ids);
+        $legacy = array_values(array_unique(array_filter(array_map('absint', (array) ($request['ssf_inspector_ids'] ?? array())))));
+        $lead = absint($request['ssf_lead_inspector_id'] ?? ($legacy[0] ?? 0));
+        $co = absint($request['ssf_co_inspector_id'] ?? ($legacy[1] ?? 0));
+        if ($co === $lead) { $co = 0; }
+        $valid = array();
+        foreach (array($lead, $co) as $user_id) { $user = $user_id ? get_userdata($user_id) : false; if ($user && $this->is_inspector($user)) { $valid[] = $user_id; } }
+        update_post_meta($application_id, '_ssf_inspector_ids', $valid);
         update_post_meta($application_id, '_ssf_inspector_deadline', $this->date_value((string) ($request['ssf_inspector_deadline'] ?? '')));
         update_post_meta($application_id, '_ssf_inspector_task', sanitize_textarea_field((string) ($request['ssf_inspector_task'] ?? '')));
-
-        if ($before !== $valid_ids) {
-            $names = array();
-            foreach ($valid_ids as $user_id) {
-                $user = get_userdata($user_id);
-                if ($user) {
-                    $names[] = $user->display_name;
-                }
-            }
-            SSF_Medlemsprocess_Application::add_history($application_id, 'inspection_assignment', $names ? 'Inspektör tilldelad: ' . implode(', ', $names) . '.' : 'Inspektörstilldelning togs bort.', false, array('audience' => 'inspectors'));
-            foreach (array_diff($valid_ids, $before) as $user_id) {
-                $user = get_userdata($user_id);
-                if ($user) {
-                    SSF_Medlemsprocess_Plugin::instance()->emails->send_inspector_assignment($application_id, $user);
-                }
-            }
+        if ($valid) { SSF_Medlemsprocess_Inspection::ensure_real($application_id, (int) $valid[0], (int) ($valid[1] ?? 0)); }
+        if ($before !== $valid) {
+            $names = array_map(static function (int $id): string { $user = get_userdata($id); return $user ? $user->display_name : ''; }, $valid);
+            SSF_Medlemsprocess_Application::add_history($application_id, 'inspection_assignment', $names ? 'Inspektörer tilldelade: ' . implode(', ', array_filter($names)) . '.' : 'Inspektörstilldelning togs bort.', false, array('audience' => 'inspectors'));
+            foreach (array_diff($valid, $before) as $id) { $user = get_userdata($id); if ($user) { SSF_Medlemsprocess_Plugin::instance()->emails->send_inspector_assignment($application_id, $user); } }
         }
     }
 
     public function assignment_summary(int $application_id): string
     {
-        $names = array();
-        foreach ($this->assigned_ids($application_id) as $user_id) {
-            $user = get_userdata($user_id);
-            if ($user) {
-                $names[] = $user->display_name;
-            }
-        }
-        return $names ? implode(', ', $names) : 'Ej tilldelad';
+        $names = array(); foreach ($this->assigned_ids($application_id) as $index => $id) { $user = get_userdata($id); if ($user) { $names[] = (0 === $index ? 'Huvud: ' : 'Med: ') . $user->display_name; } }
+        return $names ? implode(' · ', $names) : 'Ej tilldelad';
     }
 
     public function report_summary(int $application_id): string
     {
-        $assigned = $this->assigned_ids($application_id);
-        if (! $assigned) {
-            return 'Ej tilldelad';
-        }
-        $reports = $this->reports($application_id);
-        $complete = 0;
-        $draft = 0;
-        $last_opened = (array) get_post_meta($application_id, '_ssf_inspector_last_opened', true);
-        $latest = 0;
-        foreach ($assigned as $user_id) {
-            $state = $reports[$user_id]['status'] ?? 'not_started';
-            $complete += 'complete' === $state ? 1 : 0;
-            $draft += 'draft' === $state ? 1 : 0;
-            $opened = strtotime((string) ($last_opened[$user_id] ?? ''));
-            $latest = max($latest, $opened ?: 0);
-        }
-        $parts = array();
-        if ($complete) {
-            $parts[] = $complete . ' klar';
-        }
-        if ($draft) {
-            $parts[] = $draft . ' utkast';
-        }
-        if (! $parts) {
-            $parts[] = 'Ej påbörjad';
-        }
-        if ($latest) {
-            $parts[] = 'senast öppnad ' . wp_date('j/n H:i', $latest);
-        }
-        return implode(', ', $parts);
+        $id = SSF_Medlemsprocess_Inspection::inspection_for_application($application_id);
+        if ($id) { $record = SSF_Medlemsprocess_Inspection::record($id); $progress = SSF_Medlemsprocess_Inspection::progress($record); $labels = array('draft' => 'Pågår', 'ready_confirmation' => 'Väntar på bekräftelse', 'ready_finalization' => 'Klar att färdigställa', 'completed' => 'Protokoll klart'); return ($labels[$record['status'] ?? 'draft'] ?? 'Pågår') . ' · ' . $progress['complete'] . ' av ' . $progress['total'] . ' svar'; }
+        return get_post_meta($application_id, '_ssf_inspector_reports', true) ? 'Äldre inspektionsformat' : 'Ej påbörjad';
     }
 
     public function portal(): string
     {
-        $portal_url = class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'inspektioner')
-            ? SSF_Workspace::url('inspektioner')
-            : SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner');
-        if (! is_user_logged_in()) {
-            return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Mina inspektioner</h1><p>Logga in för att öppna dina tilldelade ärenden.</p><p><a class="ssf-process-button" href="' . esc_url(wp_login_url($portal_url)) . '">Logga in</a></p></section>';
+        $portal_url = class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'inspektioner') ? SSF_Workspace::url('inspektioner') : SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner');
+        if (! is_user_logged_in()) { return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Mina inspektioner</h1><p>Logga in för att öppna dina tilldelade ärenden.</p><p><a class="ssf-process-button" href="' . esc_url(wp_login_url($portal_url)) . '">Logga in</a></p></section>'; }
+        if (! current_user_can('ssf_view_assigned_applications') && ! current_user_can('ssf_view_applications') && ! current_user_can('manage_options')) { return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Åtkomst saknas</h1><p>Kontot saknar inspektionsbehörighet.</p></section>'; }
+        wp_enqueue_style('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-inspector-portal.css', array('ssf-medlemsprocess'), SSF_MEDLEMSPROCESS_VERSION);
+        wp_enqueue_script('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-inspector-portal.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
+        $user_id = get_current_user_id(); $inspection_id = absint($_GET['inspection'] ?? 0); $case_id = absint($_GET['case'] ?? 0); $legacy_case_id = 0;
+        if (! $inspection_id && $case_id && $this->can_view_case($case_id, $user_id)) {
+            $inspection_id = SSF_Medlemsprocess_Inspection::inspection_for_application($case_id);
+            if (! $inspection_id && get_post_meta($case_id, '_ssf_inspector_reports', true)) { $legacy_case_id = $case_id; }
+            elseif (! $inspection_id) { $assigned = $this->assigned_ids($case_id); $inspection_id = SSF_Medlemsprocess_Inspection::ensure_real($case_id, (int) ($assigned[0] ?? 0), (int) ($assigned[1] ?? 0)); }
         }
-        if (! current_user_can('ssf_view_assigned_applications') && ! current_user_can('manage_options')) {
-            return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Åtkomst saknas</h1><p>Det här kontot har inte rollen Inspektör. Kontakta SSF om du behöver hjälp.</p></section>';
-        }
-
-        $user_id = get_current_user_id();
-        $case_id = absint($_GET['case'] ?? 0);
-        $notice = sanitize_key(wp_unslash($_GET['ssf_inspector_saved'] ?? ''));
-        $error = sanitize_key(wp_unslash($_GET['ssf_inspector_error'] ?? ''));
-        $view = 'dashboard';
-        $cases = array();
-        $case = null;
-        if ($case_id) {
-            if (! $this->can_view_case($case_id, $user_id)) {
-                return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Åtkomst saknas</h1><p>Ärendet finns inte i dina tilldelade inspektioner.</p><p><a class="ssf-process-button ssf-process-button--secondary" href="' . esc_url($portal_url) . '">Till mina ärenden</a></p></section>';
-            }
-            $this->mark_opened($case_id, $user_id);
-            $view = 'case';
-            $case = $this->case_data($case_id, $user_id);
+        $view = 'dashboard'; $case = null; $cases = array();
+        if ($inspection_id) {
+            if (! SSF_Medlemsprocess_Inspection::can_read($inspection_id, $user_id)) { return '<section class="ssf-inspector-shell ssf-inspector-empty"><h1>Åtkomst saknas</h1><p>Inspektionen finns inte bland dina uppdrag.</p></section>'; }
+            $view = 'case'; $case = $this->case_data($inspection_id);
+            wp_localize_script('ssf-inspector-portal', 'SSFMembershipInspection', array('ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('ssf_membership_inspection_' . $inspection_id), 'inspection' => $inspection_id, 'user' => $user_id));
+        } elseif ($legacy_case_id) {
+            $view = 'legacy'; $case = $this->legacy_full_case_data($legacy_case_id);
         } else {
-            foreach ($this->assigned_applications($user_id) as $application_id) {
-                $cases[] = $this->case_data($application_id, $user_id);
-            }
+            foreach ($this->assigned_applications($user_id) as $application_id) { $id = SSF_Medlemsprocess_Inspection::inspection_for_application($application_id); $cases[] = $id ? $this->case_data($id) : $this->legacy_case_data($application_id); }
         }
-
-        ob_start();
-        include SSF_MEDLEMSPROCESS_PATH . 'templates/inspector-portal.php';
-        return (string) ob_get_clean();
+        ob_start(); include SSF_MEDLEMSPROCESS_PATH . 'templates/inspector-portal.php'; return (string) ob_get_clean();
     }
 
-    public function save_report(): void
+    private function case_data(int $inspection_id): array
     {
-        $application_id = absint($_POST['application_id'] ?? 0);
-        $user_id = get_current_user_id();
-        $this->assert_case_access($application_id, $user_id, 'ssf_inspector_report_');
-        $action = 'complete' === sanitize_key(wp_unslash($_POST['report_action'] ?? 'draft')) ? 'complete' : 'draft';
-        if ('complete' === $action && ! in_array(SSF_Medlemsprocess_Application::membership_status($application_id), array('aspirant', 'follow_up'), true)) {
-            wp_die('Inspektion kan slutföras först när aspirantåret har startat.');
-        }
-        $inspection = $this->sanitize_inspection((array) wp_unslash($_POST['ssf_inspection'] ?? array()));
-        $portal_url = $this->case_url($application_id);
-
-        if ('complete' === $action) {
-            $missing = $this->missing_checks($inspection['checks']);
-            if ($missing || empty($inspection['recommendation'])) {
-                wp_safe_redirect(add_query_arg(array('ssf_inspector_error' => 'checklist', 'missing' => count($missing)), $portal_url));
-                exit;
-            }
-        }
-
-        $reports = $this->reports($application_id);
-        $current = (array) ($reports[$user_id] ?? array());
-        $state = 'complete' === $action ? 'complete' : (($current['status'] ?? '') === 'complete' ? 'complete' : 'draft');
-        $files = $this->handle_uploads($application_id, 'ssf_inspector_files', ! empty($_POST['ssf_inspector_files_visible']));
-        if ($files) {
-            $stored_files = (array) get_post_meta($application_id, '_ssf_inspector_files', true);
-            foreach ($files as $file_id) {
-                $stored_files[] = array('id' => $file_id, 'inspector_id' => $user_id, 'time' => current_time('mysql'), 'visible_to_applicant' => ! empty($_POST['ssf_inspector_files_visible']), 'note' => sanitize_text_field(wp_unslash($_POST['ssf_inspector_file_note'] ?? '')));
-            }
-            update_post_meta($application_id, '_ssf_inspector_files', $stored_files);
-        }
-
-        $reports[$user_id] = array(
-            'status' => $state,
-            'updated_at' => current_time('mysql'),
-            'completed_at' => 'complete' === $state ? ($current['completed_at'] ?? current_time('mysql')) : '',
-            'inspection' => $inspection,
-            'files' => $files,
-        );
-        update_post_meta($application_id, '_ssf_inspector_reports', $reports);
-        update_post_meta($application_id, '_ssf_inspection', $inspection);
-
-        if ('complete' === $action && 'complete' !== ($current['status'] ?? '')) {
-            SSF_Medlemsprocess_Application::add_history($application_id, 'inspection_report', 'Inspektionsrapport markerades som klar.', false, array('audience' => 'inspectors', 'inspector_id' => $user_id));
-            if ($this->all_assigned_reports_complete($application_id)) {
-                if (in_array(SSF_Medlemsprocess_Application::membership_status($application_id), array('aspirant', 'follow_up'), true) && SSF_Medlemsprocess_Application::set_inspection_status($application_id, 'completed', 'inspector')) {
-                    SSF_Medlemsprocess_Plugin::instance()->sharepoint->push_status($application_id);
-                    SSF_Medlemsprocess_Plugin::instance()->emails->send_inspection_complete($application_id);
-                }
-            }
-        }
-
-        wp_safe_redirect(add_query_arg('ssf_inspector_saved', $action, $portal_url));
-        exit;
+        $record = SSF_Medlemsprocess_Inspection::record($inspection_id); $application_id = (int) $record['application_id']; $snapshot = (array) ($record['application_snapshot'] ?? array());
+        $lead = get_userdata((int) $record['lead_inspector_user_id']); $co = ! empty($record['co_inspector_user_id']) ? get_userdata((int) $record['co_inspector_user_id']) : false;
+        return array('id' => $application_id, 'inspection_id' => $inspection_id, 'record' => $record, 'number' => $snapshot['number'] ?? '', 'title' => $snapshot['ship_name'] ?? get_the_title($application_id), 'deadline' => (string) get_post_meta($application_id, '_ssf_inspector_deadline', true), 'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true), 'booking' => (array) get_post_meta($application_id, '_ssf_booking', true), 'legacy_files' => $this->legacy_files($application_id), 'progress' => SSF_Medlemsprocess_Inspection::progress($record), 'deviations' => SSF_Medlemsprocess_Inspection::deviations($record), 'lead_name' => $lead ? $lead->display_name : '', 'co_name' => $co ? $co->display_name : '', 'is_lead' => get_current_user_id() === (int) $record['lead_inspector_user_id'], 'is_co' => get_current_user_id() === (int) $record['co_inspector_user_id'], 'can_edit' => SSF_Medlemsprocess_Inspection::can_edit($inspection_id), 'url' => $this->case_url($application_id, $inspection_id));
     }
 
-    public function send_message(): void
-    {
-        $application_id = absint($_POST['application_id'] ?? 0);
-        $user_id = get_current_user_id();
-        $this->assert_case_access($application_id, $user_id, 'ssf_inspector_message_');
-        $message = sanitize_textarea_field(wp_unslash($_POST['message'] ?? ''));
-        if (! $message) {
-            wp_safe_redirect(add_query_arg('ssf_inspector_error', 'message', $this->case_url($application_id)));
-            exit;
-        }
-        $requires_completion = ! empty($_POST['requires_completion']);
-        $send_email = ! empty($_POST['send_email']);
-        if ($requires_completion) {
-            SSF_Medlemsprocess_Application::transition($application_id, 'needs_completion', $message, false, 'inspector');
-        } else {
-            SSF_Medlemsprocess_Application::add_history($application_id, 'inspector_message', $message, true, array('audience' => 'inspectors', 'inspector_id' => $user_id));
-        }
-        if ($send_email) {
-            $token = SSF_Medlemsprocess_Application::issue_token($application_id);
-            $template = $requires_completion ? 'completion_required' : 'reminder';
-            SSF_Medlemsprocess_Plugin::instance()->emails->send_template($template, $application_id, array('public_status_comment' => $message, 'status_link' => SSF_Medlemsprocess_Application::status_link($token)));
-        }
-        wp_safe_redirect(add_query_arg('ssf_inspector_saved', 'message', $this->case_url($application_id)));
-        exit;
-    }
-
-    public function case_url(int $application_id): string
-    {
-        if (class_exists('SSF_Workspace')) {
-            $path = (string) get_query_var('ssf_workspace_path');
-            $referer = wp_get_referer();
-            $workspace_url = SSF_Workspace::url('inspektioner/' . $application_id);
-            if (0 === strpos($path, 'inspektioner') || ($referer && 0 === strpos($referer, $workspace_url))) {
-                return $workspace_url;
-            }
-        }
-        return SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner', array('case' => $application_id));
-    }
-
-    private function case_data(int $application_id, int $user_id): array
+    private function legacy_case_data(int $application_id): array
     {
         $data = SSF_Medlemsprocess_Application::data($application_id);
-        $reports = $this->reports($application_id);
-        $report = (array) ($reports[$user_id] ?? array());
-        $inspection = (array) ($report['inspection'] ?? get_post_meta($application_id, '_ssf_inspection', true));
-        $inspection['checks'] = (array) ($inspection['checks'] ?? array());
-        $deadline = (string) get_post_meta($application_id, '_ssf_inspector_deadline', true);
-        $history = $this->history_for_inspector($application_id, $user_id);
-        return array(
-            'id' => $application_id,
-            'number' => (string) get_post_meta($application_id, '_ssf_application_number', true),
-            'title' => get_the_title($application_id),
-            'data' => $data,
-            'status' => SSF_Medlemsprocess_Application::status($application_id),
-            'status_label' => SSF_Medlemsprocess_Application::status_label(SSF_Medlemsprocess_Application::status($application_id)),
-            'deadline' => $deadline,
-            'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true),
-            'booking' => (array) get_post_meta($application_id, '_ssf_booking', true),
-            'report' => $report,
-            'inspection' => $inspection,
-            'files' => $this->files($application_id),
-            'history' => $history,
-            'progress' => $this->check_progress($inspection['checks']),
-            'url' => $this->case_url($application_id),
-        );
+        return array('id' => $application_id, 'inspection_id' => 0, 'number' => (string) get_post_meta($application_id, '_ssf_application_number', true), 'title' => $data['ship_name'] ?? get_the_title($application_id), 'deadline' => (string) get_post_meta($application_id, '_ssf_inspector_deadline', true), 'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true), 'legacy' => true, 'url' => $this->case_url($application_id));
     }
 
-    /** Existing per-object assignment resolver, also used by Workspace tasks. */
-    public function assigned_applications(int $user_id): array
+    private function legacy_full_case_data(int $application_id): array
     {
-        $ids = get_posts(array(
-            'post_type' => SSF_Medlemsprocess_Application::POST_TYPE,
-            'post_status' => 'private',
-            'posts_per_page' => 500,
-            'fields' => 'ids',
-            'orderby' => 'modified',
-            'order' => 'DESC',
-        ));
-        return array_values(array_filter(array_map('intval', $ids), function (int $application_id) use ($user_id): bool {
-            return $this->can_view_case($application_id, $user_id);
-        }));
+        $case = $this->legacy_case_data($application_id); $case['data'] = SSF_Medlemsprocess_Application::data($application_id); $case['reports'] = (array) get_post_meta($application_id, '_ssf_inspector_reports', true); $case['inspection'] = (array) get_post_meta($application_id, '_ssf_inspection', true); return $case;
     }
 
-    /** Authoritative object-level inspector access, including legacy assignments. */
-    public function can_view_case(int $application_id, int $user_id): bool
-    {
-        if (! $application_id || SSF_Medlemsprocess_Application::POST_TYPE !== get_post_type($application_id)) {
-            return false;
-        }
-        if (user_can($user_id, 'manage_options')) {
-            return true;
-        }
-        return user_can($user_id, 'ssf_view_assigned_applications') && in_array($user_id, $this->assigned_ids($application_id), true);
-    }
-
-    private function assert_case_access(int $application_id, int $user_id, string $nonce_prefix): void
-    {
-        if (! $application_id || ! $this->can_view_case($application_id, $user_id) || ! check_admin_referer($nonce_prefix . $application_id)) {
-            wp_die('Du saknar behörighet för ärendet.', 'Åtkomst saknas', array('response' => 403));
-        }
-    }
-
-    private function assigned_ids(int $application_id): array
-    {
-        $ids = array_values(array_unique(array_filter(array_map('absint', (array) get_post_meta($application_id, '_ssf_inspector_ids', true)))));
-        if (! $ids) {
-            $legacy_id = absint(get_post_meta($application_id, '_ssf_assigned_user', true));
-            $legacy_user = $legacy_id ? get_userdata($legacy_id) : false;
-            if ($legacy_user && $this->is_inspector($legacy_user)) {
-                $ids[] = $legacy_id;
-            }
-        }
-        return $ids;
-    }
-
-    private function inspector_users(): array
-    {
-        return array_values(array_filter(get_users(array('orderby' => 'display_name', 'order' => 'ASC')), array($this, 'is_inspector')));
-    }
-
-    private function is_inspector(WP_User $user): bool
-    {
-        return (bool) array_intersect(array('ssf_inspector', 'ssf_inspektor'), (array) $user->roles);
-    }
-
-    private function reports(int $application_id): array
-    {
-        return (array) get_post_meta($application_id, '_ssf_inspector_reports', true);
-    }
-
-    private function all_assigned_reports_complete(int $application_id): bool
-    {
-        $assigned = $this->assigned_ids($application_id);
-        if (! $assigned) {
-            return false;
-        }
-        $reports = $this->reports($application_id);
-        foreach ($assigned as $user_id) {
-            if ('complete' !== ($reports[$user_id]['status'] ?? '')) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private function mark_opened(int $application_id, int $user_id): void
-    {
-        $opened = (array) get_post_meta($application_id, '_ssf_inspector_last_opened', true);
-        $opened[$user_id] = current_time('mysql');
-        update_post_meta($application_id, '_ssf_inspector_last_opened', $opened);
-    }
-
-    private function check_progress(array $checks): array
-    {
-        $total = 0;
-        $complete = 0;
-        foreach (self::checklist_sections() as $points) {
-            foreach ($points as $key => $label) {
-                $total++;
-                if (! empty($checks[$key]['status'])) {
-                    $complete++;
-                }
-            }
-        }
-        return array('complete' => $complete, 'total' => $total, 'percent' => $total ? (int) round(($complete / $total) * 100) : 0);
-    }
-
-    private function missing_checks(array $checks): array
-    {
-        $missing = array();
-        foreach (self::checklist_sections() as $points) {
-            foreach ($points as $key => $label) {
-                if (empty($checks[$key]['status'])) {
-                    $missing[] = $key;
-                }
-            }
-        }
-        return $missing;
-    }
-
-    private function sanitize_inspection(array $inspection): array
-    {
-        $clean = array();
-        foreach (array('date', 'place', 'inspector', 'attendees', 'type', 'conditions', 'summary', 'strengths', 'deficiencies', 'actions', 'board_comment', 'public_comment', 'recommendation') as $key) {
-            $clean[$key] = sanitize_textarea_field($inspection[$key] ?? '');
-        }
-        $clean['checks'] = array();
-        foreach ((array) ($inspection['checks'] ?? array()) as $key => $item) {
-            $status = sanitize_key($item['status'] ?? '');
-            $clean['checks'][sanitize_key($key)] = array(
-                'status' => array_key_exists($status, self::CHECK_STATUSES) ? $status : '',
-                'comment' => sanitize_textarea_field($item['comment'] ?? ''),
-            );
-        }
-        return $clean;
-    }
-
-    private function files(int $application_id): array
+    private function legacy_files(int $application_id): array
     {
         $files = array();
-        foreach (array('application' => '_ssf_application_files', 'completion' => '_ssf_completion_files') as $source => $meta_key) {
-            foreach (array_map('intval', (array) get_post_meta($application_id, $meta_key, true)) as $file_id) {
-                if (wp_get_attachment_url($file_id)) {
-                    $files[] = array('id' => $file_id, 'source' => $source, 'visible_to_applicant' => true, 'note' => '');
-                }
-            }
+        foreach (array('Ansökningsfil' => '_ssf_application_files', 'Komplettering' => '_ssf_completion_files') as $label => $meta_key) {
+            foreach (array_map('intval', (array) get_post_meta($application_id, $meta_key, true)) as $id) { $url = wp_get_attachment_url($id); if ($url) { $files[] = array('id' => $id, 'label' => $label, 'url' => $url, 'note' => ''); } }
         }
         foreach ((array) get_post_meta($application_id, '_ssf_inspector_files', true) as $file) {
-            if (! empty($file['id']) && wp_get_attachment_url((int) $file['id'])) {
-                $file['source'] = 'inspector';
-                $files[] = $file;
-            }
+            if (! empty($file['question_id'])) { continue; } $id = absint($file['id'] ?? 0); $url = $id ? wp_get_attachment_url($id) : '';
+            if ($url) { $files[] = array('id' => $id, 'label' => 'Inspektörsfil', 'url' => $url, 'note' => (string) ($file['note'] ?? '')); }
         }
         return $files;
     }
 
+    public function assigned_applications(int $user_id): array
+    {
+        $ids = get_posts(array('post_type' => SSF_Medlemsprocess_Application::POST_TYPE, 'post_status' => 'private', 'posts_per_page' => 500, 'fields' => 'ids', 'orderby' => 'modified', 'order' => 'DESC'));
+        return array_values(array_filter(array_map('intval', $ids), function (int $id) use ($user_id): bool { return $this->can_view_case($id, $user_id); }));
+    }
+
+    public function can_view_case(int $application_id, int $user_id): bool
+    {
+        if (! $application_id || SSF_Medlemsprocess_Application::POST_TYPE !== get_post_type($application_id)) { return false; }
+        if (class_exists('SSF_Access_Control') && ! SSF_Access_Control::is_active($user_id)) { return false; }
+        return user_can($user_id, 'manage_options') || user_can($user_id, 'ssf_view_applications') || (user_can($user_id, 'ssf_view_assigned_applications') && in_array($user_id, $this->assigned_ids($application_id), true));
+    }
+
+    public function assigned_ids(int $application_id): array
+    {
+        $ids = array_slice(array_values(array_unique(array_filter(array_map('absint', (array) get_post_meta($application_id, '_ssf_inspector_ids', true))))), 0, 2);
+        if (! $ids) { $legacy = absint(get_post_meta($application_id, '_ssf_assigned_user', true)); if ($legacy) { $ids[] = $legacy; } }
+        return $ids;
+    }
+
+    private function inspector_users(): array { return array_values(array_filter(get_users(array('orderby' => 'display_name', 'order' => 'ASC')), array($this, 'is_inspector'))); }
+    private function is_inspector(WP_User $user): bool { return user_can($user, 'ssf_view_assigned_applications') && (! class_exists('SSF_Access_Control') || SSF_Access_Control::is_active((int) $user->ID)); }
+
+    public function case_url(int $application_id, int $inspection_id = 0): string
+    {
+        $args = $inspection_id ? array('inspection' => $inspection_id) : array('case' => $application_id);
+        if (class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'inspektioner')) { return add_query_arg($args, SSF_Workspace::url('inspektioner')); }
+        return SSF_Medlemsprocess_Plugin::page_url('mina_inspektioner', $args);
+    }
+
+    public function photo_url(int $inspection_id, string $photo_id, string $token = ''): string
+    {
+        $args = array('action' => 'ssf_membership_inspection_photo', 'inspection_id' => $inspection_id, 'photo_id' => $photo_id);
+        if ($token) { $args['token'] = $token; } else { $args['_wpnonce'] = wp_create_nonce('ssf_membership_inspection_photo_' . $inspection_id . '_' . $photo_id); }
+        return add_query_arg($args, admin_url('admin-post.php'));
+    }
+
+    private function verify_ajax(int $id): int
+    {
+        $user_id = get_current_user_id();
+        if (! check_ajax_referer('ssf_membership_inspection_' . $id, 'nonce', false) || ! SSF_Medlemsprocess_Inspection::can_edit($id, $user_id)) { wp_send_json_error(array('message' => 'Du saknar behörighet till inspektionen.'), 403); }
+        return $user_id;
+    }
+
+    public function ajax_save(): void
+    {
+        $id = absint($_POST['inspection_id'] ?? 0); $user_id = $this->verify_ajax($id); $kind = sanitize_key(wp_unslash($_POST['kind'] ?? 'answer'));
+        $result = 'details' === $kind ? SSF_Medlemsprocess_Inspection::save_details($id, (array) wp_unslash($_POST['details'] ?? array()), (string) wp_unslash($_POST['summary'] ?? ''), $user_id) : SSF_Medlemsprocess_Inspection::save_answer($id, sanitize_key(wp_unslash($_POST['question_id'] ?? '')), sanitize_text_field(wp_unslash($_POST['selected_option'] ?? '')), (string) wp_unslash($_POST['comment'] ?? ''), $user_id);
+        $result['ok'] ? wp_send_json_success($result) : wp_send_json_error($result, 400);
+    }
+
+    public function ajax_photo(): void
+    {
+        $id = absint($_POST['inspection_id'] ?? 0); $user_id = $this->verify_ajax($id);
+        $result = SSF_Medlemsprocess_Inspection::add_photo($id, sanitize_key(wp_unslash($_POST['question_id'] ?? '')), (string) wp_unslash($_POST['caption'] ?? ''), sanitize_text_field(wp_unslash($_POST['operation_id'] ?? '')), (array) ($_FILES['photo'] ?? array()), $user_id);
+        if (! empty($result['ok'])) { $result['photo']['url'] = $this->photo_url($id, (string) $result['photo']['id']); wp_send_json_success($result); }
+        wp_send_json_error($result, 400);
+    }
+
+    public function ajax_photo_update(): void
+    {
+        $id = absint($_POST['inspection_id'] ?? 0); $user_id = $this->verify_ajax($id);
+        $result = SSF_Medlemsprocess_Inspection::update_photo($id, sanitize_text_field(wp_unslash($_POST['photo_id'] ?? '')), (string) wp_unslash($_POST['caption'] ?? ''), ! empty($_POST['delete']), $user_id);
+        $result['ok'] ? wp_send_json_success($result) : wp_send_json_error($result, 400);
+    }
+
+    public function ajax_workflow(): void
+    {
+        $id = absint($_POST['inspection_id'] ?? 0); $user_id = $this->verify_ajax($id); $action = sanitize_key(wp_unslash($_POST['workflow_action'] ?? ''));
+        if ('ready' === $action) { $result = SSF_Medlemsprocess_Inspection::ready($id, $user_id); }
+        elseif ('confirm' === $action) { $result = SSF_Medlemsprocess_Inspection::confirm($id, $user_id); }
+        elseif ('finalize' === $action) { $result = SSF_Medlemsprocess_Inspection::finalize($id, $user_id); }
+        else { $result = array('ok' => false, 'message' => 'Ogiltig åtgärd.'); }
+        $result['ok'] ? wp_send_json_success($result) : wp_send_json_error($result, 409);
+    }
+
+    public function serve_photo(): void
+    {
+        $inspection_id = absint($_GET['inspection_id'] ?? 0); $photo_id = sanitize_text_field(wp_unslash($_GET['photo_id'] ?? '')); $record = SSF_Medlemsprocess_Inspection::record($inspection_id); $token = sanitize_text_field(wp_unslash($_GET['token'] ?? ''));
+        $applicant = $token && 'completed' === ($record['status'] ?? '') && (int) ($record['application_id'] ?? 0) === SSF_Medlemsprocess_Application::find_by_token($token);
+        $authorized = $applicant || (is_user_logged_in() && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '')), 'ssf_membership_inspection_photo_' . $inspection_id . '_' . $photo_id) && SSF_Medlemsprocess_Inspection::can_read($inspection_id));
+        $photo = $authorized ? SSF_Medlemsprocess_Inspection::photo($inspection_id, $photo_id, $applicant) : array();
+        if (! $photo || ($applicant && 'protocol' !== ($photo['visibility'] ?? ''))) { status_header(403); exit; }
+        $base = wp_normalize_path(SSF_Medlemsprocess_Inspection::private_photo_dir()['base']); $path = wp_normalize_path($base . '/' . ltrim((string) $photo['path'], '/'));
+        if (0 !== strpos($path, $base . '/') || ! is_file($path)) { status_header(404); exit; }
+        nocache_headers(); header('Content-Type: image/jpeg'); header('Content-Length: ' . filesize($path)); header('X-Content-Type-Options: nosniff'); readfile($path); exit;
+    }
+
+    /** Legacy history visibility reader retained for existing assignments. */
     private function history_for_inspector(int $application_id, int $user_id): array
     {
-        $safe_types = array('submitted', 'status', 'booking', 'completion', 'inspection_assignment', 'inspection_report', 'inspector_message');
-        $history = (array) get_post_meta($application_id, '_ssf_application_history', true);
-        return array_values(array_filter($history, static function ($item) use ($user_id, $safe_types): bool {
-            return is_array($item) && (
-                ! empty($item['public'])
-                || (int) ($item['author'] ?? 0) === $user_id
-                || 'inspectors' === ($item['audience'] ?? '')
-                || in_array($item['type'] ?? '', $safe_types, true)
-            );
+        $safe = array('submitted', 'status', 'booking', 'completion', 'inspection_assignment', 'inspection_report', 'inspector_message');
+        return array_values(array_filter((array) get_post_meta($application_id, '_ssf_application_history', true), static function ($item) use ($user_id, $safe): bool {
+            return is_array($item) && (! empty($item['public']) || (int) ($item['author'] ?? 0) === $user_id || 'inspectors' === ($item['audience'] ?? '') || in_array($item['type'] ?? '', $safe, true));
         }));
     }
 
-    private function handle_uploads(int $application_id, string $field, bool $visible_to_applicant): array
-    {
-        if (empty($_FILES[$field]['name'][0])) {
-            return array();
-        }
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        require_once ABSPATH . 'wp-admin/includes/image.php';
-        require_once ABSPATH . 'wp-admin/includes/media.php';
-        $settings = SSF_Medlemsprocess_Plugin::settings();
-        $files = $_FILES[$field];
-        $attachments = array();
-        foreach ((array) $files['name'] as $index => $name) {
-            if (UPLOAD_ERR_OK !== (int) $files['error'][$index]) {
-                continue;
-            }
-            $extension = strtolower(pathinfo((string) $name, PATHINFO_EXTENSION));
-            if (! in_array($extension, array('jpg', 'jpeg', 'png', 'webp', 'pdf'), true)) {
-                continue;
-            }
-            $max_bytes = ('pdf' === $extension ? (int) $settings['max_file_mb'] : (int) $settings['max_image_mb']) * MB_IN_BYTES;
-            if ((int) $files['size'][$index] > $max_bytes) {
-                continue;
-            }
-            $file = array('name' => sanitize_file_name((string) $name), 'type' => (string) $files['type'][$index], 'tmp_name' => (string) $files['tmp_name'][$index], 'error' => (int) $files['error'][$index], 'size' => (int) $files['size'][$index]);
-            $checked = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
-            if (empty($checked['ext']) || ! in_array(strtolower($checked['ext']), array('jpg', 'jpeg', 'png', 'webp', 'pdf'), true)) {
-                continue;
-            }
-            $upload = wp_handle_upload($file, array('test_form' => false));
-            if (! empty($upload['error'])) {
-                continue;
-            }
-            $attachment_id = wp_insert_attachment(array('post_mime_type' => $upload['type'], 'post_title' => sanitize_text_field(pathinfo($file['name'], PATHINFO_FILENAME)), 'post_status' => 'inherit', 'post_parent' => $application_id), $upload['file'], $application_id);
-            if (! is_wp_error($attachment_id)) {
-                wp_update_attachment_metadata($attachment_id, wp_generate_attachment_metadata($attachment_id, $upload['file']));
-                $attachments[] = (int) $attachment_id;
-            }
-        }
-        return $attachments;
-    }
-
-    private function date_value(string $value): string
-    {
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
-    }
+    private function date_value(string $value): string { return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : ''; }
 }

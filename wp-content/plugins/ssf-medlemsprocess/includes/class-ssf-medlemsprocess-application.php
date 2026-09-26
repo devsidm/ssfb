@@ -95,6 +95,7 @@ class SSF_Medlemsprocess_Application
             'not_planned' => 'Ej planerad',
             'planning' => 'Inspektion ska bokas',
             'booked' => 'Inspektion bokad',
+            'in_progress' => 'Inspektion pågår',
             'completed' => 'Inspektion genomförd',
             'follow_up' => 'Under uppföljning',
             'final_review' => 'Under slutbedömning',
@@ -124,8 +125,11 @@ class SSF_Medlemsprocess_Application
         $allowed = array(
             'not_planned' => array('planning'),
             'planning' => array('booked'),
-            'booked' => array('completed'),
-            'completed' => array('follow_up'),
+            // Direct completion remains valid for historical/manual cases.
+            'booked' => array('in_progress', 'completed'),
+            'in_progress' => array('completed'),
+            // Follow-up is optional. Historical cases may still take that route.
+            'completed' => array('follow_up', 'final_review'),
             'follow_up' => array('final_review'),
         );
         if (! in_array($status, $allowed[$old] ?? array(), true)) {

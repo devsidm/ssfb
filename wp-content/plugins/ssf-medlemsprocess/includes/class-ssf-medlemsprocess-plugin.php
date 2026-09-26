@@ -18,6 +18,7 @@ final class SSF_Medlemsprocess_Plugin
     public SSF_Medlemsprocess_Public $public;
     public SSF_Medlemsprocess_Admin $admin;
     public SSF_Medlemsprocess_Inspector $inspector;
+    public SSF_Medlemsprocess_Inspection $inspection;
     public SSF_Medlemsprocess_Portal $portal;
     public SSF_Medlemsprocess_PDF $pdf;
     public SSF_Medlemsprocess_SharePoint $sharepoint;
@@ -34,7 +35,7 @@ final class SSF_Medlemsprocess_Plugin
 
     private function __construct()
     {
-        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'archive-migration', 'public', 'admin', 'inspector', 'portal') as $file) {
+        foreach (array('application', 'emails', 'pdf', 'sharepoint', 'archive-migration', 'public', 'admin', 'inspection', 'inspector', 'portal') as $file) {
             require_once SSF_MEDLEMSPROCESS_PATH . 'includes/class-ssf-medlemsprocess-' . $file . '.php';
         }
 
@@ -45,6 +46,7 @@ final class SSF_Medlemsprocess_Plugin
         $this->archive_migration = new SSF_Medlemsprocess_Archive_Migration();
         $this->public = new SSF_Medlemsprocess_Public();
         $this->admin = new SSF_Medlemsprocess_Admin();
+        $this->inspection = new SSF_Medlemsprocess_Inspection();
         $this->inspector = new SSF_Medlemsprocess_Inspector();
         $this->portal = new SSF_Medlemsprocess_Portal();
 
@@ -225,7 +227,7 @@ final class SSF_Medlemsprocess_Plugin
         }
         wp_enqueue_style('ssf-medlemsprocess', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-medlemsprocess.css', array(), SSF_MEDLEMSPROCESS_VERSION);
         wp_enqueue_script('ssf-medlemsprocess', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-medlemsprocess.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
-        if (is_page($inspector_page)) {
+        if (is_page($inspector_page) || (is_page((int) get_option('ssf_medlemsprocess_ansokan_status_page_id')) && ! empty($_GET['inspection_protocol']))) {
             wp_enqueue_style('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-inspector-portal.css', array('ssf-medlemsprocess'), SSF_MEDLEMSPROCESS_VERSION);
             wp_enqueue_script('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/js/ssf-inspector-portal.js', array(), SSF_MEDLEMSPROCESS_VERSION, true);
         }

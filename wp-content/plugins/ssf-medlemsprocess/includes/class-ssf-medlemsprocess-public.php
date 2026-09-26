@@ -69,6 +69,16 @@ class SSF_Medlemsprocess_Public
         $completion_files = array_map('intval', (array) get_post_meta($application_id, '_ssf_completion_files', true));
         $inspector_files = (array) get_post_meta($application_id, '_ssf_inspector_files', true);
         $inspector_visible_files = array_map('intval', wp_list_pluck(array_filter($inspector_files, static function ($file) { return ! empty($file['visible_to_applicant']); }), 'id'));
+        $inspection_id = SSF_Medlemsprocess_Inspection::inspection_for_application($application_id);
+        $inspection_record = $inspection_id ? SSF_Medlemsprocess_Inspection::record($inspection_id) : array();
+        if (! empty($_GET['inspection_protocol']) && 'completed' === ($inspection_record['status'] ?? '') && ! empty($inspection_record['final_snapshot'])) {
+            wp_enqueue_style('ssf-inspector-portal', SSF_MEDLEMSPROCESS_URL . 'assets/css/ssf-inspector-portal.css', array('ssf-medlemsprocess'), SSF_MEDLEMSPROCESS_VERSION);
+            $protocol = $inspection_record['final_snapshot'];
+            $photo_token = $token;
+            ob_start();
+            include SSF_MEDLEMSPROCESS_PATH . 'templates/inspection-protocol.php';
+            return ob_get_clean();
+        }
         ob_start();
         include SSF_MEDLEMSPROCESS_PATH . 'templates/status-page.php';
         return ob_get_clean();

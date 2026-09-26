@@ -202,7 +202,7 @@ class SSF_Medlemsprocess_Portal
     private function handle_booking(int $application_id): bool
     {
         $booking = array();
-        foreach (array('date', 'start', 'end', 'location', 'type', 'participants', 'comment') as $key) {
+        foreach (array('date', 'start', 'end', 'location', 'type', 'contact', 'participants', 'comment') as $key) {
             $booking[$key] = sanitize_text_field(wp_unslash($_POST['booking'][$key] ?? ''));
         }
         if (! $booking['date']) {
@@ -363,8 +363,11 @@ class SSF_Medlemsprocess_Portal
             } elseif ('planning' === $inspection) {
                 echo $this->booking_form($application_id);
             } elseif ('booked' === $inspection) {
-                echo $this->inspection_progress_form($application_id, 'completed', 'Markera inspektion genomförd');
+                echo '<p>Inspektionen är bokad. Inspektörerna startar och färdigställer det gemensamma protokollet i sin arbetsvy.</p>';
+            } elseif ('in_progress' === $inspection) {
+                echo '<p>Den fysiska inspektionen och protokollarbetet pågår.</p>';
             } elseif ('completed' === $inspection) {
+                echo $this->inspection_progress_form($application_id, 'final_review', 'Gå direkt till slutbedömning');
                 echo $this->inspection_progress_form($application_id, 'follow_up', 'Starta uppföljning');
             } elseif ('follow_up' === $inspection) {
                 echo $this->inspection_progress_form($application_id, 'final_review', 'Gå till slutbedömning');
@@ -420,6 +423,30 @@ class SSF_Medlemsprocess_Portal
     {
         $booking = (array) get_post_meta($application_id, '_ssf_booking', true);
         $inspection = (array) get_post_meta($application_id, '_ssf_inspection', true);
+        $inspection_id = SSF_Medlemsprocess_Inspection::inspection_for_application($application_id);
+        $record = $inspection_id ? SSF_Medlemsprocess_Inspection::record($inspection_id) : array();
+        if ($record) {
+            $snapshot = (array) ($record['application_snapshot'] ?? array());
+            $answer = (array) ($record['answers']['10'] ?? array());
+            $deviations = SSF_Medlemsprocess_Inspection::deviations($record);
+            $inspector_names = array();
+            foreach (array((int) ($record['lead_inspector_user_id'] ?? 0), (int) ($record['co_inspector_user_id'] ?? 0)) as $user_id) { $user = $user_id ? get_userdata($user_id) : false; if ($user) { $inspector_names[] = $user->display_name; } }
+            echo '<section class="ssf-portal-panel"><p class="ssf-portal-kicker">Beslutsunderlag</p><h2>Inspektionsprotokoll</h2><dl class="ssf-definition-grid">';
+            foreach (array('Fartyg' => $snapshot['ship_name'] ?? '', 'Ansökningsnummer' => $snapshot['number'] ?? '', 'Aspirant sedan' => get_post_meta($application_id, '_ssf_aspirant_started_at', true), 'Inspektionsdatum' => $record['details']['date'] ?? '', 'Inspektörer' => implode(', ', $inspector_names), 'Status' => $record['status'] ?? '') as $label => $value) {
+                echo '<div><dt>' . esc_html($label) . '</dt><dd>' . esc_html((string) $value) . '</dd></div>';
+            }
+            echo '</dl><h3>Inspektörernas rekommendation</h3><p><strong>' . esc_html((string) ($answer['selected_option'] ?? 'Inte angiven')) . '</strong></p><h3>Motivering</h3><p>' . nl2br(esc_html((string) ($record['summary'] ?? ''))) . '</p>';
+            echo '<h3>Punkter att granska</h3><p>' . esc_html((string) count($deviations)) . ' svar med kommentar eller avvikelse.</p><ul>';
+            foreach ($deviations as $item) { echo '<li><strong>' . esc_html(strtoupper($item['id'])) . '</strong> ' . esc_html($item['answer']) . ($item['comment'] ? ' – ' . esc_html($item['comment']) : '') . '</li>'; }
+            echo '</ul>';
+            if (! empty($record['photos'])) {
+                echo '<h3>Bilder</h3><div class="ssf-document-list">';
+                foreach (array_slice((array) $record['photos'], 0, 8) as $photo) { echo '<article><img src="' . esc_url(SSF_Medlemsprocess_Plugin::instance()->inspector->photo_url($inspection_id, (string) $photo['id'])) . '" alt="' . esc_attr((string) ($photo['caption'] ?: 'Inspektionsbild')) . '" style="max-width:160px;height:auto"><span>' . esc_html((string) ($photo['caption'] ?? '')) . '</span></article>'; }
+                echo '</div>';
+            }
+            echo '<p><a class="ssf-portal-button" href="' . esc_url(SSF_Medlemsprocess_Plugin::instance()->inspector->case_url($application_id, $inspection_id)) . '">Läs hela protokollet</a></p></section>';
+            return;
+        }
         echo '<section class="ssf-portal-panel"><h2>Inspektion</h2><dl class="ssf-definition-grid">';
         foreach (array('Datum' => $booking['date'] ?? $inspection['date'] ?? '', 'Tid' => trim(($booking['start'] ?? '') . ' ' . ($booking['end'] ?? '')), 'Plats' => $booking['location'] ?? $inspection['place'] ?? '', 'Inspektör' => $inspection['inspector'] ?? '') as $label => $value) {
             echo '<div><dt>' . esc_html($label) . '</dt><dd>' . esc_html((string) $value) . '</dd></div>';
@@ -669,7 +696,7 @@ class SSF_Medlemsprocess_Portal
 
     private function booking_form(int $application_id): string
     {
-        $fields = '<input type="hidden" name="target_status" value="inspection_booked"><label>Datum<input type="date" name="booking[date]" required></label><label>Starttid<input type="time" name="booking[start]"></label><label>Plats eller länk<input type="text" name="booking[location]"></label><label>Inspektör/deltagare<input type="text" name="booking[participants]"></label><label>Kommentar<textarea name="booking[comment]" rows="3"></textarea></label><label class="ssf-checkbox"><input type="checkbox" name="send_booking_email" value="1"> Skicka bokningsmail</label><button class="ssf-portal-button ssf-portal-button-primary" type="submit">Boka inspektion</button>';
+        $fields = '<input type="hidden" name="target_status" value="inspection_booked"><label>Datum<input type="date" name="booking[date]" required></label><label>Starttid<input type="time" name="booking[start]"></label><label>Plats<input type="text" name="booking[location]"></label><label>Kontaktperson<input type="text" name="booking[contact]"></label><label>Deltagare<input type="text" name="booking[participants]"></label><label>Praktisk kommentar<textarea name="booking[comment]" rows="3"></textarea></label><label class="ssf-checkbox"><input type="checkbox" name="send_booking_email" value="1"> Skicka bokningsmail</label><button class="ssf-portal-button ssf-portal-button-primary" type="submit">Boka inspektion</button>';
         return $this->action_form($application_id, 'book_inspection', $fields);
     }
 

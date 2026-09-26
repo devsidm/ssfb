@@ -36,6 +36,7 @@ $portalScript = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugi
 $admin = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-admin.php')
 $destinations = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\includes\Integrations\Microsoft365\SharePointDestinations.php')
 $inspector = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-inspector.php')
+$inspection = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-inspection.php')
 $archiveMigration = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-archive-migration.php')
 $adminNavigation = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-admin-navigation.php')
 $theme = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\themes\ssf\index.php')
@@ -195,7 +196,8 @@ Assert-Contains 'Aspirantmail visar uppföljningsdatum' $emails "'Planerat uppf�
 Assert-Contains 'Separat aspirantvy' $admin 'ssf-medlemsprocess-aspirants'
 Assert-Contains '60-dagarsmarkering' $admin 'Kommande inom 60 dagar'
 Assert-Contains '30-dagarsvarning' $admin 'Åtgärd inom 30 dagar'
-Assert-Contains 'Slutförd inspektion stannar i aspirantåret' $inspector "set_inspection_status(`$application_id, 'completed'"
+Assert-Contains 'Slutförd inspektion stannar i aspirantåret' $inspection "set_inspection_status(`$application_id, 'completed'"
+Assert-NotContains 'Inspektörsrekommendation fattar inte medlemsbeslut' $inspection 'set_membership_status('
 Assert-NotContains 'Inspektion ändrar inte ansökningsbeslut' $inspector "transition(`$application_id, 'awaiting_decision'"
 Assert-True 'Inspektören använder inte äldre slutförd-status' (-not $inspector.Contains("transition(`$application_id, 'inspection_completed'"))
 foreach ($step in @('Autentisering', 'Site access', 'Drive access', 'List access', 'Läs kolumner', 'Hitta ärendemapp', 'Läs mappmetadata', 'Skriv mappmetadata')) { Assert-Contains "Diagnostik $step" $sharepoint "'$step'" }
