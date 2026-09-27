@@ -157,6 +157,7 @@ Assert-Contains 'checksum-based itemized file copy' $script 'rsync -aci --no-per
 Assert-Contains 'checksum-based byte verification' $script 'verify_component_bytes()'
 Assert-Contains 'all tracked WordPress files audited' $script 'audit_tracked_wordpress_scope()'
 Assert-Contains 'audit uses frozen revision' $script 'git ls-tree -r -z --name-only "$SOURCE_REVISION" -- wp-content'
+Assert-Contains 'audit classifies plugin policy DEV-only files' $script '$config["plugin_policy"]["dev_only"] ?? array()'
 Assert-Contains 'Git archive uses source revision' $script 'git archive "$SOURCE_REVISION" | tar -x -C "$RELEASE_SOURCE"'
 Assert-Contains 'registered manifest verified' $script 'Prepared DEV manifest does not match any registered Git release manifest.'
 Assert-Contains 'source revision must be a full commit' $script 'SOURCE_REVISION" =~ ^[0-9a-f]{40}$'

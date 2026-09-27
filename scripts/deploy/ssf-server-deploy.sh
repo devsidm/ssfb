@@ -207,7 +207,12 @@ audit_tracked_wordpress_scope() {
       $group = $parts[1] ?? "";
       $name = $parts[2] ?? "";
       if ($group === "plugins") {
-        $allowed = array_merge($config["production"]["plugins"] ?? array(), $config["dev_only"]["plugins"] ?? array(), $config["excluded"]["plugins"] ?? array());
+        $allowed = array_merge(
+          $config["production"]["plugins"] ?? array(),
+          $config["dev_only"]["plugins"] ?? array(),
+          $config["excluded"]["plugins"] ?? array(),
+          $config["plugin_policy"]["dev_only"] ?? array()
+        );
       } elseif ($group === "themes") {
         $allowed = array_merge($config["production"]["themes"] ?? array(), $config["excluded"]["themes"] ?? array());
       } elseif ($group === "mu-plugins") {

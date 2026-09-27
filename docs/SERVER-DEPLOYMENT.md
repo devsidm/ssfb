@@ -195,8 +195,9 @@ not fail verification and are never copied to PROD. Selected PROD release
 files are checksum-verified after copying.
 Every tracked WordPress plugin, theme and MU file must also be classified in
 `config/deploy-components.json` at the frozen revision. Unclassified files stop
-deployment. Unknown files already in PROD are preserved. Removed old files are
-also retained unless a trustworthy previous-release file manifest proves they
+deployment. Plugins listed in `plugin_policy.dev_only` are classified but remain
+excluded from PROD candidates. Unknown files already in PROD are preserved.
+Removed old files are also retained unless a trustworthy previous-release file manifest proves they
 were managed; automatic managed-file deletion is not implemented yet. `ssf-promotions`
 (SSF Aktuellt) is included in the PROD plugin candidate set and still requires
 an explicit install/update choice if it differs from PROD.
