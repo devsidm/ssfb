@@ -322,13 +322,18 @@ final class SSF_News_Service
 
     public static function match_relevance(string $text): array
     {
-        $haystack = mb_strtolower(wp_strip_all_tags($text));
+        $plain = wp_strip_all_tags($text);
+        $has_mb = function_exists('mb_strtolower') && function_exists('mb_strpos') && function_exists('mb_strlen');
+        $lower = static fn(string $value): string => $has_mb ? mb_strtolower($value) : strtolower($value);
+        $contains = static fn(string $value, string $term): bool => false !== ($has_mb ? mb_strpos($value, $term) : strpos($value, $term));
+        $length = static fn(string $value): int => $has_mb ? mb_strlen($value) : strlen($value);
+        $haystack = $lower($plain);
         $topics = array('segelfartyg', 'skutor', 'traditionsfartyg', 'kulturarv', 'restaurering', 'race', 'regattor', 'evenemang', 'ungdom', 'utbildning', 'sjöfartshistoria', 'hamnfrågor', 'myndighet');
-        $matched_topics = array_values(array_filter($topics, static fn(string $term): bool => false !== mb_strpos($haystack, $term)));
+        $matched_topics = array_values(array_filter($topics, static fn(string $term): bool => $contains($haystack, $term)));
         $ships = array();
         if (post_type_exists('medlemsfartyg')) {
             foreach (get_posts(array('post_type' => 'medlemsfartyg', 'post_status' => 'publish', 'numberposts' => -1)) as $ship) {
-                if (mb_strlen($ship->post_title) > 2 && false !== mb_strpos($haystack, mb_strtolower($ship->post_title))) {
+                if ($length($ship->post_title) > 2 && $contains($haystack, $lower($ship->post_title))) {
                     $ships[] = (int) $ship->ID;
                 }
             }
@@ -348,10 +353,10 @@ final class SSF_News_Service
     {
         $url = SSF_Workspace::url($path);
         if ($notice) {
-            $url = add_query_arg('notice', $notice, $url);
+            $url = add_query_arg('ssf_news_notice', $notice, $url);
         }
         if ($error) {
-            $url = add_query_arg('error', $error, $url);
+            $url = add_query_arg('ssf_news_error', $error, $url);
         }
         wp_safe_redirect($url);
         exit;
@@ -367,11 +372,11 @@ final class SSF_News_Service
     private static function notice_html(): string
     {
         $html = '';
-        if (! empty($_GET['notice'])) {
-            $html .= '<p class="ssf-workspace-confirmation" role="status">' . esc_html(sanitize_text_field(wp_unslash($_GET['notice']))) . '</p>';
+        if (! empty($_GET['ssf_news_notice'])) {
+            $html .= '<p class="ssf-workspace-confirmation" role="status">' . esc_html(sanitize_text_field(wp_unslash($_GET['ssf_news_notice']))) . '</p>';
         }
-        if (! empty($_GET['error'])) {
-            $html .= '<p class="ssf-workspace-error" role="alert">' . esc_html(sanitize_text_field(wp_unslash($_GET['error']))) . '</p>';
+        if (! empty($_GET['ssf_news_error'])) {
+            $html .= '<p class="ssf-workspace-error" role="alert">' . esc_html(sanitize_text_field(wp_unslash($_GET['ssf_news_error']))) . '</p>';
         }
         return $html;
     }
@@ -606,6 +611,9 @@ final class SSF_News_Service
         if (self::post_meta($id, '_ssf_suggestion_comment')) {
             $html .= '<section class="ssf-workspace-panel"><h2>Kommentar från tipsaren</h2><p>' . esc_html(self::post_meta($id, '_ssf_suggestion_comment')) . '</p></section>';
         }
+        if ('new' !== self::post_meta($id, '_ssf_suggestion_status')) {
+            return $html . '<p class="ssf-workspace-confirmation" role="status">Förslaget är redan behandlat och kan inte konverteras igen.</p>';
+        }
         $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_suggestion"><input type="hidden" name="suggestion_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_suggestion_' . $id, '_wpnonce', true, false) . '<div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="convert">Skapa I medierna</button><button class="ssf-workspace-button ssf-workspace-button--danger" name="intent" value="dismiss">Inte relevant</button></div>';
         if (self::post_meta($id, '_ssf_suggestion_image') && ! $allow_preview) {
             $html .= '<p class="ssf-workspace-help">Källan tillåter inte extern bildförhandsvisning. Textkort används tills detta aktiveras på källan.</p>';
@@ -746,6 +754,9 @@ final class SSF_News_Service
         $converted = (int) get_post_meta($id, '_ssf_suggestion_post_id', true);
         if ($converted && 'post' === get_post_type($converted)) {
             self::redirect('nyheter/medierna/' . $converted, 'Förslaget har redan ett utkast.');
+        }
+        if ('new' !== self::post_meta($id, '_ssf_suggestion_status')) {
+            self::redirect('nyheter/forslag', '', 'Förslaget är redan behandlat.');
         }
         if ('dismiss' === $intent) {
             update_post_meta($id, '_ssf_suggestion_status', 'dismissed');

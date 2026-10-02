@@ -127,6 +127,8 @@ check_news(false !== strpos($renderer, 'Läs hos '), 'external CTA names the sou
 check_news(false !== strpos($service, "'twicedaily', self::CRON_HOOK"), 'monitoring is scheduled twice daily');
 check_news(false !== strpos($service, "'editor_manual'") && false !== strpos($service, "'member_tip'") && false !== strpos($service, "'monitoring'"), 'all origins share the canonical suggestion model');
 check_news(false !== strpos($service, "'_ssf_suggestion_status', 'dismissed'"), 'dismissed suggestions retain their dedup record');
+check_news(false !== strpos($service, "'ssf_news_error'") && false !== strpos($service, "'ssf_news_notice'"), 'workspace notices use namespaced query parameters');
+check_news(false !== strpos($service, 'Förslaget är redan behandlat och kan inte konverteras igen.'), 'handled suggestions cannot be converted from a stale direct link');
 check_news(false !== strpos($service, "'redirection' => 0") && false !== strpos($service, 'self::is_safe_url($url)'), 'each redirect is revalidated');
 check_news(false !== strpos($service, "array('external_preview', 'ssf_image', 'none')"), 'all three image modes are constrained');
 check_news(false !== strpos($access, "'ssf_news_edit'") && false !== strpos($access, "'ssf_news_publish'"), 'editor and publisher capabilities are distinct');

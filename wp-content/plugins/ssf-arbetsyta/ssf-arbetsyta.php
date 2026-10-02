@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SSF Arbetsyta
  * Description: Gemensam frontend för SSF:s interna verksamhetstjänster.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Requires PHP: 8.0
  */
 
@@ -10,7 +10,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('SSF_WORKSPACE_VERSION', '0.2.0');
+define('SSF_WORKSPACE_VERSION', '0.2.1');
 define('SSF_WORKSPACE_PATH', plugin_dir_path(__FILE__));
 define('SSF_WORKSPACE_URL', plugin_dir_url(__FILE__));
 
