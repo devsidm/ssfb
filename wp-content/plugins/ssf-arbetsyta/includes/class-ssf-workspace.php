@@ -74,8 +74,10 @@ final class SSF_Workspace
         $service['id'] = $id;
         $service['route'] = $route;
         $service['capability'] = $capability;
-        $service['group'] = in_array(($service['group'] ?? ''), array('arbete', 'administration'), true) ? $service['group'] : 'arbete';
+        $group = $service['nav_group'] ?? $service['group'] ?? '';
+        $service['group'] = in_array($group, array('arbete', 'administration'), true) ? $group : 'arbete';
         $service['order'] = (int) ($service['order'] ?? 100);
+        $service['icon'] = sanitize_key((string) ($service['icon'] ?? 'service'));
         self::$services[$id] = $service;
         return true;
     }
@@ -106,7 +108,8 @@ final class SSF_Workspace
 
     public static function active_user(): bool
     {
-        return is_user_logged_in() && class_exists('SSF_Access_Control') && SSF_Access_Control::is_active(get_current_user_id());
+        return is_user_logged_in() && (current_user_can('manage_options')
+            || (class_exists('SSF_Access_Control') && SSF_Access_Control::is_active(get_current_user_id())));
     }
 
     /** A hidden service can never be resolved by typing its URL directly. */
@@ -240,7 +243,18 @@ final class SSF_Workspace
             echo self::task_list(array_slice($tasks, 0, 5));
             echo '</section><section aria-labelledby="ssf-workspace-services"><h2 id="ssf-workspace-services">Mina tjänster</h2><div class="ssf-workspace-cards">';
             foreach ($services as $service) {
-                echo '<a class="ssf-workspace-card" href="' . esc_url(self::url($service['route'])) . '"><strong>' . esc_html($service['label']) . '</strong><span>' . esc_html((string) ($service['description'] ?? 'Öppna tjänsten')) . '</span></a>';
+                $badge = '';
+                if (is_callable($service['badge_provider'] ?? null)) {
+                    try {
+                        $value = call_user_func($service['badge_provider']);
+                        if (is_scalar($value) && '' !== (string) $value && '0' !== (string) $value) {
+                            $badge = '<span class="ssf-workspace-badge" aria-label="Aktuellt antal">' . esc_html((string) $value) . '</span>';
+                        }
+                    } catch (Throwable $error) {
+                        error_log('SSF Workspace badge provider failed: ' . $service['id']);
+                    }
+                }
+                echo '<a class="ssf-workspace-card" href="' . esc_url(self::url($service['route'])) . '"><span class="ssf-workspace-card__top"><strong>' . esc_html($service['label']) . '</strong>' . $badge . '</span><span>' . esc_html((string) ($service['description'] ?? 'Öppna tjänsten')) . '</span></a>';
             }
             echo '</div></section>';
         }

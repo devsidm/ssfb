@@ -277,6 +277,82 @@ h3, h4, .site-title {
   padding: 22px;
 }
 
+.ssf-news-card__image[hidden] {
+  display: none;
+}
+
+.ssf-news-card--text {
+  position: relative;
+  border-top: 6px solid var(--ssf-blue-dark);
+  background: linear-gradient(145deg, #fff 0%, #f3f7fb 100%);
+}
+
+.ssf-news-card--text::before {
+  content: "SSF";
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  color: rgba(16, 35, 66, .08);
+  font: 700 2.3rem/1 var(--ssf-font-display, Georgia, serif);
+}
+
+.ssf-news-type {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--ssf-blue-dark);
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.ssf-news-card__meta {
+  margin: 0 0 8px;
+  color: var(--ssf-gold-dark);
+  font-weight: 700;
+}
+
+.ssf-news-card__tags {
+  color: var(--ssf-blue-dark);
+  font-size: .88rem;
+  font-weight: 650;
+}
+
+.ssf-read-more--external::after {
+  content: "Extern länk";
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 700;
+}
+
+.ssf-news-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 26px;
+}
+
+.ssf-news-filters a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 15px;
+  border: 1px solid var(--ssf-border);
+  border-radius: 999px;
+  color: var(--ssf-blue-dark);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.ssf-news-filters a[aria-current="page"] {
+  border-color: var(--ssf-blue-dark);
+  background: var(--ssf-blue-dark);
+  color: #fff;
+}
+
 .ssf-news-card h3 a,
 .ssf-read-more {
   color: var(--ssf-blue-dark);

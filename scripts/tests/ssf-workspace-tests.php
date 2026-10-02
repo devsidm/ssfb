@@ -55,4 +55,7 @@ check(count(SSF_Workspace::tasks()) === 1, 'provider failure isolated');
 $active = false;
 check(SSF_Workspace::services_for_user() === array(), 'inactive user has no services');
 check(SSF_Workspace::tasks() === array(), 'inactive user has no tasks');
+
+$caps = array('manage_options' => true);
+check(array_keys(SSF_Workspace::services_for_user()) === array('a', 'b', 'failure'), 'manage_options is break-glass access even if business access is inactive');
 echo "PASS: Workspace registry, permissions, tasks and provider isolation.\n";

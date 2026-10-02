@@ -56,9 +56,9 @@ final class SSF_Access_Control
                 'capabilities' => array('ssf_inspect_v2', 'ssf_manage_inspections'),
             ),
             'nyheter' => array(
-                'label' => 'Nyheter',
-                'description' => 'Skriva, granska och publicera nyheter.',
-                'capabilities' => array('ssf_manage_news', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'upload_files'),
+                'label' => 'Webbredaktör',
+                'description' => 'Nyheter, artikelförslag, publicering och omvärldsbevakning.',
+                'capabilities' => array('ssf_manage_news', 'ssf_news_view', 'ssf_news_edit', 'ssf_news_publish', 'ssf_news_suggestions_manage', 'ssf_news_sources_manage', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'upload_files'),
             ),
             'systemadministration' => array(
                 'label' => 'Systemadministration',
@@ -93,6 +93,9 @@ final class SSF_Access_Control
     public static function grant_capabilities(array $allcaps, array $caps, array $args, WP_User $user): array
     {
         if (! self::is_active((int) $user->ID)) {
+            if (in_array('administrator', (array) $user->roles, true) && ! empty($allcaps['manage_options'])) {
+                return $allcaps;
+            }
             foreach (array_keys($allcaps) as $capability) {
                 $allcaps[$capability] = false;
             }
@@ -169,6 +172,11 @@ final class SSF_Access_Control
             }
             if (! $administrator->has_cap('ssf_manage_inspections')) {
                 $administrator->add_cap('ssf_manage_inspections');
+            }
+            foreach (array('ssf_manage_news', 'ssf_news_view', 'ssf_news_edit', 'ssf_news_publish', 'ssf_news_suggestions_manage', 'ssf_news_sources_manage') as $capability) {
+                if (! $administrator->has_cap($capability)) {
+                    $administrator->add_cap($capability);
+                }
             }
         }
     }

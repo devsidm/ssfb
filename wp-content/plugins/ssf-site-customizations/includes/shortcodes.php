@@ -172,17 +172,53 @@ function ssf_site_step(string $number, string $title, string $text): string
 function ssf_site_render_news_card(WP_Post $post, string $url = ''): string
 {
     $url = $url ?: get_permalink($post);
-    $image = get_the_post_thumbnail($post->ID, 'medium_large');
-    return '<article class="ssf-news-card"><a href="' . esc_url($url) . '" class="ssf-news-card__image">' . $image . '</a><div class="ssf-news-card__body"><time datetime="' . esc_attr(get_the_date('c', $post)) . '">' . esc_html(get_the_date('', $post)) . '</time><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3><p>' . esc_html(wp_trim_words(get_the_excerpt($post), 24)) . '</p><a class="ssf-read-more" href="' . esc_url($url) . '">Läs mer <span aria-hidden="true">-&gt;</span></a></div></article>';
+    $type = (string) get_post_meta($post->ID, '_ssf_news_type', true);
+    $type = in_array($type, array('ship', 'media'), true) ? $type : 'ssf';
+    $labels = array('ssf' => 'SSF-nyhet', 'ship' => 'Från medlemsfartygen', 'media' => 'I medierna');
+    $source = sanitize_text_field((string) get_post_meta($post->ID, '_ssf_news_source_name', true));
+    $external_url = 'media' === $type ? esc_url_raw((string) get_post_meta($post->ID, '_ssf_news_external_url', true)) : '';
+    $image_mode = (string) get_post_meta($post->ID, '_ssf_news_image_mode', true);
+    $image = '';
+    $source_id = (int) get_post_meta($post->ID, '_ssf_news_source_id', true);
+    $preview_allowed = $source_id
+        ? '1' === (string) get_post_meta($source_id, '_ssf_source_allow_preview', true)
+        : '1' === (string) get_post_meta($post->ID, '_ssf_news_external_preview_allowed', true);
+    if ('media' === $type && 'external_preview' === $image_mode && $preview_allowed) {
+        $external_image = esc_url_raw((string) get_post_meta($post->ID, '_ssf_news_external_image', true));
+        if ($external_image) {
+            $image = '<span class="ssf-news-card__image ssf-news-card__image--external" data-external-preview><img src="' . esc_url($external_image) . '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span>';
+        }
+    } elseif ('ssf_image' === $image_mode || 'media' !== $type) {
+        $thumbnail = get_the_post_thumbnail($post->ID, 'medium_large', array('loading' => 'lazy'));
+        if ($thumbnail) {
+            $image = '<a href="' . esc_url($url) . '" class="ssf-news-card__image">' . $thumbnail . '</a>';
+        }
+    }
+    $ship_names = array_filter(array_map('get_the_title', array_map('intval', (array) get_post_meta($post->ID, '_ssf_news_ship_ids', true))));
+    $topics = taxonomy_exists('ssf_news_topic') ? wp_get_object_terms($post->ID, 'ssf_news_topic', array('fields' => 'names')) : array();
+    $tags = array_merge($ship_names, is_wp_error($topics) ? array() : $topics);
+    $date = 'media' === $type && get_post_meta($post->ID, '_ssf_news_original_date', true)
+        ? wp_date(get_option('date_format'), strtotime((string) get_post_meta($post->ID, '_ssf_news_original_date', true)))
+        : get_the_date('', $post);
+    $meta = ('media' === $type && $source ? $source . ' · ' : '') . $date;
+    $cta = 'media' === $type && $external_url
+        ? '<a class="ssf-read-more ssf-read-more--external" target="_blank" rel="noopener noreferrer" href="' . esc_url($external_url) . '">Läs hos ' . esc_html($source ?: wp_parse_url($external_url, PHP_URL_HOST)) . ' <span aria-hidden="true">↗</span><span class="screen-reader-text"> (extern webbplats)</span></a>'
+        : '<a class="ssf-read-more" href="' . esc_url($url) . '">Läs mer <span aria-hidden="true">→</span></a>';
+    return '<article class="ssf-news-card ssf-news-card--' . esc_attr($type) . ($image ? '' : ' ssf-news-card--text') . '" data-news-type="' . esc_attr($type) . '">' . $image . '<div class="ssf-news-card__body"><span class="ssf-news-type">' . esc_html($labels[$type]) . '</span><p class="ssf-news-card__meta">' . esc_html($meta) . '</p><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3><p>' . esc_html(wp_trim_words(get_the_excerpt($post), 24)) . '</p>' . ($tags ? '<p class="ssf-news-card__tags">' . esc_html(implode(' · ', $tags)) . '</p>' : '') . $cta . '</div></article>';
 }
 
 function ssf_site_news_cards_shortcode(array $atts): string
 {
-    $atts = shortcode_atts(array('count' => 3), $atts);
+    $atts = shortcode_atts(array('count' => 3, 'filters' => ''), $atts);
+    $show_filters = '1' === (string) $atts['filters'] || (function_exists('is_page') && is_page('nyheter'));
+    $filter = $show_filters ? sanitize_key((string) ($_GET['nyhetstyp'] ?? 'all')) : 'all';
+    if (! in_array($filter, array('all', 'ssf', 'ship', 'media'), true)) {
+        $filter = 'all';
+    }
     $query = new WP_Query(
         array(
             'post_type' => 'post',
-            'posts_per_page' => (int) $atts['count'],
+            'posts_per_page' => $show_filters ? -1 : max(1, (int) $atts['count']),
             'post_status' => 'publish',
         )
     );
@@ -192,17 +228,44 @@ function ssf_site_news_cards_shortcode(array $atts): string
     }
 
     ob_start();
+    if ($show_filters) {
+        echo '<nav class="ssf-news-filters" aria-label="Filtrera nyheter">';
+        foreach (array('all' => 'Alla', 'ssf' => 'SSF-nyheter', 'ship' => 'Från medlemsfartygen', 'media' => 'I medierna') as $key => $label) {
+            echo '<a' . ($filter === $key ? ' aria-current="page"' : '') . ' href="' . esc_url(add_query_arg('nyhetstyp', $key, get_permalink())) . '">' . esc_html($label) . '</a>';
+        }
+        echo '</nav>';
+    }
     echo '<div class="ssf-news-grid">';
+    $rendered = 0;
     while ($query->have_posts()) {
         $query->the_post();
-        echo ssf_site_render_news_card(get_post()); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        $post = get_post();
+        $type = (string) get_post_meta($post->ID, '_ssf_news_type', true);
+        $type = in_array($type, array('ship', 'media'), true) ? $type : 'ssf';
+        if ('all' === $filter || $filter === $type) {
+            echo ssf_site_render_news_card($post); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+            $rendered++;
+        }
     }
     echo '</div>';
+    if (! $rendered) {
+        echo '<p class="ssf-empty">Inga nyheter i det här filtret ännu.</p>';
+    }
     wp_reset_postdata();
 
     return ob_get_clean();
 }
 add_shortcode('ssf_news_cards', 'ssf_site_news_cards_shortcode');
+
+/** Ensure the canonical /nyheter/ page has the editorial index even if legacy page content lacks the shortcode. */
+function ssf_site_news_page_index(string $content): string
+{
+    if (! is_page('nyheter') || ! in_the_loop() || ! is_main_query() || has_shortcode($content, 'ssf_news_cards')) {
+        return $content;
+    }
+    return $content . '<section class="ssf-page-section"><h2>Senaste nyheterna</h2>' . do_shortcode('[ssf_news_cards filters="1"]') . '</section>';
+}
+add_filter('the_content', 'ssf_site_news_page_index', 12);
 
 function ssf_site_application_form_shortcode(): string
 {

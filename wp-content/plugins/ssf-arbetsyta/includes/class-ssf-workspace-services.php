@@ -9,7 +9,6 @@ final class SSF_Workspace_Services
     public static function boot(): void
     {
         add_action('ssf_workspace_register_services', array(__CLASS__, 'register'));
-        add_action('admin_post_ssf_workspace_news_save', array(__CLASS__, 'save_news'));
     }
 
     public static function register(): void
@@ -31,8 +30,20 @@ final class SSF_Workspace_Services
         if (post_type_exists('post')) {
             SSF_Workspace::register_service(array(
                 'id' => 'news', 'label' => 'Nyheter', 'description' => 'Utkast, granskning och publicering',
-                'route' => 'nyheter', 'capability' => 'ssf_manage_news', 'order' => 30,
-                'render' => array(__CLASS__, 'news'), 'tasks' => array(__CLASS__, 'news_tasks'),
+                'icon' => 'news', 'route' => 'nyheter', 'capability' => 'ssf_news_view', 'nav_group' => 'arbete', 'order' => 30,
+                'owns_heading' => true, 'render' => array('SSF_News_Service', 'render'),
+                'tasks' => array('SSF_News_Service', 'tasks'), 'badge_provider' => array('SSF_News_Service', 'badge'),
+                'quick_actions' => array(
+                    array('label' => 'Ny artikel', 'url' => add_query_arg('new', '1', SSF_Workspace::url('nyheter/egna'))),
+                    array('label' => 'Lägg till extern artikel', 'url' => SSF_Workspace::url('nyheter/extern')),
+                ),
+            ));
+        }
+        if (current_user_can('ssf_news_tip') && ! current_user_can('ssf_news_view')) {
+            SSF_Workspace::register_service(array(
+                'id' => 'news-tip', 'label' => 'Tipsa om artikel', 'description' => 'Skicka en länk till SSF:s webbredaktion',
+                'icon' => 'link', 'route' => 'tipsa-om-artikel', 'capability' => 'ssf_news_tip', 'nav_group' => 'arbete', 'order' => 31,
+                'render' => array(__CLASS__, 'member_tip'),
             ));
         }
         if (class_exists('SSF\MemberPortal\Core\Plugin')) {
@@ -54,6 +65,14 @@ final class SSF_Workspace_Services
                 'group' => 'administration', 'order' => 80, 'render' => array(__CLASS__, 'microsoft'),
             ));
         }
+    }
+
+    public static function member_tip(string $tail)
+    {
+        if ('' !== $tail) {
+            return self::error('Sidan kunde inte hittas.');
+        }
+        return SSF_News_Service::render('tips');
     }
 
     private static function error(string $message, int $status = 404): WP_Error

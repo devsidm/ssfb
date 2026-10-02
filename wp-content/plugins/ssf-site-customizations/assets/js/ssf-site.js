@@ -71,5 +71,15 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.ssf-application-form').forEach(initApplicationForm);
+    document.querySelectorAll('[data-external-preview] img').forEach(function (image) {
+      function fallback() {
+        var media = image.closest('[data-external-preview]');
+        var card = image.closest('.ssf-news-card');
+        if (media) media.hidden = true;
+        if (card) card.classList.add('ssf-news-card--text');
+      }
+      image.addEventListener('error', fallback);
+      if (image.complete && image.naturalWidth === 0) fallback();
+    });
   });
 }());
