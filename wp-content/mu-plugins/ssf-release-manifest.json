@@ -1,16 +1,15 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.4",
-    "build":  "20261002.2",
-    "built_at":  "2026-10-02T12:01:10.1280778Z",
+    "version":  "0.14.5",
+    "build":  "20261002.3",
+    "built_at":  "2026-10-02T12:16:45.9291028Z",
     "source":  "codex",
-    "source_revision":  "67aecc39effa00f5310d1b791d8afc6edb9daf3d",
-    "description":  "SSF Arbetsyta: robust feedback och lasta forslagstillstand",
-    "notes":  "TorrkÃƒÂ¶rning kontrollerar mÃƒÂ¥l och skapar stÃƒÂ¶dda saknade metadatafÃƒÂ¤lt i steg 5.",
+    "source_revision":  "5e2f4572f76b327c7e8a0acf2eefd64a484f8d03",
+    "description":  "SSF Arbetsyta: responsiv navigering vid surfplattebredd",
+    "notes":  "TorrkÃƒÆ’Ã‚Â¶rning kontrollerar mÃƒÆ’Ã‚Â¥l och skapar stÃƒÆ’Ã‚Â¶dda saknade metadatafÃƒÆ’Ã‚Â¤lt i steg 5.",
     "components":  [
-                       "release-tooling",
-                       "ssf-arbetsyta"
+                       "ssf"
                    ],
     "status":  "development",
     "prepared_at":  ""
