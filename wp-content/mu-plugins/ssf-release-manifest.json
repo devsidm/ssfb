@@ -1,13 +1,13 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.5",
-    "build":  "20261002.3",
-    "built_at":  "2026-10-02T12:16:45.9291028Z",
+    "version":  "0.14.6",
+    "build":  "20261002.4",
+    "built_at":  "2026-10-02T12:23:01.1477320Z",
     "source":  "codex",
-    "source_revision":  "5e2f4572f76b327c7e8a0acf2eefd64a484f8d03",
-    "description":  "SSF Arbetsyta: responsiv navigering vid surfplattebredd",
-    "notes":  "TorrkÃƒÆ’Ã‚Â¶rning kontrollerar mÃƒÆ’Ã‚Â¥l och skapar stÃƒÆ’Ã‚Â¶dda saknade metadatafÃƒÆ’Ã‚Â¤lt i steg 5.",
+    "source_revision":  "9a76c475037dec22f29af55ec91fa5f8363ed815",
+    "description":  "SSF Arbetsyta: verifierad surfplattenavigering",
+    "notes":  "TorrkÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rning kontrollerar mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¥l och skapar stÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶dda saknade metadatafÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤lt i steg 5.",
     "components":  [
                        "ssf"
                    ],
