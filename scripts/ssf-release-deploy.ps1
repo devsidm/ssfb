@@ -33,7 +33,7 @@ if (-not $ftpPassword) { throw 'SSF_FTP_PASSWORD saknas i den aktuella processen
 if (-not $wpUser -or -not $wpPassword) { throw 'SSF_WP_USER och SSF_WP_PASSWORD krävs för verifiering efter deployment.' }
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw 'Release-manifest saknas. Registrera först en build.' }
 
-$manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath | ConvertFrom-Json
 if (([string]$manifest.build) -notmatch '^\d{8}\.\d+$') { throw 'Manifestet innehåller ett ogiltigt buildnummer.' }
 if ($Environment -eq 'production') {
     if (-not $BackupConfirmed) { throw 'Production kräver -BackupConfirmed efter verifierad extern backup.' }

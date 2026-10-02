@@ -83,6 +83,8 @@ try {
     }
 
     $php = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-release-controls.php')
+    $build = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts\ssf-release-build.ps1')
+    $prepare = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts\ssf-release-prepare.ps1')
     $deploy = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts\ssf-release-deploy.ps1')
     Assert-Equal 'Miljö använder WordPress' $true ($php.Contains('wp_get_environment_type()'))
     Assert-Equal 'Ingen URL- eller sökvägsgissning' $false ($php.Contains('installation_environment'))
@@ -99,6 +101,9 @@ try {
     Assert-Equal 'DEV manifest remains current build' $true ($deploy.Contains("`$file -eq 'wp-content/mu-plugins/ssf-release-manifest.json'"))
     Assert-Equal 'Nested ssfb.se is only reported' $true ($deploy.Contains("`$ftpRootListing -contains 'ssfb.se'"))
     Assert-Equal 'Production guard remains separate' $true ($deploy.Contains("if (`$Environment -eq 'production')"))
+    Assert-Equal 'Build reads UTF-8 manifest explicitly' $true ($build.Contains('Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath'))
+    Assert-Equal 'Prepare reads UTF-8 manifest explicitly' $true ($prepare.Contains('Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath'))
+    Assert-Equal 'Deploy reads UTF-8 manifest explicitly' $true ($deploy.Contains('Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath'))
 
     $guardMessage = 'DEV FTP account is already rooted at the DEV WordPress document root. Do not specify RemoteRoot.'
     $devOmitted = Invoke-DeployGuardCase -Environment 'development' -RemoteRoot '' -SupplyRemoteRoot $false

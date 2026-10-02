@@ -18,7 +18,7 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw 'Release-manifest saknas. Registrera först en DEV-build.'
 }
 
-$manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath | ConvertFrom-Json
 if (-not ([string]$manifest.build -match '^\d{8}\.\d+$')) {
     throw 'Release-manifestet saknar ett giltigt buildnummer.'
 }

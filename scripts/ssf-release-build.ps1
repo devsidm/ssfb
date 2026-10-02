@@ -50,7 +50,7 @@ try {
 
     $current = $null
     if (Test-Path -LiteralPath $manifestPath) {
-        $current = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+        $current = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath | ConvertFrom-Json
     }
 
     $today = [DateTime]::UtcNow.ToString('yyyyMMdd')

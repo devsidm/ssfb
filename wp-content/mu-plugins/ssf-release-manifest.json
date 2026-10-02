@@ -7,7 +7,7 @@
     "source":  "codex",
     "source_revision":  "9a76c475037dec22f29af55ec91fa5f8363ed815",
     "description":  "SSF Arbetsyta: verifierad surfplattenavigering",
-    "notes":  "TorrkÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rning kontrollerar mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¥l och skapar stÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶dda saknade metadatafÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¤lt i steg 5.",
+    "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
                        "ssf"
                    ],
