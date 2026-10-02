@@ -60,6 +60,11 @@ final class SSF_Access_Control
                 'description' => 'Nyheter, artikelförslag, publicering och omvärldsbevakning.',
                 'capabilities' => array('ssf_manage_news', 'ssf_news_view', 'ssf_news_edit', 'ssf_news_publish', 'ssf_news_suggestions_manage', 'ssf_news_sources_manage', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'upload_files'),
             ),
+            'nyhetsutkast' => array(
+                'label' => 'Nyhetsskribent',
+                'description' => 'Skriva och förhandsgranska nyhetsutkast; kan inte publicera.',
+                'capabilities' => array('ssf_news_view', 'ssf_news_edit', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'upload_files'),
+            ),
             'systemadministration' => array(
                 'label' => 'Systemadministration',
                 'description' => 'Användare, systeminställningar, Microsoft och diagnostik.',

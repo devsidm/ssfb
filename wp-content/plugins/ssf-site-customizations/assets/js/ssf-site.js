@@ -79,7 +79,10 @@
         if (card) card.classList.add('ssf-news-card--text');
       }
       image.addEventListener('error', fallback);
+      function loaded() { image.classList.add('is-loaded'); }
+      image.addEventListener('load', loaded);
       if (image.complete && image.naturalWidth === 0) fallback();
+      else if (image.complete) loaded();
     });
   });
 }());

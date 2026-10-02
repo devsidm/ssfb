@@ -39,11 +39,11 @@ final class SSF_Workspace_Services
                 ),
             ));
         }
-        if (current_user_can('ssf_news_tip') && ! current_user_can('ssf_news_view')) {
+        if (post_type_exists('medlemsfartyg')) {
             SSF_Workspace::register_service(array(
                 'id' => 'news-tip', 'label' => 'Tipsa om artikel', 'description' => 'Skicka en länk till SSF:s webbredaktion',
                 'icon' => 'link', 'route' => 'tipsa-om-artikel', 'capability' => 'ssf_news_tip', 'nav_group' => 'arbete', 'order' => 31,
-                'render' => array(__CLASS__, 'member_tip'),
+                'render' => array(__CLASS__, 'member_tip'), 'owns_heading' => true,
             ));
         }
         if (class_exists('SSF\MemberPortal\Core\Plugin')) {

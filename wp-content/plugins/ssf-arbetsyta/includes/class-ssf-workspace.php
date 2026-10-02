@@ -78,6 +78,7 @@ final class SSF_Workspace
         $service['group'] = in_array($group, array('arbete', 'administration'), true) ? $group : 'arbete';
         $service['order'] = (int) ($service['order'] ?? 100);
         $service['icon'] = sanitize_key((string) ($service['icon'] ?? 'service'));
+        $service['tasks'] = $service['task_provider'] ?? $service['tasks'] ?? null;
         self::$services[$id] = $service;
         return true;
     }

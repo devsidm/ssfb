@@ -48,6 +48,8 @@ a.ssf-workspace-card:hover{border-color:var(--ssf-blue,#1c5b98)}
 .ssf-workspace-form{display:flex;flex-direction:column;gap:10px;max-width:850px}
 .ssf-workspace-form label{font-weight:700;margin-top:12px}
 .ssf-workspace-form input,.ssf-workspace-form textarea{font:inherit;width:100%;padding:11px;border:1px solid var(--ssf-border,#b8c7d9);border-radius:5px;background:#fff;color:inherit}
+.ssf-workspace-form select{font:inherit;width:100%;min-height:44px;padding:11px;border:1px solid var(--ssf-border,#b8c7d9);border-radius:5px;background:#fff;color:inherit}
+.ssf-news-preview-card{max-width:560px;width:100%;margin-bottom:24px}
 .ssf-workspace-form-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:14px}
 .ssf-workspace-form fieldset{border:0;padding:0;margin:12px 0;display:flex;flex-direction:column;gap:8px}
 .ssf-workspace-form legend h3{margin:0 0 8px}

@@ -26,6 +26,9 @@ $wpPassword = [string]$env:SSF_WP_PASSWORD
 if ($Environment -eq 'development' -and -not [string]::IsNullOrWhiteSpace($RemoteRoot)) {
     throw 'DEV FTP account is already rooted at the DEV WordPress document root. Do not specify RemoteRoot.'
 }
+if ($Environment -eq 'development' -and $BaseUrl.TrimEnd('/') -ne 'https://ssfb.se/dev') {
+    throw 'DEV deployment is restricted to https://ssfb.se/dev.'
+}
 if (-not $ftpPassword) { throw 'SSF_FTP_PASSWORD saknas i den aktuella processen.' }
 if (-not $wpUser -or -not $wpPassword) { throw 'SSF_WP_USER och SSF_WP_PASSWORD krävs för verifiering efter deployment.' }
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw 'Release-manifest saknas. Registrera först en build.' }
@@ -94,6 +97,12 @@ try {
         if ($ftpRootListing -contains 'ssfb.se') {
             Write-Warning 'Accidental nested /ssfb.se directory exists in the DEV FTP root. It will not be deleted automatically; remove it manually.'
         }
+        if ($ftpRootListing -contains '.maintenance') {
+            throw 'DEV is already in maintenance. Resolve the existing deployment before starting another.'
+        }
+        $maintenanceFile = Join-Path $PSScriptRoot 'deploy\ssf-dev-maintenance.php'
+        & curl.exe -sS --fail --ftp-pasv -u ($FtpUser + ':' + $ftpPassword) -T $maintenanceFile ('ftp://' + $FtpHost.TrimEnd('/') + '/.maintenance')
+        if ($LASTEXITCODE -ne 0) { throw 'Could not enable DEV maintenance.' }
     }
     foreach ($file in $trackedFiles) {
         $local = if ($file -eq 'wp-content/mu-plugins/ssf-release-manifest.json') {
@@ -107,6 +116,11 @@ try {
         $url = 'ftp://' + $FtpHost.TrimEnd('/') + $ftpPathPrefix + $remotePath
         & curl.exe -sS --fail --ftp-pasv --ftp-create-dirs -u ($FtpUser + ':' + $ftpPassword) -T $local $url
         if ($LASTEXITCODE -ne 0) { throw "FTP-uppladdning misslyckades: $file" }
+    }
+
+    if ($Environment -eq 'development') {
+        & curl.exe -sS --fail --ftp-pasv -u ($FtpUser + ':' + $ftpPassword) -Q 'DELE .maintenance' ('ftp://' + $FtpHost.TrimEnd('/') + '/') -o NUL
+        if ($LASTEXITCODE -ne 0) { throw 'Artifact installed but DEV maintenance could not be removed.' }
     }
 
     & curl.exe -sS -c $cookiePath -o $pagePath "$BaseUrl/wp-login.php"

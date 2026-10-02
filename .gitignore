@@ -30,6 +30,7 @@ artifacts/dev-preflight.json
 artifacts/*.cookie
 artifacts/*login*.html
 artifacts/*harness*.json
+artifacts/news-qa/
 ssf-wp-*.cookie
 ssf-login-*.html
 ssf-admin-*.html

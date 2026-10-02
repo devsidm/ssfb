@@ -22,6 +22,7 @@ final class SSF_News_Service
         add_action('init', array(__CLASS__, 'register_data'), 8);
         add_action('init', array(__CLASS__, 'ensure_schedule'), 40);
         add_action(self::CRON_HOOK, array(__CLASS__, 'run_monitoring'));
+        add_action('ssf_news_check_source', array(__CLASS__, 'background_source'));
         add_filter('user_has_cap', array(__CLASS__, 'member_tip_capability'), 20, 4);
         foreach (array(
             'ssf_news_manual' => 'handle_manual',
@@ -74,8 +75,9 @@ final class SSF_News_Service
 
     public static function member_tip_capability(array $allcaps, array $caps, array $args, WP_User $user): array
     {
-        $active_member = class_exists('SSF_Access_Control') && SSF_Access_Control::is_active((int) $user->ID);
-        if (in_array('ssf_news_tip', $caps, true) && ($active_member || self::user_ship_ids((int) $user->ID))) {
+        $active = class_exists('SSF_Access_Control') && SSF_Access_Control::is_active((int) $user->ID);
+        if ($active && in_array('ssf_news_tip', $caps, true)
+            && (in_array('ssf_fartygsombud', (array) $user->roles, true) || self::user_ship_ids((int) $user->ID))) {
             $allcaps['ssf_news_tip'] = true;
         }
         return $allcaps;
@@ -91,11 +93,11 @@ final class SSF_News_Service
         if ($user_id < 1 || ! post_type_exists('medlemsfartyg')) {
             return array();
         }
-        $ids = get_posts(array(
-            'post_type' => 'medlemsfartyg', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids',
-            'meta_query' => array(array('key' => '_ssf_ship_owner_users', 'value' => '"' . $user_id . '"', 'compare' => 'LIKE')),
-        ));
-        return array_map('intval', $ids);
+        // The canonical owner field can contain either serialized integers or strings.
+        return array_values(array_map(static fn($ship): int => (int) $ship->ID, array_filter(
+            get_posts(array('post_type' => 'medlemsfartyg', 'post_status' => 'any', 'numberposts' => -1)),
+            static fn($ship): bool => in_array($user_id, array_map('intval', (array) get_post_meta($ship->ID, '_ssf_ship_owner_users', true)), true)
+        )));
     }
 
     public static function normalize_url(string $url): string
@@ -107,7 +109,7 @@ final class SSF_News_Service
         }
         $scheme = strtolower((string) $parts['scheme']);
         $host = strtolower(rtrim((string) $parts['host'], '.'));
-        if (! in_array($scheme, array('http', 'https'), true)) {
+        if (! in_array($scheme, array('http', 'https'), true) || isset($parts['user']) || isset($parts['pass'])) {
             return '';
         }
         $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
@@ -159,7 +161,7 @@ final class SSF_News_Service
                 return new WP_Error('unsafe_url', 'URL:en pekar mot en otillåten nätverksadress.');
             }
             $response = wp_safe_remote_get($url, array(
-                'timeout' => 8, 'redirection' => 0, 'limit_response_size' => $max_bytes,
+                'timeout' => 8, 'redirection' => 0, 'limit_response_size' => $max_bytes + 1,
                 'reject_unsafe_urls' => true,
                 'headers' => array('Accept' => 'text/html,application/xhtml+xml,application/rss+xml,application/atom+xml;q=0.9'),
                 'user-agent' => 'SSF News Monitor/1.0; ' . home_url('/'),
@@ -183,13 +185,21 @@ final class SSF_News_Service
             if ($type && ! preg_match('#(text/html|application/xhtml\+xml|application/(rss|atom)\+xml|text/xml|application/xml)#', $type)) {
                 return new WP_Error('content_type', 'Källan returnerade inte HTML eller RSS/Atom.');
             }
-            return array('url' => $url, 'body' => (string) wp_remote_retrieve_body($response), 'content_type' => $type);
+            $body = (string) wp_remote_retrieve_body($response);
+            if (strlen($body) > $max_bytes) {
+                return new WP_Error('response_size', 'Källans svar överskrider tillåten storlek.');
+            }
+            return array('url' => $url, 'body' => $body, 'content_type' => $type);
         }
         return new WP_Error('fetch_failed', 'Källan kunde inte hämtas.');
     }
 
     private static function resolve_url(string $base, string $target): string
     {
+        $target = trim($target);
+        if (! $target || preg_match('#^[a-z][a-z0-9+.-]*:#i', $target) && ! preg_match('#^https?://#i', $target)) {
+            return '';
+        }
         if (preg_match('#^https?://#i', $target)) {
             return $target;
         }
@@ -238,7 +248,7 @@ final class SSF_News_Service
         $image = trim((string) ($meta['og:image'] ?? ''));
         $data['image'] = $image ? esc_url_raw(self::resolve_url($url, $image)) : '';
         $canonical_url = $canonical && $canonical->length ? self::resolve_url($url, trim($canonical->item(0)->nodeValue)) : $url;
-        $data['canonical_url'] = self::normalize_url($canonical_url) ?: $data['url'];
+        $data['canonical_url'] = self::is_safe_url($canonical_url) ? self::normalize_url($canonical_url) : $data['url'];
         $date = (string) ($meta['article:published_time'] ?? $meta['datepublished'] ?? $meta['date'] ?? '');
         if ($date && strtotime($date)) {
             $data['published_at'] = gmdate('Y-m-d H:i:s', strtotime($date));
@@ -286,8 +296,8 @@ final class SSF_News_Service
             '_ssf_suggestion_url' => self::normalize_url((string) ($data['url'] ?? $canonical)),
             '_ssf_suggestion_canonical' => $canonical,
             '_ssf_suggestion_dedup' => $hash,
-            '_ssf_suggestion_source' => sanitize_text_field((string) ($data['site_name'] ?? $data['source'] ?? wp_parse_url($canonical, PHP_URL_HOST))),
-            '_ssf_suggestion_original_date' => sanitize_text_field((string) ($data['published_at'] ?? '')),
+            '_ssf_suggestion_source' => sanitize_text_field((string) (! empty($data['site_name']) ? $data['site_name'] : ($data['source'] ?? wp_parse_url($canonical, PHP_URL_HOST)))),
+            '_ssf_suggestion_original_date' => ! empty($data['published_at']) && strtotime((string) $data['published_at']) ? gmdate('Y-m-d H:i:s', strtotime((string) $data['published_at'])) : '',
             '_ssf_suggestion_image' => esc_url_raw((string) ($data['image'] ?? '')),
             '_ssf_suggestion_origin' => sanitize_key((string) ($data['origin'] ?? 'monitoring')),
             '_ssf_suggestion_status' => 'new',
@@ -305,6 +315,7 @@ final class SSF_News_Service
         foreach ($fields as $key => $value) {
             update_post_meta((int) $id, $key, $value);
         }
+        update_post_meta((int) $id, '_ssf_suggestion_origins', array(array('origin' => $fields['_ssf_suggestion_origin'], 'at' => current_time('mysql'), 'user_id' => $fields['_ssf_suggestion_user_id'])));
         do_action('ssf_news_suggestion_created', (int) $id, $data);
         return (int) $id;
     }
@@ -381,6 +392,10 @@ final class SSF_News_Service
         if ('forslag' === $section) {
             return self::suggestions(isset($parts[1]) ? (int) $parts[1] : 0);
         }
+        if ('ny' === $section) {
+            self::require_cap('ssf_news_edit');
+            return self::own_editor(null);
+        }
         if ('extern' === $section) {
             return self::manual_form();
         }
@@ -398,6 +413,10 @@ final class SSF_News_Service
         $tabs = array('' => 'Översikt', 'egna' => 'Egna nyheter', 'medierna' => 'I medierna', 'forslag' => 'Artikelförslag', 'bevakning' => 'Omvärldsbevakning');
         $html = '<nav class="ssf-workspace-tabs ssf-news-tabs" aria-label="Nyheters delar">';
         foreach ($tabs as $path => $label) {
+            if ('bevakning' === $path && ! self::can('ssf_news_sources_manage')
+                || 'forslag' === $path && ! self::can('ssf_news_suggestions_manage')) {
+                continue;
+            }
             $html .= '<a' . ($active === $path ? ' aria-current="page"' : '') . ' href="' . esc_url(SSF_Workspace::url('nyheter' . ($path ? '/' . $path : ''))) . '">' . esc_html($label) . '</a>';
         }
         return $html . '</nav>';
@@ -414,7 +433,7 @@ final class SSF_News_Service
         $new = self::count_suggestions();
         $drafts = wp_count_posts('post')->draft ?? 0;
         $future = wp_count_posts('post')->future ?? 0;
-        $html = self::notice_html() . '<div class="ssf-news-heading"><div><h1>Nyheter</h1><p>Det här behöver du göra nu.</p></div><div class="ssf-workspace-form-actions"><a class="ssf-workspace-button" href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '">+ Ny artikel</a><a class="ssf-workspace-button ssf-workspace-button--secondary" href="' . esc_url(SSF_Workspace::url('nyheter/extern')) . '">+ Lägg till extern artikel</a></div></div>' . self::tabs('');
+        $html = self::notice_html() . '<div class="ssf-news-heading"><div><h1>Nyheter</h1><p>Det här behöver du göra nu.</p></div><div class="ssf-workspace-form-actions"><a class="ssf-workspace-button" href="' . esc_url(SSF_Workspace::url('nyheter/ny')) . '">+ Ny artikel</a><a class="ssf-workspace-button ssf-workspace-button--secondary" href="' . esc_url(SSF_Workspace::url('nyheter/extern')) . '">+ Lägg till extern artikel</a></div></div>' . self::tabs('');
         $html .= '<div class="ssf-news-stats"><a href="' . esc_url(SSF_Workspace::url('nyheter/forslag')) . '"><strong>' . esc_html((string) $new) . '</strong><span>nya artikelförslag</span></a><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '"><strong>' . esc_html((string) $drafts) . '</strong><span>utkast</span></a><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '"><strong>' . esc_html((string) $future) . '</strong><span>schemalagda</span></a></div>';
         $recent = get_posts(array('post_type' => array('post', self::SUGGESTION_TYPE), 'post_status' => array('draft', 'pending', 'future', 'publish', 'private'), 'numberposts' => 6, 'orderby' => 'modified', 'order' => 'DESC'));
         $html .= '<h2>Senaste aktivitet</h2><ul class="ssf-workspace-list">';
@@ -476,6 +495,9 @@ final class SSF_News_Service
 
     private static function own_editor(?WP_Post $post): string
     {
+        if ($post && isset($_GET['preview'])) {
+            return self::preview($post, 'egna');
+        }
         $id = $post ? (int) $post->ID : 0;
         $type = $post ? self::post_meta($id, self::META_TYPE) : 'ssf';
         $html = '<h1>' . ($post ? 'Redigera nyhet' : 'Ny artikel') . '</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '">← Egna nyheter</a></p>' . self::notice_html();
@@ -487,6 +509,7 @@ final class SSF_News_Service
                 $html .= '<button class="ssf-workspace-button ssf-workspace-button--danger" name="intent" value="unpublish">Avpublicera</button>';
             }
         }
+        $html .= '<button class="ssf-workspace-button ssf-workspace-button--secondary" name="intent" value="preview">Spara och förhandsgranska</button>';
         if ($post) {
             $html .= '<a target="_blank" rel="noopener" href="' . esc_url(get_preview_post_link($post)) . '">Förhandsgranska ↗</a>';
         }
@@ -580,6 +603,9 @@ final class SSF_News_Service
         $source_id = (int) get_post_meta($id, '_ssf_suggestion_source_id', true);
         $allow_preview = $source_id && '1' === self::post_meta($source_id, '_ssf_source_allow_preview');
         $html = '<h1>Granska artikelförslag</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/forslag')) . '">← Artikelförslag</a></p>' . self::notice_html() . '<article class="ssf-workspace-panel"><p class="ssf-news-kicker">' . esc_html(self::suggestion_origin(self::post_meta($id, '_ssf_suggestion_origin'))) . '</p><h2>' . esc_html(get_the_title($post)) . '</h2><p><strong>Källa:</strong> ' . esc_html(self::post_meta($id, '_ssf_suggestion_source')) . '</p><p>' . esc_html($post->post_excerpt) . '</p><p><a target="_blank" rel="noopener noreferrer" href="' . esc_url(self::post_meta($id, '_ssf_suggestion_canonical')) . '">Läs original ↗</a></p></article>';
+        if (self::post_meta($id, '_ssf_suggestion_comment')) {
+            $html .= '<section class="ssf-workspace-panel"><h2>Kommentar från tipsaren</h2><p>' . esc_html(self::post_meta($id, '_ssf_suggestion_comment')) . '</p></section>';
+        }
         $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_suggestion"><input type="hidden" name="suggestion_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_suggestion_' . $id, '_wpnonce', true, false) . '<div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="convert">Skapa I medierna</button><button class="ssf-workspace-button ssf-workspace-button--danger" name="intent" value="dismiss">Inte relevant</button></div>';
         if (self::post_meta($id, '_ssf_suggestion_image') && ! $allow_preview) {
             $html .= '<p class="ssf-workspace-help">Källan tillåter inte extern bildförhandsvisning. Textkort används tills detta aktiveras på källan.</p>';
@@ -589,6 +615,9 @@ final class SSF_News_Service
 
     private static function external_editor(WP_Post $post): string
     {
+        if (isset($_GET['preview'])) {
+            return self::preview($post, 'medierna');
+        }
         $id = (int) $post->ID;
         $mode = self::post_meta($id, self::META_IMAGE_MODE) ?: 'none';
         $source_id = (int) get_post_meta($id, '_ssf_news_source_id', true);
@@ -604,7 +633,26 @@ final class SSF_News_Service
                 $html .= '<button class="ssf-workspace-button ssf-workspace-button--danger" name="intent" value="unpublish">Avpublicera</button>';
             }
         }
-        return $html . '<a target="_blank" rel="noopener" href="' . esc_url(get_preview_post_link($post)) . '">Förhandsgranska ↗</a></div></form>';
+        return $html . '<button class="ssf-workspace-button ssf-workspace-button--secondary" name="intent" value="preview">Spara och förhandsgranska</button></div></form>';
+    }
+
+    private static function preview(WP_Post $post, string $section): string
+    {
+        if (defined('SSF_SITE_URL')) {
+            wp_enqueue_style('ssf-news-preview', SSF_SITE_URL . 'assets/css/ssf-site.css', array(), SSF_WORKSPACE_VERSION);
+            wp_enqueue_script('ssf-news-preview', SSF_SITE_URL . 'assets/js/ssf-site.js', array(), SSF_WORKSPACE_VERSION, true);
+        }
+        $url = SSF_Workspace::url('nyheter/' . $section . '/' . $post->ID);
+        $html = '<h1>Förhandsgranska</h1><p>Så här visas det sparade innehållet. Utkastet är endast synligt för redaktionen.</p><p><a class="ssf-workspace-button" href="' . esc_url($url) . '">← Till redigering</a></p>';
+        if (function_exists('ssf_site_render_news_card')) {
+            $html .= '<div class="ssf-news-preview-card">' . ssf_site_render_news_card($post, add_query_arg('preview', '1', $url)) . '</div>';
+        }
+        if ('egna' === $section && function_exists('ssf_render_news_article')) {
+            ob_start();
+            ssf_render_news_article($post);
+            $html .= (string) ob_get_clean();
+        }
+        return $html;
     }
 
     private static function ship_select(array $selected): string
@@ -695,6 +743,10 @@ final class SSF_News_Service
             wp_die('Förslaget kunde inte hittas.', '', array('response' => 404));
         }
         $intent = sanitize_key((string) ($_POST['intent'] ?? ''));
+        $converted = (int) get_post_meta($id, '_ssf_suggestion_post_id', true);
+        if ($converted && 'post' === get_post_type($converted)) {
+            self::redirect('nyheter/medierna/' . $converted, 'Förslaget har redan ett utkast.');
+        }
         if ('dismiss' === $intent) {
             update_post_meta($id, '_ssf_suggestion_status', 'dismissed');
             self::redirect('nyheter/forslag', 'Förslaget markerades som inte relevant.');
@@ -704,7 +756,7 @@ final class SSF_News_Service
         }
         $post_id = wp_insert_post(array(
             'post_type' => 'post', 'post_status' => 'draft', 'post_title' => $suggestion->post_title,
-            'post_excerpt' => $suggestion->post_excerpt, 'post_author' => get_current_user_id(),
+            'post_excerpt' => '', 'post_author' => get_current_user_id(),
         ), true);
         if (is_wp_error($post_id)) {
             self::redirect('nyheter/forslag/' . $id, '', 'Utkastet kunde inte skapas.');
@@ -744,6 +796,15 @@ final class SSF_News_Service
         }
         $mode = sanitize_key((string) ($_POST['mode'] ?? 'own'));
         $intent = sanitize_key((string) ($_POST['intent'] ?? 'draft'));
+        if (! in_array($mode, array('own', 'external'), true)
+            || ('external' === $mode && (! $post || 'media' !== self::post_meta($id, self::META_TYPE)))
+            || ('own' === $mode && $post && 'media' === self::post_meta($id, self::META_TYPE))) {
+            wp_die('Ogiltig artikeltyp.', '', array('response' => 400));
+        }
+        if (in_array($intent, array('publish', 'unpublish'), true) && ! self::can('ssf_news_publish')
+            || ($post && in_array($post->post_status, array('publish', 'future'), true) && ! self::can('ssf_news_publish'))) {
+            wp_die('Publiceringsbehörighet krävs för denna åtgärd.', '', array('response' => 403));
+        }
         $status = 'draft';
         if ('publish' === $intent && self::can('ssf_news_publish')) {
             $status = 'publish';
@@ -755,6 +816,9 @@ final class SSF_News_Service
             'post_title' => sanitize_text_field((string) wp_unslash($_POST['title'] ?? '')),
             'post_excerpt' => sanitize_textarea_field((string) wp_unslash($_POST['summary'] ?? '')),
         );
+        if (! $args['post_title'] || ('external' === $mode && (! $args['post_excerpt'] || mb_strlen($args['post_excerpt']) > 600))) {
+            wp_die('Ange rubrik och en kort egen sammanfattning (högst 600 tecken).', '', array('response' => 400));
+        }
         if ('own' === $mode) {
             $args['post_content'] = wp_kses_post((string) wp_unslash($_POST['content'] ?? ''));
         }
@@ -775,7 +839,8 @@ final class SSF_News_Service
             if (! in_array($image_mode, array('external_preview', 'ssf_image', 'none'), true)) {
                 $image_mode = 'none';
             }
-            if ('external_preview' === $image_mode && '1' !== self::post_meta($id, '_ssf_news_external_preview_allowed')) {
+            $source_id = (int) get_post_meta($id, '_ssf_news_source_id', true);
+            if ('external_preview' === $image_mode && (! $source_id || '1' !== self::post_meta($source_id, '_ssf_source_allow_preview'))) {
                 $image_mode = 'none';
             }
             update_post_meta($id, self::META_IMAGE_MODE, $image_mode);
@@ -791,6 +856,10 @@ final class SSF_News_Service
         }
         self::handle_image_upload($id);
         $path = 'external' === $mode ? 'nyheter/medierna/' . $id : 'nyheter/egna/' . $id;
+        if ('preview' === $intent) {
+            wp_safe_redirect(add_query_arg('preview', '1', SSF_Workspace::url($path)));
+            exit;
+        }
         self::redirect($path, 'Artikeln sparades som ' . strtolower(self::status_label($status)) . '.');
     }
 
@@ -801,6 +870,11 @@ final class SSF_News_Service
         }
         if (! current_user_can('upload_files')) {
             return;
+        }
+        $file = $_FILES['featured_image'];
+        $checked = wp_check_filetype_and_ext((string) ($file['tmp_name'] ?? ''), (string) ($file['name'] ?? ''));
+        if (! in_array($checked['type'] ?? '', array('image/jpeg', 'image/png', 'image/webp'), true)) {
+            wp_die('Bilden måste vara JPEG, PNG eller WebP.', '', array('response' => 400));
         }
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -816,6 +890,9 @@ final class SSF_News_Service
         self::require_cap('ssf_news_sources_manage');
         $id = absint($_POST['source_id'] ?? 0);
         check_admin_referer('ssf_news_source_save_' . $id);
+        if ($id && self::SOURCE_TYPE !== get_post_type($id)) {
+            wp_die('Källan kunde inte hittas.', '', array('response' => 404));
+        }
         $urls = array();
         foreach (array('base_url', 'feed_url', 'discovery_url') as $field) {
             $urls[$field] = esc_url_raw((string) wp_unslash($_POST[$field] ?? ''));
@@ -875,19 +952,35 @@ final class SSF_News_Service
             update_post_meta($id, '_ssf_source_active', '1' === self::post_meta($id, '_ssf_source_active') ? '0' : '1');
             self::redirect('nyheter/bevakning', 'Källans status uppdaterades.');
         }
-        $result = self::check_source($id);
-        self::redirect('nyheter/bevakning', is_wp_error($result) ? '' : 'Källan kontrollerades.', is_wp_error($result) ? $result->get_error_message() : '');
+        if ('1' !== self::post_meta($id, '_ssf_source_active')) {
+            self::redirect('nyheter/bevakning', '', 'Källan är pausad. Aktivera den först.');
+        }
+        self::queue_source($id);
+        self::redirect('nyheter/bevakning', 'Kontrollen har startats i bakgrunden. Uppdatera sidan för att se resultatet.');
     }
 
     public static function run_monitoring(): void
     {
         $sources = get_posts(array('post_type' => self::SOURCE_TYPE, 'post_status' => 'private', 'numberposts' => -1, 'meta_key' => '_ssf_source_active', 'meta_value' => '1'));
         foreach ($sources as $source) {
-            try {
-                self::check_source((int) $source->ID);
-            } catch (Throwable $error) {
-                self::source_result((int) $source->ID, 0, 'Error', 'Källan kunde inte behandlas.');
-            }
+            self::queue_source((int) $source->ID);
+        }
+    }
+
+    private static function queue_source(int $id): void
+    {
+        if (! wp_next_scheduled('ssf_news_check_source', array($id))) {
+            wp_schedule_single_event(time() + 1, 'ssf_news_check_source', array($id));
+        }
+        update_post_meta($id, '_ssf_source_last_result', 'Kontroll köad');
+    }
+
+    public static function background_source(int $id): void
+    {
+        try {
+            self::check_source($id);
+        } catch (Throwable $error) {
+            self::source_result($id, 0, 'Error', 'Källan kunde inte behandlas.');
         }
     }
 
@@ -903,6 +996,9 @@ final class SSF_News_Service
         $source = get_post($id);
         if (! $source || self::SOURCE_TYPE !== $source->post_type) {
             return new WP_Error('source_missing', 'Källan kunde inte hittas.');
+        }
+        if ('1' !== self::post_meta($id, '_ssf_source_active')) {
+            return new WP_Error('source_paused', 'Källan är pausad. Aktivera den först.');
         }
         $feed = self::post_meta($id, '_ssf_source_feed_url');
         $discovery = self::post_meta($id, '_ssf_source_discovery_url');
@@ -923,11 +1019,10 @@ final class SSF_News_Service
             if (empty($item['url']) || ! self::is_safe_url($item['url'])) {
                 continue;
             }
-            if (empty($item['title']) || empty($item['description'])) {
-                $metadata = self::fetch_metadata($item['url']);
-                if (! is_wp_error($metadata)) {
-                    $item = array_merge($metadata, array_filter($item));
-                }
+            // Always resolve canonical + OG, including complete RSS entries. Feed text is never article content.
+            $metadata = self::fetch_metadata($item['url']);
+            if (! is_wp_error($metadata)) {
+                $item = array_merge($item, array_filter($metadata));
             }
             $candidate_text = mb_strtolower((string) ($item['title'] ?? '') . ' ' . (string) ($item['description'] ?? ''));
             $custom_keywords = array_filter(array_map('trim', explode(',', self::post_meta($id, '_ssf_source_keywords'))));
@@ -953,9 +1048,13 @@ final class SSF_News_Service
 
     private static function feed_items(string $xml, string $base): array
     {
-        libxml_use_internal_errors(true);
+        if (preg_match('/<!DOCTYPE|<!ENTITY/i', $xml)) {
+            return array();
+        }
+        $previous = libxml_use_internal_errors(true);
         $feed = simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET);
         libxml_clear_errors();
+        libxml_use_internal_errors($previous);
         if (! $feed) {
             return array();
         }
@@ -993,8 +1092,12 @@ final class SSF_News_Service
             if (! $href || mb_strlen($title) < 12) {
                 continue;
             }
-            $items[] = array('url' => self::resolve_url($base, $href), 'canonical_url' => self::resolve_url($base, $href), 'title' => $title);
+            $url = self::resolve_url($base, $href);
+            if (wp_parse_url($url, PHP_URL_HOST) !== wp_parse_url($base, PHP_URL_HOST)) {
+                continue;
+            }
+            $items[$url] = array('url' => $url, 'canonical_url' => $url, 'title' => $title);
         }
-        return $items;
+        return array_values($items);
     }
 }
