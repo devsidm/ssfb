@@ -430,7 +430,11 @@ class SSF_Medlemsprocess_Portal
             $answer = (array) ($record['answers']['10'] ?? array());
             $deviations = SSF_Medlemsprocess_Inspection::deviations($record);
             $inspector_names = array();
-            foreach (array((int) ($record['lead_inspector_user_id'] ?? 0), (int) ($record['co_inspector_user_id'] ?? 0)) as $user_id) { $user = $user_id ? get_userdata($user_id) : false; if ($user) { $inspector_names[] = $user->display_name; } }
+            foreach (array((int) ($record['lead_inspector_user_id'] ?? 0), (int) ($record['co_inspector_user_id'] ?? 0)) as $user_id) {
+                $user = $user_id ? get_userdata($user_id) : false;
+                $historical_name = (string) ($record['actor_snapshots'][(string) $user_id]['display_name'] ?? '');
+                if ($user || $historical_name) { $inspector_names[] = $user ? $user->display_name : $historical_name; }
+            }
             echo '<section class="ssf-portal-panel"><p class="ssf-portal-kicker">Beslutsunderlag</p><h2>Inspektionsprotokoll</h2><dl class="ssf-definition-grid">';
             foreach (array('Fartyg' => $snapshot['ship_name'] ?? '', 'Ansökningsnummer' => $snapshot['number'] ?? '', 'Aspirant sedan' => get_post_meta($application_id, '_ssf_aspirant_started_at', true), 'Inspektionsdatum' => $record['details']['date'] ?? '', 'Inspektörer' => implode(', ', $inspector_names), 'Status' => $record['status'] ?? '') as $label => $value) {
                 echo '<div><dt>' . esc_html($label) . '</dt><dd>' . esc_html((string) $value) . '</dd></div>';
@@ -460,6 +464,7 @@ class SSF_Medlemsprocess_Portal
         echo '<section class="ssf-portal-panel"><h2>Historik</h2><ol class="ssf-timeline">';
         foreach ($history as $entry) {
             $author = ! empty($entry['author']) ? get_the_author_meta('display_name', (int) $entry['author']) : '';
+            $author = $author ?: (string) ($entry['actor_name'] ?? '');
             echo '<li><time>' . esc_html((string) ($entry['time'] ?? $entry['changed_at'] ?? '')) . '</time><strong>' . esc_html((string) ($entry['message'] ?? '')) . '</strong><span>' . esc_html(trim(($author ?: 'System') . ' · ' . (string) ($entry['source'] ?? ''))) . '</span></li>';
         }
         echo '</ol></section>';

@@ -56,8 +56,10 @@ final class SSF_Workspace_Services
         if (class_exists('SSF_Access_Control')) {
             SSF_Workspace::register_service(array(
                 'id' => 'users', 'label' => 'Användare & behörigheter', 'description' => 'Hantera SSF-åtkomst',
-                'route' => 'anvandare', 'capability' => SSF_Access_Control::MANAGE_USERS,
-                'group' => 'administration', 'order' => 70, 'render' => array(__CLASS__, 'users'),
+                'icon' => 'users', 'route' => 'anvandare', 'capability' => SSF_Access_Control::MANAGE_USERS,
+                'nav_group' => 'administration', 'order' => 70, 'render' => array(__CLASS__, 'users'),
+                'badge_provider' => array(__CLASS__, 'users_badge'),
+                'quick_actions' => array(array('label' => 'Bjud in användare', 'url' => SSF_Workspace::url('anvandare/ny'))),
             ));
             SSF_Workspace::register_service(array(
                 'id' => 'microsoft', 'label' => 'Microsoft-konfiguration', 'description' => 'Katalog, inloggning, SharePoint och e-post',
@@ -356,15 +358,26 @@ final class SSF_Workspace_Services
         return $html . '<div class="ssf-workspace-cards"><div class="ssf-workspace-card"><strong>' . esc_html((string) $count) . '</strong><span>Anmälningar</span></div><div class="ssf-workspace-card"><strong>' . (! empty($data['registration_open']) ? 'Öppen' : 'Stängd') . '</strong><span>Anmälan</span></div></div>';
     }
 
+    public static function users_badge(): int
+    {
+        $count = 0;
+        foreach (get_users(array('fields' => 'ids')) as $user_id) {
+            if (in_array(SSF_Access_Control::status((int) $user_id), array(SSF_Access_Control::STATUS_INVITED, SSF_Access_Control::STATUS_TERMINATED), true)) {
+                ++$count;
+            }
+        }
+        return $count;
+    }
+
     public static function users(string $tail)
     {
         $groups = SSF_Access_Control::groups();
         if ('ny' === $tail) {
-            $html = '<p><a href="' . esc_url(SSF_Workspace::url('anvandare')) . '">← Alla användare</a></p><h2>Bjud in SSF-användare</h2><p>Inbjudan använder den befintliga Microsoft-aktiveringen. E-postadressen måste sluta på @ssfb.se.</p>';
-            $html .= '<form class="ssf-workspace-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_m365_create_invitation">' . wp_nonce_field('ssf_m365_create_invitation', '_wpnonce', true, false);
+            $html = '<p><a href="' . esc_url(SSF_Workspace::url('anvandare')) . '">← Alla användare</a></p><h2>Bjud in SSF-användare</h2><p>Inbjudan använder den säkra Microsoft-aktiveringen. E-postadressen måste sluta på @ssfb.se.</p>';
+            $html .= '<form class="ssf-workspace-form ssf-user-panel" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_m365_create_invitation">' . wp_nonce_field('ssf_m365_create_invitation', '_wpnonce', true, false);
             $html .= '<label for="ssf-workspace-invite-name">Namn</label><input id="ssf-workspace-invite-name" name="display_name" required><label for="ssf-workspace-invite-email">SSF-e-post</label><input id="ssf-workspace-invite-email" type="email" name="email" required><fieldset><legend><h3>Behörighetsgrupper</h3></legend>';
             foreach ($groups as $key => $group) {
-                $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"> ' . esc_html($group['label']) . '</label>';
+                $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"> <span><strong>' . esc_html($group['label']) . '</strong><small>' . esc_html($group['description']) . '</small></span></label>';
             }
             return $html . '</fieldset><button class="ssf-workspace-button" type="submit">Skapa och skicka inbjudan</button></form>';
         }
@@ -372,65 +385,124 @@ final class SSF_Workspace_Services
             $html = '<p><a href="' . esc_url(SSF_Workspace::url('anvandare')) . '">← Alla användare</a></p><h2>Inbjudningar</h2><ul class="ssf-workspace-list">';
             foreach ((array) get_option('ssf_microsoft_login_invitations', array()) as $invite_id => $invite) {
                 $user = get_userdata((int) ($invite['user_id'] ?? 0));
-                if (! $user) {
-                    continue;
-                }
+                if (! $user) { continue; }
                 $status = ! empty($invite['used_at']) ? 'Aktiverad' : (! empty($invite['canceled_at']) ? 'Avbruten' : (strtotime((string) ($invite['expires_at'] ?? '')) > time() ? 'Väntar på aktivering' : 'Utgången'));
-                $html .= '<li><div><strong>' . esc_html($user->display_name) . '</strong><span>' . esc_html($status) . ' · ' . esc_html($user->user_email) . '</span></div>';
+                $html .= '<li><div><strong>' . esc_html($user->display_name) . '</strong><span>' . esc_html($status) . ' · ' . esc_html($user->user_email) . '</span></div><div class="ssf-user-row-actions">';
                 if ('Aktiverad' !== $status) {
                     $html .= '<a href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_resend_invitation&user_id=' . (int) $user->ID), 'ssf_m365_resend_invitation_' . (int) $user->ID)) . '">Skicka igen</a>';
                 }
                 if ('Väntar på aktivering' === $status) {
                     $html .= '<a href="' . esc_url(wp_nonce_url(admin_url('admin-post.php?action=ssf_m365_cancel_invitation&invite_id=' . rawurlencode((string) $invite_id)), 'ssf_m365_cancel_invitation_' . $invite_id)) . '">Avbryt</a>';
                 }
-                $html .= '</li>';
+                $html .= '</div></li>';
             }
             return $html . '</ul>';
         }
         if ('' !== $tail) {
-            if (! ctype_digit($tail)) {
-                return self::error('Användaren kunde inte hittas.');
-            }
-            $user = get_userdata((int) $tail);
-            if (! $user) {
-                return self::error('Användaren kunde inte hittas.');
-            }
-            $id = (int) $user->ID;
-            $active = SSF_Access_Control::is_active($id);
-            $selected = SSF_Access_Control::user_groups($id);
-            $html = '<p><a href="' . esc_url(SSF_Workspace::url('anvandare')) . '">← Alla användare</a></p><h2>' . esc_html($user->display_name) . '</h2><p>' . esc_html($user->user_email) . '</p>';
-            if (isset($_GET['ssf_user_notice'])) {
-                $html .= '<p role="status" class="ssf-workspace-confirmation">Ändringen har behandlats.</p>';
-            }
-            $linked = get_user_meta($id, '_ssf_m365_tid', true) && get_user_meta($id, '_ssf_m365_oid', true);
-            $html .= '<p>SSF-status: <strong>' . ($active ? 'Aktiv' : 'Inaktiv') . '</strong> · Microsoft: <strong>' . ($linked ? 'Kopplat' : 'Ej kopplat') . '</strong></p>';
-            if ($id !== get_current_user_id() || current_user_can('manage_options')) {
-                $html .= '<form class="ssf-workspace-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_user_save_groups"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_save_groups_' . $id, '_wpnonce', true, false) . '<fieldset><legend><h3>Behörighetsgrupper</h3></legend>';
-                foreach ($groups as $key => $group) {
-                    $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"' . checked(in_array($key, $selected, true), true, false) . '> ' . esc_html($group['label']) . '</label>';
-                }
-                $html .= '</fieldset><button class="ssf-workspace-button" type="submit">Spara behörigheter</button></form>';
-            }
-            $open = $active ? SSF_User_Admin::open_assignments($id) : array();
-            if ($open) {
-                $html .= '<p role="status">Användaren ansvarar för ' . esc_html((string) count($open)) . ' öppna ärenden. Omfördela dem innan SSF-åtkomsten tas bort.</p>';
-            } elseif (! $active || ($id !== get_current_user_id() && ! user_can($id, 'manage_options'))) {
-                $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_user_set_active"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '"><input type="hidden" name="active" value="' . ($active ? '0' : '1') . '">' . wp_nonce_field('ssf_user_set_active_' . $id, '_wpnonce', true, false) . '<button class="ssf-workspace-button" type="submit">' . ($active ? 'Ta bort SSF-åtkomst' : 'Återaktivera SSF-åtkomst') . '</button></form>';
-            }
-            return $html;
+            return self::user_detail($tail, $groups);
         }
-        $users = get_users(array('number' => 100, 'orderby' => 'display_name'));
-        $html = '<p><a class="ssf-workspace-button" href="' . esc_url(SSF_Workspace::url('anvandare/ny')) . '">Bjud in användare</a> <a href="' . esc_url(SSF_Workspace::url('anvandare/inbjudningar')) . '">Inbjudningar</a></p>';
+        return self::users_list($groups);
+    }
+
+    private static function users_list(array $groups): string
+    {
+        $filter = sanitize_key((string) ($_GET['status'] ?? 'all'));
+        if (! in_array($filter, array('all', 'active', 'invited', 'terminated', 'blocked'), true)) { $filter = 'all'; }
+        $search = isset($_GET['s']) && is_scalar($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '';
+        $args = array('number' => 200, 'orderby' => 'display_name', 'order' => 'ASC');
+        if ('' !== $search) {
+            $args['search'] = '*' . $search . '*';
+            $args['search_columns'] = array('display_name', 'user_email', 'user_login');
+        }
+        $all_users = get_users(array('number' => 200, 'orderby' => 'display_name', 'order' => 'ASC'));
+        $users = get_users($args);
+        $counts = array('all' => count($all_users), 'active' => 0, 'invited' => 0, 'terminated' => 0, 'blocked' => 0);
+        foreach ($all_users as $candidate) { ++$counts[SSF_Access_Control::status((int) $candidate->ID)]; }
+        if ('all' !== $filter) {
+            $users = array_values(array_filter($users, static fn(WP_User $user): bool => SSF_Access_Control::status((int) $user->ID) === $filter));
+        }
+        $labels = array('all' => 'Alla', 'active' => 'Aktiva', 'invited' => 'Inbjudna', 'terminated' => 'Avslutade');
+        $html = '<div class="ssf-user-heading"><div><p class="ssf-workspace-lead">Hantera åtkomst, behörigheter och avslutade konton.</p></div><div class="ssf-workspace-form-actions"><a class="ssf-workspace-button" href="' . esc_url(SSF_Workspace::url('anvandare/ny')) . '">Bjud in användare</a><a class="ssf-workspace-button ssf-workspace-button--secondary" href="' . esc_url(SSF_Workspace::url('anvandare/inbjudningar')) . '">Inbjudningar</a></div></div>';
         if (isset($_GET['ssf_user_notice'])) {
-            $html .= '<p role="status" class="ssf-workspace-confirmation">Inbjudan har behandlats. Kontrollera användarens status nedan.</p>';
+            $notice = sanitize_key((string) wp_unslash($_GET['ssf_user_notice']));
+            $html .= '<p role="status" class="ssf-workspace-confirmation">' . ('deleted' === $notice ? 'Användaren har tagits bort permanent. Historiska verksamhetsposter är bevarade.' : 'Ändringen har behandlats.') . '</p>';
         }
-        $html .= '<div class="ssf-workspace-table-wrap"><table><thead><tr><th>Namn</th><th>E-post</th><th>Status</th><th>Behörigheter</th><th>Microsoft</th><th></th></tr></thead><tbody>';
+        $html .= '<div class="ssf-user-stats">';
+        foreach ($labels as $key => $label) {
+            $url = add_query_arg('status', $key, SSF_Workspace::url('anvandare'));
+            $html .= '<a href="' . esc_url($url) . '"' . ($filter === $key ? ' aria-current="page"' : '') . '><strong>' . esc_html((string) $counts[$key]) . '</strong><span>' . esc_html($label) . '</span></a>';
+        }
+        $html .= '</div><form class="ssf-user-search" method="get" action="' . esc_url(SSF_Workspace::url('anvandare')) . '"><label for="ssf-user-search">Sök namn eller e-post</label><div><input id="ssf-user-search" type="search" name="s" value="' . esc_attr($search) . '"><input type="hidden" name="status" value="' . esc_attr($filter) . '"><button class="ssf-workspace-button" type="submit">Sök</button></div></form>';
+        $html .= '<div class="ssf-workspace-table-wrap ssf-user-table"><table><thead><tr><th>Namn</th><th>E-post</th><th>Status</th><th>Behörigheter</th><th>Senast aktiv</th><th>Åtgärd</th></tr></thead><tbody>';
         foreach ($users as $user) {
-            $names = array_map(static function (string $key) use ($groups): string { return $groups[$key]['label'] ?? $key; }, SSF_Access_Control::user_groups((int) $user->ID));
-            $linked = get_user_meta($user->ID, '_ssf_m365_tid', true) && get_user_meta($user->ID, '_ssf_m365_oid', true);
-            $html .= '<tr><td>' . esc_html($user->display_name) . '</td><td>' . esc_html($user->user_email) . '</td><td>' . (SSF_Access_Control::is_active((int) $user->ID) ? 'Aktiv' : 'Inaktiv') . '</td><td>' . esc_html(implode(', ', $names)) . '</td><td>' . ($linked ? 'Kopplat' : 'Ej kopplat') . '</td><td><a href="' . esc_url(SSF_Workspace::url('anvandare/' . (int) $user->ID)) . '">Hantera</a></td></tr>';
+            $id = (int) $user->ID;
+            $names = array_map(static fn(string $key): string => (string) ($groups[$key]['label'] ?? $key), SSF_Access_Control::user_groups($id));
+            $last = (int) get_user_meta($id, '_ssf_m365_last_login', true);
+            $status = SSF_Access_Control::status($id);
+            $html .= '<tr><td data-label="Namn"><strong>' . esc_html($user->display_name ?: $user->user_login) . '</strong></td><td data-label="E-post">' . esc_html($user->user_email) . '</td><td data-label="Status"><span class="ssf-user-status ssf-user-status--' . esc_attr($status) . '"><span aria-hidden="true">●</span> ' . esc_html(SSF_Access_Control::status_label($id)) . '</span></td><td data-label="Behörigheter">' . esc_html($names ? implode(', ', $names) : 'Inga') . '</td><td data-label="Senast aktiv">' . esc_html($last ? wp_date('Y-m-d H:i', $last) : '–') . '</td><td data-label="Åtgärd"><a href="' . esc_url(SSF_Workspace::url('anvandare/' . $id)) . '">Hantera</a></td></tr>';
         }
+        if (! $users) { $html .= '<tr><td colspan="6">Inga användare matchar filtret.</td></tr>'; }
         return $html . '</tbody></table></div>';
+    }
+
+    private static function user_detail(string $tail, array $groups)
+    {
+        if (! ctype_digit($tail)) { return self::error('Användaren kunde inte hittas.'); }
+        $user = get_userdata((int) $tail);
+        if (! $user instanceof WP_User) { return self::error('Användaren kunde inte hittas.'); }
+        $id = (int) $user->ID;
+        $status = SSF_Access_Control::status($id);
+        $selected = SSF_Access_Control::user_groups($id);
+        $previous = SSF_Access_Control::previous_groups($id);
+        $linked = get_user_meta($id, '_ssf_m365_tid', true) && get_user_meta($id, '_ssf_m365_oid', true);
+        $last = (int) get_user_meta($id, '_ssf_m365_last_login', true);
+        $refs = SSF_User_Admin::reference_summary($id);
+        $protected = $id === get_current_user_id() || user_can($id, 'manage_options');
+        $html = '<p><a href="' . esc_url(SSF_Workspace::url('anvandare')) . '">← Alla användare</a></p><div class="ssf-user-heading"><div><h2>' . esc_html($user->display_name ?: $user->user_login) . '</h2><p>' . esc_html($user->user_email) . '</p></div><span class="ssf-user-status ssf-user-status--' . esc_attr($status) . '"><span aria-hidden="true">●</span> ' . esc_html(SSF_Access_Control::status_label($id)) . '</span></div>';
+        if (isset($_GET['ssf_user_notice'])) { $html .= '<p role="status" class="ssf-workspace-confirmation">Ändringen har genomförts.</p>'; }
+        $html .= '<dl class="ssf-workspace-account"><dt>Status</dt><dd>' . esc_html(SSF_Access_Control::status_label($id)) . '</dd><dt>Microsoft-konto</dt><dd>' . esc_html($linked ? $user->user_email : 'Ej kopplat') . '</dd><dt>Senast aktiv</dt><dd>' . esc_html($last ? wp_date('Y-m-d H:i', $last) : '–') . '</dd></dl>';
+        $html .= '<section class="ssf-user-section"><h2>Aktivitet / historik</h2><div class="ssf-user-stats ssf-user-stats--detail"><div><strong>' . esc_html((string) $refs['applications']) . '</strong><span>Ansökningar</span></div><div><strong>' . esc_html((string) $refs['inspections']) . '</strong><span>Inspektioner</span></div><div><strong>' . esc_html((string) $refs['news']) . '</strong><span>Nyheter</span></div><div><strong>' . esc_html((string) $refs['history_events']) . '</strong><span>Historikhändelser</span></div></div></section>';
+        if (SSF_Access_Control::STATUS_TERMINATED === $status) {
+            $previous_names = array_map(static fn(string $key): string => (string) ($groups[$key]['label'] ?? $key), $previous);
+            $html .= '<section class="ssf-user-section"><h2>Avslutad användare</h2><p>Användaren kan inte logga in. Aktiva sessioner och behörigheter är avstängda.</p><h3>Tidigare behörigheter</h3><p>' . esc_html($previous_names ? implode(', ', $previous_names) : 'Inga') . '</p>';
+            if (! $protected) { $html .= '<button class="ssf-workspace-button" type="button" data-ssf-dialog-open="ssf-reactivate-dialog">Återaktivera</button>'; }
+            $html .= '</section>';
+        } else {
+            $html .= '<section class="ssf-user-section"><h2>Behörigheter</h2><form class="ssf-workspace-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_user_save_groups"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_save_groups_' . $id, '_wpnonce', true, false) . '<fieldset>';
+            foreach ($groups as $key => $group) {
+                $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"' . checked(in_array($key, $selected, true), true, false) . '> <span><strong>' . esc_html($group['label']) . '</strong><small>' . esc_html($group['description']) . '</small></span></label>';
+            }
+            $html .= '</fieldset><button class="ssf-workspace-button" type="submit">Spara behörigheter</button></form></section>';
+            if (! $protected) {
+                $open = SSF_User_Admin::open_assignments($id);
+                $html .= '<section class="ssf-user-section"><h2>Konto</h2>' . ($open ? '<p class="ssf-workspace-error">Användaren ansvarar för ' . esc_html((string) count($open)) . ' öppna ärenden. Omfördela dem snarast efter frånkoppling.</p>' : '') . '<button class="ssf-workspace-button ssf-workspace-button--secondary" type="button" data-ssf-dialog-open="ssf-disconnect-dialog">Koppla bort användare</button></section>';
+            }
+        }
+        if (! $protected) {
+            $html .= '<section class="ssf-user-risk"><h2>Riskzon</h2><h3>Ta bort användaren permanent</h3><p>Kontot, inloggningskopplingen och den personliga systemprofilen tas bort. Historiska verksamhetsposter bevaras.</p><button class="ssf-workspace-button ssf-workspace-button--danger" type="button" data-ssf-dialog-open="ssf-delete-dialog">Ta bort permanent</button></section>';
+            $html .= self::user_dialogs($user, $groups, $previous, $refs, $status);
+        } else {
+            $html .= '<p class="ssf-workspace-help">Det här kontot skyddas eftersom det är ditt eget konto eller ett lokalt administratörskonto.</p>';
+        }
+        return $html;
+    }
+
+    private static function user_dialogs(WP_User $user, array $groups, array $previous, array $refs, string $status): string
+    {
+        $id = (int) $user->ID;
+        $name = (string) ($user->display_name ?: $user->user_login);
+        $html = '';
+        if (SSF_Access_Control::STATUS_TERMINATED !== $status) {
+            $html .= '<dialog id="ssf-disconnect-dialog" class="ssf-user-dialog"><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_user_disconnect"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_disconnect_' . $id, '_wpnonce', true, false) . '<h2>Koppla bort ' . esc_html($name) . '?</h2><p>Användaren kommer inte längre kunna logga in i SSF:s system.</p><p>Tidigare historik, ansökningar, inspektioner och andra aktiviteter behålls. Status ändras till <strong>Avslutad</strong>.</p><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button ssf-workspace-button--secondary" type="button" data-ssf-dialog-close>Avbryt</button><button class="ssf-workspace-button ssf-workspace-button--danger" type="submit">Koppla bort användare</button></div></form></dialog>';
+        } else {
+            $html .= '<dialog id="ssf-reactivate-dialog" class="ssf-user-dialog"><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_user_reactivate"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_reactivate_' . $id, '_wpnonce', true, false) . '<h2>Återaktivera ' . esc_html($name) . '</h2><p>Välj vilka behörigheter användaren ska få. Tidigare behörigheter är markerade med text men aktiveras inte automatiskt.</p><fieldset>';
+            foreach ($groups as $key => $group) {
+                $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="groups[]" value="' . esc_attr($key) . '"> <span><strong>' . esc_html($group['label']) . '</strong>' . (in_array($key, $previous, true) ? '<small>Tidigare behörighet</small>' : '') . '</span></label>';
+            }
+            $html .= '</fieldset><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button ssf-workspace-button--secondary" type="button" data-ssf-dialog-close>Avbryt</button><button class="ssf-workspace-button" type="submit">Återaktivera</button></div></form></dialog>';
+        }
+        $html .= '<dialog id="ssf-delete-dialog" class="ssf-user-dialog ssf-user-dialog--danger"><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_user_delete"><input type="hidden" name="user_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_user_delete_' . $id, '_wpnonce', true, false) . '<h2>Ta bort ' . esc_html($name) . ' permanent?</h2><p><strong>Detta går inte att ångra.</strong> Verksamhetsposter raderas inte.</p><dl class="ssf-user-reference-list"><dt>Ansökningar</dt><dd>' . esc_html((string) $refs['applications']) . '</dd><dt>Inspektioner</dt><dd>' . esc_html((string) $refs['inspections']) . '</dd><dt>Nyheter</dt><dd>' . esc_html((string) $refs['news']) . '</dd><dt>Historikhändelser</dt><dd>' . esc_html((string) $refs['history_events']) . '</dd></dl><p>Rekommenderad åtgärd är normalt att koppla bort användaren i stället.</p><label for="ssf-delete-confirmation">Skriv <strong>TA BORT</strong></label><input id="ssf-delete-confirmation" name="delete_confirmation" autocomplete="off" required pattern="TA BORT"><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button ssf-workspace-button--secondary" type="button" data-ssf-dialog-close>Avbryt</button><button class="ssf-workspace-button ssf-workspace-button--danger" type="submit">Ta bort permanent</button></div></form></dialog>';
+        return $html;
     }
 
     public static function microsoft(string $tail)

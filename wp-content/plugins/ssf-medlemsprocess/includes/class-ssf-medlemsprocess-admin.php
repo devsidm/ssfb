@@ -241,7 +241,8 @@ class SSF_Medlemsprocess_Admin
         echo '<ol class="ssf-process-history">';
         foreach ($history as $item) {
             $author = ! empty($item['author']) ? get_userdata((int) $item['author']) : false;
-            printf('<li><strong>%s</strong><span>%s%s</span><p>%s</p></li>', esc_html(mysql2date('j F Y, H:i', $item['time'] ?? '')), esc_html($item['public'] ?? false ? 'Synlig för sökanden' : 'Intern'), $author ? esc_html(' · ' . $author->display_name) : '', nl2br(esc_html($item['message'] ?? '')));
+            $actor_name = $author ? (string) $author->display_name : (string) ($item['actor_name'] ?? '');
+            printf('<li><strong>%s</strong><span>%s%s</span><p>%s</p></li>', esc_html(mysql2date('j F Y, H:i', $item['time'] ?? '')), esc_html($item['public'] ?? false ? 'Synlig för sökanden' : 'Intern'), $actor_name ? esc_html(' · ' . $actor_name) : '', nl2br(esc_html($item['message'] ?? '')));
         }
         echo '</ol>';
     }

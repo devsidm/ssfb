@@ -8,6 +8,8 @@ $access = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-cont
 $users = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-user-admin.php')
 $handler = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-medlemsprocess\includes\class-ssf-medlemsprocess-admin.php')
 $login = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\plugins\microsoft-id-login\microsoft-id-login.php')
+$workspace = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-arbetsyta\includes\class-ssf-workspace-services.php')
+$workspaceJs = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-arbetsyta\assets\workspace.js')
 $central = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\mu-plugins\ssf-microsoft365-config.php')
 $mailer = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-office365-mailer\ssf-office365-mailer.php')
 $release = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'config\deploy-components.json') | ConvertFrom-Json
@@ -20,14 +22,31 @@ Require 'Existing permission storage retained' $access "_ssf_permission_groups"
 Require 'Central capability grant' $access "add_filter('user_has_cap'"
 Require 'Inactive capability denial' $access "if (! self::is_active((int) `$user->ID))"
 Require 'Membership handler capability' $access "user_can(`$user_id, 'ssf_review_applications')"
-Require 'No self deactivation' $access "`$target_user_id === `$actor_user_id"
+Require 'No self disconnect' $access "`$target_user_id === `$actor_user_id"
+Require 'Sessions revoked' $access 'WP_Session_Tokens::get_instance($user_id)->destroy_all()'
+Require 'Terminated status' $access "STATUS_TERMINATED = 'terminated'"
+Require 'Password login blocked' $access "add_filter('authenticate'"
 Require 'Users admin nonce' $users "check_admin_referer('ssf_user_save_groups_"
 Require 'Activation admin nonce' $users "check_admin_referer('ssf_user_set_active_"
-Require 'Open case deactivation blocker' $users "self::open_assignments(`$user_id)"
+Require 'Disconnect nonce' $users "check_admin_referer('ssf_user_disconnect_"
+Require 'Delete nonce' $users "check_admin_referer('ssf_user_delete_"
+Require 'Typed delete confirmation' $users "'TA BORT' !== `$confirmation"
+Require 'Historical snapshots' $users "snapshot_historical_references"
+Require 'Domain posts reassigned, not deleted' $users 'wp_delete_user($user_id, $actor_id)'
 Require 'Invitation backend reused' $users 'ssf_m365_create_invitation'
 Require 'Existing handler retained' $handler 'handler_user_ids($assigned)'
 Require 'New handler capability checked' $handler 'can_assign_handler($new_handler)'
 Require 'Login rejects inactive user' $login 'SSF_Access_Control::is_active($user_id)'
+Require 'Invitation status recorded' $login 'SSF_Access_Control::mark_invited'
+Require 'Invitation activation enables user' $login 'SSF_Access_Control::activate_invitation'
+Require 'Friendly terminated login message' $login 'Ditt SSF-konto'
+Require 'Workspace user service registered' $workspace "'id' => 'users'"
+Require 'Workspace quick navigation capability' $workspace "'capability' => SSF_Access_Control::MANAGE_USERS"
+Require 'Workspace user status filters' $workspace "array('all', 'active', 'invited', 'terminated', 'blocked')"
+Require 'Workspace disconnect dialog' $workspace 'ssf-disconnect-dialog'
+Require 'Workspace reactivate dialog' $workspace 'ssf-reactivate-dialog'
+Require 'Workspace delete risk dialog' $workspace 'ssf-delete-dialog'
+Require 'Workspace dialog behavior' $workspaceJs 'showModal()'
 Require 'Login diagnostics use runtime resolver' $login 'public_configuration_status()'
 Require 'Central login status uses runtime resolver' $central 'SSF_Microsoft_ID_Login::instance()->public_configuration_status()'
 Require 'Central mailer status uses runtime resolver' $central 'SSF_Office365_Mailer::instance()->public_configuration_status()'

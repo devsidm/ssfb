@@ -33,7 +33,7 @@ $userAdmin = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'wp-c
 
 Assert-True 'Microsoft login plugin exists' (Test-Path -LiteralPath $pluginPath)
 Assert-Contains 'Plugin header exists' $plugin 'Plugin Name: Microsoft ID Login'
-Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.6'
+Assert-Contains 'Plugin version bumped' $plugin 'Version: 0.3.7'
 
 Assert-Contains 'Server force-off switch exists' $plugin "SSF_M365_LOGIN_ENABLED"
 Assert-Contains 'Server force-off switch is explicit' $plugin 'private function is_force_disabled()'

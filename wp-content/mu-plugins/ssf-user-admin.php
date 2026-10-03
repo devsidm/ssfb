@@ -18,6 +18,9 @@ final class SSF_User_Admin
         add_action('admin_menu', array(__CLASS__, 'register_page'), 25);
         add_action('admin_post_ssf_user_save_groups', array(__CLASS__, 'save_groups'));
         add_action('admin_post_ssf_user_set_active', array(__CLASS__, 'set_active'));
+        add_action('admin_post_ssf_user_disconnect', array(__CLASS__, 'disconnect'));
+        add_action('admin_post_ssf_user_reactivate', array(__CLASS__, 'reactivate'));
+        add_action('admin_post_ssf_user_delete', array(__CLASS__, 'delete_user'));
     }
 
     public static function register_page(): void
@@ -56,7 +59,7 @@ final class SSF_User_Admin
         }
         if (isset($_GET['ssf_user_notice'])) {
             $notice = sanitize_key((string) wp_unslash($_GET['ssf_user_notice']));
-            $messages = array('saved' => 'Behörigheterna har sparats.', 'inactive' => 'SSF-åtkomsten har tagits bort.', 'active' => 'SSF-åtkomsten har återaktiverats.', 'assigned' => 'Åtkomsten kan inte tas bort förrän öppna ärenden har omfördelats.');
+            $messages = array('saved' => 'Behörigheterna har sparats.', 'inactive' => 'Användaren har kopplats bort och status är Avslutad.', 'active' => 'Användaren har återaktiverats.', 'deleted' => 'Användaren har tagits bort permanent.', 'assigned' => 'Användaren har öppna ärenden som bör omfördelas.');
             if (isset($messages[$notice])) {
                 echo '<div class="notice ' . esc_attr('assigned' === $notice ? 'notice-error' : 'notice-success') . ' inline"><p>' . esc_html($messages[$notice]) . '</p></div>';
             }
@@ -84,7 +87,7 @@ final class SSF_User_Admin
                 $labels[] = SSF_Access_Control::groups()[$key]['label'];
             }
             $last_login = (int) get_user_meta($id, '_ssf_m365_last_login', true);
-            echo '<tr><td><a href="' . esc_url(self::url('users', $id)) . '">' . esc_html($user->display_name ?: $user->user_login) . '</a></td><td>' . esc_html($user->user_email) . '</td><td>' . esc_html(self::user_status($id)) . '</td><td>' . esc_html($labels ? implode(', ', $labels) : 'Inga') . '</td><td>' . esc_html(self::is_linked($id) ? 'Kopplat' : 'Ej kopplat') . '</td><td>' . esc_html($last_login ? wp_date('Y-m-d H:i', $last_login) : '–') . '</td></tr>';
+            echo '<tr><td><a href="' . esc_url(self::url('users', $id)) . '">' . esc_html($user->display_name ?: $user->user_login) . '</a></td><td>' . esc_html($user->user_email) . '</td><td>' . esc_html(SSF_Access_Control::status_label($id)) . '</td><td>' . esc_html($labels ? implode(', ', $labels) : 'Inga') . '</td><td>' . esc_html(self::is_linked($id) ? 'Kopplat' : 'Ej kopplat') . '</td><td>' . esc_html($last_login ? wp_date('Y-m-d H:i', $last_login) : '–') . '</td></tr>';
         }
         echo '</tbody></table>';
     }
@@ -182,6 +185,9 @@ final class SSF_User_Admin
         if ($user_id === get_current_user_id() && ! current_user_can('manage_options')) {
             wp_die('Du kan inte ändra dina egna systembehörigheter.');
         }
+        if (SSF_Access_Control::STATUS_TERMINATED === SSF_Access_Control::status($user_id)) {
+            wp_die('Återaktivera användaren och välj nya behörigheter i samma steg.');
+        }
         $groups = isset($_POST['groups']) && is_array($_POST['groups']) ? (array) wp_unslash($_POST['groups']) : array();
         SSF_Access_Control::save_groups($user_id, $groups, get_current_user_id());
         wp_safe_redirect(add_query_arg('ssf_user_notice', 'saved', self::return_url($user_id)));
@@ -198,12 +204,77 @@ final class SSF_User_Admin
         if (! $active && ($user_id === get_current_user_id() || user_can($user_id, 'manage_options'))) {
             wp_die('Administratörskonton kan inte inaktiveras här.');
         }
-        if (! $active && self::open_assignments($user_id)) {
-            wp_safe_redirect(add_query_arg('ssf_user_notice', 'assigned', self::return_url($user_id)));
-            exit;
+        if ($active) {
+            SSF_Access_Control::reactivate($user_id, array(), get_current_user_id());
+        } else {
+            SSF_Access_Control::disconnect($user_id, get_current_user_id());
+            self::remove_invitations($user_id);
         }
-        SSF_Access_Control::set_active($user_id, $active, get_current_user_id());
         wp_safe_redirect(add_query_arg('ssf_user_notice', $active ? 'active' : 'inactive', self::return_url($user_id)));
+        exit;
+    }
+
+    public static function disconnect(): void
+    {
+        $user_id = absint($_POST['user_id'] ?? 0);
+        if (! SSF_Access_Control::can_manage_users() || ! $user_id || ! get_userdata($user_id) || ! check_admin_referer('ssf_user_disconnect_' . $user_id)) {
+            wp_die('Du saknar behörighet.');
+        }
+        if ($user_id === get_current_user_id() || user_can($user_id, 'manage_options')) {
+            wp_die('Administratörskonton kan inte kopplas bort här.');
+        }
+        if (! SSF_Access_Control::disconnect($user_id, get_current_user_id())) {
+            wp_die('Användaren kunde inte kopplas bort.');
+        }
+        self::remove_invitations($user_id);
+        wp_safe_redirect(add_query_arg('ssf_user_notice', 'inactive', self::return_url($user_id)));
+        exit;
+    }
+
+    public static function reactivate(): void
+    {
+        $user_id = absint($_POST['user_id'] ?? 0);
+        if (! SSF_Access_Control::can_manage_users() || ! $user_id || ! get_userdata($user_id) || ! check_admin_referer('ssf_user_reactivate_' . $user_id)) {
+            wp_die('Du saknar behörighet.');
+        }
+        $groups = isset($_POST['groups']) && is_array($_POST['groups']) ? (array) wp_unslash($_POST['groups']) : array();
+        if (! SSF_Access_Control::reactivate($user_id, $groups, get_current_user_id())) {
+            wp_die('Endast en avslutad användare kan återaktiveras.');
+        }
+        wp_safe_redirect(add_query_arg('ssf_user_notice', 'active', self::return_url($user_id)));
+        exit;
+    }
+
+    public static function delete_user(): void
+    {
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $target = $user_id ? get_userdata($user_id) : false;
+        if (! SSF_Access_Control::can_manage_users() || ! $target instanceof WP_User || ! check_admin_referer('ssf_user_delete_' . $user_id)) {
+            wp_die('Du saknar behörighet.');
+        }
+        if ($user_id === get_current_user_id()) {
+            wp_die('Du kan inte ta bort ditt eget konto.');
+        }
+        if (user_can($user_id, 'manage_options')) {
+            wp_die('Administratörskonton kan inte tas bort här.');
+        }
+        $confirmation = isset($_POST['delete_confirmation']) && is_scalar($_POST['delete_confirmation']) ? trim((string) wp_unslash($_POST['delete_confirmation'])) : '';
+        if ('TA BORT' !== $confirmation) {
+            wp_die('Skriv TA BORT exakt för att bekräfta permanent borttagning.');
+        }
+        $actor_id = get_current_user_id();
+        self::snapshot_historical_references($user_id, (string) ($target->display_name ?: $target->user_login));
+        SSF_Access_Control::destroy_sessions($user_id);
+        self::remove_invitations($user_id);
+        SSF_Access_Control::audit_identity_event($user_id, $actor_id, 'user_deleted');
+        if (! function_exists('wp_delete_user')) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        if (! wp_delete_user($user_id, $actor_id)) {
+            wp_die('Användaren kunde inte tas bort. Inga verksamhetsposter har raderats.');
+        }
+        $return = class_exists('SSF_Workspace') ? SSF_Workspace::url('anvandare') : self::url();
+        wp_safe_redirect(add_query_arg('ssf_user_notice', 'deleted', $return));
         exit;
     }
 
@@ -229,6 +300,147 @@ final class SSF_User_Admin
         }));
     }
 
+    public static function reference_summary(int $user_id): array
+    {
+        $summary = array('applications' => 0, 'inspections' => 0, 'news' => 0, 'history_events' => 0);
+        if (post_type_exists('ssf_application')) {
+            foreach (get_posts(array('post_type' => 'ssf_application', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids')) as $application_id) {
+                $post = get_post($application_id);
+                $history = (array) get_post_meta($application_id, '_ssf_application_history', true);
+                $history_count = 0;
+                foreach ($history as $entry) {
+                    if ((int) ($entry['author'] ?? 0) === $user_id || (int) ($entry['actor_if_known'] ?? 0) === $user_id) {
+                        ++$history_count;
+                    }
+                }
+                $inspectors = array_map('intval', (array) get_post_meta($application_id, '_ssf_inspector_ids', true));
+                $referenced = ($post instanceof WP_Post && (int) $post->post_author === $user_id)
+                    || (int) get_post_meta($application_id, '_ssf_assigned_user', true) === $user_id
+                    || in_array($user_id, $inspectors, true)
+                    || $history_count > 0;
+                if ($referenced) {
+                    ++$summary['applications'];
+                    $summary['history_events'] += $history_count;
+                }
+            }
+        }
+        if (post_type_exists('ssf_membership_insp')) {
+            foreach (get_posts(array('post_type' => 'ssf_membership_insp', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids')) as $inspection_id) {
+                $record = (array) get_post_meta($inspection_id, '_ssf_membership_inspection', true);
+                $events = 0;
+                foreach ((array) ($record['audit'] ?? array()) as $event) {
+                    $events += (int) ((int) ($event['user_id'] ?? 0) === $user_id);
+                }
+                $photo_match = false;
+                foreach ((array) ($record['photos'] ?? array()) as $photo) {
+                    $photo_match = $photo_match || (int) ($photo['created_by'] ?? 0) === $user_id;
+                }
+                $referenced = (int) ($record['lead_inspector_user_id'] ?? 0) === $user_id
+                    || (int) ($record['co_inspector_user_id'] ?? 0) === $user_id
+                    || isset($record['confirmations'][$user_id]) || $events > 0 || $photo_match;
+                if ($referenced) {
+                    ++$summary['inspections'];
+                    $summary['history_events'] += $events;
+                }
+            }
+        }
+        $summary['news'] = count(get_posts(array('post_type' => 'post', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids', 'author' => $user_id)));
+        foreach ((array) get_option(SSF_Access_Control::AUDIT_OPTION, array()) as $entry) {
+            if ((int) ($entry['target_user_id'] ?? 0) === $user_id || (int) ($entry['actor_user_id'] ?? 0) === $user_id) {
+                ++$summary['history_events'];
+            }
+        }
+        return $summary;
+    }
+
+    private static function snapshot_historical_references(int $user_id, string $display_name): void
+    {
+        $snapshot = array('display_name' => sanitize_text_field($display_name), 'historical_user_id' => $user_id);
+        foreach (get_posts(array('post_type' => array('post', 'ssf_application', 'ssf_membership_insp', 'medlemsfartyg'), 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids', 'author' => $user_id)) as $post_id) {
+            update_post_meta($post_id, '_ssf_historical_author', $snapshot);
+        }
+        if (post_type_exists('ssf_application')) {
+            foreach (get_posts(array('post_type' => 'ssf_application', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids')) as $application_id) {
+                $history = (array) get_post_meta($application_id, '_ssf_application_history', true);
+                $changed = false;
+                foreach ($history as &$entry) {
+                    if ((int) ($entry['author'] ?? 0) === $user_id || (int) ($entry['actor_if_known'] ?? 0) === $user_id) {
+                        $entry['actor_name'] = $snapshot['display_name'];
+                        $changed = true;
+                    }
+                }
+                unset($entry);
+                if ($changed) {
+                    update_post_meta($application_id, '_ssf_application_history', $history);
+                }
+                $inspectors = array_map('intval', (array) get_post_meta($application_id, '_ssf_inspector_ids', true));
+                if ((int) get_post_meta($application_id, '_ssf_assigned_user', true) === $user_id || in_array($user_id, $inspectors, true)) {
+                    self::store_actor_snapshot($application_id, $user_id, $snapshot);
+                }
+            }
+        }
+        if (post_type_exists('ssf_membership_insp')) {
+            foreach (get_posts(array('post_type' => 'ssf_membership_insp', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids')) as $inspection_id) {
+                $record = (array) get_post_meta($inspection_id, '_ssf_membership_inspection', true);
+                $changed = false;
+                foreach ((array) ($record['audit'] ?? array()) as $index => $event) {
+                    if ((int) ($event['user_id'] ?? 0) === $user_id) {
+                        $record['audit'][$index]['actor_name'] = $snapshot['display_name'];
+                        $changed = true;
+                    }
+                }
+                foreach ((array) ($record['confirmations'] ?? array()) as $key => $confirmation) {
+                    if ((int) ($confirmation['user_id'] ?? $key) === $user_id) {
+                        $record['confirmations'][$key]['actor_name'] = $snapshot['display_name'];
+                        $changed = true;
+                    }
+                }
+                if ((int) ($record['lead_inspector_user_id'] ?? 0) === $user_id || (int) ($record['co_inspector_user_id'] ?? 0) === $user_id) {
+                    $record['actor_snapshots'][(string) $user_id] = $snapshot;
+                    $changed = true;
+                }
+                foreach ((array) ($record['photos'] ?? array()) as $index => $photo) {
+                    if ((int) ($photo['created_by'] ?? 0) === $user_id) {
+                        $record['photos'][$index]['creator_name'] = $snapshot['display_name'];
+                        $changed = true;
+                    }
+                }
+                if ($changed) {
+                    update_post_meta($inspection_id, '_ssf_membership_inspection', $record);
+                }
+            }
+        }
+        $audit = (array) get_option(SSF_Access_Control::AUDIT_OPTION, array());
+        foreach ($audit as &$entry) {
+            if ((int) ($entry['target_user_id'] ?? 0) === $user_id) {
+                $entry['target_name'] = $snapshot['display_name'];
+            }
+            if ((int) ($entry['actor_user_id'] ?? 0) === $user_id) {
+                $entry['actor_name'] = $snapshot['display_name'];
+            }
+        }
+        unset($entry);
+        update_option(SSF_Access_Control::AUDIT_OPTION, $audit, false);
+    }
+
+    private static function store_actor_snapshot(int $post_id, int $user_id, array $snapshot): void
+    {
+        $snapshots = (array) get_post_meta($post_id, '_ssf_historical_actors', true);
+        $snapshots[(string) $user_id] = $snapshot;
+        update_post_meta($post_id, '_ssf_historical_actors', $snapshots);
+    }
+
+    private static function remove_invitations(int $user_id): void
+    {
+        $invitations = (array) get_option('ssf_microsoft_login_invitations', array());
+        foreach ($invitations as $id => $invitation) {
+            if ((int) ($invitation['user_id'] ?? 0) === $user_id) {
+                unset($invitations[$id]);
+            }
+        }
+        update_option('ssf_microsoft_login_invitations', $invitations, false);
+    }
+
     private static function is_linked(int $user_id): bool
     {
         return '' !== (string) get_user_meta($user_id, '_ssf_m365_tid', true) && '' !== (string) get_user_meta($user_id, '_ssf_m365_oid', true);
@@ -236,15 +448,7 @@ final class SSF_User_Admin
 
     private static function user_status(int $user_id): string
     {
-        if (! SSF_Access_Control::is_active($user_id)) {
-            return 'Inaktiv / åtkomst borttagen';
-        }
-        foreach ((array) get_option('ssf_microsoft_login_invitations', array()) as $invitation) {
-            if ((int) ($invitation['user_id'] ?? 0) === $user_id && empty($invitation['used_at']) && empty($invitation['canceled_at']) && strtotime((string) ($invitation['expires_at'] ?? '')) > time()) {
-                return 'Inviterad';
-            }
-        }
-        return 'Aktiv';
+        return SSF_Access_Control::status_label($user_id);
     }
 }
 

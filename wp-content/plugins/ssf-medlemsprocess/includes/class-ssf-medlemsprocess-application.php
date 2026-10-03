@@ -325,12 +325,15 @@ class SSF_Medlemsprocess_Application
     public static function add_history(int $application_id, string $type, string $message, bool $public = false, array $extra = array()): void
     {
         $history = (array) get_post_meta($application_id, '_ssf_application_history', true);
+        $actor_id = get_current_user_id();
+        $actor = $actor_id ? get_userdata($actor_id) : false;
         $extra['source'] = sanitize_key((string) ($extra['source'] ?? (is_admin() ? 'wordpress_admin' : 'system')));
         $history[] = array_merge(array(
             'time' => current_time('mysql'),
             'changed_at' => current_time('mysql'),
-            'author' => get_current_user_id(),
-            'actor_if_known' => get_current_user_id(),
+            'author' => $actor_id,
+            'actor_if_known' => $actor_id,
+            'actor_name' => $actor instanceof WP_User ? (string) ($actor->display_name ?: $actor->user_login) : '',
             'type' => sanitize_key($type),
             'message' => sanitize_textarea_field($message),
             'public' => $public,

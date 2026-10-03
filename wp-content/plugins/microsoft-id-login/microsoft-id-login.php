@@ -3,7 +3,7 @@
  * Plugin Name: Microsoft ID Login
  * Plugin URI: https://github.com/devsidm/ssfb
  * Description: Microsoft Entra ID login for SSF WordPress accounts.
- * Version: 0.3.6
+ * Version: 0.3.7
  * Author: SIDM
  * Text Domain: microsoft-id-login
  * Requires at least: 6.0
@@ -18,7 +18,7 @@ if (! defined('ABSPATH')) {
 
 final class SSF_Microsoft_ID_Login
 {
-    private const VERSION = '0.3.6';
+    private const VERSION = '0.3.7';
     private const STATE_PREFIX = 'ssf_m365_login_state_';
     private const NOTICE_PREFIX = 'ssf_m365_login_notice_';
     private const TEST_PREFIX = 'ssf_m365_login_test_';
@@ -642,12 +642,15 @@ final class SSF_Microsoft_ID_Login
             wp_safe_redirect($this->admin_section_url('microsoft-users'));
             exit;
         }
-        if (class_exists('SSF_Access_Control') && ! SSF_Access_Control::is_active((int) $user_id)) {
+        if (class_exists('SSF_Access_Control') && in_array(SSF_Access_Control::status((int) $user_id), array(SSF_Access_Control::STATUS_TERMINATED, SSF_Access_Control::STATUS_BLOCKED), true)) {
             $this->set_notice(get_current_user_id(), 'error', __('Återaktivera användaren innan en ny inbjudan skickas.', 'microsoft-id-login'), 'microsoft-users');
             wp_safe_redirect($this->admin_section_url('microsoft-users'));
             exit;
         }
         $this->save_user_groups((int) $user_id, $groups, get_current_user_id());
+        if (class_exists('SSF_Access_Control') && ! $this->is_user_linked((int) $user_id)) {
+            SSF_Access_Control::mark_invited((int) $user_id, get_current_user_id());
+        }
         $invitation = $this->issue_invitation((int) $user_id, $email);
         if (class_exists('SSF_Access_Control')) {
             SSF_Access_Control::audit_identity_event((int) $user_id, get_current_user_id(), 'invitation_created');
@@ -871,7 +874,10 @@ final class SSF_Microsoft_ID_Login
         if (empty($enable_state['active'])) {
             wp_die(esc_html((string) $enable_state['message']));
         }
-        if (class_exists('SSF_Access_Control') && ! SSF_Access_Control::is_active($user_id)) {
+        $status_allowed = ! class_exists('SSF_Access_Control') || $user_id <= 0
+            || SSF_Access_Control::is_active($user_id)
+            || ('invite' === $mode && SSF_Access_Control::STATUS_INVITED === SSF_Access_Control::status($user_id));
+        if (! $status_allowed) {
             $this->set_notice(get_current_user_id(), 'error', __('Återaktivera användaren innan inbjudan skickas igen.', 'microsoft-id-login'), 'microsoft-users');
             wp_safe_redirect($this->admin_section_url('microsoft-users'));
             exit;
@@ -970,7 +976,7 @@ final class SSF_Microsoft_ID_Login
         }
         $user_id = (int) $users[0]->ID;
         if (class_exists('SSF_Access_Control') && ! SSF_Access_Control::is_active($user_id)) {
-            $this->deny(__('SSF-åtkomsten är inaktiv. Kontakta en administratör.', 'microsoft-id-login'));
+            $this->deny(__('Ditt SSF-konto är avslutat. Kontakta en administratör om du behöver tillgång igen.', 'microsoft-id-login'));
         }
         update_user_meta($user_id, self::META_LAST_LOGIN, time());
         if ('' !== $email) {
@@ -1106,7 +1112,7 @@ final class SSF_Microsoft_ID_Login
             }
         }
         $user_id = (int) $invitation['user_id'];
-        if (class_exists('SSF_Access_Control') && ! SSF_Access_Control::is_active($user_id)) {
+        if (class_exists('SSF_Access_Control') && ! in_array(SSF_Access_Control::status($user_id), array(SSF_Access_Control::STATUS_INVITED, SSF_Access_Control::STATUS_ACTIVE), true)) {
             $this->deny(__('SSF-åtkomsten är inaktiv. Inbjudan har inte förbrukats.', 'microsoft-id-login'));
         }
         update_user_meta($user_id, self::META_TID, $tid);
@@ -1116,6 +1122,7 @@ final class SSF_Microsoft_ID_Login
         $invitations[$invite_id]['used_at'] = gmdate('c');
         $this->save_invitations($invitations);
         if (class_exists('SSF_Access_Control')) {
+            SSF_Access_Control::activate_invitation($user_id);
             SSF_Access_Control::audit_identity_event($user_id, $user_id, 'invitation_activated');
         }
         wp_set_current_user($user_id);

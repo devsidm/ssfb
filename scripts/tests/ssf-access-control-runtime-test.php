@@ -6,12 +6,27 @@ final class WP_User
 {
     public int $ID;
     public array $caps;
+    public array $roles;
+    public string $display_name;
+    public string $user_login;
 
     public function __construct(int $id, array $caps = array())
     {
         $this->ID = $id;
         $this->caps = $caps;
+        $this->roles = ! empty($caps['manage_options']) ? array('administrator') : array('subscriber');
+        $this->display_name = 'Test User ' . $id;
+        $this->user_login = 'test' . $id;
     }
+}
+final class WP_Error { public string $code; public string $message; public function __construct(string $code, string $message) { $this->code = $code; $this->message = $message; } }
+final class WP_Session_Tokens
+{
+    public static array $destroyed = array();
+    private int $user_id;
+    private function __construct(int $user_id) { $this->user_id = $user_id; }
+    public static function get_instance(int $user_id): self { return new self($user_id); }
+    public function destroy_all(): void { self::$destroyed[] = $this->user_id; }
 }
 
 $users = array(
@@ -31,10 +46,10 @@ function get_user_meta(int $id, string $key, bool $single = true) { global $meta
 function update_user_meta(int $id, string $key, $value): void { global $meta; $meta[$id][$key] = $value; }
 function get_option(string $key, $default = false) { global $options; return $options[$key] ?? $default; }
 function update_option(string $key, $value, bool $autoload = false): void { global $options; $options[$key] = $value; }
-function user_can(int $id, string $cap): bool
+function user_can($subject, string $cap): bool
 {
     global $users;
-    $user = $users[$id] ?? null;
+    $user = $subject instanceof WP_User ? $subject : ($users[(int) $subject] ?? null);
     if (! $user) { return false; }
     $allcaps = SSF_Access_Control::grant_capabilities($user->caps, array($cap), array(), $user);
     return ! empty($allcaps[$cap]);
@@ -90,17 +105,32 @@ $cases = array(
 );
 check(count(SSF_User_Admin::open_assignments(2)) === 1, 'Only active assigned case blocks deactivation');
 check(count(SSF_User_Admin::open_assignments(3)) === 1, 'Other user assignment remains separate');
+SSF_Access_Control::save_groups(2, array('ansokningar', 'nyheter'), 1);
 SSF_Access_Control::set_active(2, false, 1);
 check(! SSF_Access_Control::is_active(2), 'Deactivation persists');
+check(SSF_Access_Control::status(2) === SSF_Access_Control::STATUS_TERMINATED, 'Disconnected user has terminated status');
+check(SSF_Access_Control::user_groups(2) === array(), 'Disconnect clears active groups');
+check(count(SSF_Access_Control::previous_groups(2)) === 2, 'Disconnect preserves previous groups as read-only history');
+check(WP_Session_Tokens::$destroyed === array(2), 'Disconnect revokes all sessions immediately');
 check(! user_can(2, 'ssf_review_applications'), 'Inactive user has no SSF capability');
 $users[2]->caps['edit_posts'] = true;
 check(! user_can(2, 'edit_posts'), 'Inactive user cannot retain unrelated WordPress role capabilities');
-SSF_Access_Control::set_active(2, true, 1);
+$denied = SSF_Access_Control::block_inactive_login($users[2], 'test2', 'password');
+check($denied instanceof WP_Error && str_contains($denied->message, 'avslutat'), 'Terminated password login is denied with friendly message');
+SSF_Access_Control::reactivate(2, array('nyheter'), 1);
 check(SSF_Access_Control::is_active(2), 'Reactivation persists');
 check(user_can(2, 'edit_posts'), 'Reactivation restores original WordPress role capabilities');
+check(SSF_Access_Control::user_groups(2) === array('nyheter'), 'Reactivation grants only explicitly selected groups');
+check(! user_can(2, 'ssf_review_applications'), 'Old application permission is not silently restored');
 SSF_Access_Control::set_active(1, false, 1);
 check(SSF_Access_Control::is_active(1), 'Administrator cannot deactivate self');
-check(count($options[SSF_Access_Control::AUDIT_OPTION]) === 4, 'Group, deactivation and reactivation events audited');
+SSF_Access_Control::mark_invited(3, 1);
+check(SSF_Access_Control::status(3) === SSF_Access_Control::STATUS_INVITED, 'Invitation has explicit invited status');
+check(! SSF_Access_Control::is_active(3), 'Invited account has no active access');
+SSF_Access_Control::activate_invitation(3);
+check(SSF_Access_Control::is_active(3), 'Invitation activation enables account');
+check(count($options[SSF_Access_Control::AUDIT_OPTION]) === 6, 'Permission, lifecycle and invitation events audited');
 check($options[SSF_Access_Control::AUDIT_OPTION][0]['actor_user_id'] === 1, 'Audit records actor');
 check($options[SSF_Access_Control::AUDIT_OPTION][0]['target_user_id'] === 2, 'Audit records target');
+check($options[SSF_Access_Control::AUDIT_OPTION][0]['actor_name'] === 'Test User 1', 'Audit snapshots actor name');
 echo "PASS: access-control runtime behaviour and open-assignment filtering.\n";
