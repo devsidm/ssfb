@@ -1,16 +1,21 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.7",
-    "build":  "20261002.5",
-    "built_at":  "2026-10-02T16:54:17.8162189Z",
+    "version":  "0.14.8",
+    "build":  "20261003.1",
+    "built_at":  "2026-10-03T04:48:10.5824783Z",
     "source":  "codex",
-    "source_revision":  "de80d0994f775f08166ea8891e4e589ee3f98324",
-    "description":  "SSF Arbetsyta: slutverifierad DEV-release",
+    "source_revision":  "9131c9415d87fbc8944a648e69a973e46a430ec5",
+    "description":  "Användarlivscykel, säker historik och korrigerad gemensam kortlayout",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
-                       "release-tooling",
-                       "ssf"
+                       "microsoft-id-login",
+                       "ssf",
+                       "ssf-access-control",
+                       "ssf-arbetsyta",
+                       "ssf-medlemsprocess",
+                       "ssf-site-customizations",
+                       "ssf-user-admin"
                    ],
     "status":  "development",
     "prepared_at":  ""
