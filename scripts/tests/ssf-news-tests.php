@@ -124,6 +124,7 @@ check_news(false !== strpos($renderer, 'referrerpolicy="no-referrer"'), 'externa
 check_news(false !== strpos($renderer, 'loading="lazy"'), 'external previews lazy-load');
 check_news(false !== strpos($script, "image.addEventListener('error', fallback)"), 'broken external images have a text-card fallback');
 check_news(false !== strpos($renderer, 'Läs hos '), 'external CTA names the source');
+check_news(false !== strpos($renderer, "\$excerpt = 'media' === \$type ? trim((string) \$post->post_excerpt)") && false !== strpos($renderer, "\$summary = '' !== \$excerpt ? '<p>'"), 'external cards omit an empty summary element');
 check_news(false !== strpos($service, "'twicedaily', self::CRON_HOOK"), 'monitoring is scheduled twice daily');
 check_news(false !== strpos($service, "'editor_manual'") && false !== strpos($service, "'member_tip'") && false !== strpos($service, "'monitoring'"), 'all origins share the canonical suggestion model');
 check_news(false !== strpos($service, "'_ssf_suggestion_status', 'dismissed'"), 'dismissed suggestions retain their dedup record');
@@ -131,6 +132,8 @@ check_news(false !== strpos($service, "'ssf_news_error'") && false !== strpos($s
 check_news(false !== strpos($service, 'Förslaget är redan behandlat och kan inte konverteras igen.'), 'handled suggestions cannot be converted from a stale direct link');
 check_news(false !== strpos($service, "'redirection' => 0") && false !== strpos($service, 'self::is_safe_url($url)'), 'each redirect is revalidated');
 check_news(false !== strpos($service, "array('external_preview', 'ssf_image', 'none')"), 'all three image modes are constrained');
+check_news(false !== strpos($service, 'Kort information (frivillig)') && false === strpos($service, 'name="summary" required'), 'external summary is optional in the editor');
+check_news(false !== strpos($service, "'external' === \$mode && mb_strlen(\$args['post_excerpt']) > 600") && false === strpos($service, "! \$args['post_excerpt']"), 'external save accepts an empty summary and retains its length limit');
 check_news(false !== strpos($access, "'ssf_news_edit'") && false !== strpos($access, "'ssf_news_publish'"), 'editor and publisher capabilities are distinct');
 check_news(false !== strpos($renderer, "\$_GET['nyhetstyp']") && false !== strpos($renderer, 'aria-current="page"'), 'public filters have a server-rendered no-JS baseline');
 

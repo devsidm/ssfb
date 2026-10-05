@@ -204,7 +204,9 @@ function ssf_site_render_news_card(WP_Post $post, string $url = ''): string
     $cta = 'media' === $type && $external_url
         ? '<a class="ssf-read-more ssf-read-more--external" target="_blank" rel="noopener noreferrer" href="' . esc_url($external_url) . '">Läs hos ' . esc_html($source ?: wp_parse_url($external_url, PHP_URL_HOST)) . ' <span aria-hidden="true">↗</span><span class="screen-reader-text"> (extern webbplats)</span></a>'
         : '<a class="ssf-read-more" href="' . esc_url($url) . '">Läs mer <span aria-hidden="true">→</span></a>';
-    return '<article class="ssf-news-card ssf-news-card--' . esc_attr($type) . ($image ? '' : ' ssf-news-card--text') . '" data-news-type="' . esc_attr($type) . '">' . $image . '<div class="ssf-news-card__body"><span class="ssf-news-type">' . esc_html($labels[$type]) . '</span><p class="ssf-news-card__meta">' . esc_html($meta) . '</p><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3><p>' . esc_html(wp_trim_words(get_the_excerpt($post), 24)) . '</p>' . ($tags ? '<p class="ssf-news-card__tags">' . esc_html(implode(' · ', $tags)) . '</p>' : '') . $cta . '</div></article>';
+    $excerpt = 'media' === $type ? trim((string) $post->post_excerpt) : trim((string) get_the_excerpt($post));
+    $summary = '' !== $excerpt ? '<p>' . esc_html(wp_trim_words($excerpt, 24)) . '</p>' : '';
+    return '<article class="ssf-news-card ssf-news-card--' . esc_attr($type) . ($image ? '' : ' ssf-news-card--text') . '" data-news-type="' . esc_attr($type) . '">' . $image . '<div class="ssf-news-card__body"><span class="ssf-news-type">' . esc_html($labels[$type]) . '</span><p class="ssf-news-card__meta">' . esc_html($meta) . '</p><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3>' . $summary . ($tags ? '<p class="ssf-news-card__tags">' . esc_html(implode(' · ', $tags)) . '</p>' : '') . $cta . '</div></article>';
 }
 
 function ssf_site_news_cards_shortcode(array $atts): string

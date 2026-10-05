@@ -49,7 +49,9 @@ function ssf_render_news_article(WP_Post $post): void
         $external = esc_url_raw((string) get_post_meta($post->ID, '_ssf_news_external_url', true));
         $original_date = (string) get_post_meta($post->ID, '_ssf_news_original_date', true);
         $display_date = $original_date && strtotime($original_date) ? wp_date(get_option('date_format'), strtotime($original_date)) : get_the_date('', $post);
-        echo '<p class="ssf-news-type">I medierna</p><p class="entry-date">' . esc_html($source . ' · ' . $display_date . ' · Publicerad av ' . $author_name) . '</p><h1>' . esc_html(get_the_title($post)) . '</h1><div class="entry-content"><p>' . esc_html($post->post_excerpt) . '</p></div>';
+        $summary = trim((string) $post->post_excerpt);
+        echo '<p class="ssf-news-type">I medierna</p><p class="entry-date">' . esc_html($source . ' · ' . $display_date . ' · Publicerad av ' . $author_name) . '</p><h1>' . esc_html(get_the_title($post)) . '</h1>';
+        if ('' !== $summary) { echo '<div class="entry-content"><p>' . esc_html($summary) . '</p></div>'; }
         if ($external) { echo '<p><a class="ssf-button" target="_blank" rel="noopener noreferrer" href="' . esc_url($external) . '">Läs hos ' . esc_html($source ?: wp_parse_url($external, PHP_URL_HOST)) . ' ↗</a></p>'; }
         echo '</article>';
         return;
