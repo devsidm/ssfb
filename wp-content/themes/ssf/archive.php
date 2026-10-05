@@ -17,12 +17,12 @@ get_header();
     <div class="ssf-news-grid">
         <?php while (have_posts()) : ?>
             <?php the_post(); ?>
-            <article id="post-<?php the_ID(); ?>" <?php post_class('ssf-news-card'); ?>>
-                <a href="<?php the_permalink(); ?>" class="ssf-news-card__image">
-                    <?php if (has_post_thumbnail()) : ?>
+            <article id="post-<?php the_ID(); ?>" <?php post_class(has_post_thumbnail() ? 'ssf-news-card' : 'ssf-news-card ssf-news-card--text'); ?>>
+                <?php if (has_post_thumbnail()) : ?>
+                    <a href="<?php the_permalink(); ?>" class="ssf-news-card__image">
                         <?php the_post_thumbnail('medium_large'); ?>
-                    <?php endif; ?>
-                </a>
+                    </a>
+                <?php endif; ?>
                 <div class="ssf-news-card__body">
                     <time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time>
                     <h2><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h2>
