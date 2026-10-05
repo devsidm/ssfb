@@ -325,7 +325,6 @@ h3, h4, .site-title {
   aspect-ratio: 472 / 486.667;
   background: url("../../../../themes/ssf/assets/images/ssf-logo.svg") center / contain no-repeat;
   filter: grayscale(1);
-  opacity: .08;
   pointer-events: none;
 }
 
