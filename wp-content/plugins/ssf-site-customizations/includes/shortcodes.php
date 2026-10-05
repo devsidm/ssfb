@@ -23,6 +23,84 @@ function ssf_site_application_destination(string $title, string $text, string $u
     return array($title, $text, $url);
 }
 
+function ssf_site_home_news_settings(): array
+{
+    $stored = get_option('ssf_news_home_settings', array());
+    $stored = is_array($stored) ? $stored : array();
+    $integer = static function (string $key, int $default, int $maximum) use ($stored): int {
+        $value = (int) ($stored[$key] ?? $default);
+        return $value >= 1 && $value <= $maximum ? $value : $default;
+    };
+    $show_media = (string) ($stored['show_media'] ?? '1');
+    $show_media = in_array($show_media, array('0', '1'), true) ? $show_media : '1';
+    return array(
+        'ssf_count' => $integer('ssf_count', 6, 6),
+        'ssf_columns' => $integer('ssf_columns', 3, 3),
+        'show_media' => '1' === $show_media,
+        'media_count' => $integer('media_count', 6, 6),
+        'media_columns' => $integer('media_columns', 3, 3),
+    );
+}
+
+function ssf_site_news_meta_query(string $type): array
+{
+    if ('media' === $type || 'ship' === $type) {
+        return array(array('key' => '_ssf_news_type', 'value' => $type));
+    }
+    if ('ssf' === $type) {
+        return array(
+            'relation' => 'OR',
+            array('key' => '_ssf_news_type', 'compare' => 'NOT EXISTS'),
+            array('key' => '_ssf_news_type', 'value' => array('ship', 'media'), 'compare' => 'NOT IN'),
+        );
+    }
+    return array();
+}
+
+function ssf_site_news_query(string $type, int $count, array $exclude = array()): WP_Query
+{
+    $args = array(
+        'post_type' => 'post',
+        'posts_per_page' => $count,
+        'post_status' => 'publish',
+        'ignore_sticky_posts' => true,
+        'no_found_rows' => true,
+    );
+    $meta_query = ssf_site_news_meta_query($type);
+    if ($meta_query) {
+        $args['meta_query'] = $meta_query;
+    }
+    if ($exclude) {
+        $args['post__not_in'] = array_map('intval', $exclude);
+    }
+    return new WP_Query($args);
+}
+
+function ssf_site_render_news_grid(array $posts, int $columns = 3): string
+{
+    $columns = min(3, max(1, $columns));
+    $html = '<div class="ssf-news-grid ssf-news-grid--columns-' . $columns . '">';
+    foreach ($posts as $post) {
+        $html .= ssf_site_render_news_card($post);
+    }
+    return $html . '</div>';
+}
+
+function ssf_site_home_news_section(string $type, int $count, int $columns): string
+{
+    $query = ssf_site_news_query($type, min(6, max(1, $count)));
+    if (! $query->posts) {
+        return '';
+    }
+    $media = 'media' === $type;
+    $archive_url = home_url('/nyheter/');
+    $url = $media ? add_query_arg('nyhetstyp', 'media', $archive_url) : $archive_url;
+    $title = $media ? 'I medierna' : 'Nyheter från SSF';
+    $intro = $media ? '' : '<p>Här hittar du information från förbundet, nyheter, evenemang och sådant som är viktigt för våra medlemmar.</p>';
+    $cta = $media ? 'Visa allt i medierna' : 'Visa alla nyheter';
+    return '<section class="ssf-section ssf-home-news' . ($media ? ' ssf-home-news--media' : '') . '"><div class="ssf-wrap"><h2>' . esc_html($title) . '</h2>' . $intro . ssf_site_render_news_grid($query->posts, $columns) . '<p class="ssf-news-section__cta"><a href="' . esc_url($url) . '">' . esc_html($cta) . ' <span aria-hidden="true">→</span></a></p></div></section>';
+}
+
 function ssf_site_button(string $label, string $url, string $class = ''): string
 {
     list($label, , $url) = ssf_site_application_destination($label, '', $url);
@@ -31,6 +109,7 @@ function ssf_site_button(string $label, string $url, string $class = ''): string
 
 function ssf_site_home_shortcode(): string
 {
+    $news_settings = ssf_site_home_news_settings();
     ob_start();
     ?>
     <section class="ssf-hero" aria-label="Sveriges Segelfartygsförbund">
@@ -95,13 +174,10 @@ function ssf_site_home_shortcode(): string
         </div>
     </section>
 
-    <section class="ssf-section">
-        <div class="ssf-wrap">
-            <h2>Nyheter från SSF</h2>
-            <p>Här hittar du information från förbundet, nyheter, evenemang och sådant som är viktigt för våra medlemmar.</p>
-            <?php echo do_shortcode('[ssf_news_cards count="4"]'); ?>
-        </div>
-    </section>
+    <?php echo ssf_site_home_news_section('ssf', $news_settings['ssf_count'], $news_settings['ssf_columns']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+    <?php if ($news_settings['show_media']) : ?>
+        <?php echo ssf_site_home_news_section('media', $news_settings['media_count'], $news_settings['media_columns']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+    <?php endif; ?>
 
     <section class="ssf-section ssf-section--blue">
         <div class="ssf-wrap ssf-split">
@@ -169,7 +245,7 @@ function ssf_site_step(string $number, string $title, string $text): string
     return sprintf('<div class="ssf-step"><span>%s</span><h3>%s</h3><p>%s</p></div>', esc_html($number), esc_html($title), esc_html($text));
 }
 
-function ssf_site_render_news_card(WP_Post $post, string $url = ''): string
+function ssf_site_render_news_card(WP_Post $post, string $url = '', string $modifier = ''): string
 {
     $url = $url ?: get_permalink($post);
     $type = (string) get_post_meta($post->ID, '_ssf_news_type', true);
@@ -206,28 +282,31 @@ function ssf_site_render_news_card(WP_Post $post, string $url = ''): string
         : '<a class="ssf-read-more" href="' . esc_url($url) . '">Läs mer <span aria-hidden="true">→</span></a>';
     $excerpt = 'media' === $type ? trim((string) $post->post_excerpt) : trim((string) get_the_excerpt($post));
     $summary = '' !== $excerpt ? '<p>' . esc_html(wp_trim_words($excerpt, 24)) . '</p>' : '';
-    return '<article class="ssf-news-card ssf-news-card--' . esc_attr($type) . ($image ? '' : ' ssf-news-card--text') . '" data-news-type="' . esc_attr($type) . '">' . $image . '<div class="ssf-news-card__body"><span class="ssf-news-type">' . esc_html($labels[$type]) . '</span><p class="ssf-news-card__meta">' . esc_html($meta) . '</p><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3>' . $summary . ($tags ? '<p class="ssf-news-card__tags">' . esc_html(implode(' · ', $tags)) . '</p>' : '') . $cta . '</div></article>';
+    $classes = 'ssf-news-card ssf-news-card--' . $type . ($image ? '' : ' ssf-news-card--text') . ($modifier ? ' ' . $modifier : '');
+    return '<article class="' . esc_attr($classes) . '" data-news-type="' . esc_attr($type) . '">' . $image . '<div class="ssf-news-card__body"><span class="ssf-news-type">' . esc_html($labels[$type]) . '</span><p class="ssf-news-card__meta">' . esc_html($meta) . '</p><h3><a href="' . esc_url($url) . '">' . esc_html(get_the_title($post)) . '</a></h3>' . $summary . ($tags ? '<p class="ssf-news-card__tags">' . esc_html(implode(' · ', $tags)) . '</p>' : '') . $cta . '</div></article>';
 }
 
 function ssf_site_news_cards_shortcode(array $atts): string
 {
-    $atts = shortcode_atts(array('count' => 3, 'filters' => ''), $atts);
+    $atts = shortcode_atts(array('count' => 3, 'filters' => '', 'type' => '', 'columns' => 3), $atts);
     $show_filters = '1' === (string) $atts['filters'] || (function_exists('is_page') && is_page('nyheter'));
     $filter = $show_filters ? sanitize_key((string) ($_GET['nyhetstyp'] ?? 'all')) : 'all';
     if (! in_array($filter, array('all', 'ssf', 'ship', 'media'), true)) {
         $filter = 'all';
     }
-    $query = new WP_Query(
-        array(
-            'post_type' => 'post',
-            'posts_per_page' => $show_filters ? -1 : max(1, (int) $atts['count']),
-            'post_status' => 'publish',
-        )
-    );
-
-    if (! $query->have_posts()) {
-        return '<p class="ssf-empty">Inga nyheter publicerade ännu.</p>';
+    $type = $show_filters ? $filter : sanitize_key((string) $atts['type']);
+    $type = in_array($type, array('ssf', 'ship', 'media'), true) ? $type : 'all';
+    $featured = array();
+    if ($show_filters && 'all' === $filter) {
+        $featured_query = new WP_Query(array(
+            'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => 1,
+            'meta_key' => '_ssf_news_featured', 'meta_value' => '1',
+            'ignore_sticky_posts' => true, 'no_found_rows' => true,
+        ));
+        $featured = $featured_query->posts;
     }
+    $exclude = $featured ? array((int) $featured[0]->ID) : array();
+    $query = ssf_site_news_query($type, $show_filters ? -1 : max(1, (int) $atts['count']), $exclude);
 
     ob_start();
     if ($show_filters) {
@@ -237,23 +316,15 @@ function ssf_site_news_cards_shortcode(array $atts): string
         }
         echo '</nav>';
     }
-    echo '<div class="ssf-news-grid">';
-    $rendered = 0;
-    while ($query->have_posts()) {
-        $query->the_post();
-        $post = get_post();
-        $type = (string) get_post_meta($post->ID, '_ssf_news_type', true);
-        $type = in_array($type, array('ship', 'media'), true) ? $type : 'ssf';
-        if ('all' === $filter || $filter === $type) {
-            echo ssf_site_render_news_card($post); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-            $rendered++;
-        }
+    if ($featured) {
+        echo '<section class="ssf-news-featured"><h2>Utvald nyhet</h2>' . ssf_site_render_news_card($featured[0], '', 'ssf-news-card--featured') . '</section>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     }
-    echo '</div>';
-    if (! $rendered) {
+    if ($query->posts) {
+        $grid = ssf_site_render_news_grid($query->posts, (int) $atts['columns']);
+        echo $show_filters ? '<section class="ssf-news-latest"><h2>Senaste</h2>' . $grid . '</section>' : $grid; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+    } elseif (! $featured) {
         echo '<p class="ssf-empty">Inga nyheter i det här filtret ännu.</p>';
     }
-    wp_reset_postdata();
 
     return ob_get_clean();
 }
@@ -265,7 +336,7 @@ function ssf_site_news_page_index(string $content): string
     if (! is_page('nyheter') || ! in_the_loop() || ! is_main_query() || has_shortcode($content, 'ssf_news_cards')) {
         return $content;
     }
-    return $content . '<section class="ssf-page-section"><h2>Senaste nyheterna</h2>' . do_shortcode('[ssf_news_cards filters="1"]') . '</section>';
+    return $content . '<section class="ssf-page-section">' . do_shortcode('[ssf_news_cards filters="1"]') . '</section>';
 }
 add_filter('the_content', 'ssf_site_news_page_index', 12);
 

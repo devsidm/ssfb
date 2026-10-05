@@ -15,6 +15,8 @@ final class SSF_News_Service
     public const META_IMAGE_MODE = '_ssf_news_image_mode';
     public const META_EXTERNAL_IMAGE = '_ssf_news_external_image';
     public const META_SHIPS = '_ssf_news_ship_ids';
+    public const META_FEATURED = '_ssf_news_featured';
+    public const HOME_SETTINGS = 'ssf_news_home_settings';
     public const TAXONOMY = 'ssf_news_topic';
 
     public static function boot(): void
@@ -29,6 +31,7 @@ final class SSF_News_Service
             'ssf_news_tip' => 'handle_tip',
             'ssf_news_suggestion' => 'handle_suggestion',
             'ssf_news_external_save' => 'handle_external_save',
+            'ssf_news_home_settings' => 'handle_home_settings',
             'ssf_news_source_save' => 'handle_source_save',
             'ssf_news_source_action' => 'handle_source_action',
         ) as $action => $method) {
@@ -86,6 +89,29 @@ final class SSF_News_Service
     public static function can(string $capability): bool
     {
         return current_user_can($capability) || current_user_can('manage_options');
+    }
+
+    public static function sanitize_home_settings(array $settings): array
+    {
+        $integer = static function (string $key, int $default, int $maximum) use ($settings): int {
+            $value = (int) ($settings[$key] ?? $default);
+            return $value >= 1 && $value <= $maximum ? $value : $default;
+        };
+        $show_media = (string) ($settings['show_media'] ?? '1');
+        $show_media = in_array($show_media, array('0', '1'), true) ? $show_media : '1';
+        return array(
+            'ssf_count' => $integer('ssf_count', 6, 6),
+            'ssf_columns' => $integer('ssf_columns', 3, 3),
+            'show_media' => $show_media,
+            'media_count' => $integer('media_count', 6, 6),
+            'media_columns' => $integer('media_columns', 3, 3),
+        );
+    }
+
+    private static function home_settings(): array
+    {
+        $settings = get_option(self::HOME_SETTINGS, array());
+        return self::sanitize_home_settings(is_array($settings) ? $settings : array());
     }
 
     public static function user_ship_ids(int $user_id): array
@@ -447,7 +473,24 @@ final class SSF_News_Service
             $url = $suggestion ? SSF_Workspace::url('nyheter/forslag/' . $item->ID) : SSF_Workspace::url(('media' === self::post_meta($item->ID, self::META_TYPE) ? 'nyheter/medierna/' : 'nyheter/egna/') . $item->ID);
             $html .= '<li><div><strong>' . esc_html(get_the_title($item)) . '</strong><span>' . esc_html($suggestion ? 'Artikelförslag' : self::status_label($item->post_status)) . ' · ' . esc_html(get_the_modified_date('j F Y H:i', $item)) . '</span></div><a href="' . esc_url($url) . '">Öppna</a></li>';
         }
-        return $html . '</ul>';
+        $html .= '</ul>';
+        if (! self::can('ssf_news_edit')) {
+            return $html;
+        }
+        $settings = self::home_settings();
+        $html .= '<section class="ssf-workspace-panel"><h2>Startsidans nyheter</h2><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_home_settings">' . wp_nonce_field('ssf_news_home_settings', '_wpnonce', true, false);
+        $html .= '<fieldset><legend>Nyheter från SSF</legend><label for="ssf-home-count">Antal artiklar</label><input id="ssf-home-count" name="ssf_count" type="number" min="1" max="6" value="' . esc_attr((string) $settings['ssf_count']) . '"><label for="ssf-home-columns">Kolumner på desktop</label><select id="ssf-home-columns" name="ssf_columns">' . self::column_options((int) $settings['ssf_columns']) . '</select></fieldset>';
+        $html .= '<fieldset><legend>I medierna</legend><label class="ssf-workspace-check"><input type="checkbox" name="show_media" value="1"' . checked('1', $settings['show_media'], false) . '> Visa ”I medierna” på startsidan</label><label for="ssf-media-count">Antal artiklar</label><input id="ssf-media-count" name="media_count" type="number" min="1" max="6" value="' . esc_attr((string) $settings['media_count']) . '"><label for="ssf-media-columns">Kolumner på desktop</label><select id="ssf-media-columns" name="media_columns">' . self::column_options((int) $settings['media_columns']) . '</select></fieldset>';
+        return $html . '<button class="ssf-workspace-button" type="submit">Spara</button></form></section>';
+    }
+
+    private static function column_options(int $selected_columns): string
+    {
+        $html = '';
+        foreach (array(1, 2, 3) as $columns) {
+            $html .= '<option value="' . $columns . '"' . selected($selected_columns, $columns, false) . '>' . $columns . '</option>';
+        }
+        return $html;
     }
 
     public static function tasks(int $user_id): array
@@ -505,9 +548,10 @@ final class SSF_News_Service
         }
         $id = $post ? (int) $post->ID : 0;
         $type = $post ? self::post_meta($id, self::META_TYPE) : 'ssf';
+        $featured = $post && '1' === self::post_meta($id, self::META_FEATURED);
         $html = '<h1>' . ($post ? 'Redigera nyhet' : 'Ny artikel') . '</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '">← Egna nyheter</a></p>' . self::notice_html();
         $html .= '<form method="post" enctype="multipart/form-data" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_external_save"><input type="hidden" name="mode" value="own"><input type="hidden" name="post_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_save_' . $id, '_wpnonce', true, false)
-            . '<label for="ssf-title">Rubrik</label><input id="ssf-title" name="title" required maxlength="200" value="' . esc_attr($post ? $post->post_title : '') . '"><label for="ssf-excerpt">Ingress</label><textarea id="ssf-excerpt" name="summary" rows="4">' . esc_textarea($post ? $post->post_excerpt : '') . '</textarea><label for="ssf-content">Artikeltext</label><textarea id="ssf-content" name="content" rows="16">' . esc_textarea($post ? $post->post_content : '') . '</textarea><label for="ssf-type">Typ</label><select id="ssf-type" name="news_type"><option value="ssf"' . selected($type, 'ssf', false) . '>SSF-nyhet</option><option value="ship"' . selected($type, 'ship', false) . '>Från medlemsfartygen</option></select><label for="ssf-image">Utvald bild (valfri)</label><input id="ssf-image" name="featured_image" type="file" accept="image/jpeg,image/png,image/webp"><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="draft">Spara utkast</button>';
+            . '<label for="ssf-title">Rubrik</label><input id="ssf-title" name="title" required maxlength="200" value="' . esc_attr($post ? $post->post_title : '') . '"><label for="ssf-excerpt">Ingress</label><textarea id="ssf-excerpt" name="summary" rows="4">' . esc_textarea($post ? $post->post_excerpt : '') . '</textarea><label for="ssf-content">Artikeltext</label><textarea id="ssf-content" name="content" rows="16">' . esc_textarea($post ? $post->post_content : '') . '</textarea><label for="ssf-type">Typ</label><select id="ssf-type" name="news_type"><option value="ssf"' . selected($type, 'ssf', false) . '>SSF-nyhet</option><option value="ship"' . selected($type, 'ship', false) . '>Från medlemsfartygen</option></select><label class="ssf-workspace-check"><input type="checkbox" name="featured_news" value="1"' . checked($featured, true, false) . '> Utvald på nyhetssidan</label><p class="ssf-workspace-help">Den utvalda nyheten visas större i filtret Alla när den är publicerad.</p><label for="ssf-image">Utvald bild (valfri)</label><input id="ssf-image" name="featured_image" type="file" accept="image/jpeg,image/png,image/webp"><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="draft">Spara utkast</button>';
         if (self::can('ssf_news_publish')) {
             $html .= '<button class="ssf-workspace-button" name="intent" value="publish">Publicera</button>';
             if ($post && 'publish' === $post->post_status) {
@@ -632,9 +676,10 @@ final class SSF_News_Service
         $preview_allowed = $source_id && '1' === self::post_meta($source_id, '_ssf_source_allow_preview');
         $ship_ids = array_map('intval', (array) get_post_meta($id, self::META_SHIPS, true));
         $topics = wp_get_object_terms($id, self::TAXONOMY, array('fields' => 'names'));
+        $featured = '1' === self::post_meta($id, self::META_FEATURED);
         $html = '<h1>I medierna</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/medierna')) . '">← I medierna</a></p>' . self::notice_html() . '<section class="ssf-workspace-panel"><p class="ssf-news-kicker">Originalartikel</p><h2>' . esc_html(self::post_meta($id, '_ssf_news_original_title') ?: $post->post_title) . '</h2><p><strong>' . esc_html(self::post_meta($id, self::META_SOURCE)) . '</strong>' . (self::post_meta($id, '_ssf_news_original_date') ? ' · ' . esc_html(wp_date('j F Y', strtotime(self::post_meta($id, '_ssf_news_original_date')))) : '') . '</p><a target="_blank" rel="noopener noreferrer" href="' . esc_url(self::post_meta($id, self::META_EXTERNAL_URL)) . '">Läs original ↗</a></section>';
         $html .= '<form method="post" enctype="multipart/form-data" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_external_save"><input type="hidden" name="mode" value="external"><input type="hidden" name="post_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_save_' . $id, '_wpnonce', true, false) . '<label for="ssf-title">SSF-rubrik</label><input id="ssf-title" name="title" required maxlength="200" value="' . esc_attr($post->post_title) . '"><label for="ssf-summary">Kort information (frivillig)</label><textarea id="ssf-summary" name="summary" maxlength="600" rows="5" aria-describedby="ssf-summary-help">' . esc_textarea($post->post_excerpt) . '</textarea><p id="ssf-summary-help" class="ssf-workspace-help">Frivillig. Använd om du vill förklara varför artikeln är intressant.</p>';
-        $html .= self::ship_select($ship_ids) . '<label for="ssf-topics">Ämnen (kommaseparerade)</label><input id="ssf-topics" name="topics" value="' . esc_attr(is_wp_error($topics) ? '' : implode(', ', $topics)) . '"><fieldset><legend>Bildläge</legend><label class="ssf-workspace-check"><input type="radio" name="image_mode" value="external_preview"' . checked($mode, 'external_preview', false) . disabled(!$preview_allowed, true, false) . '> Extern Open Graph-förhandsvisning</label>' . ($preview_allowed ? '' : '<p class="ssf-workspace-help">Extern förhandsvisning måste tillåtas på en matchande bevakningskälla.</p>') . '<label class="ssf-workspace-check"><input type="radio" name="image_mode" value="ssf_image"' . checked($mode, 'ssf_image', false) . '> SSF:s egen / licensierad bild</label><label class="ssf-workspace-check"><input type="radio" name="image_mode" value="none"' . checked($mode, 'none', false) . '> Ingen bild</label></fieldset><label for="ssf-image">SSF/licensierad bild</label><input id="ssf-image" name="featured_image" type="file" accept="image/jpeg,image/png,image/webp"><label for="ssf-photographer">Fotograf</label><input id="ssf-photographer" name="photographer" value="' . esc_attr(self::post_meta($id, '_ssf_news_photographer')) . '"><label for="ssf-rights-source">Bildkälla</label><input id="ssf-rights-source" name="rights_source" value="' . esc_attr(self::post_meta($id, '_ssf_news_rights_source')) . '"><label for="ssf-rights">Rättighetsnotering</label><input id="ssf-rights" name="rights_note" value="' . esc_attr(self::post_meta($id, '_ssf_news_rights_note')) . '"><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="draft">Spara utkast</button>';
+        $html .= self::ship_select($ship_ids) . '<label for="ssf-topics">Ämnen (kommaseparerade)</label><input id="ssf-topics" name="topics" value="' . esc_attr(is_wp_error($topics) ? '' : implode(', ', $topics)) . '"><label class="ssf-workspace-check"><input type="checkbox" name="featured_news" value="1"' . checked($featured, true, false) . '> Utvald på nyhetssidan</label><p class="ssf-workspace-help">Den utvalda nyheten visas större i filtret Alla när den är publicerad.</p><fieldset><legend>Bildläge</legend><label class="ssf-workspace-check"><input type="radio" name="image_mode" value="external_preview"' . checked($mode, 'external_preview', false) . disabled(!$preview_allowed, true, false) . '> Extern Open Graph-förhandsvisning</label>' . ($preview_allowed ? '' : '<p class="ssf-workspace-help">Extern förhandsvisning måste tillåtas på en matchande bevakningskälla.</p>') . '<label class="ssf-workspace-check"><input type="radio" name="image_mode" value="ssf_image"' . checked($mode, 'ssf_image', false) . '> SSF:s egen / licensierad bild</label><label class="ssf-workspace-check"><input type="radio" name="image_mode" value="none"' . checked($mode, 'none', false) . '> Ingen bild</label></fieldset><label for="ssf-image">SSF/licensierad bild</label><input id="ssf-image" name="featured_image" type="file" accept="image/jpeg,image/png,image/webp"><label for="ssf-photographer">Fotograf</label><input id="ssf-photographer" name="photographer" value="' . esc_attr(self::post_meta($id, '_ssf_news_photographer')) . '"><label for="ssf-rights-source">Bildkälla</label><input id="ssf-rights-source" name="rights_source" value="' . esc_attr(self::post_meta($id, '_ssf_news_rights_source')) . '"><label for="ssf-rights">Rättighetsnotering</label><input id="ssf-rights" name="rights_note" value="' . esc_attr(self::post_meta($id, '_ssf_news_rights_note')) . '"><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="draft">Spara utkast</button>';
         if (self::can('ssf_news_publish')) {
             $html .= '<button class="ssf-workspace-button" name="intent" value="publish">Publicera</button>';
             if ('publish' === $post->post_status) {
@@ -695,6 +740,21 @@ final class SSF_News_Service
             return '<p>Källan kunde inte hittas.</p>';
         }
         return '<h1>' . ($source ? 'Redigera källa' : 'Lägg till källa') . '</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/bevakning')) . '">← Omvärldsbevakning</a></p>' . self::notice_html() . '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_source_save"><input type="hidden" name="source_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_source_save_' . $id, '_wpnonce', true, false) . '<label for="ssf-source-name">Källans namn</label><input id="ssf-source-name" name="name" required value="' . esc_attr($source ? $source->post_title : '') . '"><label for="ssf-base-url">Webbplats</label><input id="ssf-base-url" name="base_url" type="url" required value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_base_url') : '') . '"><label for="ssf-feed-url">RSS/Atom (valfri, prioriteras)</label><input id="ssf-feed-url" name="feed_url" type="url" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_feed_url') : '') . '"><label for="ssf-discovery-url">Konfigurerad artikel-/indexsida (valfri)</label><input id="ssf-discovery-url" name="discovery_url" type="url" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_discovery_url') : '') . '"><label for="ssf-keywords">Extra nyckelord/ämnen (kommaseparerade)</label><input id="ssf-keywords" name="keywords" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_keywords') : '') . '"><label class="ssf-workspace-check"><input type="checkbox" name="active" value="1"' . checked(!$source || '1' === self::post_meta($id, '_ssf_source_active'), true, false) . '> Aktiv</label><label class="ssf-workspace-check"><input type="checkbox" name="priority" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_priority'), true, false) . '> ★ Prioriterad</label><label class="ssf-workspace-check"><input type="checkbox" name="allow_preview" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_allow_preview'), true, false) . '> Tillåt extern Open Graph-bild</label><p class="ssf-workspace-help">Extern bild innebär att besökarens webbläsare kontaktar källans bildserver. Bilden kopieras eller cachas inte av SSF.</p><button class="ssf-workspace-button" type="submit">Spara källa</button></form>';
+    }
+
+    public static function handle_home_settings(): void
+    {
+        self::require_cap('ssf_news_edit');
+        check_admin_referer('ssf_news_home_settings');
+        $settings = self::sanitize_home_settings(array(
+            'ssf_count' => wp_unslash($_POST['ssf_count'] ?? ''),
+            'ssf_columns' => wp_unslash($_POST['ssf_columns'] ?? ''),
+            'show_media' => ! empty($_POST['show_media']) ? '1' : '0',
+            'media_count' => wp_unslash($_POST['media_count'] ?? ''),
+            'media_columns' => wp_unslash($_POST['media_columns'] ?? ''),
+        ));
+        update_option(self::HOME_SETTINGS, $settings, false);
+        self::redirect('nyheter', 'Inställningarna för startsidans nyheter sparades.');
     }
 
     public static function handle_manual(): void
@@ -868,6 +928,7 @@ final class SSF_News_Service
             $type = sanitize_key((string) ($_POST['news_type'] ?? 'ssf'));
             update_post_meta($id, self::META_TYPE, 'ship' === $type ? 'ship' : 'ssf');
         }
+        self::set_featured($id, ! empty($_POST['featured_news']));
         self::handle_image_upload($id);
         $path = 'external' === $mode ? 'nyheter/medierna/' . $id : 'nyheter/egna/' . $id;
         if ('preview' === $intent) {
@@ -875,6 +936,24 @@ final class SSF_News_Service
             exit;
         }
         self::redirect($path, 'Artikeln sparades som ' . strtolower(self::status_label($status)) . '.');
+    }
+
+    private static function set_featured(int $post_id, bool $featured): void
+    {
+        if (! $featured) {
+            delete_post_meta($post_id, self::META_FEATURED);
+            return;
+        }
+        $featured_ids = get_posts(array(
+            'post_type' => 'post', 'post_status' => 'any', 'numberposts' => -1,
+            'meta_key' => self::META_FEATURED, 'meta_value' => '1', 'fields' => 'ids',
+        ));
+        foreach ($featured_ids as $featured_id) {
+            if ((int) $featured_id !== $post_id) {
+                delete_post_meta((int) $featured_id, self::META_FEATURED);
+            }
+        }
+        update_post_meta($post_id, self::META_FEATURED, '1');
     }
 
     private static function handle_image_upload(int $post_id): void

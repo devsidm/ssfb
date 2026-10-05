@@ -159,6 +159,18 @@ h3, h4, .site-title {
   min-width: 0;
 }
 
+.ssf-news-grid.ssf-news-grid--columns-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ssf-news-grid.ssf-news-grid--columns-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ssf-news-grid.ssf-news-grid--columns-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .ssf-card-grid {
   display: grid;
   min-width: 0;
@@ -384,6 +396,51 @@ h3, h4, .site-title {
   border-color: var(--ssf-blue-dark);
   background: var(--ssf-blue-dark);
   color: #fff;
+}
+
+.ssf-news-featured,
+.ssf-news-latest {
+  margin-top: 34px;
+}
+
+.ssf-news-featured > h2,
+.ssf-news-latest > h2 {
+  margin-bottom: 18px;
+  font-size: clamp(1.55rem, 3vw, 2.15rem);
+}
+
+.ssf-news-card--featured:not(.ssf-news-card--text) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.ssf-news-card--featured:not(.ssf-news-card--text) .ssf-news-card__image {
+  min-height: 280px;
+  aspect-ratio: auto;
+}
+
+.ssf-news-card--featured .ssf-news-card__body {
+  align-self: center;
+  padding: clamp(26px, 5vw, 46px);
+}
+
+.ssf-news-card--featured h3 {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.ssf-news-section__cta {
+  margin: 24px 0 0;
+}
+
+.ssf-news-section__cta a {
+  color: var(--ssf-blue-dark);
+  font-weight: 700;
+  text-underline-offset: 5px;
+}
+
+.ssf-home-news--media {
+  border-block: 1px solid var(--ssf-border);
+  background: var(--ssf-bg-soft);
 }
 
 .ssf-news-card h3 a,
@@ -832,6 +889,15 @@ h3, h4, .site-title {
   .ssf-step:nth-child(2n) {
     border-right: 0;
   }
+
+  .ssf-news-grid.ssf-news-grid--columns-1 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssf-news-grid.ssf-news-grid--columns-2,
+  .ssf-news-grid.ssf-news-grid--columns-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -856,6 +922,21 @@ h3, h4, .site-title {
 
   .ssf-news-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssf-news-grid.ssf-news-grid--columns-1,
+  .ssf-news-grid.ssf-news-grid--columns-2,
+  .ssf-news-grid.ssf-news-grid--columns-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssf-news-card--featured:not(.ssf-news-card--text) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssf-news-card--featured:not(.ssf-news-card--text) .ssf-news-card__image {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
   }
 
   .ssf-home-card-grid { gap: 18px; }

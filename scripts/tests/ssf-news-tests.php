@@ -58,6 +58,13 @@ function check_news(bool $condition, string $description): void
     }
 }
 
+$home_defaults = SSF_News_Service::sanitize_home_settings(array());
+check_news(6 === $home_defaults['ssf_count'] && 3 === $home_defaults['ssf_columns'] && '1' === $home_defaults['show_media'], 'homepage news settings have safe defaults');
+$home_valid = SSF_News_Service::sanitize_home_settings(array('ssf_count' => '4', 'ssf_columns' => '2', 'show_media' => '0', 'media_count' => '1', 'media_columns' => '1'));
+check_news(4 === $home_valid['ssf_count'] && 2 === $home_valid['ssf_columns'] && '0' === $home_valid['show_media'] && 1 === $home_valid['media_count'], 'homepage news settings accept valid ranges');
+$home_invalid = SSF_News_Service::sanitize_home_settings(array('ssf_count' => '9', 'ssf_columns' => '0', 'show_media' => 'invalid', 'media_count' => '-2', 'media_columns' => '4'));
+check_news(6 === $home_invalid['ssf_count'] && 3 === $home_invalid['ssf_columns'] && '1' === $home_invalid['show_media'] && 6 === $home_invalid['media_count'] && 3 === $home_invalid['media_columns'], 'homepage news settings reject invalid values');
+
 $normalized = SSF_News_Service::normalize_url('HTTPS://Example.COM:443/story/?utm_source=test&b=2&a=1#part');
 check_news('https://example.com/story/?a=1&b=2' === $normalized, 'canonical URL is stable and tracking-free');
 check_news('' === SSF_News_Service::normalize_url('file:///etc/passwd'), 'unsafe scheme is rejected');
@@ -119,6 +126,7 @@ check_news(isset($news_scheduled['ssf_news_check_source[' . $source . ']']) && i
 $renderer = file_get_contents(__DIR__ . '/../../wp-content/plugins/ssf-site-customizations/includes/shortcodes.php');
 $script = file_get_contents(__DIR__ . '/../../wp-content/plugins/ssf-site-customizations/assets/js/ssf-site.js');
 $service = file_get_contents(__DIR__ . '/../../wp-content/plugins/ssf-arbetsyta/includes/class-ssf-news-service.php');
+$styles = file_get_contents(__DIR__ . '/../../wp-content/plugins/ssf-site-customizations/assets/css/ssf-site.css');
 $access = file_get_contents(__DIR__ . '/../../wp-content/mu-plugins/ssf-access-control.php');
 check_news(false !== strpos($renderer, 'referrerpolicy="no-referrer"'), 'external previews use no-referrer');
 check_news(false !== strpos($renderer, 'loading="lazy"'), 'external previews lazy-load');
@@ -134,6 +142,12 @@ check_news(false !== strpos($service, "'redirection' => 0") && false !== strpos(
 check_news(false !== strpos($service, "array('external_preview', 'ssf_image', 'none')"), 'all three image modes are constrained');
 check_news(false !== strpos($service, 'Kort information (frivillig)') && false === strpos($service, 'name="summary" required'), 'external summary is optional in the editor');
 check_news(false !== strpos($service, "'external' === \$mode && mb_strlen(\$args['post_excerpt']) > 600") && false === strpos($service, "! \$args['post_excerpt']"), 'external save accepts an empty summary and retains its length limit');
+check_news(strpos($renderer, "ssf_site_home_news_section('ssf'") < strpos($renderer, "ssf_site_home_news_section('media'"), 'homepage renders SSF news before media news');
+check_news(false !== strpos($renderer, "'posts_per_page' => \$count") && false !== strpos($renderer, "min(6, max(1, \$count))"), 'homepage queries only the configured maximum of six posts');
+check_news(false !== strpos($renderer, "add_query_arg('nyhetstyp', 'media'") && false !== strpos($renderer, 'Visa allt i medierna'), 'homepage media CTA preserves the archive filter');
+check_news(false !== strpos($renderer, "'meta_key' => '_ssf_news_featured'") && false !== strpos($renderer, "\$exclude = \$featured ? array((int) \$featured[0]->ID)"), 'featured article is optional and excluded from the latest grid');
+check_news(false !== strpos($service, 'delete_post_meta((int) $featured_id, self::META_FEATURED)') && false !== strpos($service, 'update_post_meta($post_id, self::META_FEATURED'), 'selecting a featured article replaces the previous selection');
+check_news(false !== strpos($styles, '.ssf-news-grid.ssf-news-grid--columns-3') && false !== strpos($styles, '@media (max-width: 640px)'), 'news grids have configurable desktop columns and a mobile breakpoint');
 check_news(false !== strpos($access, "'ssf_news_edit'") && false !== strpos($access, "'ssf_news_publish'"), 'editor and publisher capabilities are distinct');
 check_news(false !== strpos($renderer, "\$_GET['nyhetstyp']") && false !== strpos($renderer, 'aria-current="page"'), 'public filters have a server-rendered no-JS baseline');
 
