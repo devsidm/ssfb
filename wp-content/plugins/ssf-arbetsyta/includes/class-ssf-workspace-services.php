@@ -145,7 +145,7 @@ final class SSF_Workspace_Services
             }
             $tasks[] = array(
                 'id' => 'application-' . $id, 'entity_id' => (int) $id,
-                'title' => (string) get_post_meta($id, '_ssf_application_number', true) . ' · ' . get_the_title($id),
+                'title' => (string) get_post_meta($id, '_ssf_application_number', true) . ' · ' . SSF_Workspace::display_title($id),
                 'description' => SSF_Medlemsprocess_Application::status_label($status),
                 'status' => $status, 'updated_at' => get_post_modified_time('c', true, $id),
                 'url' => SSF_Workspace::url('ansokningar/' . $id),
@@ -160,7 +160,7 @@ final class SSF_Workspace_Services
         $tasks = array();
         foreach ($ids as $id) {
             $tasks[] = array(
-                'id' => 'inspection-' . $id, 'entity_id' => (int) $id, 'title' => get_the_title($id),
+                'id' => 'inspection-' . $id, 'entity_id' => (int) $id, 'title' => SSF_Workspace::display_title($id),
                 'description' => 'Tilldelad inspektion', 'updated_at' => get_post_modified_time('c', true, $id),
                 'url' => SSF_Workspace::url('inspektioner/' . $id),
             );
@@ -189,7 +189,7 @@ final class SSF_Workspace_Services
             if (! current_user_can('edit_post', $post->ID)) {
                 continue;
             }
-            $html .= '<li><div><strong>' . esc_html(get_the_title($post)) . '</strong><span>' . esc_html(self::news_status($post->post_status)) . ' · ' . esc_html(get_the_modified_date('j F Y', $post)) . '</span></div><a href="' . esc_url(SSF_Workspace::url('nyheter/' . $post->ID)) . '">Öppna</a></li>';
+            $html .= '<li><div><strong>' . esc_html(SSF_Workspace::display_title($post)) . '</strong><span>' . esc_html(self::news_status($post->post_status)) . ' · ' . esc_html(get_the_modified_date('j F Y', $post)) . '</span></div><a href="' . esc_url(SSF_Workspace::url('nyheter/' . $post->ID)) . '">Öppna</a></li>';
         }
         return $html . '</ul>';
     }

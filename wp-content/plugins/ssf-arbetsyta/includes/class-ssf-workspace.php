@@ -46,6 +46,13 @@ final class SSF_Workspace
         return home_url('/arbetsyta/' . ($path ? trim($path, '/') . '/' : ''));
     }
 
+    /** Raw business title for records rendered inside the restricted Workspace. */
+    public static function display_title($post): string
+    {
+        $record = get_post($post);
+        return $record ? (string) $record->post_title : '';
+    }
+
     /**
      * Register a service. Routes are relative to /arbetsyta/; callbacks receive the remaining path.
      * Returns false for invalid or duplicate definitions, leaving the existing entry untouched.

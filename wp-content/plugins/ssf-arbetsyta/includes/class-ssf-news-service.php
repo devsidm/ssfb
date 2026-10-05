@@ -477,7 +477,7 @@ final class SSF_News_Service
         foreach ($recent as $item) {
             $suggestion = self::SUGGESTION_TYPE === $item->post_type;
             $url = $suggestion ? SSF_Workspace::url('nyheter/forslag/' . $item->ID) : SSF_Workspace::url(('media' === self::post_meta($item->ID, self::META_TYPE) ? 'nyheter/medierna/' : 'nyheter/egna/') . $item->ID);
-            $item_status = $suggestion ? 'Artikelförslag · ' . self::status_label($item->post_status) : self::status_label($item->post_status);
+            $item_status = $suggestion ? self::suggestion_status_label() : self::status_label($item->post_status);
             $html .= '<li><div><strong>' . esc_html($item->post_title) . '</strong><span>' . esc_html($item_status) . ' · ' . esc_html(get_the_modified_date('j F Y H:i', $item)) . '</span></div><a href="' . esc_url($url) . '">Öppna</a></li>';
         }
         $html .= '</ul>';
@@ -521,6 +521,11 @@ final class SSF_News_Service
     private static function status_label(string $status): string
     {
         return array('draft' => 'Utkast', 'pending' => 'Väntar på granskning', 'future' => 'Schemalagd', 'publish' => 'Publicerad', 'private' => 'Ej publicerad')[$status] ?? $status;
+    }
+
+    private static function suggestion_status_label(): string
+    {
+        return 'Artikelförslag';
     }
 
     private static function own_news(int $id): string
@@ -641,7 +646,7 @@ final class SSF_News_Service
             $origin = self::suggestion_origin(self::post_meta($post->ID, '_ssf_suggestion_origin'));
             $topics = (array) get_post_meta($post->ID, '_ssf_suggestion_topics', true);
             $ships = array_filter(array_map('get_the_title', (array) get_post_meta($post->ID, '_ssf_suggestion_ships', true)));
-            $html .= '<article class="ssf-suggestion-card"><div class="ssf-suggestion-card__meta"><span>' . esc_html($origin) . '</span><span>Status: ' . esc_html(self::status_label($post->post_status)) . '</span>' . ('1' === self::post_meta($post->ID, '_ssf_suggestion_priority') ? '<span>★ Prioriterad källa</span>' : '') . '</div><h2>' . esc_html($post->post_title) . '</h2><p><strong>' . esc_html($source) . '</strong>' . (self::post_meta($post->ID, '_ssf_suggestion_original_date') ? ' · ' . esc_html(wp_date('j F Y', strtotime(self::post_meta($post->ID, '_ssf_suggestion_original_date')))) : '') . '</p>';
+            $html .= '<article class="ssf-suggestion-card"><div class="ssf-suggestion-card__meta"><span>' . esc_html($origin) . '</span><span>Status: ' . esc_html(self::suggestion_status_label()) . '</span>' . ('1' === self::post_meta($post->ID, '_ssf_suggestion_priority') ? '<span>★ Prioriterad källa</span>' : '') . '</div><h2>' . esc_html($post->post_title) . '</h2><p><strong>' . esc_html($source) . '</strong>' . (self::post_meta($post->ID, '_ssf_suggestion_original_date') ? ' · ' . esc_html(wp_date('j F Y', strtotime(self::post_meta($post->ID, '_ssf_suggestion_original_date')))) : '') . '</p>';
             if ($post->post_excerpt) {
                 $html .= '<p>' . esc_html(wp_trim_words($post->post_excerpt, 32)) . '</p>';
             }
@@ -658,7 +663,7 @@ final class SSF_News_Service
         $id = (int) $post->ID;
         $source_id = (int) get_post_meta($id, '_ssf_suggestion_source_id', true);
         $allow_preview = $source_id && '1' === self::post_meta($source_id, '_ssf_source_allow_preview');
-        $html = '<h1>Granska artikelförslag</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/forslag')) . '">← Artikelförslag</a></p>' . self::notice_html() . '<article class="ssf-workspace-panel"><p class="ssf-news-kicker">' . esc_html(self::suggestion_origin(self::post_meta($id, '_ssf_suggestion_origin'))) . '</p><p><span class="ssf-status">Status: ' . esc_html(self::status_label($post->post_status)) . '</span></p><h2>' . esc_html($post->post_title) . '</h2><p><strong>Källa:</strong> ' . esc_html(self::post_meta($id, '_ssf_suggestion_source')) . '</p><p>' . esc_html($post->post_excerpt) . '</p><p><a target="_blank" rel="noopener noreferrer" href="' . esc_url(self::post_meta($id, '_ssf_suggestion_canonical')) . '">Läs original ↗</a></p></article>';
+        $html = '<h1>Granska artikelförslag</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/forslag')) . '">← Artikelförslag</a></p>' . self::notice_html() . '<article class="ssf-workspace-panel"><p class="ssf-news-kicker">' . esc_html(self::suggestion_origin(self::post_meta($id, '_ssf_suggestion_origin'))) . '</p><p><span class="ssf-status">Status: ' . esc_html(self::suggestion_status_label()) . '</span></p><h2>' . esc_html($post->post_title) . '</h2><p><strong>Källa:</strong> ' . esc_html(self::post_meta($id, '_ssf_suggestion_source')) . '</p><p>' . esc_html($post->post_excerpt) . '</p><p><a target="_blank" rel="noopener noreferrer" href="' . esc_url(self::post_meta($id, '_ssf_suggestion_canonical')) . '">Läs original ↗</a></p></article>';
         if (self::post_meta($id, '_ssf_suggestion_comment')) {
             $html .= '<section class="ssf-workspace-panel"><h2>Kommentar från tipsaren</h2><p>' . esc_html(self::post_meta($id, '_ssf_suggestion_comment')) . '</p></section>';
         }

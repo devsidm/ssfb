@@ -6,6 +6,7 @@ define('ABSPATH', __DIR__);
 $hooks = array();
 $active = true;
 $caps = array('view_a' => true, 'view_b' => false);
+$test_posts = array(44 => (object) array('ID' => 44, 'post_title' => 'SSF-2026-0020 – DEV TEST 3', 'post_status' => 'private'));
 
 function add_action(string $name, callable $callback, int $priority = 10): void { global $hooks; $hooks[$name][] = $callback; }
 function add_filter(string $name, callable $callback): void { add_action($name, $callback); }
@@ -16,6 +17,7 @@ function get_current_user_id(): int { return 10; }
 function current_user_can(string $capability): bool { global $caps; return ! empty($caps[$capability]); }
 function home_url(string $path): string { return 'https://example.test/dev' . $path; }
 function wp_validate_redirect(string $url, string $fallback): string { return str_starts_with($url, 'https://example.test/dev/') ? $url : $fallback; }
+function get_post($post) { global $test_posts; return is_object($post) ? $post : ($test_posts[(int) $post] ?? null); }
 
 final class SSF_Access_Control
 {
@@ -33,6 +35,7 @@ function check(bool $condition, string $description): void
 }
 
 $render = static fn(string $path): string => $path;
+check(SSF_Workspace::display_title(44) === 'SSF-2026-0020 – DEV TEST 3', 'private Workspace record keeps its raw business title');
 check(SSF_Workspace::register_service(array('id' => 'a', 'label' => 'A', 'route' => 'a', 'capability' => 'view_a', 'render' => $render, 'order' => 20,
     'tasks' => static fn(): array => array(array('title' => 'Ärende 5', 'url' => SSF_Workspace::url('a/5'), 'updated_at' => '2026-09-25')))), 'valid service registers');
 check(SSF_Workspace::register_service(array('id' => 'b', 'label' => 'B', 'route' => 'b', 'capability' => 'view_b', 'render' => $render)), 'hidden service registers');

@@ -122,18 +122,26 @@ class SSF_Medlemsprocess_Inspector
         $actor_snapshots = (array) ($record['actor_snapshots'] ?? array());
         $lead_name = $lead ? $lead->display_name : (string) ($actor_snapshots[(string) ($record['lead_inspector_user_id'] ?? 0)]['display_name'] ?? 'Tidigare användare');
         $co_name = $co ? $co->display_name : (string) ($actor_snapshots[(string) ($record['co_inspector_user_id'] ?? 0)]['display_name'] ?? '');
-        return array('id' => $application_id, 'inspection_id' => $inspection_id, 'record' => $record, 'number' => $snapshot['number'] ?? '', 'title' => $snapshot['ship_name'] ?? get_the_title($application_id), 'deadline' => (string) get_post_meta($application_id, '_ssf_inspector_deadline', true), 'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true), 'booking' => (array) get_post_meta($application_id, '_ssf_booking', true), 'legacy_files' => $this->legacy_files($application_id), 'progress' => SSF_Medlemsprocess_Inspection::progress($record), 'deviations' => SSF_Medlemsprocess_Inspection::deviations($record), 'lead_name' => $lead_name, 'co_name' => $co_name, 'is_lead' => get_current_user_id() === (int) $record['lead_inspector_user_id'], 'is_co' => get_current_user_id() === (int) $record['co_inspector_user_id'], 'can_edit' => SSF_Medlemsprocess_Inspection::can_edit($inspection_id), 'url' => $this->case_url($application_id, $inspection_id));
+        return array('id' => $application_id, 'inspection_id' => $inspection_id, 'record' => $record, 'number' => $snapshot['number'] ?? '', 'title' => $snapshot['ship_name'] ?? $this->display_title($application_id), 'deadline' => (string) get_post_meta($application_id, '_ssf_inspector_deadline', true), 'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true), 'booking' => (array) get_post_meta($application_id, '_ssf_booking', true), 'legacy_files' => $this->legacy_files($application_id), 'progress' => SSF_Medlemsprocess_Inspection::progress($record), 'deviations' => SSF_Medlemsprocess_Inspection::deviations($record), 'lead_name' => $lead_name, 'co_name' => $co_name, 'is_lead' => get_current_user_id() === (int) $record['lead_inspector_user_id'], 'is_co' => get_current_user_id() === (int) $record['co_inspector_user_id'], 'can_edit' => SSF_Medlemsprocess_Inspection::can_edit($inspection_id), 'url' => $this->case_url($application_id, $inspection_id));
     }
 
     private function legacy_case_data(int $application_id): array
     {
         $data = SSF_Medlemsprocess_Application::data($application_id);
-        return array('id' => $application_id, 'inspection_id' => 0, 'number' => (string) get_post_meta($application_id, '_ssf_application_number', true), 'title' => $data['ship_name'] ?? get_the_title($application_id), 'deadline' => (string) get_post_meta($application_id, '_ssf_inspector_deadline', true), 'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true), 'legacy' => true, 'url' => $this->case_url($application_id));
+        return array('id' => $application_id, 'inspection_id' => 0, 'number' => (string) get_post_meta($application_id, '_ssf_application_number', true), 'title' => $data['ship_name'] ?? $this->display_title($application_id), 'deadline' => (string) get_post_meta($application_id, '_ssf_inspector_deadline', true), 'task' => (string) get_post_meta($application_id, '_ssf_inspector_task', true), 'legacy' => true, 'url' => $this->case_url($application_id));
     }
 
     private function legacy_full_case_data(int $application_id): array
     {
         $case = $this->legacy_case_data($application_id); $case['data'] = SSF_Medlemsprocess_Application::data($application_id); $case['reports'] = (array) get_post_meta($application_id, '_ssf_inspector_reports', true); $case['inspection'] = (array) get_post_meta($application_id, '_ssf_inspection', true); return $case;
+    }
+
+    private function display_title(int $application_id): string
+    {
+        if (class_exists('SSF_Workspace') && 0 === strpos((string) get_query_var('ssf_workspace_path'), 'inspektioner')) {
+            return SSF_Workspace::display_title($application_id);
+        }
+        return get_the_title($application_id);
     }
 
     private function legacy_files(int $application_id): array
