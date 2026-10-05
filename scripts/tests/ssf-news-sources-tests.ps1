@@ -27,6 +27,10 @@ Assert-True 'Kontrollresultat är begripliga' ($service.Contains('Problem vid ko
 Assert-True 'Träffar använder befintliga artikelförslag och dubblettskydd' ($service.Contains("`$item['origin'] = 'monitoring'") -and $service.Contains('self::create_suggestion($item)') -and $service.Contains("'_ssf_suggestion_dedup'"))
 Assert-True 'Källregistret är responsivt' ($styles.Contains('.ssf-source-toolbar') -and $styles.Contains('.ssf-source-search>div{flex-direction:column}'))
 
+Assert-True 'Sitemap discovery checks standard, news and post sitemaps' ($service.Contains("'sitemap.xml'") -and $service.Contains("'news-sitemap.xml'") -and $service.Contains("'post-sitemap.xml'") -and $service.Contains('self::sitemap_items'))
+Assert-True 'Manual fallback tests an HTML news page before it can be saved' ($service.Contains("'ssf_news_source_test_page' => 'handle_source_test_page'") -and $service.Contains('Testa sidan') -and $service.Contains('self::discovery_items'))
+Assert-True 'Source data stores a monitoring method and URL in the existing source model' ($service.Contains("_ssf_source_method") -and $service.Contains("_ssf_source_monitor_url"))
+
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error "FAIL: $_" }
     exit 1
