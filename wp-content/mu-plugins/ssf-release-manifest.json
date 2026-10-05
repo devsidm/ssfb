@@ -2,20 +2,18 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.8",
-    "build":  "20261003.1",
-    "built_at":  "2026-10-03T04:48:10.5824783Z",
+    "build":  "20261005.1",
+    "built_at":  "2026-10-05T14:29:32.5045065Z",
     "source":  "codex",
-    "source_revision":  "9131c9415d87fbc8944a648e69a973e46a430ec5",
-    "description":  "Användarlivscykel, säker historik och korrigerad gemensam kortlayout",
+    "source_revision":  "7e0d57fe5cb67471112fb396da3109d18aa61a5f",
+    "description":  "Workspace titles and news monitoring improvements",
     "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
     "components":  [
-                       "microsoft-id-login",
+                       "release-tooling",
                        "ssf",
-                       "ssf-access-control",
                        "ssf-arbetsyta",
                        "ssf-medlemsprocess",
-                       "ssf-site-customizations",
-                       "ssf-user-admin"
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
