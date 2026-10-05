@@ -514,7 +514,7 @@ final class SSF_News_Service
 
     private static function status_label(string $status): string
     {
-        return array('draft' => 'Utkast', 'pending' => 'Väntar på granskning', 'future' => 'Schemalagd', 'publish' => 'Publicerad', 'private' => 'Endast internt')[$status] ?? $status;
+        return array('draft' => 'Utkast', 'pending' => 'Väntar på granskning', 'future' => 'Schemalagd', 'publish' => 'Publicerad', 'private' => 'Ej publicerad')[$status] ?? $status;
     }
 
     private static function own_news(int $id): string

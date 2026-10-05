@@ -11,7 +11,7 @@ function Assert-True([string] $name, [bool] $condition) {
 }
 
 Assert-True 'Artikelförslag behåller intern WordPress-status' ($service.Contains("'post_type' => self::SUGGESTION_TYPE, 'post_status' => 'private'"))
-Assert-True 'Private visas som Endast internt' ($service.Contains("'private' => 'Endast internt'"))
+Assert-True 'Private visas som Ej publicerad' ($service.Contains("'private' => 'Ej publicerad'"))
 Assert-True 'Publicerad status är oförändrad' ($service.Contains("'publish' => 'Publicerad'"))
 Assert-True 'Utkaststatus är oförändrad' ($service.Contains("'draft' => 'Utkast'"))
 Assert-True 'Status visas separat i förslagskort' ($service.Contains("<span>Status: ' . esc_html(self::status_label(`$post->post_status))"))
