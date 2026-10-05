@@ -32,6 +32,7 @@ final class SSF_News_Service
             'ssf_news_suggestion' => 'handle_suggestion',
             'ssf_news_external_save' => 'handle_external_save',
             'ssf_news_home_settings' => 'handle_home_settings',
+            'ssf_news_source_analyze' => 'handle_source_analyze',
             'ssf_news_source_save' => 'handle_source_save',
             'ssf_news_source_action' => 'handle_source_action',
         ) as $action => $method) {
@@ -377,7 +378,12 @@ final class SSF_News_Service
 
     private static function redirect(string $path, string $notice = '', string $error = ''): void
     {
-        $url = SSF_Workspace::url($path);
+        $parts = explode('?', $path, 2);
+        $url = SSF_Workspace::url($parts[0]);
+        if (isset($parts[1])) {
+            parse_str($parts[1], $query);
+            $url = add_query_arg($query, $url);
+        }
         if ($notice) {
             $url = add_query_arg('ssf_news_notice', $notice, $url);
         }
@@ -724,14 +730,44 @@ final class SSF_News_Service
         if ($id || isset($_GET['new'])) {
             return self::source_editor($id);
         }
-        $sources = get_posts(array('post_type' => self::SOURCE_TYPE, 'post_status' => 'private', 'numberposts' => -1, 'orderby' => 'title', 'order' => 'ASC'));
-        $html = '<h1>Omvärldsbevakning</h1>' . self::tabs('bevakning') . self::notice_html() . '<p>Aktiva källor kontrolleras i bakgrunden ungefär två gånger per dygn. En publik sidvisning väntar aldrig på en extern källa.</p><p><a class="ssf-workspace-button" href="' . esc_url(add_query_arg('new', '1', SSF_Workspace::url('nyheter/bevakning'))) . '">+ Lägg till källa</a></p><div class="ssf-source-list">';
+        $all_sources = get_posts(array('post_type' => self::SOURCE_TYPE, 'post_status' => 'private', 'numberposts' => -1, 'orderby' => 'title', 'order' => 'ASC'));
+        $filter = sanitize_key((string) wp_unslash($_GET['source_status'] ?? 'all'));
+        $filter = in_array($filter, array('all', 'active', 'paused', 'problem', 'priority'), true) ? $filter : 'all';
+        $search = sanitize_text_field((string) wp_unslash($_GET['source_search'] ?? ''));
+        $active_count = count(array_filter($all_sources, static fn($source): bool => '1' === self::post_meta((int) $source->ID, '_ssf_source_active')));
+        $paused_count = count($all_sources) - $active_count;
+        $sources = array_values(array_filter($all_sources, static function ($source) use ($filter, $search): bool {
+            $active = '1' === self::post_meta((int) $source->ID, '_ssf_source_active');
+            $problem = '' !== self::post_meta((int) $source->ID, '_ssf_source_error');
+            $priority = '1' === self::post_meta((int) $source->ID, '_ssf_source_priority');
+            if (('active' === $filter && ! $active) || ('paused' === $filter && $active) || ('problem' === $filter && ! $problem) || ('priority' === $filter && ! $priority)) {
+                return false;
+            }
+            $haystack = $source->post_title . ' ' . self::post_meta((int) $source->ID, '_ssf_source_base_url') . ' ' . self::post_meta((int) $source->ID, '_ssf_source_feed_url') . ' ' . self::post_meta((int) $source->ID, '_ssf_source_discovery_url');
+            return '' === $search || false !== mb_stripos($haystack, $search);
+        }));
+        $html = '<h1>Omvärldsbevakning</h1>' . self::tabs('bevakning') . self::notice_html() . '<p>SSF bevakar utvalda webbplatser efter intressanta artiklar. Träffar blir artikelförslag som redaktionen granskar. Ingenting publiceras automatiskt.</p><div class="ssf-source-toolbar"><div><h2>Bevakningskällor</h2><p>' . esc_html($active_count . ' aktiva · ' . $paused_count . ' pausade') . '</p></div><a class="ssf-workspace-button" href="' . esc_url(add_query_arg('new', '1', SSF_Workspace::url('nyheter/bevakning'))) . '">+ Lägg till bevakningskälla</a></div><form class="ssf-source-search" method="get"><label for="ssf-source-search">Sök bland bevakningskällor</label><div>' . ('all' !== $filter ? '<input type="hidden" name="source_status" value="' . esc_attr($filter) . '">' : '') . '<input id="ssf-source-search" name="source_search" value="' . esc_attr($search) . '" placeholder="Namn eller URL"><button class="ssf-workspace-button" type="submit">Sök</button></div></form><nav class="ssf-news-filters" aria-label="Filtrera bevakningskällor">';
+        foreach (array('all' => 'Alla', 'active' => 'Aktiva', 'paused' => 'Pausade', 'problem' => 'Problem', 'priority' => 'Prioriterade') as $key => $label) {
+            $url = add_query_arg(array_filter(array('source_status' => 'all' === $key ? null : $key, 'source_search' => $search ?: null)), SSF_Workspace::url('nyheter/bevakning'));
+            $html .= '<a href="' . esc_url($url) . '"' . ((('all' === $key && 'all' === $filter) || $key === $filter) ? ' aria-current="page"' : '') . '>' . esc_html($label) . '</a>';
+        }
+        $html .= '</nav><div class="ssf-source-list">';
         foreach ($sources as $source) {
             $active = '1' === self::post_meta($source->ID, '_ssf_source_active');
             $priority = '1' === self::post_meta($source->ID, '_ssf_source_priority');
-            $html .= '<article class="ssf-workspace-panel"><div class="ssf-source-heading"><h2>' . esc_html($source->post_title) . '</h2><div><span class="ssf-status">' . ($active ? 'Aktiv' : 'Pausad') . '</span>' . ($priority ? '<span class="ssf-status">★ Prioriterad</span>' : '') . '</div></div><dl><dt>Metod</dt><dd>' . esc_html(self::post_meta($source->ID, '_ssf_source_feed_url') ? 'RSS/Atom' : 'Konfigurerad sida') . '</dd><dt>Senaste kontroll</dt><dd>' . esc_html(self::post_meta($source->ID, '_ssf_source_last_checked') ?: 'Aldrig') . '</dd><dt>Senaste resultat</dt><dd>' . esc_html(self::post_meta($source->ID, '_ssf_source_last_result') ?: 'Inte kontrollerad') . '</dd><dt>Felstatus</dt><dd>' . esc_html(self::post_meta($source->ID, '_ssf_source_error') ?: 'OK') . '</dd></dl><div class="ssf-workspace-form-actions"><a href="' . esc_url(SSF_Workspace::url('nyheter/bevakning/' . $source->ID)) . '">Redigera</a><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_news_source_action"><input type="hidden" name="source_id" value="' . esc_attr((string) $source->ID) . '">' . wp_nonce_field('ssf_news_source_action_' . $source->ID, '_wpnonce', true, false) . '<button class="ssf-workspace-button" name="intent" value="check">Kontrollera nu</button><button class="ssf-workspace-button ssf-workspace-button--secondary" name="intent" value="toggle">' . ($active ? 'Pausa' : 'Aktivera') . '</button></form></div></article>';
+            $error = self::post_meta($source->ID, '_ssf_source_error');
+            $status = $error ? 'Problem' : ($active ? 'Aktiv' : 'Pausad');
+            $monitor_url = self::post_meta($source->ID, '_ssf_source_feed_url') ?: self::post_meta($source->ID, '_ssf_source_discovery_url');
+            $html .= '<article class="ssf-workspace-panel"><div class="ssf-source-heading"><h2>' . esc_html($source->post_title) . '</h2><div><span class="ssf-status">' . esc_html($status) . '</span>' . ($priority ? '<span class="ssf-status">★ Prioriterad</span>' : '') . '</div></div><dl><dt>Webbplats</dt><dd><a target="_blank" rel="noopener noreferrer" href="' . esc_url(self::post_meta($source->ID, '_ssf_source_base_url')) . '">' . esc_html(self::post_meta($source->ID, '_ssf_source_base_url')) . '</a></dd><dt>Typ</dt><dd>' . esc_html(self::post_meta($source->ID, '_ssf_source_feed_url') ? 'RSS/Atom' : 'Nyhetssida') . '</dd><dt>Bevakar</dt><dd>' . esc_html($monitor_url ?: 'Inte angiven') . '</dd><dt>Senast kontrollerad</dt><dd>' . esc_html(self::source_checked_label(self::post_meta($source->ID, '_ssf_source_last_checked'))) . '</dd><dt>Senaste resultat</dt><dd>' . esc_html(self::post_meta($source->ID, '_ssf_source_last_result') ?: 'Inte kontrollerad') . ($error ? '<br><small>' . esc_html($error) . '</small>' : '') . '</dd></dl><div class="ssf-workspace-form-actions"><a href="' . esc_url(SSF_Workspace::url('nyheter/bevakning/' . $source->ID)) . '">Redigera</a><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_news_source_action"><input type="hidden" name="source_id" value="' . esc_attr((string) $source->ID) . '">' . wp_nonce_field('ssf_news_source_action_' . $source->ID, '_wpnonce', true, false) . '<button class="ssf-workspace-button" name="intent" value="check">Kontrollera nu</button><button class="ssf-workspace-button ssf-workspace-button--secondary" name="intent" value="toggle">' . ($active ? 'Pausa bevakning' : 'Aktivera bevakning') . '</button></form></div></article>';
         }
-        return $html . ($sources ? '' : '<p class="ssf-workspace-empty">Inga bevakningskällor har lagts till.</p>') . '</div>';
+        $empty = $all_sources ? 'Inga bevakningskällor matchar urvalet.' : 'Inga bevakningskällor ännu. Lägg till webbplatser som SSF vill följa efter nya artiklar.';
+        return $html . ($sources ? '' : '<p class="ssf-workspace-empty">' . esc_html($empty) . '</p>') . '</div>';
+    }
+
+    private static function source_checked_label(string $checked): string
+    {
+        $timestamp = $checked ? strtotime($checked) : false;
+        return $timestamp ? wp_date('j M Y H:i', $timestamp) : 'Aldrig';
     }
 
     private static function source_editor(int $id): string
@@ -740,7 +776,29 @@ final class SSF_News_Service
         if ($id && (! $source || self::SOURCE_TYPE !== $source->post_type)) {
             return '<p>Källan kunde inte hittas.</p>';
         }
-        return '<h1>' . ($source ? 'Redigera källa' : 'Lägg till källa') . '</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/bevakning')) . '">← Omvärldsbevakning</a></p>' . self::notice_html() . '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_source_save"><input type="hidden" name="source_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_source_save_' . $id, '_wpnonce', true, false) . '<label for="ssf-source-name">Källans namn</label><input id="ssf-source-name" name="name" required value="' . esc_attr($source ? $source->post_title : '') . '"><label for="ssf-base-url">Webbplats</label><input id="ssf-base-url" name="base_url" type="url" required value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_base_url') : '') . '"><label for="ssf-feed-url">RSS/Atom (valfri, prioriteras)</label><input id="ssf-feed-url" name="feed_url" type="url" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_feed_url') : '') . '"><label for="ssf-discovery-url">Konfigurerad artikel-/indexsida (valfri)</label><input id="ssf-discovery-url" name="discovery_url" type="url" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_discovery_url') : '') . '"><label for="ssf-keywords">Extra nyckelord/ämnen (kommaseparerade)</label><input id="ssf-keywords" name="keywords" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_keywords') : '') . '"><label class="ssf-workspace-check"><input type="checkbox" name="active" value="1"' . checked(!$source || '1' === self::post_meta($id, '_ssf_source_active'), true, false) . '> Aktiv</label><label class="ssf-workspace-check"><input type="checkbox" name="priority" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_priority'), true, false) . '> ★ Prioriterad</label><label class="ssf-workspace-check"><input type="checkbox" name="allow_preview" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_allow_preview'), true, false) . '> Tillåt extern Open Graph-bild</label><p class="ssf-workspace-help">Extern bild innebär att besökarens webbläsare kontaktar källans bildserver. Bilden kopieras eller cachas inte av SSF.</p><button class="ssf-workspace-button" type="submit">Spara källa</button></form>';
+        $analysis = null;
+        if (! $source) {
+            $key = 'ssf_source_analysis_' . get_current_user_id();
+            $analysis = get_transient($key);
+            delete_transient($key);
+        }
+        $html = '<h1>' . ($source ? 'Redigera bevakningskälla' : 'Lägg till bevakningskälla') . '</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/bevakning')) . '">← Bevakningskällor</a></p>' . self::notice_html();
+        if (! $source && ! is_array($analysis)) {
+            return $html . '<p>Ange webbplatsen som SSF ska bevaka. Vi letar efter webbplatsens namn, huvudadress och en RSS- eller Atom-feed. Om ingen feed finns kan webbplatsens nyhetssida bevakas.</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_source_analyze">' . wp_nonce_field('ssf_news_source_analyze', '_wpnonce', true, false) . '<label for="ssf-analyze-url">Webbplatsens URL</label><input id="ssf-analyze-url" name="url" type="url" inputmode="url" required placeholder="https://…"><button class="ssf-workspace-button" type="submit">Analysera webbplats</button></form>';
+        }
+        $name = $source ? $source->post_title : (string) ($analysis['name'] ?? '');
+        $base_url = $source ? self::post_meta($id, '_ssf_source_base_url') : (string) ($analysis['base_url'] ?? '');
+        $feed_url = $source ? self::post_meta($id, '_ssf_source_feed_url') : (string) ($analysis['feed_url'] ?? '');
+        $discovery_url = $source ? self::post_meta($id, '_ssf_source_discovery_url') : (string) ($analysis['discovery_url'] ?? '');
+        if (is_array($analysis)) {
+            $analysis_message = $feed_url || $discovery_url ? '<p><strong>Föreslagen metod:</strong> ' . esc_html($feed_url ? 'RSS/Atom' : 'Nyhetssida') . '</p><p>Kontrollera uppgifterna innan du sparar.</p>' : '<p>Vi kunde inte automatiskt hitta någon nyhetskälla på webbplatsen. Ange en specifik nyhetssida nedan.</p>';
+            $html .= '<section class="ssf-workspace-panel"><h2>Analys klar</h2>' . $analysis_message . '</section>';
+        }
+        if ($source) {
+            $error = self::post_meta($id, '_ssf_source_error');
+            $html .= '<section class="ssf-workspace-panel"><h2>Bevakningsstatus</h2><dl><dt>Status</dt><dd>' . esc_html($error ? 'Problem' : ('1' === self::post_meta($id, '_ssf_source_active') ? 'Aktiv' : 'Pausad')) . '</dd><dt>Kontroll</dt><dd>Automatiskt två gånger per dygn</dd><dt>Senast kontrollerad</dt><dd>' . esc_html(self::source_checked_label(self::post_meta($id, '_ssf_source_last_checked'))) . '</dd><dt>Senaste resultat</dt><dd>' . esc_html(self::post_meta($id, '_ssf_source_last_result') ?: 'Inte kontrollerad') . '</dd></dl></section>';
+        }
+        return $html . '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_source_save"><input type="hidden" name="source_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_source_save_' . $id, '_wpnonce', true, false) . '<label for="ssf-source-name">Namn</label><input id="ssf-source-name" name="name" required value="' . esc_attr($name) . '"><label for="ssf-base-url">Webbplatsens huvudadress</label><input id="ssf-base-url" name="base_url" type="url" required value="' . esc_attr($base_url) . '"><label for="ssf-feed-url">RSS/Atom-adress (valfri)</label><input id="ssf-feed-url" name="feed_url" type="url" value="' . esc_attr($feed_url) . '"><label for="ssf-discovery-url">Nyhetssida (används när RSS/Atom saknas)</label><input id="ssf-discovery-url" name="discovery_url" type="url" value="' . esc_attr($discovery_url) . '"><label for="ssf-keywords">Extra nyckelord/ämnen (kommaseparerade)</label><input id="ssf-keywords" name="keywords" value="' . esc_attr($source ? self::post_meta($id, '_ssf_source_keywords') : '') . '"><label class="ssf-workspace-check"><input type="checkbox" name="active" value="1"' . checked(!$source || '1' === self::post_meta($id, '_ssf_source_active'), true, false) . '> Aktiv bevakning</label><label class="ssf-workspace-check"><input type="checkbox" name="priority" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_priority'), true, false) . '> ★ Prioriterad</label><label class="ssf-workspace-check"><input type="checkbox" name="allow_preview" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_allow_preview'), true, false) . '> Tillåt extern förhandsvisningsbild</label><p class="ssf-workspace-help">Extern bild innebär att besökarens webbläsare kontaktar källans bildserver. Bilden kopieras eller cachas inte av SSF.</p><button class="ssf-workspace-button" type="submit">Spara bevakningskälla</button></form>';
     }
 
     public static function handle_home_settings(): void
@@ -979,6 +1037,84 @@ final class SSF_News_Service
         }
     }
 
+    public static function handle_source_analyze(): void
+    {
+        self::require_cap('ssf_news_sources_manage');
+        check_admin_referer('ssf_news_source_analyze');
+        $url = esc_url_raw((string) wp_unslash($_POST['url'] ?? ''));
+        $analysis = self::analyze_source_url($url);
+        if (is_wp_error($analysis)) {
+            self::redirect('nyheter/bevakning?new=1', '', $analysis->get_error_message());
+        }
+        set_transient('ssf_source_analysis_' . get_current_user_id(), $analysis, 10 * MINUTE_IN_SECONDS);
+        self::redirect('nyheter/bevakning?new=1', 'Webbplatsen analyserades. Kontrollera förslaget och spara bevakningskällan.');
+    }
+
+    public static function analyze_source_url(string $url)
+    {
+        $url = self::normalize_url($url);
+        if (! $url || ! self::is_safe_url($url)) {
+            return new WP_Error('source_url', 'Ange en tillåten publik webbadress.');
+        }
+        $response = self::safe_fetch($url, 2097152);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        $final_url = self::normalize_url((string) $response['url']);
+        $parts = wp_parse_url($final_url);
+        $base_url = is_array($parts) && ! empty($parts['scheme']) && ! empty($parts['host']) ? $parts['scheme'] . '://' . $parts['host'] . (! empty($parts['port']) ? ':' . (int) $parts['port'] : '') . '/' : $final_url;
+        $body = (string) $response['body'];
+        $type = (string) $response['content_type'];
+        $is_feed = preg_match('#(rss|atom)\+xml#i', $type) || preg_match('/^\s*(?:<\?xml[^>]*>\s*)?<(rss|feed)\b/i', $body);
+        $name = (string) ($parts['host'] ?? 'Bevakningskälla');
+        $feed_url = '';
+        $discovery_url = '';
+        if ($is_feed) {
+            $feed_url = $final_url;
+            $previous = libxml_use_internal_errors(true);
+            $feed = simplexml_load_string($body, 'SimpleXMLElement', LIBXML_NOCDATA | LIBXML_NONET);
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            if ($feed) {
+                $feed_name = sanitize_text_field((string) ($feed->channel->title ?: $feed->title));
+                $name = $feed_name ?: $name;
+            }
+        } else {
+            $metadata = self::parse_metadata($body, $final_url);
+            $name = (string) ($metadata['site_name'] ?: $metadata['title'] ?: $name);
+            $doc = new DOMDocument();
+            $previous = libxml_use_internal_errors(true);
+            $loaded = $doc->loadHTML('<?xml encoding="utf-8" ?>' . $body, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NONET);
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            if ($loaded) {
+                foreach ($doc->getElementsByTagName('link') as $link) {
+                    $rel = strtolower($link->getAttribute('rel'));
+                    $link_type = strtolower($link->getAttribute('type'));
+                    if (false !== strpos($rel, 'alternate') && in_array($link_type, array('application/rss+xml', 'application/atom+xml'), true)) {
+                        $candidate = self::resolve_url($final_url, $link->getAttribute('href'));
+                        if ($candidate && self::is_safe_url($candidate)) {
+                            $feed_url = self::normalize_url($candidate);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (! $feed_url) {
+                $path = (string) wp_parse_url($final_url, PHP_URL_PATH);
+                if ($path && '/' !== $path) {
+                    $discovery_url = self::normalize_url((string) ($metadata['canonical_url'] ?: $final_url));
+                }
+            }
+        }
+        return array(
+            'name' => $name,
+            'base_url' => self::normalize_url($base_url),
+            'feed_url' => $feed_url,
+            'discovery_url' => $discovery_url,
+        );
+    }
+
     public static function handle_source_save(): void
     {
         self::require_cap('ssf_news_sources_manage');
@@ -993,11 +1129,19 @@ final class SSF_News_Service
             if ($urls[$field] && ! self::is_safe_url($urls[$field])) {
                 self::redirect('nyheter/bevakning' . ($id ? '/' . $id : ''), '', 'Källans URL är inte en tillåten publik adress.');
             }
+            $urls[$field] = $urls[$field] ? self::normalize_url($urls[$field]) : '';
         }
         if (! $urls['base_url']) {
             self::redirect('nyheter/bevakning' . ($id ? '/' . $id : ''), '', 'Webbplats saknas.');
         }
-        $args = array('post_type' => self::SOURCE_TYPE, 'post_status' => 'private', 'post_title' => sanitize_text_field((string) wp_unslash($_POST['name'] ?? '')));
+        if (! $urls['feed_url'] && ! $urls['discovery_url']) {
+            self::redirect('nyheter/bevakning' . ($id ? '/' . $id : ''), '', 'Ange en RSS/Atom-adress eller nyhetssida att bevaka.');
+        }
+        $name = sanitize_text_field((string) wp_unslash($_POST['name'] ?? ''));
+        if (! $name) {
+            self::redirect('nyheter/bevakning' . ($id ? '/' . $id : ''), '', 'Namn saknas.');
+        }
+        $args = array('post_type' => self::SOURCE_TYPE, 'post_status' => 'private', 'post_title' => $name);
         if ($id) {
             $args['ID'] = $id;
             $result = wp_update_post($args, true);
@@ -1015,7 +1159,7 @@ final class SSF_News_Service
         foreach (array('active', 'priority', 'allow_preview') as $key) {
             update_post_meta($id, '_ssf_source_' . $key, isset($_POST[$key]) ? '1' : '0');
         }
-        self::redirect('nyheter/bevakning', 'Källan sparades.');
+        self::redirect('nyheter/bevakning', 'Bevakningskällan sparades.');
     }
 
     private static function source_for_url(string $url): int
@@ -1043,14 +1187,15 @@ final class SSF_News_Service
             wp_die('Källan kunde inte hittas.', '', array('response' => 404));
         }
         if ('toggle' === sanitize_key((string) ($_POST['intent'] ?? ''))) {
-            update_post_meta($id, '_ssf_source_active', '1' === self::post_meta($id, '_ssf_source_active') ? '0' : '1');
-            self::redirect('nyheter/bevakning', 'Källans status uppdaterades.');
+            $active = '1' === self::post_meta($id, '_ssf_source_active');
+            update_post_meta($id, '_ssf_source_active', $active ? '0' : '1');
+            self::redirect('nyheter/bevakning', $active ? 'Bevakningen pausades.' : 'Bevakningen aktiverades.');
         }
-        if ('1' !== self::post_meta($id, '_ssf_source_active')) {
-            self::redirect('nyheter/bevakning', '', 'Källan är pausad. Aktivera den först.');
+        $result = self::check_source($id, true);
+        if (is_wp_error($result)) {
+            self::redirect('nyheter/bevakning', '', 'Kontrollen misslyckades: ' . $result->get_error_message());
         }
-        self::queue_source($id);
-        self::redirect('nyheter/bevakning', 'Kontrollen har startats i bakgrunden. Uppdatera sidan för att se resultatet.');
+        self::redirect('nyheter/bevakning', $result ? $result . ' nya artikelförslag skapades.' : 'Kontrollen är klar. Inga nya artikelförslag hittades.');
     }
 
     public static function run_monitoring(): void
@@ -1074,24 +1219,25 @@ final class SSF_News_Service
         try {
             self::check_source($id);
         } catch (Throwable $error) {
-            self::source_result($id, 0, 'Error', 'Källan kunde inte behandlas.');
+            self::source_result($id, 0, 'problem', 'Källan kunde inte behandlas.');
         }
     }
 
     private static function source_result(int $id, int $count, string $status, string $error = ''): void
     {
         update_post_meta($id, '_ssf_source_last_checked', current_time('mysql'));
-        update_post_meta($id, '_ssf_source_last_result', $status . ': ' . $count . ' nya förslag');
+        $result = 'problem' === $status ? 'Problem vid kontroll' : ($count ? $count . ' nya artikelförslag' : 'Inga nya artikelförslag');
+        update_post_meta($id, '_ssf_source_last_result', $result);
         update_post_meta($id, '_ssf_source_error', sanitize_text_field($error));
     }
 
-    public static function check_source(int $id)
+    public static function check_source(int $id, bool $manual = false)
     {
         $source = get_post($id);
         if (! $source || self::SOURCE_TYPE !== $source->post_type) {
             return new WP_Error('source_missing', 'Källan kunde inte hittas.');
         }
-        if ('1' !== self::post_meta($id, '_ssf_source_active')) {
+        if (! $manual && '1' !== self::post_meta($id, '_ssf_source_active')) {
             return new WP_Error('source_paused', 'Källan är pausad. Aktivera den först.');
         }
         $feed = self::post_meta($id, '_ssf_source_feed_url');
@@ -1099,12 +1245,12 @@ final class SSF_News_Service
         $url = $feed ?: $discovery;
         if (! $url) {
             $error = new WP_Error('source_url', 'Ange RSS/Atom eller en konfigurerad indexsida.');
-            self::source_result($id, 0, 'Warning', $error->get_error_message());
+            self::source_result($id, 0, 'problem', $error->get_error_message());
             return $error;
         }
         $response = self::safe_fetch($url, 2097152);
         if (is_wp_error($response)) {
-            self::source_result($id, 0, 'Error', $response->get_error_message());
+            self::source_result($id, 0, 'problem', $response->get_error_message());
             return $response;
         }
         $items = $feed ? self::feed_items($response['body'], $response['url']) : self::discovery_items($response['body'], $response['url']);
@@ -1136,7 +1282,7 @@ final class SSF_News_Service
                 $created++;
             }
         }
-        self::source_result($id, $created, 'OK');
+        self::source_result($id, $created, 'ok');
         return $created;
     }
 

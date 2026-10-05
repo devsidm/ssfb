@@ -117,7 +117,7 @@ update_post_meta($source, '_ssf_source_active', '1');
 update_post_meta($source, '_ssf_source_feed_url', 'https://93.184.216.34/feed');
 $news_response = new RuntimeException('Source failed');
 SSF_News_Service::background_source($source);
-check_news(str_starts_with(get_post_meta($source, '_ssf_source_last_result', true), 'Error'), 'broken source becomes an error without crashing background work');
+check_news('Problem vid kontroll' === get_post_meta($source, '_ssf_source_last_result', true), 'broken source becomes a problem without crashing background work');
 $source2 = wp_insert_post(array('post_type' => SSF_News_Service::SOURCE_TYPE, 'post_title' => 'B'));
 update_post_meta($source2, '_ssf_source_active', '1');
 SSF_News_Service::run_monitoring();

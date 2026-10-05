@@ -100,5 +100,5 @@ $sourceReview = Request-NewsPage 'arbetsyta/nyheter/bevakning/'
 $sourceCard = [regex]::Match($sourceReview.Html, '(?s)<article[^>]*>.*?name="source_id" value="' + $sourceId + '".*?</article>').Value
 $sourceNonce = [regex]::Match($sourceCard,'name="source_id" value="' + $sourceId + '".*?name="_wpnonce" value="([^"]+)"').Groups[1].Value
 $check = Request-NewsPage 'wp-admin/admin-post.php' @{ action='ssf_news_source_action'; _wpnonce=$sourceNonce; source_id=$sourceId; intent='check' }
-Assert-News ($check.Html -match 'bakgrunden') 'check now starts background work'
+Assert-News ($check.Html -match 'Kontrollen är klar|nya artikelförslag skapades') 'check now returns an understandable result'
 @{ source_id=$sourceId; suggestion_id=$suggestionId; post_id=$postId; member_tip_id=$tipId; article_url=$articleUrl; post_title='DEV QA - Batliv i medierna' } | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $artifactDir 'dev-flow-result.json')
