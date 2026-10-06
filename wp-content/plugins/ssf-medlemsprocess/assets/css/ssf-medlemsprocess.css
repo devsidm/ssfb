@@ -96,6 +96,9 @@
 .ssf-process-actions { display: flex; justify-content: space-between; gap: 12px; padding-top: 18px; border-top: 1px solid var(--ssf-border); }
 .ssf-process-form [hidden] { display: none !important; }
 .ssf-process-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 10px 18px; color: var(--ssf-white); background: var(--ssf-blue); border: 1px solid var(--ssf-blue); border-radius: 5px; cursor: pointer; font: inherit; font-weight: 700; text-decoration: none; }
+.ssf-inspector-case-card .ssf-process-button,
+.ssf-inspector-case-card .ssf-process-button:hover,
+.ssf-inspector-case-card .ssf-process-button:focus { color: var(--ssf-white); }
 .ssf-process-button:hover, .ssf-process-button:focus { color: var(--ssf-white); background: var(--ssf-blue-dark); border-color: var(--ssf-blue-dark); }
 .ssf-process-button--secondary { color: var(--ssf-blue-dark); background: var(--ssf-white); border-color: var(--ssf-border); }
 .ssf-process-button--secondary:hover, .ssf-process-button--secondary:focus { color: var(--ssf-blue-dark); background: var(--ssf-blue-light); border-color: var(--ssf-blue); }
