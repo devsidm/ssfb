@@ -6,6 +6,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $renderer = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-site-customizations\includes\shortcodes.php')
 $service = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-arbetsyta\includes\class-ssf-news-service.php')
 $styles = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-site-customizations\assets\css\ssf-site.css')
+$pageBootstrap = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts\wp-rest-create-pages.ps1')
 $failures = [Collections.Generic.List[string]]::new()
 
 function Assert-True([string] $name, [bool] $condition) {
@@ -28,6 +29,10 @@ Assert-True 'Utvald dupliceras inte i senaste grid' ($renderer.Contains("`$exclu
 Assert-True 'Endast en nyhet kan vara utvald' ($service.Contains('delete_post_meta((int) $featured_id, self::META_FEATURED)'))
 Assert-True 'Watermark-fallbacken finns kvar' ($styles.Contains('ssf-news-card--text::before') -and $styles.Contains('ssf-logo.svg'))
 Assert-True 'Tom extern sammanfattning utelämnas' ($renderer.Contains("`$summary = '' !== `$excerpt ? '<p>'"))
+
+Assert-True 'Nyhetssidans bootstrap skapar inte gamla Latest Posts-blocket' (-not $pageBootstrap.Contains('<!-- wp:latest-posts'))
+Assert-True 'Befintligt Latest Posts-block tas bara bort från den kanoniska nyhetssidan' ($renderer.Contains("'core/latest-posts' !== (`$block['blockName'] ?? '')") -and $renderer.Contains("! is_page('nyheter')") -and $renderer.Contains("add_filter('render_block', 'ssf_site_remove_legacy_news_latest_posts', 10, 2)"))
+Assert-True 'Nyhetssidans SSF-renderer finns kvar' ($renderer.Contains('do_shortcode(''[ssf_news_cards filters="1"]'')'))
 
 if ($failures.Count) {
     $failures | ForEach-Object { Write-Error "FAIL: $_" }

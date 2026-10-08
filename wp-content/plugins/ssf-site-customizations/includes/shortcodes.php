@@ -330,6 +330,22 @@ function ssf_site_news_cards_shortcode(array $atts): string
 }
 add_shortcode('ssf_news_cards', 'ssf_site_news_cards_shortcode');
 
+/** Do not render the legacy Latest Posts block stored on the canonical news page. */
+function ssf_site_remove_legacy_news_latest_posts(string $block_content, array $block): string
+{
+    if (
+        'core/latest-posts' !== ($block['blockName'] ?? '')
+        || ! is_page('nyheter')
+        || ! in_the_loop()
+        || ! is_main_query()
+    ) {
+        return $block_content;
+    }
+
+    return '';
+}
+add_filter('render_block', 'ssf_site_remove_legacy_news_latest_posts', 10, 2);
+
 /** Ensure the canonical /nyheter/ page has the editorial index even if legacy page content lacks the shortcode. */
 function ssf_site_news_page_index(string $content): string
 {

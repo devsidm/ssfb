@@ -93,7 +93,7 @@ Upsert-Page "Stadgar" "stadgar" @"
 <!-- wp:list --><ul><li>Stadgar</li><li>Avgifter</li><li>Ansokningsunderlag</li><li>Relaterade dokument</li></ul><!-- /wp:list -->
 "@
 
-Upsert-Page "Nyheter" "nyheter" "<!-- wp:paragraph --><p>Nyheter, information och evenemang fran Sveriges Segelfartygsforbund.</p><!-- /wp:paragraph --><!-- wp:latest-posts {`"displayPostDate`":true,`"displayFeaturedImage`":true,`"featuredImageSizeSlug`":`"medium_large`"} /-->"
+Upsert-Page "Nyheter" "nyheter" "<!-- wp:paragraph --><p>Nyheter, information och evenemang fran Sveriges Segelfartygsforbund.</p><!-- /wp:paragraph -->"
 
 Upsert-Page "Kontakta oss" "kontakta-oss" "<!-- wp:paragraph --><p>Hor av dig om medlemskap, fartygsombud, ansokan eller om du vill veta mer om SSF:s arbete.</p><!-- /wp:paragraph --><!-- wp:shortcode -->[ssf_contact_form]<!-- /wp:shortcode -->"
 
