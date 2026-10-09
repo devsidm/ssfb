@@ -1,17 +1,17 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.8",
+    "version":  "0.14.9",
     "build":  "20261008.1",
     "built_at":  "2026-10-08T20:19:23.2983210Z",
     "source":  "codex",
     "source_revision":  "e45a9ab07995a06fda9eedaa972de83a7428e7ca",
     "description":  "Remove legacy Latest Posts block from news page",
-    "notes":  "Torrkörning kontrollerar mål och skapar stödda saknade metadatafält i steg 5.",
+    "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
     "components":  [
                        "release-tooling",
                        "ssf-site-customizations"
                    ],
-    "status":  "development",
-    "prepared_at":  ""
+    "status":  "prepared",
+    "prepared_at":  "2026-10-09T21:37:07.9250888Z"
 }
