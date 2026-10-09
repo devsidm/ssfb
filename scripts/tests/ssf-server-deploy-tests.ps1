@@ -142,7 +142,8 @@ Assert-Contains 'git pull ff-only required' $script 'git pull --ff-only origin m
 Assert-Contains 'fast-forward ancestry check' $script 'git merge-base --is-ancestor HEAD origin/main'
 Assert-NotContains 'no reset hard' $script 'reset --hard'
 Assert-NotContains 'no force push/pull' $script '--force'
-Assert-Contains 'dynamic tests enumerated' $script "find scripts/tests -maxdepth 1 -type f -name '*.ps1' | sort"
+Assert-Contains 'dynamic tests enumerated' $script "find scripts/tests -maxdepth 1 -type f -name '*.ps1' ! -name 'ssf-news-dev-flow.ps1' | sort"
+Assert-Contains 'DEV-mutating news flow excluded from PROD deploy' $script "! -name 'ssf-news-dev-flow.ps1'"
 Assert-Contains 'tests run with pwsh' $script 'pwsh -NoProfile -File "$test"'
 Assert-Contains 'PHP lint exists' $script 'php -l "$file"'
 Assert-Contains 'PROD db check exists' $script 'wp_prod db check'

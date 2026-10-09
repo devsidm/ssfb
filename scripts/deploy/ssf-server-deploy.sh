@@ -508,7 +508,9 @@ create_release_source() {
 run_tests() {
   section "TEST SUITE"
   cd "$REPO"
-  mapfile -t tests < <(find scripts/tests -maxdepth 1 -type f -name '*.ps1' | sort)
+  # Live DEV flows require local credentials and create workflow data. They are
+  # verified separately in DEV and must never run as part of a PROD deployment.
+  mapfile -t tests < <(find scripts/tests -maxdepth 1 -type f -name '*.ps1' ! -name 'ssf-news-dev-flow.ps1' | sort)
   [[ "${#tests[@]}" -gt 0 ]] || fail "No repository tests found."
   for test in "${tests[@]}"; do
     echo "RUN $test"
