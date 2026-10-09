@@ -7,6 +7,7 @@ function update_post_meta($id, $key, $value) { global $meta; $meta[$id][$key] = 
 function current_time($format) { return '2026-09-22 12:00:00'; }
 function wp_date($format) { return '2026-09-22'; }
 function get_current_user_id() { return 7; }
+function get_userdata($id) { return false; }
 function is_admin() { return true; }
 function sanitize_key($value) { return strtolower(preg_replace('/[^a-z0-9_\-]/', '', (string) $value)); }
 function sanitize_textarea_field($value) { return (string) $value; }
