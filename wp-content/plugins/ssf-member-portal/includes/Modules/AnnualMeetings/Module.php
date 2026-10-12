@@ -490,7 +490,7 @@ final class Module
             ? (bool) $meeting['registration_visible']
             : 'hidden' !== ($meeting['registration_mode'] ?? '');
 
-        return $enabled && (bool) $this->registration_choices($meeting);
+        return $enabled;
     }
 
     public function registration_choices(array $meeting): array
@@ -501,10 +501,13 @@ final class Module
             foreach ((array) $meeting['program'] as $item) {
                 $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
                 $is_dinner = 'dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '');
+                if ($is_annual_meeting) {
+                    continue;
+                }
                 if ($is_dinner && ! $this->module_enabled($meeting, 'dinner')) {
                     continue;
                 }
-                if (empty($item['visible']) || (empty($item['requires_registration']) && ! $is_annual_meeting)) {
+                if (empty($item['visible']) || empty($item['requires_registration'])) {
                     continue;
                 }
                 if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
@@ -513,11 +516,11 @@ final class Module
                 $starts_at = ! empty($item['date']) && ! empty($item['start']) ? $this->timestamp($item['date'] . 'T' . $item['start']) : 0;
                 $ends_at = ! empty($item['date']) && ! empty($item['end']) ? $this->timestamp($item['date'] . 'T' . $item['end']) : 0;
                 $choices[] = array_merge($item, array(
-                    'source' => $is_annual_meeting ? 'annual_meeting' : 'activity',
-                    'title' => $is_annual_meeting ? __('Själva årsmötet', 'ssf-member-portal') : (string) $item['title'],
+                    'source' => 'activity',
+                    'title' => (string) $item['title'],
                     'starts_at' => $starts_at,
                     'ends_at' => $ends_at,
-                    'optional' => $is_annual_meeting ? 1 : ($item['optional'] ?? 1),
+                    'optional' => $item['optional'] ?? 1,
                 ));
             }
         }

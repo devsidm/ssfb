@@ -168,6 +168,7 @@ final class RegistrationService
             }
         }
         $relationship = (string) $get('relationship');
+        $meeting_attendance = (string) $get('meeting_attendance');
         return array(
             'id' => $registration_id,
             'registration_id' => (string) $get('registration_id'),
@@ -180,6 +181,8 @@ final class RegistrationService
             'represented_vessels' => (array) $get('represented_vessels', array()),
             'associated_vessels' => (array) $get('associated_vessels', array()),
             'has_associated_vessels' => (bool) $get('has_associated_vessels', 0),
+            'meeting_attendance' => $meeting_attendance,
+            'meeting_attendance_label' => $this->meeting_attendance_label($meeting_attendance),
             'program' => $program,
             'program_labels' => $labels,
             'food' => (array) $get('food', array()),
@@ -203,7 +206,7 @@ final class RegistrationService
     public function registrations(int $meeting_id, array $filters = array()): array
     {
         $meta_query = array();
-        foreach (array('relationship', 'status', 'sharepoint_sync_status') as $filter) {
+        foreach (array('relationship', 'status', 'meeting_attendance', 'sharepoint_sync_status') as $filter) {
             if (! empty($filters[$filter])) {
                 $meta_query[] = array('key' => '_ssf_am_' . $filter, 'value' => sanitize_text_field((string) $filters[$filter]));
             }
@@ -362,10 +365,14 @@ final class RegistrationService
             $status = self::AVAILABILITY_DISABLED;
         } elseif (! $this->feature_enabled('annual_meetings') || ! $this->feature_enabled('annual_meeting_registration') || empty($meeting['registration_open'])) {
             $status = self::AVAILABILITY_DISABLED;
-        } elseif (! $choices) {
-            $status = self::AVAILABILITY_NO_CHOICES;
         } elseif ($meeting_end && $now > $meeting_end) {
             $status = self::AVAILABILITY_MEETING_PASSED;
+        } elseif (! $choices && $open_at && $now < $open_at) {
+            $status = self::AVAILABILITY_NOT_STARTED;
+        } elseif (! $choices && $close_at && $now > $close_at) {
+            $status = self::AVAILABILITY_CLOSED;
+        } elseif (! $choices) {
+            $status = self::AVAILABILITY_OPEN;
         } elseif ($available) {
             $close_times = array_filter(array_map(static function (array $state): int {
                 return ! empty($state['available']) ? (int) ($state['closes_at'] ?? 0) : 0;
@@ -604,6 +611,7 @@ final class RegistrationService
             'represented_vessels' => $this->vessels((array) ($input['represented_vessels'] ?? array())),
             'has_associated_vessels' => ! empty($input['has_associated_vessels']) ? 1 : 0,
             'associated_vessels' => $this->vessels((array) ($input['associated_vessels'] ?? array())),
+            'meeting_attendance' => isset($input['meeting_attendance']) && is_scalar($input['meeting_attendance']) ? (string) $input['meeting_attendance'] : '',
             'program' => array(),
             'food' => array(),
             'food_note' => sanitize_textarea_field((string) ($input['food_note'] ?? '')),
@@ -618,6 +626,9 @@ final class RegistrationService
         }
         if (! in_array($data['relationship'], $valid_relationships, true)) {
             return new \WP_Error('annual_meeting_relationship', __('Välj din relation till SSF.', 'ssf-member-portal'));
+        }
+        if (! in_array($data['meeting_attendance'], array('yes', 'no'), true)) {
+            return new \WP_Error('annual_meeting_attendance_required', __('Ange om du deltar på SSF:s årsmöte.', 'ssf-member-portal'));
         }
         if ('representative' === $data['relationship'] && ! $data['represented_vessels']) {
             return new \WP_Error('annual_meeting_vessel', __('Ange minst ett fartyg du är ombud för.', 'ssf-member-portal'));
@@ -666,7 +677,7 @@ final class RegistrationService
                 $data['program'][$item['key']] = 1;
             }
         }
-        if (! $data['program']) {
+        if (! $data['program'] && 'yes' !== $data['meeting_attendance']) {
             return new \WP_Error('annual_meeting_choice_required', __('Välj minst ett alternativ för ditt deltagande.', 'ssf-member-portal'));
         }
         if ($this->selection_uses_food($meeting, $data['program'])) {
@@ -871,6 +882,16 @@ final class RegistrationService
     {
         $labels = array('representative' => __('Fartygsombud', 'ssf-member-portal'), 'supporter' => __('Stödmedlem', 'ssf-member-portal'), 'guest' => __('Annan/inbjuden deltagare', 'ssf-member-portal'));
         return $labels[$relationship] ?? $relationship;
+    }
+
+    private function meeting_attendance_label(string $attendance): string
+    {
+        $labels = array(
+            'yes' => __('Ja', 'ssf-member-portal'),
+            'no' => __('Nej', 'ssf-member-portal'),
+            '' => __('Ej angivet', 'ssf-member-portal'),
+        );
+        return $labels[$attendance] ?? __('Ej angivet', 'ssf-member-portal');
     }
 
     private function mark_sync(array $registrations, string $status, string $error = '', string $synced_at = ''): void

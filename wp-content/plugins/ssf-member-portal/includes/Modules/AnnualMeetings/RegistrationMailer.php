@@ -64,6 +64,7 @@ final class RegistrationMailer
         $this->add_row($registration_rows, __('E-post', 'ssf-member-portal'), (string) ($registration['email'] ?? ''));
         $this->add_row($registration_rows, __('Telefon', 'ssf-member-portal'), (string) ($registration['phone'] ?? ''));
         $this->add_row($registration_rows, __('Relation till SSF', 'ssf-member-portal'), (string) ($registration['relationship_label'] ?? ''));
+        $this->add_row($registration_rows, __('Årsmöte', 'ssf-member-portal'), (string) ($registration['meeting_attendance_label'] ?? __('Ej angivet', 'ssf-member-portal')));
         $this->add_row($registration_rows, __('Fartygsombud för', 'ssf-member-portal'), implode(', ', (array) ($registration['represented_vessels'] ?? array())));
         $this->add_row($registration_rows, __('Kopplade fartyg', 'ssf-member-portal'), implode(', ', (array) ($registration['associated_vessels'] ?? array())));
         $this->add_row($registration_rows, __('Deltagande', 'ssf-member-portal'), implode(', ', (array) ($registration['program_labels'] ?? array())));

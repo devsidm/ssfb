@@ -10,7 +10,7 @@ final class RegistrationExport
 {
     public function data(array $meeting, array $registrations): array
     {
-        $headers = array('Registration ID', 'Status', 'Anmäld datum', 'Senast ändrad', 'Förnamn', 'Efternamn', 'Telefon', 'E-post', 'Medlemstyp', 'Fartygsombud för', 'Anknytning till fartyg', 'Matpreferens', 'Matkommentar');
+        $headers = array('Registration ID', 'Status', 'Anmäld datum', 'Senast ändrad', 'Förnamn', 'Efternamn', 'Telefon', 'E-post', 'Medlemstyp', 'Årsmöte', 'Fartygsombud för', 'Anknytning till fartyg', 'Matpreferens', 'Matkommentar');
         $program = $this->registration_choices($meeting);
         $questions = array_filter((array) ($meeting['questions'] ?? array()), static function (array $question): bool { return ! empty($question['visible']) && 'info' !== ($question['type'] ?? ''); });
         foreach ($program as $item) {
@@ -36,6 +36,7 @@ final class RegistrationExport
                 (string) get_post_meta($id, '_ssf_am_phone', true),
                 (string) get_post_meta($id, '_ssf_am_email', true),
                 $this->relationship((string) get_post_meta($id, '_ssf_am_relationship', true)),
+                $this->meeting_attendance((string) get_post_meta($id, '_ssf_am_meeting_attendance', true)),
                 implode(', ', (array) get_post_meta($id, '_ssf_am_represented_vessels', true)),
                 implode(', ', (array) get_post_meta($id, '_ssf_am_associated_vessels', true)),
                 implode(', ', (array) get_post_meta($id, '_ssf_am_food', true)),
@@ -72,6 +73,11 @@ final class RegistrationExport
         return $labels[$value] ?? $value;
     }
 
+    private function meeting_attendance(string $value): string
+    {
+        return array('yes' => 'Ja', 'no' => 'Nej')[$value] ?? 'Ej angivet';
+    }
+
     private function registration_choices(array $meeting): array
     {
         $choices = array();
@@ -79,12 +85,9 @@ final class RegistrationExport
         if (! empty($meeting['modules']['day2'])) {
             foreach ((array) ($meeting['program'] ?? array()) as $item) {
                 $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
-                if (! empty($item['visible']) && (! empty($item['requires_registration']) || $is_annual_meeting)) {
+                if (! $is_annual_meeting && ! empty($item['visible']) && ! empty($item['requires_registration'])) {
                     if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
                         $has_program_dinner = true;
-                    }
-                    if ($is_annual_meeting) {
-                        $item['title'] = __('Själva årsmötet', 'ssf-member-portal');
                     }
                     $choices[] = $item;
                 }
