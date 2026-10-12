@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.9",
-    "build":  "20261012.1",
-    "built_at":  "2026-10-12T10:49:37.1383348Z",
+    "build":  "20261012.2",
+    "built_at":  "2026-10-12T13:57:56.7950749Z",
     "source":  "codex",
-    "source_revision":  "88e5ebd600106f8f67cb02aa745138a826510435",
-    "description":  "Add explicit annual meeting attendance registration",
+    "source_revision":  "23ba8cccbc00256f5e88658da5ce977097ad49bb",
+    "description":  "Support group registration for annual meeting weekend",
     "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
     "components":  [
                        "ssf-member-portal"
