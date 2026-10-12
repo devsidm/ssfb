@@ -216,8 +216,8 @@ foreach (array('ssf-am-registration', 'Gå till anmälan', 'Kallelsetext', 'ssf-
 }
 $form_html = $frontend->registration_shortcode();
 check(str_contains($form_html, 'ssf-am-form') && str_contains($form_html, 'ssf_member_portal_submit_meeting_registration'), 'Open mode did not render the existing registration form.');
-check(str_contains($form_html, 'Deltar du på SSF:s årsmöte?') && str_contains($form_html, 'name="meeting_attendance" value="yes"') && str_contains($form_html, 'name="meeting_attendance" value="no"'), 'The explicit annual-meeting attendance choice was not rendered.');
-check(! str_contains($form_html, 'name="program[annual_meeting]"'), 'Annual-meeting attendance remained coupled to program choices.');
+check(str_contains($form_html, 'Lägg till person') && str_contains($form_html, 'data-ssf-step="3"') && str_contains($form_html, '[activities][annual_meeting]'), 'The per-person annual-meeting activity choice was not rendered.');
+check(! str_contains($form_html, 'name="meeting_attendance"'), 'The obsolete registration-level attendance choice was rendered.');
 
 $_POST['ssf_meeting_registration_status'] = 'closed';
 $_POST['ssf_meeting_registration_closes_on'] = '2026-10-17';
@@ -226,7 +226,7 @@ $meeting = $module->data(10);
 $closed_state = $service->registration_state($meeting, get_post(10));
 check($meeting['registration_mode'] === 'closed' && $meeting['registration_visible'] && ! $meeting['registration_open'] && ! $closed_state['can_register'], 'Visible closed mode did not block registration.');
 check($closed_state['message'] === 'Anmälan är stängd.', 'Manual close displayed a misleading future deadline.');
-check(! isset($closed_state['choice_states']['annual_meeting']) && $closed_state['choice_states']['dinner']['message'] === 'Anmälan är stängd.', 'Annual-meeting attendance was not separated from closed program choices.');
+check(isset($closed_state['choice_states']['annual_meeting']) && $closed_state['choice_states']['annual_meeting']['message'] === 'Anmälan är stängd.' && $closed_state['choice_states']['dinner']['message'] === 'Anmälan är stängd.', 'Closed participant activities did not inherit the manual close.');
 $GLOBALS['meeting_options']['ssf_member_portal_active_meeting_id'] = 11;
 check($service->registration_state($meeting, get_post(10))['status'] === 'closed', 'Closed historical meeting lost its closed status.');
 $GLOBALS['meeting_options']['ssf_member_portal_active_meeting_id'] = 10;
@@ -248,6 +248,6 @@ check($meeting['registration_visible'] && $module->registration_visible($meeting
 $no_choices_state = $service->registration_state($meeting, get_post(10));
 $no_choices_html = $render($meeting, $no_choices_state);
 check($no_choices_state['can_register'] && str_contains($no_choices_html, 'id="ssf-am-registration"'), 'Attendance-only registration did not remain available without weekend choices.');
-check(str_contains($frontend->registration_shortcode(), 'Deltar du på SSF:s årsmöte?'), 'Attendance-only registration form was not visible.');
+check(str_contains($frontend->registration_shortcode(), '[activities][annual_meeting]'), 'Attendance-only registration form was not visible.');
 
 echo "PASS: independent visibility, advance notice, registration, legacy data and frontend.\n";

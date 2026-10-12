@@ -161,6 +161,21 @@ final class RegistrationService
             return '' === $value || null === $value ? $default : $value;
         };
         $program = (array) $get('program', array());
+        $participants = (array) $get('participants', array());
+        if (! $participants) {
+            $participants = array($this->legacy_participant($get, $meeting));
+        }
+        $activity_titles = array();
+        foreach ($this->meetings->participant_activities($meeting) as $activity) {
+            $activity_titles[(string) $activity['key']] = (string) $activity['title'];
+        }
+        foreach ($participants as &$participant) {
+            $participant = wp_parse_args((array) $participant, array('id' => '', 'first_name' => '', 'last_name' => '', 'email' => '', 'phone' => '', 'relationship' => 'other', 'vessels' => array(), 'activities' => array(), 'dietary' => array(), 'dietary_other' => '', 'allergy_note' => '', 'primary' => 0));
+            $participant['relationship_label'] = $this->relationship_label((string) $participant['relationship']);
+            $participant['activity_labels'] = array_values(array_intersect_key($activity_titles, array_filter((array) $participant['activities'])));
+            $participant['dietary_label'] = $this->dietary_label((array) $participant['dietary'], (string) $participant['dietary_other']);
+        }
+        unset($participant);
         $labels = array();
         foreach ($this->meetings->registration_choices($meeting) as $item) {
             if (! empty($program[$item['key']])) {
@@ -183,6 +198,10 @@ final class RegistrationService
             'has_associated_vessels' => (bool) $get('has_associated_vessels', 0),
             'meeting_attendance' => $meeting_attendance,
             'meeting_attendance_label' => $this->meeting_attendance_label($meeting_attendance),
+            'participants' => $participants,
+            'participant_count' => count($participants),
+            'activity_counts' => $this->participant_activity_counts($participants),
+            'special_diet_count' => count(array_filter($participants, static function (array $participant): bool { return array_diff((array) $participant['dietary'], array('none')) || ! empty($participant['dietary_other']) || ! empty($participant['allergy_note']); })),
             'program' => $program,
             'program_labels' => $labels,
             'food' => (array) $get('food', array()),
@@ -321,14 +340,17 @@ final class RegistrationService
     public function selection_counts(int $meeting_id, int $exclude_id = 0): array
     {
         $counts = array();
-        foreach ($this->registrations($meeting_id, array('status' => self::REGISTERED)) as $registration) {
+        $registrations = $this->registrations($meeting_id, array('status' => self::REGISTERED));
+        if (! $registrations) {
+            return $counts;
+        }
+        $meeting = $this->meetings->data($meeting_id);
+        foreach ($registrations as $registration) {
             if ((int) $registration->ID === $exclude_id) {
                 continue;
             }
-            foreach ((array) get_post_meta($registration->ID, '_ssf_am_program', true) as $key => $selected) {
-                if ($selected) {
-                    $counts[(string) $key] = ($counts[(string) $key] ?? 0) + 1;
-                }
+            foreach ($this->details((int) $registration->ID, $meeting)['activity_counts'] as $key => $count) {
+                $counts[(string) $key] = ($counts[(string) $key] ?? 0) + (int) $count;
             }
         }
         return $counts;
@@ -337,7 +359,7 @@ final class RegistrationService
     public function registration_state(array $meeting, ?\WP_Post $meeting_post = null, int $exclude_id = 0): array
     {
         $now = $this->now();
-        $choices = $this->meetings->registration_choices($meeting);
+        $choices = $this->meetings->participant_activities($meeting);
         $choice_states = array();
         foreach ($choices as $choice) {
             $choice_key = (string) ($choice['key'] ?? '');
@@ -582,6 +604,19 @@ final class RegistrationService
                 foreach (array('email', 'phone', 'food', 'food_note', 'answers', 'represented_vessels', 'associated_vessels') as $key) {
                     delete_post_meta($registration->ID, '_ssf_am_' . $key);
                 }
+                $participants = (array) get_post_meta($registration->ID, '_ssf_am_participants', true);
+                foreach ($participants as &$participant) {
+                    $participant['first_name'] = __('Anonymiserad', 'ssf-member-portal');
+                    $participant['last_name'] = __('deltagare', 'ssf-member-portal');
+                    $participant['email'] = '';
+                    $participant['phone'] = '';
+                    $participant['vessels'] = array();
+                    $participant['dietary'] = array();
+                    $participant['dietary_other'] = '';
+                    $participant['allergy_note'] = '';
+                }
+                unset($participant);
+                update_post_meta($registration->ID, '_ssf_am_participants', $participants);
                 update_post_meta($registration->ID, '_ssf_am_first_name', __('Anonymiserad', 'ssf-member-portal'));
                 update_post_meta($registration->ID, '_ssf_am_last_name', __('deltagare', 'ssf-member-portal'));
                 update_post_meta($registration->ID, '_ssf_am_anonymised_at', gmdate('c'));
@@ -602,39 +637,136 @@ final class RegistrationService
 
     private function validate(array $meeting, array $input, int $exclude_id)
     {
-        $data = array(
-            'first_name' => sanitize_text_field((string) ($input['first_name'] ?? '')),
-            'last_name' => sanitize_text_field((string) ($input['last_name'] ?? '')),
-            'email' => sanitize_email((string) ($input['email'] ?? '')),
-            'phone' => sanitize_text_field((string) ($input['phone'] ?? '')),
-            'relationship' => sanitize_key((string) ($input['relationship'] ?? '')),
-            'represented_vessels' => $this->vessels((array) ($input['represented_vessels'] ?? array())),
-            'has_associated_vessels' => ! empty($input['has_associated_vessels']) ? 1 : 0,
-            'associated_vessels' => $this->vessels((array) ($input['associated_vessels'] ?? array())),
-            'meeting_attendance' => isset($input['meeting_attendance']) && is_scalar($input['meeting_attendance']) ? (string) $input['meeting_attendance'] : '',
-            'program' => array(),
-            'food' => array(),
-            'food_note' => sanitize_textarea_field((string) ($input['food_note'] ?? '')),
-            'answers' => array(),
-        );
-        if (! $data['first_name'] || ! $data['last_name'] || ! is_email($data['email'])) {
-            return new \WP_Error('annual_meeting_required', __('Fyll i förnamn, efternamn och en giltig e-postadress.', 'ssf-member-portal'));
+        $submitted_participants = (array) ($input['participants'] ?? array());
+        if (! $submitted_participants) {
+            $legacy_activities = (array) ($input['program'] ?? array());
+            if ('yes' === ($input['meeting_attendance'] ?? '')) {
+                $legacy_activities['annual_meeting'] = 1;
+            }
+            $submitted_participants[] = array(
+                'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '', 'email' => $input['email'] ?? '', 'phone' => $input['phone'] ?? '',
+                'relationship' => $input['relationship'] ?? '', 'vessels' => array_merge((array) ($input['represented_vessels'] ?? array()), (array) ($input['associated_vessels'] ?? array())),
+                'activities' => $legacy_activities, 'dietary' => (array) ($input['food'] ?? array()), 'allergy_note' => $input['food_note'] ?? '',
+            );
         }
-        $valid_relationships = array('representative', 'supporter');
+        if (! $submitted_participants || count($submitted_participants) > 20) {
+            return new \WP_Error('annual_meeting_participants', __('Lägg till minst en och högst 20 deltagare.', 'ssf-member-portal'));
+        }
+
+        $activities = array();
+        foreach ($this->meetings->participant_activities($meeting) as $activity) {
+            if (! empty($activity['key'])) {
+                $activities[(string) $activity['key']] = $activity;
+            }
+        }
+        $valid_relationships = array('representative', 'supporter', 'vessel_member', 'companion', 'other');
         if (! empty($meeting['allow_guest'])) {
             $valid_relationships[] = 'guest';
         }
-        if (! in_array($data['relationship'], $valid_relationships, true)) {
-            return new \WP_Error('annual_meeting_relationship', __('Välj din relation till SSF.', 'ssf-member-portal'));
+        $valid_dietary = array('none', 'vegetarian', 'vegan', 'gluten_free', 'lactose_free', 'other');
+        $participants = array();
+        $submitted_counts = array();
+        $participant_ids = array();
+        $existing_activity_selections = array();
+        $stored_participants = get_post_meta($exclude_id, '_ssf_am_participants', true);
+        foreach (is_array($stored_participants) ? $stored_participants : array() as $existing_participant) {
+            if (! empty($existing_participant['id'])) {
+                $existing_activity_selections[(string) $existing_participant['id']] = (array) ($existing_participant['activities'] ?? array());
+            }
         }
-        if (! in_array($data['meeting_attendance'], array('yes', 'no'), true)) {
-            return new \WP_Error('annual_meeting_attendance_required', __('Ange om du deltar på SSF:s årsmöte.', 'ssf-member-portal'));
+        foreach (array_values($submitted_participants) as $index => $submitted) {
+            $submitted = is_array($submitted) ? $submitted : array();
+            $participant = array(
+                'id' => sanitize_key((string) ($submitted['id'] ?? ('person_' . ($index + 1)))),
+                'first_name' => sanitize_text_field((string) ($submitted['first_name'] ?? '')),
+                'last_name' => sanitize_text_field((string) ($submitted['last_name'] ?? '')),
+                'email' => sanitize_email((string) ($submitted['email'] ?? '')),
+                'phone' => sanitize_text_field((string) ($submitted['phone'] ?? '')),
+                'relationship' => sanitize_key((string) ($submitted['relationship'] ?? '')),
+                'vessels' => $this->vessels((array) ($submitted['vessels'] ?? array())),
+                'activities' => array(),
+                'dietary' => array(),
+                'dietary_other' => sanitize_text_field((string) ($submitted['dietary_other'] ?? '')),
+                'allergy_note' => sanitize_textarea_field((string) ($submitted['allergy_note'] ?? '')),
+                'primary' => 0 === $index ? 1 : 0,
+            );
+            if (! $participant['id'] || isset($participant_ids[$participant['id']])) {
+                return new \WP_Error('annual_meeting_participant_id', __('Deltagarlistan innehåller ett ogiltigt person-ID.', 'ssf-member-portal'));
+            }
+            $participant_ids[$participant['id']] = true;
+            if (! $participant['first_name'] || ! $participant['last_name']) {
+                return new \WP_Error('annual_meeting_participant_name', sprintf(__('Ange namn på deltagare %d.', 'ssf-member-portal'), $index + 1));
+            }
+            if (0 === $index && ! is_email($participant['email'])) {
+                return new \WP_Error('annual_meeting_required', __('Huvudanmälaren måste ha en giltig e-postadress.', 'ssf-member-portal'));
+            }
+            if ($participant['email'] && ! is_email($participant['email'])) {
+                return new \WP_Error('annual_meeting_participant_email', sprintf(__('E-postadressen för %s är ogiltig.', 'ssf-member-portal'), $participant['first_name']));
+            }
+            if (! in_array($participant['relationship'], $valid_relationships, true)) {
+                return new \WP_Error('annual_meeting_relationship', sprintf(__('Välj relation till SSF för %s.', 'ssf-member-portal'), $participant['first_name']));
+            }
+            if (in_array($participant['relationship'], array('representative', 'vessel_member'), true) && ! $participant['vessels']) {
+                return new \WP_Error('annual_meeting_vessel', sprintf(__('Ange fartyg för %s.', 'ssf-member-portal'), $participant['first_name']));
+            }
+            foreach ((array) ($submitted['activities'] ?? array()) as $activity_key => $selected) {
+                $activity_key = sanitize_key((string) $activity_key);
+                if (! $selected) {
+                    continue;
+                }
+                if (! isset($activities[$activity_key])) {
+                    return new \WP_Error('annual_meeting_invalid_activity', __('En vald aktivitet tillhör inte det aktuella årsmötet.', 'ssf-member-portal'));
+                }
+                $state = $this->choice_state($meeting, $activities[$activity_key], $exclude_id);
+                if (empty($state['available']) && empty($existing_activity_selections[$participant['id']][$activity_key])) {
+                    return new \WP_Error(! empty($state['full']) ? 'annual_meeting_choice_full' : 'annual_meeting_choice_closed', $this->choice_error_message($state, (string) $activities[$activity_key]['title']));
+                }
+                $participant['activities'][$activity_key] = 1;
+                $submitted_counts[$activity_key] = ($submitted_counts[$activity_key] ?? 0) + 1;
+            }
+            if (! $participant['activities']) {
+                return new \WP_Error('annual_meeting_choice_required', sprintf(__('Välj minst en aktivitet för %s.', 'ssf-member-portal'), $participant['first_name']));
+            }
+            $has_food = false;
+            foreach (array_keys($participant['activities']) as $activity_key) {
+                $has_food = $has_food || ! empty($activities[$activity_key]['food']);
+            }
+            if ($has_food) {
+                $dietary = array_values(array_unique(array_intersect(array_map('sanitize_key', (array) ($submitted['dietary'] ?? array())), $valid_dietary)));
+                if (count($dietary) > 1) {
+                    $dietary = array_values(array_diff($dietary, array('none')));
+                }
+                $participant['dietary'] = $dietary ?: array('none');
+                if (! in_array('other', $participant['dietary'], true)) {
+                    $participant['dietary_other'] = '';
+                }
+            } else {
+                $participant['dietary_other'] = '';
+                $participant['allergy_note'] = '';
+            }
+            $participants[] = $participant;
         }
-        if ('representative' === $data['relationship'] && ! $data['represented_vessels']) {
-            return new \WP_Error('annual_meeting_vessel', __('Ange minst ett fartyg du är ombud för.', 'ssf-member-portal'));
+
+        $existing_counts = $this->selection_counts((int) $meeting['id'], $exclude_id);
+        foreach ($submitted_counts as $activity_key => $count) {
+            $capacity = max(0, (int) ($activities[$activity_key]['capacity'] ?? 0));
+            if ($capacity && (int) ($existing_counts[$activity_key] ?? 0) + $count > $capacity) {
+                return new \WP_Error('annual_meeting_choice_full', sprintf(__('%s har inte plats för alla valda deltagare.', 'ssf-member-portal'), $activities[$activity_key]['title']));
+            }
         }
-        if (! $data['has_associated_vessels']) {
-            $data['associated_vessels'] = array();
+
+        $primary = $participants[0];
+        $data = array(
+            'first_name' => $primary['first_name'], 'last_name' => $primary['last_name'], 'email' => $primary['email'], 'phone' => $primary['phone'],
+            'relationship' => $primary['relationship'], 'represented_vessels' => 'representative' === $primary['relationship'] ? $primary['vessels'] : array(),
+            'has_associated_vessels' => 'supporter' === $primary['relationship'] && $primary['vessels'] ? 1 : 0,
+            'associated_vessels' => 'representative' !== $primary['relationship'] ? $primary['vessels'] : array(),
+            'meeting_attendance' => ! empty($primary['activities']['annual_meeting']) ? 'yes' : 'no',
+            'program' => array_diff_key($primary['activities'], array('annual_meeting' => true)),
+            'food' => $primary['dietary'], 'food_note' => $primary['allergy_note'], 'participants' => $participants, 'answers' => array(),
+        );
+        if (! $data['first_name'] || ! $data['last_name'] || ! is_email($data['email'])) {
+            return new \WP_Error('annual_meeting_required', __('Fyll i förnamn, efternamn och en giltig e-postadress.', 'ssf-member-portal'));
         }
         $existing = get_posts(array(
             'post_type' => RegistrationPostType::POST_TYPE,
@@ -648,47 +780,6 @@ final class RegistrationService
             if ((int) $duplicate->ID !== $exclude_id && self::CANCELLED !== get_post_meta($duplicate->ID, '_ssf_am_status', true)) {
                 return new \WP_Error('annual_meeting_duplicate', __('Det finns redan en anmälan med den här e-postadressen. Använd din personliga länk för att ändra den.', 'ssf-member-portal'));
             }
-        }
-        $submitted_program = (array) ($input['program'] ?? array());
-        $existing_program = $exclude_id ? (array) get_post_meta($exclude_id, '_ssf_am_program', true) : array();
-        foreach ($this->meetings->registration_choices($meeting) as $item) {
-            if (empty($item['key'])) {
-                continue;
-            }
-            $selected = ! empty($submitted_program[$item['key']]);
-            $was_selected = ! empty($existing_program[$item['key']]);
-            $state = $this->choice_state($meeting, $item, $exclude_id);
-            if (empty($state['available']) && ! $was_selected) {
-                if ($was_selected) {
-                    $data['program'][$item['key']] = 1;
-                }
-                if ($selected) {
-                    return new \WP_Error(
-                        ! empty($state['full']) ? 'annual_meeting_choice_full' : 'annual_meeting_choice_closed',
-                        $this->choice_error_message($state, (string) $item['title'])
-                    );
-                }
-                continue;
-            }
-            if (empty($item['optional']) && ! $selected) {
-                return new \WP_Error('annual_meeting_program_required', sprintf(__('Välj %s.', 'ssf-member-portal'), $item['title']));
-            }
-            if ($selected) {
-                $data['program'][$item['key']] = 1;
-            }
-        }
-        if (! $data['program'] && 'yes' !== $data['meeting_attendance']) {
-            return new \WP_Error('annual_meeting_choice_required', __('Välj minst ett alternativ för ditt deltagande.', 'ssf-member-portal'));
-        }
-        if ($this->selection_uses_food($meeting, $data['program'])) {
-            $selected_food = (array) ($input['food'] ?? array());
-            foreach ((array) $meeting['food_options'] as $option) {
-                if (! empty($selected_food[$option]) || in_array($option, $selected_food, true)) {
-                    $data['food'][] = $option;
-                }
-            }
-        } else {
-            $data['food_note'] = '';
         }
         foreach ((array) $meeting['questions'] as $question) {
             if (empty($question['visible']) || 'info' === $question['type'] || empty($question['key'])) {
@@ -735,7 +826,11 @@ final class RegistrationService
 
     private function vessels(array $values): array
     {
-        $values = array_slice($values, 0, 10);
+        $expanded = array();
+        foreach ($values as $value) {
+            $expanded = array_merge($expanded, preg_split('/[,;\r\n]+/', (string) $value) ?: array());
+        }
+        $values = array_slice($expanded, 0, 10);
         return array_values(array_unique(array_filter(array_map('sanitize_text_field', $values))));
     }
 
@@ -878,9 +973,46 @@ final class RegistrationService
         }
     }
 
+    private function participant_activity_counts(array $participants): array
+    {
+        $counts = array();
+        foreach ($participants as $participant) {
+            foreach (array_filter((array) ($participant['activities'] ?? array())) as $key => $selected) {
+                $counts[(string) $key] = ($counts[(string) $key] ?? 0) + 1;
+            }
+        }
+        return $counts;
+    }
+
+    private function legacy_participant(callable $get, array $meeting): array
+    {
+        $activities = (array) $get('program', array());
+        if ('yes' === (string) $get('meeting_attendance')) {
+            $activities['annual_meeting'] = 1;
+        }
+        $relationship = (string) $get('relationship');
+        return array(
+            'id' => 'person_1', 'first_name' => (string) $get('first_name'), 'last_name' => (string) $get('last_name'),
+            'email' => (string) $get('email'), 'phone' => (string) $get('phone'), 'relationship' => $relationship,
+            'vessels' => array_values(array_unique(array_merge((array) $get('represented_vessels', array()), (array) $get('associated_vessels', array())))),
+            'activities' => $activities, 'dietary' => (array) $get('food', array()), 'dietary_other' => '',
+            'allergy_note' => (string) $get('food_note'), 'primary' => 1,
+        );
+    }
+
+    private function dietary_label(array $dietary, string $other): string
+    {
+        $labels = array('none' => __('Ingen specialkost', 'ssf-member-portal'), 'vegetarian' => __('Vegetarisk', 'ssf-member-portal'), 'vegan' => __('Vegansk', 'ssf-member-portal'), 'gluten_free' => __('Glutenfri', 'ssf-member-portal'), 'lactose_free' => __('Laktosfri', 'ssf-member-portal'), 'other' => $other ?: __('Annan', 'ssf-member-portal'));
+        return implode(', ', array_map(static function (string $value) use ($labels): string { return $labels[$value] ?? $value; }, $dietary));
+    }
+
     private function relationship_label(string $relationship): string
     {
-        $labels = array('representative' => __('Fartygsombud', 'ssf-member-portal'), 'supporter' => __('Stödmedlem', 'ssf-member-portal'), 'guest' => __('Annan/inbjuden deltagare', 'ssf-member-portal'));
+        $labels = array(
+            'representative' => __('Fartygsombud', 'ssf-member-portal'), 'supporter' => __('Stödmedlem', 'ssf-member-portal'),
+            'vessel_member' => __('Medlem/representant från fartyg', 'ssf-member-portal'), 'companion' => __('Medföljande', 'ssf-member-portal'),
+            'other' => __('Övrig', 'ssf-member-portal'), 'guest' => __('Annan/inbjuden deltagare', 'ssf-member-portal'),
+        );
         return $labels[$relationship] ?? $relationship;
     }
 

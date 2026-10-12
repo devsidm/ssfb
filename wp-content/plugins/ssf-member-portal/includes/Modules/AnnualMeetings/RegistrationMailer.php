@@ -40,6 +40,7 @@ final class RegistrationMailer
         $message = implode("\n", array(
             sprintf('%s %s', $registration['first_name'], $registration['last_name']),
             sprintf(__('E-post: %s', 'ssf-member-portal'), $registration['email']),
+            sprintf(__('Antal deltagare: %d', 'ssf-member-portal'), (int) ($registration['participant_count'] ?? 1)),
             sprintf(__('Medlemsrelation: %s', 'ssf-member-portal'), $registration['relationship_label']),
             sprintf(__('Status: %s', 'ssf-member-portal'), $registration['status_label']),
         ));
@@ -60,16 +61,25 @@ final class RegistrationMailer
         $this->add_row($meeting_rows, __('Plats', 'ssf-member-portal'), $this->location($meeting));
 
         $registration_rows = array();
-        $this->add_row($registration_rows, __('Deltagare', 'ssf-member-portal'), trim((string) $registration['first_name'] . ' ' . (string) $registration['last_name']));
+        $this->add_row($registration_rows, __('Anmälnings-ID', 'ssf-member-portal'), (string) ($registration['registration_id'] ?? ''));
+        $this->add_row($registration_rows, __('Huvudanmälare', 'ssf-member-portal'), trim((string) $registration['first_name'] . ' ' . (string) $registration['last_name']));
         $this->add_row($registration_rows, __('E-post', 'ssf-member-portal'), (string) ($registration['email'] ?? ''));
         $this->add_row($registration_rows, __('Telefon', 'ssf-member-portal'), (string) ($registration['phone'] ?? ''));
-        $this->add_row($registration_rows, __('Relation till SSF', 'ssf-member-portal'), (string) ($registration['relationship_label'] ?? ''));
-        $this->add_row($registration_rows, __('Årsmöte', 'ssf-member-portal'), (string) ($registration['meeting_attendance_label'] ?? __('Ej angivet', 'ssf-member-portal')));
-        $this->add_row($registration_rows, __('Fartygsombud för', 'ssf-member-portal'), implode(', ', (array) ($registration['represented_vessels'] ?? array())));
-        $this->add_row($registration_rows, __('Kopplade fartyg', 'ssf-member-portal'), implode(', ', (array) ($registration['associated_vessels'] ?? array())));
-        $this->add_row($registration_rows, __('Deltagande', 'ssf-member-portal'), implode(', ', (array) ($registration['program_labels'] ?? array())));
-        $this->add_row($registration_rows, __('Matpreferenser', 'ssf-member-portal'), implode(', ', (array) ($registration['food'] ?? array())));
-        $this->add_row($registration_rows, __('Information till köket', 'ssf-member-portal'), (string) ($registration['food_note'] ?? ''));
+        $this->add_row($registration_rows, __('Antal deltagare', 'ssf-member-portal'), (string) ($registration['participant_count'] ?? 1));
+
+        $participant_sections = array();
+        foreach ((array) ($registration['participants'] ?? array()) as $index => $participant) {
+            $rows = array();
+            $this->add_row($rows, __('Roll', 'ssf-member-portal'), (string) ($participant['relationship_label'] ?? ''));
+            $this->add_row($rows, __('E-post', 'ssf-member-portal'), (string) ($participant['email'] ?? ''));
+            $this->add_row($rows, __('Telefon', 'ssf-member-portal'), (string) ($participant['phone'] ?? ''));
+            $this->add_row($rows, __('Fartyg', 'ssf-member-portal'), implode(', ', (array) ($participant['vessels'] ?? array())));
+            $this->add_row($rows, __('Aktiviteter', 'ssf-member-portal'), implode(', ', (array) ($participant['activity_labels'] ?? array())));
+            $this->add_row($rows, __('Specialkost', 'ssf-member-portal'), (string) ($participant['dietary_label'] ?? ''));
+            $this->add_row($rows, __('Allergi/övrigt', 'ssf-member-portal'), (string) ($participant['allergy_note'] ?? ''));
+            $name = trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? ''));
+            $participant_sections[] = array('title' => sprintf(__('Deltagare %d: %s', 'ssf-member-portal'), $index + 1, $name), 'rows' => $rows);
+        }
 
         foreach ((array) ($meeting['questions'] ?? array()) as $question) {
             if (empty($question['visible']) || 'info' === ($question['type'] ?? '') || empty($question['key']) || empty($question['title'])) {
@@ -93,10 +103,10 @@ final class RegistrationMailer
             'subject' => $updated ? __('Din anmälan har uppdaterats', 'ssf-member-portal') : __('Din anmälan är bekräftad', 'ssf-member-portal'),
             'recipient_name' => trim((string) ($registration['first_name'] ?? '') . ' ' . (string) ($registration['last_name'] ?? '')),
             'body' => array($updated ? __('Här är dina aktuella val för SSF:s årsmöteshelg.', 'ssf-member-portal') : __('Tack för din anmälan till aktiviteter under SSF:s årsmöteshelg. Vi ser fram emot att träffa dig!', 'ssf-member-portal')),
-            'sections' => array(
+            'sections' => array_merge(array(
                 array('title' => __('Årsmöteshelg', 'ssf-member-portal'), 'rows' => $meeting_rows),
-                array('title' => __('Dina val', 'ssf-member-portal'), 'rows' => $registration_rows),
-            ),
+                array('title' => __('Din anmälan', 'ssf-member-portal'), 'rows' => $registration_rows),
+            ), $participant_sections),
             'notice_title' => $practical_information ? __('Praktisk information', 'ssf-member-portal') : '',
             'notice' => $practical_information,
             'button_label' => $manage_url ? __('Visa eller ändra min anmälan', 'ssf-member-portal') : '',

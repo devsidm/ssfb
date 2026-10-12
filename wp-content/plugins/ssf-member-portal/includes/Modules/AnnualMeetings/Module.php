@@ -551,6 +551,32 @@ final class Module
         return $choices;
     }
 
+    /**
+     * All activities a participant can attend. The annual meeting is kept out
+     * of the legacy registration choices, but is a first-class participant
+     * activity in the group-registration model.
+     */
+    public function participant_activities(array $meeting): array
+    {
+        $activities = $this->registration_choices($meeting);
+        foreach ((array) ($meeting['program'] ?? array()) as $item) {
+            $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
+            if (! $is_annual_meeting || empty($item['visible']) || empty($item['key'])) {
+                continue;
+            }
+            $activities[] = array_merge($item, array(
+                'source' => 'annual_meeting',
+                'starts_at' => ! empty($item['date']) && ! empty($item['start']) ? $this->timestamp($item['date'] . 'T' . $item['start']) : 0,
+                'ends_at' => ! empty($item['date']) && ! empty($item['end']) ? $this->timestamp($item['date'] . 'T' . $item['end']) : 0,
+                'optional' => 1,
+            ));
+        }
+        usort($activities, static function (array $a, array $b): int {
+            return ((int) ($a['day'] ?? 0) <=> (int) ($b['day'] ?? 0)) ?: ((int) ($a['order'] ?? 0) <=> (int) ($b['order'] ?? 0));
+        });
+        return $activities;
+    }
+
     private function render_program_row($index, array $item): void
     {
         $prefix = 'ssf_meeting_program[' . $index . ']';

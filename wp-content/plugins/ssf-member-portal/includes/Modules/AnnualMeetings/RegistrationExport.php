@@ -1,106 +1,116 @@
 <?php
-
 namespace SSF\MemberPortal\Modules\AnnualMeetings;
 
-if (! defined('ABSPATH')) {
-    exit;
-}
+if (! defined('ABSPATH')) { exit; }
 
 final class RegistrationExport
 {
     public function data(array $meeting, array $registrations): array
     {
-        $headers = array('Registration ID', 'Status', 'Anmäld datum', 'Senast ändrad', 'Förnamn', 'Efternamn', 'Telefon', 'E-post', 'Medlemstyp', 'Årsmöte', 'Fartygsombud för', 'Anknytning till fartyg', 'Matpreferens', 'Matkommentar');
-        $program = $this->registration_choices($meeting);
-        $questions = array_filter((array) ($meeting['questions'] ?? array()), static function (array $question): bool { return ! empty($question['visible']) && 'info' !== ($question['type'] ?? ''); });
-        foreach ($program as $item) {
-            $headers[] = (string) $item['title'];
-        }
-        foreach ($questions as $question) {
-            $headers[] = (string) $question['title'];
-        }
-        $headers[] = 'SharePoint sync date';
-
+        $activities = $this->activities($meeting);
+        $headers = array('Anmälnings-ID', 'Huvudanmälare', 'Namn', 'E-post', 'Telefon', 'Medlemskap/roll', 'Fartyg');
+        foreach ($activities as $activity) { $headers[] = (string) $activity['title']; }
+        $headers = array_merge($headers, array('Specialkost', 'Allergi/övrigt', 'Status', 'Registreringsdatum'));
         $rows = array();
+        $activity_counts = array_fill_keys(array_keys($activities), 0);
+        $diet_rows = array();
         foreach ($registrations as $registration) {
-            $id = $registration->ID;
-            $program_values = (array) get_post_meta($id, '_ssf_am_program', true);
-            $answers = (array) get_post_meta($id, '_ssf_am_answers', true);
-            $row = array(
-                (string) get_post_meta($id, '_ssf_am_registration_id', true),
-                (string) get_post_meta($id, '_ssf_am_status', true),
-                $this->date((int) get_post_meta($id, '_ssf_am_submitted_at', true)),
-                $this->date((int) get_post_meta($id, '_ssf_am_updated_at', true)),
-                (string) get_post_meta($id, '_ssf_am_first_name', true),
-                (string) get_post_meta($id, '_ssf_am_last_name', true),
-                (string) get_post_meta($id, '_ssf_am_phone', true),
-                (string) get_post_meta($id, '_ssf_am_email', true),
-                $this->relationship((string) get_post_meta($id, '_ssf_am_relationship', true)),
-                $this->meeting_attendance((string) get_post_meta($id, '_ssf_am_meeting_attendance', true)),
-                implode(', ', (array) get_post_meta($id, '_ssf_am_represented_vessels', true)),
-                implode(', ', (array) get_post_meta($id, '_ssf_am_associated_vessels', true)),
-                implode(', ', (array) get_post_meta($id, '_ssf_am_food', true)),
-                (string) get_post_meta($id, '_ssf_am_food_note', true),
-            );
-            foreach ($program as $item) {
-                $row[] = ! empty($program_values[$item['key']]) ? 'Ja' : 'Nej';
+            $id = (int) $registration->ID;
+            $status = (string) get_post_meta($id, '_ssf_am_status', true) ?: RegistrationService::REGISTERED;
+            $registration_id = (string) get_post_meta($id, '_ssf_am_registration_id', true);
+            $submitted = $this->date((int) get_post_meta($id, '_ssf_am_submitted_at', true));
+            foreach ($this->participants($id) as $participant) {
+                $name = trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? ''));
+                $row = array($registration_id, ! empty($participant['primary']) ? 'Ja' : 'Nej', $name, (string) ($participant['email'] ?? ''), (string) ($participant['phone'] ?? ''), $this->relationship((string) ($participant['relationship'] ?? '')), implode(', ', (array) ($participant['vessels'] ?? array())));
+                $selected = array_filter((array) ($participant['activities'] ?? array()));
+                foreach ($activities as $key => $activity) {
+                    $is_selected = ! empty($selected[$key]);
+                    $row[] = $is_selected ? 'Ja' : 'Nej';
+                    if ($is_selected && RegistrationService::CANCELLED !== $status) { $activity_counts[$key]++; }
+                    if ($is_selected && RegistrationService::CANCELLED !== $status && ! empty($activity['food']) && $this->has_special_diet($participant)) {
+                        $diet_rows[] = array($name, (string) $activity['title'], $this->dietary($participant), (string) ($participant['allergy_note'] ?? ''), $registration_id);
+                    }
+                }
+                $row[] = $this->dietary($participant);
+                $row[] = (string) ($participant['allergy_note'] ?? '');
+                $row[] = $this->status($status);
+                $row[] = $submitted;
+                $rows[] = $row;
             }
-            foreach ($questions as $question) {
-                $answer = $answers[$question['key']] ?? '';
-                $row[] = is_array($answer) ? implode(', ', $answer) : (string) $answer;
-            }
-            $row[] = (string) get_post_meta($id, '_ssf_am_sharepoint_last_sync', true);
-            $rows[] = $row;
         }
-        return array('headers' => $headers, 'rows' => $rows);
+        $activity_rows = array();
+        foreach ($activities as $key => $activity) {
+            $capacity = max(0, (int) ($activity['capacity'] ?? 0));
+            $count = (int) ($activity_counts[$key] ?? 0);
+            $activity_rows[] = array((string) $activity['title'], $count, $capacity ?: '', $capacity ? max(0, $capacity - $count) : 'Obegränsat');
+        }
+        return array('headers' => $headers, 'rows' => $rows, 'sheets' => array(
+            array('name' => 'Deltagare', 'headers' => $headers, 'rows' => $rows),
+            array('name' => 'Aktiviteter', 'headers' => array('Aktivitet', 'Antal', 'Max antal', 'Lediga platser'), 'rows' => $activity_rows),
+            array('name' => 'Specialkost', 'headers' => array('Namn', 'Aktivitet', 'Kost', 'Allergi/övrigt', 'Anmälnings-ID'), 'rows' => $diet_rows),
+        ));
     }
 
     public function create_xlsx(array $meeting, array $registrations)
     {
         $data = $this->data($meeting, $registrations);
         $year = max(2000, (int) ($meeting['sharepoint_year'] ?: $meeting['year']));
-        return (new ExcelWriter())->create($data['headers'], $data['rows'], $this->sharepoint_filename($year));
+        return (new ExcelWriter())->create_workbook($data['sheets'], $this->sharepoint_filename($year));
     }
 
-    public function sharepoint_filename(int $year): string
+    public function sharepoint_filename(int $year): string { return 'Anmälningar-SSF-Årsmöte-' . $year . '.xlsx'; }
+
+    private function participants(int $id): array
     {
-        return 'Anmälningar-SSF-Årsmöte-' . $year . '.xlsx';
+        $stored = get_post_meta($id, '_ssf_am_participants', true);
+        if (is_array($stored) && $stored) { return $stored; }
+        $program = (array) get_post_meta($id, '_ssf_am_program', true);
+        if ('yes' === get_post_meta($id, '_ssf_am_meeting_attendance', true)) { $program['annual_meeting'] = 1; }
+        return array(array(
+            'first_name' => (string) get_post_meta($id, '_ssf_am_first_name', true), 'last_name' => (string) get_post_meta($id, '_ssf_am_last_name', true),
+            'email' => (string) get_post_meta($id, '_ssf_am_email', true), 'phone' => (string) get_post_meta($id, '_ssf_am_phone', true),
+            'relationship' => (string) get_post_meta($id, '_ssf_am_relationship', true),
+            'vessels' => array_values(array_filter(array_merge((array) get_post_meta($id, '_ssf_am_represented_vessels', true), (array) get_post_meta($id, '_ssf_am_associated_vessels', true)))),
+            'activities' => $program, 'dietary' => array_values(array_filter((array) get_post_meta($id, '_ssf_am_food', true))), 'dietary_other' => '',
+            'allergy_note' => (string) get_post_meta($id, '_ssf_am_food_note', true), 'primary' => 1,
+        ));
+    }
+
+    private function activities(array $meeting): array
+    {
+        $activities = array();
+        foreach ((array) ($meeting['program'] ?? array()) as $item) {
+            if (! empty($item['visible']) && (! empty($item['requires_registration']) || 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? ''))) { $activities[(string) $item['key']] = $item; }
+        }
+        if (! empty($meeting['modules']['dinner']) && ! isset($activities['dinner']) && ! empty($meeting['dinner']['start_at'])) {
+            $activities['dinner'] = array('key' => 'dinner', 'title' => (string) ($meeting['dinner']['title'] ?: 'Middag'), 'food' => 1, 'capacity' => (int) ($meeting['dinner']['capacity'] ?? 0));
+        }
+        return $activities;
     }
 
     private function relationship(string $value): string
     {
-        $labels = array('representative' => 'Fartygsombud', 'supporter' => 'Stödmedlem', 'guest' => 'Annan/inbjuden deltagare');
+        $labels = array('representative' => 'Fartygsombud', 'supporter' => 'Stödmedlem', 'vessel_member' => 'Fartygsmedlem', 'companion' => 'Medföljande', 'other' => 'Annan', 'guest' => 'Annan/inbjuden deltagare');
         return $labels[$value] ?? $value;
     }
 
-    private function meeting_attendance(string $value): string
+    private function dietary(array $participant): string
     {
-        return array('yes' => 'Ja', 'no' => 'Nej')[$value] ?? 'Ej angivet';
+        $labels = array('none' => 'Ingen specialkost', 'vegetarian' => 'Vegetarisk', 'vegan' => 'Vegansk', 'gluten_free' => 'Glutenfri', 'lactose_free' => 'Laktosfri', 'other' => 'Annan');
+        $values = array_map(static function ($value) use ($labels): string { return $labels[$value] ?? (string) $value; }, (array) ($participant['dietary'] ?? array()));
+        if (! empty($participant['dietary_other'])) { $values[] = (string) $participant['dietary_other']; }
+        return implode(', ', array_unique(array_filter($values)));
     }
 
-    private function registration_choices(array $meeting): array
+    private function has_special_diet(array $participant): bool
     {
-        $choices = array();
-        $has_program_dinner = false;
-        if (! empty($meeting['modules']['day2'])) {
-            foreach ((array) ($meeting['program'] ?? array()) as $item) {
-                $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
-                if (! $is_annual_meeting && ! empty($item['visible']) && ! empty($item['requires_registration'])) {
-                    if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
-                        $has_program_dinner = true;
-                    }
-                    $choices[] = $item;
-                }
-            }
-        }
-        if (! empty($meeting['modules']['dinner']) && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
-            $choices[] = array('key' => 'dinner', 'title' => (string) ($meeting['dinner']['title'] ?: 'Middag'));
-        }
-        return $choices;
+        return (bool) (array_diff((array) ($participant['dietary'] ?? array()), array('none')) || ! empty($participant['dietary_other']) || ! empty($participant['allergy_note']));
     }
 
-    private function date(int $timestamp): string
+    private function status(string $value): string
     {
-        return $timestamp ? wp_date('Y-m-d H:i', $timestamp, wp_timezone()) : '';
+        return array(RegistrationService::REGISTERED => 'Registrerad', RegistrationService::WAITLIST => 'Reservlista', RegistrationService::CANCELLED => 'Avbokad')[$value] ?? $value;
     }
+
+    private function date(int $timestamp): string { return $timestamp ? wp_date('Y-m-d H:i', $timestamp, wp_timezone()) : ''; }
 }

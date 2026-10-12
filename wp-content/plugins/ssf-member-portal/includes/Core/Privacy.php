@@ -42,11 +42,13 @@ final class Privacy
         }
         $registrations = get_posts(array('post_type' => RegistrationPostType::POST_TYPE, 'post_status' => 'private', 'meta_key' => '_ssf_am_email', 'meta_value' => sanitize_email($email), 'posts_per_page' => 50, 'paged' => $page));
         foreach ($registrations as $registration) {
+            $participants = (array) get_post_meta($registration->ID, '_ssf_am_participants', true);
             $data[] = array('group_id' => 'ssf-annual-meetings', 'group_label' => 'SSF Årsmöten', 'item_id' => 'ssf-annual-meeting-registration-' . $registration->ID, 'data' => array(
                 array('name' => 'Årsmöte', 'value' => get_the_title((int) $registration->post_parent)),
                 array('name' => 'Namn', 'value' => trim((string) get_post_meta($registration->ID, '_ssf_am_first_name', true) . ' ' . (string) get_post_meta($registration->ID, '_ssf_am_last_name', true))),
                 array('name' => 'Telefon', 'value' => (string) get_post_meta($registration->ID, '_ssf_am_phone', true)),
                 array('name' => 'Status', 'value' => (string) get_post_meta($registration->ID, '_ssf_am_status', true)),
+                array('name' => 'Deltagare', 'value' => implode(', ', array_map(static function (array $participant): string { return trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? '')); }, $participants))),
                 array('name' => 'Anmäld', 'value' => wp_date('c', (int) get_post_meta($registration->ID, '_ssf_am_submitted_at', true))),
             ));
         }
@@ -62,6 +64,15 @@ final class Privacy
             }
             update_post_meta($registration->ID, '_ssf_am_first_name', __('Anonymiserad', 'ssf-member-portal'));
             update_post_meta($registration->ID, '_ssf_am_last_name', __('deltagare', 'ssf-member-portal'));
+            $participants = (array) get_post_meta($registration->ID, '_ssf_am_participants', true);
+            foreach ($participants as &$participant) {
+                $participant['first_name'] = __('Anonymiserad', 'ssf-member-portal');
+                $participant['last_name'] = __('deltagare', 'ssf-member-portal');
+                $participant['email'] = $participant['phone'] = $participant['dietary_other'] = $participant['allergy_note'] = '';
+                $participant['vessels'] = $participant['dietary'] = array();
+            }
+            unset($participant);
+            update_post_meta($registration->ID, '_ssf_am_participants', $participants);
             update_post_meta($registration->ID, '_ssf_am_anonymised_at', gmdate('c'));
         }
         return array('items_removed' => ! empty($registrations), 'items_retained' => true, 'messages' => array(__('Årsmötesanmälningar har anonymiserats. Motioner bevaras som föreningshandlingar och bedöms manuellt vid behov.', 'ssf-member-portal')), 'done' => count($registrations) < 50);

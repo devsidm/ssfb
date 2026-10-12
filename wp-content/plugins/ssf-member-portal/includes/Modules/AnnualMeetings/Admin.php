@@ -79,7 +79,7 @@ final class Admin
         <?php if (isset($_GET['ssf_am_notice'])) : ?><div class="notice notice-success is-dismissible"><p><?php echo esc_html(sanitize_text_field(wp_unslash($_GET['ssf_am_notice']))); ?></p></div><?php endif; ?>
         <table class="widefat striped"><thead><tr><th><?php esc_html_e('Årsmöte', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Anmälda', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Program och mat', 'ssf-member-portal'); ?></th><th><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Åtgärder', 'ssf-member-portal'); ?></th></tr></thead><tbody>
         <?php foreach ($this->meetings->all() as $post) : $meeting = $this->meetings->data($post->ID); $registrations = $this->registrations->registrations($post->ID); $stats = $this->statistics($meeting, $registrations); $list_url = add_query_arg(array('post_type' => RegistrationPostType::POST_TYPE, 'ssf_am_meeting' => $post->ID), admin_url('edit.php')); ?>
-            <tr><td><strong><?php echo esc_html(get_the_title($post)); ?></strong><br><span class="description"><?php echo esc_html((string) $meeting['year']); ?></span></td><td><?php echo esc_html((string) $stats['registered']); ?> <?php esc_html_e('bekräftade', 'ssf-member-portal'); ?><br><?php echo esc_html(sprintf(__('Anmälda till årsmötet: %d', 'ssf-member-portal'), (int) $stats['meeting_attendees'])); ?><?php if ($stats['waitlist']) : ?><br><?php echo esc_html((string) $stats['waitlist']); ?> <?php esc_html_e('på reservlista', 'ssf-member-portal'); ?><?php endif; ?></td><td><?php foreach ($stats['selections'] as $label => $count) : ?><div><?php echo esc_html($label . ': ' . $count); ?></div><?php endforeach; ?></td><td><?php $excel_url = (string) get_post_meta($post->ID, '_ssf_am_sharepoint_excel_url', true); $sync = (string) get_post_meta($post->ID, '_ssf_am_sharepoint_excel_synced_at', true); if ($excel_url) : ?><a href="<?php echo esc_url($excel_url); ?>" target="_blank" rel="noopener"><?php esc_html_e('Öppna deltagarlista', 'ssf-member-portal'); ?></a><?php endif; ?><?php if ($sync) : ?><br><span class="description"><?php echo esc_html(sprintf(__('Synkad %s', 'ssf-member-portal'), $sync)); ?></span><?php endif; ?></td><td><p><a class="button" href="<?php echo esc_url($list_url); ?>"><?php esc_html_e('Visa deltagare', 'ssf-member-portal'); ?></a></p><?php $this->export_link($post->ID, 'csv', __('Ladda ner CSV', 'ssf-member-portal')); ?><br><?php $this->export_link($post->ID, 'xlsx', __('Ladda ner Excel', 'ssf-member-portal')); ?><p><?php $this->retry_link($post->ID); ?></p></td></tr>
+            <tr><td><strong><?php echo esc_html(get_the_title($post)); ?></strong><br><span class="description"><?php echo esc_html((string) $meeting['year']); ?></span></td><td><?php echo esc_html((string) $stats['registered']); ?> <?php esc_html_e('bekräftade anmälningar', 'ssf-member-portal'); ?><br><?php echo esc_html(sprintf(__('Deltagare: %d', 'ssf-member-portal'), (int) $stats['participants'])); ?><br><?php echo esc_html(sprintf(__('Specialkost: %d', 'ssf-member-portal'), (int) $stats['special_diets'])); ?><?php if ($stats['waitlist']) : ?><br><?php echo esc_html((string) $stats['waitlist']); ?> <?php esc_html_e('på reservlista', 'ssf-member-portal'); ?><?php endif; ?></td><td><?php foreach ($stats['selections'] as $label => $count) : ?><div><?php echo esc_html($label . ': ' . $count); ?></div><?php endforeach; ?></td><td><?php $excel_url = (string) get_post_meta($post->ID, '_ssf_am_sharepoint_excel_url', true); $sync = (string) get_post_meta($post->ID, '_ssf_am_sharepoint_excel_synced_at', true); if ($excel_url) : ?><a href="<?php echo esc_url($excel_url); ?>" target="_blank" rel="noopener"><?php esc_html_e('Öppna deltagarlista', 'ssf-member-portal'); ?></a><?php endif; ?><?php if ($sync) : ?><br><span class="description"><?php echo esc_html(sprintf(__('Synkad %s', 'ssf-member-portal'), $sync)); ?></span><?php endif; ?></td><td><p><a class="button" href="<?php echo esc_url($list_url); ?>"><?php esc_html_e('Visa deltagare', 'ssf-member-portal'); ?></a></p><?php $this->export_link($post->ID, 'csv', __('Ladda ner CSV', 'ssf-member-portal')); ?><br><?php $this->export_link($post->ID, 'xlsx', __('Ladda ner Excel', 'ssf-member-portal')); ?><p><?php $this->retry_link($post->ID); ?></p></td></tr>
         <?php endforeach; ?>
         <?php if (! $this->meetings->all()) : ?><tr><td colspan="5"><?php esc_html_e('Skapa först ett årsmöte.', 'ssf-member-portal'); ?></td></tr><?php endif; ?>
         </tbody></table></div>
@@ -92,7 +92,7 @@ final class Admin
             'cb' => $columns['cb'] ?? '<input type="checkbox">',
             'title' => __('Namn', 'ssf-member-portal'),
             'ssf_am_meeting' => __('Årsmöte', 'ssf-member-portal'),
-            'ssf_am_attendance' => __('Deltar på årsmötet', 'ssf-member-portal'),
+            'ssf_am_attendance' => __('Antal deltagare', 'ssf-member-portal'),
             'ssf_am_relationship' => __('Medlemstyp', 'ssf-member-portal'),
             'ssf_am_vessels' => __('Fartyg', 'ssf-member-portal'),
             'ssf_am_contact' => __('Kontakt', 'ssf-member-portal'),
@@ -112,7 +112,7 @@ final class Admin
         $registration = $this->registrations->details($post_id, $meeting);
         switch ($column) {
             case 'ssf_am_meeting': echo esc_html(get_the_title((int) $meeting['id']) . ' ' . $meeting['year']); break;
-            case 'ssf_am_attendance': echo esc_html($registration['meeting_attendance_label']); break;
+            case 'ssf_am_attendance': echo esc_html((string) $registration['participant_count']); break;
             case 'ssf_am_relationship': echo esc_html($registration['relationship_label']); break;
             case 'ssf_am_vessels': echo esc_html(implode(', ', array_merge($registration['represented_vessels'], $registration['associated_vessels']))); break;
             case 'ssf_am_contact': echo esc_html($registration['email']); ?><br><?php echo esc_html($registration['phone']); break;
@@ -142,7 +142,7 @@ final class Admin
         <select name="ssf_am_status"><option value=""><?php esc_html_e('Alla statusar', 'ssf-member-portal'); ?></option><option value="registered" <?php selected($selected_status, 'registered'); ?>><?php esc_html_e('Bekräftad', 'ssf-member-portal'); ?></option><option value="waitlist" <?php selected($selected_status, 'waitlist'); ?>><?php esc_html_e('Reservlista', 'ssf-member-portal'); ?></option><option value="cancelled" <?php selected($selected_status, 'cancelled'); ?>><?php esc_html_e('Avbokad', 'ssf-member-portal'); ?></option></select>
         <select name="ssf_am_attendance"><option value=""><?php esc_html_e('Alla årsmötesval', 'ssf-member-portal'); ?></option><option value="yes" <?php selected($selected_attendance, 'yes'); ?>><?php esc_html_e('Deltar på årsmötet', 'ssf-member-portal'); ?></option></select>
         <?php if ($selected_meeting) : $meeting = $this->meetings->data($selected_meeting); $vessels = array(); foreach ($this->registrations->registrations($selected_meeting) as $registration) { $data = $this->registrations->details($registration->ID, $meeting); $vessels = array_merge($vessels, $data['represented_vessels'], $data['associated_vessels']); } $vessels = array_values(array_unique(array_filter($vessels))); ?>
-            <select name="ssf_am_program"><option value=""><?php esc_html_e('Alla aktivitetsval', 'ssf-member-portal'); ?></option><?php foreach ($this->meetings->registration_choices($meeting) as $item) : ?><option value="<?php echo esc_attr($item['key']); ?>" <?php selected($selected_program, $item['key']); ?>><?php echo esc_html($item['title']); ?></option><?php endforeach; ?></select>
+            <select name="ssf_am_program"><option value=""><?php esc_html_e('Alla aktivitetsval', 'ssf-member-portal'); ?></option><?php foreach ($this->meetings->participant_activities($meeting) as $item) : ?><option value="<?php echo esc_attr($item['key']); ?>" <?php selected($selected_program, $item['key']); ?>><?php echo esc_html($item['title']); ?></option><?php endforeach; ?></select>
             <select name="ssf_am_food"><option value=""><?php esc_html_e('Alla matval', 'ssf-member-portal'); ?></option><?php foreach ($meeting['food_options'] as $food) : ?><option value="<?php echo esc_attr($food); ?>" <?php selected($selected_food, $food); ?>><?php echo esc_html($food); ?></option><?php endforeach; ?></select>
             <select name="ssf_am_vessel"><option value=""><?php esc_html_e('Alla fartyg', 'ssf-member-portal'); ?></option><?php foreach ($vessels as $vessel) : ?><option value="<?php echo esc_attr($vessel); ?>" <?php selected($selected_vessel, $vessel); ?>><?php echo esc_html($vessel); ?></option><?php endforeach; ?></select>
             <?php $this->export_link($selected_meeting, 'csv', __('Exportera CSV', 'ssf-member-portal')); echo ' '; $this->export_link($selected_meeting, 'xlsx', __('Exportera Excel', 'ssf-member-portal')); endif;
@@ -194,7 +194,8 @@ final class Admin
         $meeting = $this->meetings->data((int) $post->post_parent);
         $registration = $this->registrations->details($post->ID, $meeting);
         ?>
-        <table class="widefat striped"><tbody><tr><th><?php esc_html_e('Registrerings-ID', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['registration_id']); ?></td></tr><tr><th><?php esc_html_e('Kontakt', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['email']); ?><br><?php echo esc_html($registration['phone']); ?></td></tr><tr><th><?php esc_html_e('Relation', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['relationship_label']); ?></td></tr><tr><th><?php esc_html_e('Årsmöte', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['meeting_attendance_label']); ?></td></tr><tr><th><?php esc_html_e('Fartyg', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', array_merge($registration['represented_vessels'], $registration['associated_vessels']))); ?></td></tr><tr><th><?php esc_html_e('Deltagande', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', $registration['program_labels'])); ?></td></tr><tr><th><?php esc_html_e('Mat', 'ssf-member-portal'); ?></th><td><?php echo esc_html(implode(', ', $registration['food'])); ?><?php if ($registration['food_note']) : ?><br><?php echo esc_html($registration['food_note']); ?><?php endif; ?></td></tr><tr><th><?php esc_html_e('Bekräftelsemejl', 'ssf-member-portal'); ?></th><td><?php $this->confirmation_status($registration); ?></td></tr><tr><th><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['sharepoint_sync_status']); ?><?php if ($registration['sharepoint_last_error']) : ?><br><span class="description"><?php echo esc_html($registration['sharepoint_last_error']); ?></span><?php endif; ?></td></tr></tbody></table>
+        <table class="widefat striped"><tbody><tr><th><?php esc_html_e('Registrerings-ID', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['registration_id']); ?></td></tr><tr><th><?php esc_html_e('Huvudkontakt', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['email']); ?><br><?php echo esc_html($registration['phone']); ?></td></tr><tr><th><?php esc_html_e('Antal deltagare', 'ssf-member-portal'); ?></th><td><?php echo esc_html((string) $registration['participant_count']); ?></td></tr><tr><th><?php esc_html_e('Bekräftelsemejl', 'ssf-member-portal'); ?></th><td><?php $this->confirmation_status($registration); ?></td></tr><tr><th><?php esc_html_e('SharePoint', 'ssf-member-portal'); ?></th><td><?php echo esc_html($registration['sharepoint_sync_status']); ?><?php if ($registration['sharepoint_last_error']) : ?><br><span class="description"><?php echo esc_html($registration['sharepoint_last_error']); ?></span><?php endif; ?></td></tr></tbody></table>
+        <h3><?php esc_html_e('Deltagare och aktiviteter', 'ssf-member-portal'); ?></h3><table class="widefat striped"><thead><tr><th><?php esc_html_e('Namn', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Roll/fartyg', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Aktiviteter', 'ssf-member-portal'); ?></th><th><?php esc_html_e('Specialkost', 'ssf-member-portal'); ?></th></tr></thead><tbody><?php foreach ($registration['participants'] as $participant) : ?><tr><td><strong><?php echo esc_html(trim($participant['first_name'] . ' ' . $participant['last_name'])); ?></strong><?php if ($participant['email']) : ?><br><?php echo esc_html($participant['email']); ?><?php endif; ?></td><td><?php echo esc_html($participant['relationship_label']); ?><?php if ($participant['vessels']) : ?><br><?php echo esc_html(implode(', ', $participant['vessels'])); ?><?php endif; ?></td><td><?php echo esc_html(implode(', ', $participant['activity_labels'])); ?></td><td><?php echo esc_html(implode(' · ', array_filter(array($participant['dietary_label'], $participant['allergy_note'])))); ?></td></tr><?php endforeach; ?></tbody></table>
         <?php if ($registration['answers']) : ?><h3><?php esc_html_e('Övriga svar', 'ssf-member-portal'); ?></h3><ul><?php foreach ($registration['answers'] as $key => $answer) : ?><li><strong><?php echo esc_html($key); ?>:</strong> <?php echo esc_html(is_array($answer) ? implode(', ', $answer) : $answer); ?></li><?php endforeach; ?></ul><?php endif; ?>
         <?php $this->resend_link($post->ID); ?>
         <?php
@@ -226,13 +227,13 @@ final class Admin
         if ($program || $food || $vessel) {
             $registrations = array_values(array_filter($registrations, function (\WP_Post $registration) use ($program, $food, $vessel): bool {
                 $data = $this->registrations->details($registration->ID);
-                if ($program && empty($data['program'][$program])) {
+                if ($program && ! array_filter($data['participants'], static function (array $participant) use ($program): bool { return ! empty($participant['activities'][$program]); })) {
                     return false;
                 }
-                if ($food && ! in_array($food, $data['food'], true)) {
+                if ($food && ! array_filter($data['participants'], static function (array $participant) use ($food): bool { return in_array($food, (array) $participant['dietary'], true); })) {
                     return false;
                 }
-                return ! $vessel || in_array($vessel, array_merge($data['represented_vessels'], $data['associated_vessels']), true);
+                return ! $vessel || array_filter($data['participants'], static function (array $participant) use ($vessel): bool { return in_array($vessel, (array) $participant['vessels'], true); });
             }));
         }
         $data = (new RegistrationExport())->data($meeting, $registrations);
@@ -280,7 +281,7 @@ final class Admin
 
     private function statistics(array $meeting, array $registrations): array
     {
-        $statistics = array('registered' => 0, 'waitlist' => 0, 'meeting_attendees' => 0, 'selections' => array());
+        $statistics = array('registered' => 0, 'waitlist' => 0, 'meeting_attendees' => 0, 'participants' => 0, 'special_diets' => 0, 'selections' => array());
         foreach ($registrations as $post) {
             $registration = $this->registrations->details($post->ID, $meeting);
             if (RegistrationService::REGISTERED === $registration['status']) {
@@ -292,14 +293,13 @@ final class Admin
             if (RegistrationService::CANCELLED === $registration['status']) {
                 continue;
             }
-            if ('yes' === $registration['meeting_attendance']) {
-                $statistics['meeting_attendees']++;
-            }
-            foreach ($registration['program_labels'] as $label) {
-                $statistics['selections'][$label] = ($statistics['selections'][$label] ?? 0) + 1;
-            }
-            foreach ($registration['food'] as $food) {
-                $statistics['selections'][$food] = ($statistics['selections'][$food] ?? 0) + 1;
+            $statistics['participants'] += (int) $registration['participant_count'];
+            $statistics['special_diets'] += (int) $registration['special_diet_count'];
+            foreach ($registration['participants'] as $participant) {
+                if (! empty($participant['activities']['annual_meeting'])) { $statistics['meeting_attendees']++; }
+                foreach ($participant['activity_labels'] as $label) {
+                    $statistics['selections'][$label] = ($statistics['selections'][$label] ?? 0) + 1;
+                }
             }
         }
         return $statistics;

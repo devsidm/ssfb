@@ -1,94 +1,161 @@
 (function () {
   'use strict';
 
-  function refreshRelations(form) {
-    var checked = form.querySelector('[name="relationship"]:checked');
-    var relationship = checked ? checked.value : '';
-    form.querySelectorAll('[data-ssf-relationship]').forEach(function (element) {
-      element.hidden = element.getAttribute('data-ssf-relationship') !== relationship;
-    });
-    var association = form.querySelector('[data-ssf-associated-toggle]');
-    var vessels = form.querySelector('[data-ssf-associated-vessels]');
-    if (vessels) {
-      vessels.hidden = !association || !association.checked;
-    }
+  function personName(card, index) {
+    var fields = card.querySelectorAll('[data-ssf-person-name]');
+    var name = Array.prototype.map.call(fields, function (field) { return field.value.trim(); }).join(' ').trim();
+    return name || 'Person ' + (index + 1);
   }
 
-  function refreshFood(form) {
-    var section = form.querySelector('[data-ssf-food-section]');
-    if (!section) {
-      return;
-    }
-    var hasFoodChoice = !!form.querySelector('[data-ssf-food-choice="1"]:checked');
-    section.hidden = !hasFoodChoice;
-    if (!hasFoodChoice) {
-      section.querySelectorAll('input[type="checkbox"]').forEach(function (input) {
-        input.checked = false;
+  function reindex(form) {
+    var cards = form.querySelectorAll('[data-ssf-person]');
+    cards.forEach(function (card, index) {
+      var oldIndex = card.getAttribute('data-person-index');
+      card.setAttribute('data-person-index', index);
+      card.querySelectorAll('[name]').forEach(function (field) {
+        field.name = field.name.replace('participants[' + oldIndex + ']', 'participants[' + index + ']');
       });
-      section.querySelectorAll('textarea').forEach(function (textarea) {
-        textarea.value = '';
-      });
-    }
+      card.querySelector('[data-ssf-person-heading]').textContent = personName(card, index);
+    });
+    syncPeople(form);
   }
 
-  document.querySelectorAll('[data-ssf-error-message]').forEach(function (message) {
-    message.focus();
-  });
-
-  document.querySelectorAll('.ssf-am-calendar-menu').forEach(function (menu) {
-    menu.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && menu.open) {
-        menu.open = false;
-        menu.querySelector('summary').focus();
-      }
+  function syncPeople(form) {
+    var people = Array.prototype.map.call(form.querySelectorAll('[data-ssf-person]'), function (card, index) {
+      var idField = card.querySelector('input[type="hidden"][name$="[id]"]');
+      var id = card.getAttribute('data-person-id') || (idField ? idField.value : 'person_' + (index + 1));
+      card.setAttribute('data-person-id', id);
+      return { index: index, id: id, name: personName(card, index) };
     });
-  });
-
-  document.querySelectorAll('.ssf-am-form').forEach(function (form) {
-    refreshRelations(form);
-    refreshFood(form);
-    form.addEventListener('change', function (event) {
-      if (event.target.matches('[name="relationship"], [data-ssf-associated-toggle]')) {
-        refreshRelations(form);
-      }
-      if (event.target.matches('[data-ssf-food-choice]')) {
-        refreshFood(form);
-      }
+    form.querySelectorAll('[data-ssf-activity]').forEach(function (activity) {
+      var key = activity.getAttribute('data-ssf-activity');
+      var container = activity.querySelector('[data-ssf-activity-people]');
+      var selected = {};
+      container.querySelectorAll('input:checked').forEach(function (input) { selected[input.getAttribute('data-person-id')] = true; });
+      container.innerHTML = '';
+      people.forEach(function (person) {
+        var label = document.createElement('label');
+        label.className = 'ssf-am-option';
+        label.innerHTML = '<input type="checkbox" data-person-id="' + person.id + '" name="participants[' + person.index + '][activities][' + key + ']" value="1"> <span></span>';
+        label.querySelector('span').textContent = person.name;
+        label.querySelector('input').checked = !!selected[person.id];
+        label.querySelector('input').disabled = activity.getAttribute('data-disabled') === '1' && !selected[person.id];
+        container.appendChild(label);
+      });
     });
+    syncDiet(form, people);
+    refreshCounts(form);
+  }
+
+  function syncDiet(form, people) {
+    var container = form.querySelector('[data-ssf-diet-list]');
+    var existing = {};
+    container.querySelectorAll('[data-ssf-diet-person]').forEach(function (card) {
+      var oldIndex = card.getAttribute('data-ssf-diet-person');
+      var person = people[Number(oldIndex)];
+      var id = card.getAttribute('data-person-id') || (person ? person.id : '');
+      if (id) { card.setAttribute('data-person-id', id); existing[id] = card; }
+    });
+    people.forEach(function (person) {
+      var card = existing[person.id];
+      if (!card) {
+        card = document.createElement('article');
+        card.className = 'ssf-am-diet-card';
+        card.setAttribute('data-ssf-diet-person', person.index);
+        card.setAttribute('data-person-id', person.id);
+        card.innerHTML = '<h3></h3><div class="ssf-am-options"></div><p><label>Annan specialkost<input name="participants[' + person.index + '][dietary_other]"></label></p><p><label>Allergi / övrig information<textarea name="participants[' + person.index + '][allergy_note]" rows="2"></textarea></label></p>';
+        [['none', 'Ingen specialkost'], ['vegetarian', 'Vegetarisk'], ['vegan', 'Vegansk'], ['gluten_free', 'Glutenfri'], ['lactose_free', 'Laktosfri'], ['other', 'Annan']].forEach(function (option) {
+          card.querySelector('.ssf-am-options').insertAdjacentHTML('beforeend', '<label class="ssf-am-option"><input type="checkbox" name="participants[' + person.index + '][dietary][]" value="' + option[0] + '"> ' + option[1] + '</label>');
+        });
+        container.appendChild(card);
+      }
+      card.setAttribute('data-ssf-diet-person', person.index);
+      card.querySelectorAll('[name]').forEach(function (field) { field.name = field.name.replace(/participants\[\d+\]/, 'participants[' + person.index + ']'); });
+      card.querySelector('h3').textContent = person.name;
+      var hasFood = !!form.querySelector('[data-food="1"] input[name^="participants[' + person.index + ']"]:checked');
+      card.hidden = !hasFood;
+    });
+    var active = {};
+    people.forEach(function (person) { active[person.id] = true; });
+    Object.keys(existing).forEach(function (id) { if (!active[id]) existing[id].remove(); });
+  }
+
+  function refreshCounts(form) {
+    form.querySelectorAll('[data-ssf-activity]').forEach(function (activity) {
+      var count = activity.querySelectorAll('input:checked').length;
+      activity.querySelector('[data-ssf-activity-count]').textContent = count + (count === 1 ? ' person' : ' personer');
+    });
+  }
+
+  function buildReview(form) {
+    var review = form.querySelector('[data-ssf-review]');
+    review.innerHTML = '';
+    form.querySelectorAll('[data-ssf-person]').forEach(function (card, index) {
+      var article = document.createElement('article');
+      article.className = 'ssf-am-review-person';
+      var activities = [];
+      form.querySelectorAll('[data-ssf-activity]').forEach(function (activity) {
+        if (activity.querySelector('input[name^="participants[' + index + ']"]:checked')) activities.push(activity.querySelector('h3').textContent);
+      });
+      article.innerHTML = '<h3></h3><p></p>';
+      article.querySelector('h3').textContent = personName(card, index);
+      article.querySelector('p').textContent = activities.length ? activities.join(' · ') : 'Inga aktiviteter valda';
+      review.appendChild(article);
+    });
+    var summary = document.createElement('article');
+    summary.className = 'ssf-am-review-summary';
+    summary.innerHTML = '<h3>Sammanfattning</h3><p>' + form.querySelectorAll('[data-ssf-person]').length + ' deltagare</p>';
+    form.querySelectorAll('[data-ssf-activity]').forEach(function (activity) {
+      summary.insertAdjacentHTML('beforeend', '<div><span></span><strong>' + activity.querySelectorAll('input:checked').length + '</strong></div>');
+      summary.lastElementChild.querySelector('span').textContent = activity.querySelector('h3').textContent;
+    });
+    review.appendChild(summary);
+  }
+
+  document.querySelectorAll('[data-ssf-error-message]').forEach(function (message) { message.focus(); });
+  document.querySelectorAll('.ssf-am-calendar-menu').forEach(function (menu) { menu.addEventListener('keydown', function (event) { if (event.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } }); });
+  document.querySelectorAll('[data-ssf-group-registration]').forEach(function (form) {
+    var current = 1;
+    form.classList.add('is-step-flow');
+    function show(step) {
+      current = Math.max(1, Math.min(5, step));
+      form.querySelectorAll('[data-ssf-step]').forEach(function (section) { section.hidden = Number(section.getAttribute('data-ssf-step')) !== current; });
+      form.querySelectorAll('[data-ssf-step-indicator]').forEach(function (item) { item.classList.toggle('is-active', Number(item.getAttribute('data-ssf-step-indicator')) === current); });
+      if (current === 4) syncPeople(form);
+      if (current === 5) buildReview(form);
+      form.querySelector('[data-ssf-step="' + current + '"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function currentStepIsValid() {
+      var section = form.querySelector('[data-ssf-step="' + current + '"]');
+      var fields = section ? section.querySelectorAll('input, select, textarea') : [];
+      for (var index = 0; index < fields.length; index++) {
+        if (!fields[index].checkValidity()) { fields[index].reportValidity(); return false; }
+      }
+      if (current === 3) {
+        var people = form.querySelectorAll('[data-ssf-person]');
+        for (var personIndex = 0; personIndex < people.length; personIndex++) {
+          if (!section.querySelector('input[name^="participants[' + personIndex + '][activities]"]:checked')) {
+            window.alert('Välj minst en aktivitet för ' + personName(people[personIndex], personIndex) + '.');
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+    syncPeople(form); show(1);
+    form.addEventListener('input', function (event) { if (event.target.matches('[data-ssf-person-name]')) syncPeople(form); });
+    form.addEventListener('change', function () { refreshCounts(form); syncDiet(form, Array.prototype.map.call(form.querySelectorAll('[data-ssf-person]'), function (card, index) { return { index: index, name: personName(card, index) }; })); });
     form.addEventListener('click', function (event) {
-      var add = event.target.closest('[data-ssf-add-vessel]');
-      if (add) {
-        var group = add.previousElementSibling;
-        if (!group || !group.hasAttribute('data-ssf-vessels')) {
-          return;
-        }
-        var first = group.querySelector('input');
-        if (!first) {
-          return;
-        }
-        var item = document.createElement('span');
-        item.className = 'ssf-am-vessel';
-        item.innerHTML = '<input name="' + first.name + '" placeholder="Fartygsnamn"><button type="button" class="ssf-am-icon-button" data-ssf-remove-vessel aria-label="Ta bort fartyg">×</button>';
-        group.appendChild(item);
-        item.querySelector('input').focus();
+      if (event.target.closest('[data-ssf-next]')) { if (currentStepIsValid()) show(current + 1); }
+      if (event.target.closest('[data-ssf-back]')) show(current - 1);
+      if (event.target.closest('[data-ssf-add-person]')) {
+        var index = form.querySelectorAll('[data-ssf-person]').length;
+        var html = form.querySelector('[data-ssf-person-template]').innerHTML.replaceAll('__INDEX__', index).replaceAll('__NUMBER__', index + 1).replaceAll('__TOKEN__', Date.now());
+        form.querySelector('[data-ssf-participants]').insertAdjacentHTML('beforeend', html); reindex(form);
       }
-      var remove = event.target.closest('[data-ssf-remove-vessel]');
-      if (remove) {
-        var vessel = remove.closest('.ssf-am-vessel');
-        var container = vessel && vessel.parentElement;
-        if (vessel && container && container.querySelectorAll('.ssf-am-vessel').length > 1) {
-          vessel.remove();
-        } else if (vessel) {
-          vessel.querySelector('input').value = '';
-        }
-      }
+      var remove = event.target.closest('[data-ssf-remove-person]');
+      if (remove) { remove.closest('[data-ssf-person]').remove(); reindex(form); }
     });
-    form.addEventListener('submit', function () {
-      var button = form.querySelector('button[type="submit"]');
-      if (button) {
-        button.disabled = true;
-        button.setAttribute('aria-disabled', 'true');
-      }
-    });
+    form.addEventListener('submit', function () { var button = form.querySelector('[data-ssf-submit]'); if (button) { button.disabled = true; button.textContent = button.getAttribute('data-sending-label'); } });
   });
 }());

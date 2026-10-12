@@ -1,36 +1,43 @@
 <?php
-
 namespace SSF\MemberPortal\Modules\AnnualMeetings;
 
-if (! defined('ABSPATH')) {
-    exit;
-}
+if (! defined('ABSPATH')) { exit; }
 
-/**
- * Small dependency-free XLSX writer for the registration projection.
- */
+/** Small dependency-free XLSX writer for registration projections. */
 final class ExcelWriter
 {
     public function create(array $headers, array $rows, string $filename)
     {
-        if (! class_exists('ZipArchive')) {
-            return new \WP_Error('annual_meeting_zip_missing', __('Servern saknar ZipArchive och kan inte skapa Excel-filen.', 'ssf-member-portal'));
-        }
+        return $this->create_workbook(array(array('name' => 'Anmälningar', 'headers' => $headers, 'rows' => $rows)), $filename);
+    }
 
+    public function create_workbook(array $sheets, string $filename)
+    {
+        if (! class_exists('ZipArchive')) { return new \WP_Error('annual_meeting_zip_missing', __('Servern saknar ZipArchive och kan inte skapa Excel-filen.', 'ssf-member-portal')); }
         $path = trailingslashit(get_temp_dir()) . 'ssf-annual-meeting-' . wp_generate_password(16, false, false) . '.xlsx';
         $zip = new \ZipArchive();
-        if (true !== $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE)) {
-            return new \WP_Error('annual_meeting_xlsx_create', __('Excel-filen kunde inte skapas på servern.', 'ssf-member-portal'));
+        if (true !== $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE)) { return new \WP_Error('annual_meeting_xlsx_create', __('Excel-filen kunde inte skapas på servern.', 'ssf-member-portal')); }
+        $types = $sheet_xml = $relations = '';
+        foreach (array_values($sheets) as $index => $sheet) {
+            $number = $index + 1;
+            $types .= '<Override PartName="/xl/worksheets/sheet' . $number . '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+            $name = htmlspecialchars($this->sheet_name((string) ($sheet['name'] ?? ('Blad ' . $number))), ENT_XML1 | ENT_COMPAT, 'UTF-8');
+            $sheet_xml .= '<sheet name="' . $name . '" sheetId="' . $number . '" r:id="rId' . $number . '"/>';
+            $relations .= '<Relationship Id="rId' . $number . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' . $number . '.xml"/>';
+            $zip->addFromString('xl/worksheets/sheet' . $number . '.xml', $this->worksheet((array) ($sheet['headers'] ?? array()), (array) ($sheet['rows'] ?? array())));
         }
-
-        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' . $types . '</Types>');
         $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
-        $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Anmälningar" sheetId="1" r:id="rId1"/></sheets></workbook>');
-        $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
-        $zip->addFromString('xl/worksheets/sheet1.xml', $this->worksheet($headers, $rows));
+        $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' . $sheet_xml . '</sheets></workbook>');
+        $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . $relations . '</Relationships>');
         $zip->close();
-
         return is_readable($path) ? $path : new \WP_Error('annual_meeting_xlsx_read', __('Excel-filen kunde inte läsas efter skapandet.', 'ssf-member-portal'));
+    }
+
+    private function sheet_name(string $name): string
+    {
+        $name = preg_replace('/[\\\\\/\?\*\[\]:]/u', '-', $name) ?: 'Blad';
+        return function_exists('mb_substr') ? mb_substr($name, 0, 31) : substr($name, 0, 31);
     }
 
     private function worksheet(array $headers, array $rows): string
@@ -47,19 +54,13 @@ final class ExcelWriter
             }
             $xml .= '</row>';
         }
-        $last_column = $this->column(max(1, count($headers)));
-        $last_row = max(1, count($all_rows));
-        return $xml . '</sheetData><autoFilter ref="A1:' . $last_column . $last_row . '"/></worksheet>';
+        return $xml . '</sheetData><autoFilter ref="A1:' . $this->column(max(1, count($headers))) . max(1, count($all_rows)) . '"/></worksheet>';
     }
 
     private function column(int $number): string
     {
         $value = '';
-        while ($number > 0) {
-            $number--;
-            $value = chr(65 + ($number % 26)) . $value;
-            $number = intdiv($number, 26);
-        }
+        while ($number > 0) { $number--; $value = chr(65 + ($number % 26)) . $value; $number = intdiv($number, 26); }
         return $value;
     }
 }
