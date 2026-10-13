@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.9",
-    "build":  "20261013.4",
-    "built_at":  "2026-10-13T17:32:20.3975869Z",
+    "build":  "20261013.5",
+    "built_at":  "2026-10-13T18:29:49.3841648Z",
     "source":  "codex",
-    "source_revision":  "25c858fa610b14ce398c8a5136d5fafdc2cf1bec",
-    "description":  "Simplify annual meeting registration flow and make vessel optional",
+    "source_revision":  "070e62db03d4d79e0416e487dd649dff104ae1f2",
+    "description":  "Add Teams meeting links to annual meeting activities and confirmations",
     "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
     "components":  [
                        "ssf-member-portal"
