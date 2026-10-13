@@ -145,7 +145,7 @@ $resources = array_values(array_filter($resources, static function (array $resou
     <section id="ssf-am-registration" class="ssf-am-registration-cta" aria-label="<?php esc_attr_e('Anmälan', 'ssf-member-portal'); ?>">
         <div><strong><?php $registration_closed ? esc_html_e('Anmälan', 'ssf-member-portal') : esc_html_e('Anmäl ditt deltagande', 'ssf-member-portal'); ?></strong><?php if (! $registration_closed) : ?><p><?php esc_html_e('Ange om du deltar på själva årsmötet. I samma formulär väljer du middag och aktiviteter.', 'ssf-member-portal'); ?></p><?php endif; ?></div>
         <?php if (! empty($registration_state['can_register'])) : ?>
-            <a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Gå till anmälan', 'ssf-member-portal'); ?></a>
+            <a class="ssf-am-button" href="<?php echo esc_url($this->meetings->registration_url()); ?>"><?php esc_html_e('Anmäl dig', 'ssf-member-portal'); ?></a>
         <?php else : ?>
             <span class="ssf-am-badge"><?php echo esc_html((string) ($registration_state['label'] ?? '')); ?></span>
         <?php endif; ?>

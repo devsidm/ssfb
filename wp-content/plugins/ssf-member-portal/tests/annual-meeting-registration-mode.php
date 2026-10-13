@@ -213,7 +213,7 @@ $hidden_html = $render($meeting, $hidden_state);
 foreach (array('Simrishamn', 'Kajen 1', 'Vägbeskrivning', 'Lägg programmet i kalendern', 'Varmt välkommen') as $required) {
     check(str_contains($hidden_html, $required), 'Hidden components removed core meeting information: ' . $required);
 }
-foreach (array('ssf-am-registration', 'Gå till anmälan', 'Anmälan är inte', 'Anmälan är stängd', 'Avstängd', 'Anmälan krävs', 'Anmäl gärna', 'ssf-am-program', 'Kallelsetext', 'ssf-am-motion-row', 'ssf-am-document-grid', 'Handling 1', 'ssf-am-contact', 'href="#ssf-am-') as $forbidden) {
+foreach (array('ssf-am-registration', 'Anmäl dig', 'Anmälan är inte', 'Anmälan är stängd', 'Avstängd', 'Anmälan krävs', 'Anmäl gärna', 'ssf-am-program', 'Kallelsetext', 'ssf-am-motion-row', 'ssf-am-document-grid', 'Handling 1', 'ssf-am-contact', 'href="#ssf-am-') as $forbidden) {
     check(! str_contains($hidden_html, $forbidden), 'Hidden component leaked UI: ' . $forbidden);
 }
 check(substr_count($hidden_html, '<h2>Mer information kommer</h2>') === 1, 'The shared advance notice was missing or duplicated.');
@@ -248,13 +248,18 @@ $meeting = $module->data(10);
 $open_state = $service->registration_state($meeting, get_post(10));
 check($meeting['registration_mode'] === 'open' && $meeting['registration_visible'] && $meeting['registration_open'] && $open_state['can_register'], 'Visible open registration did not persist or enable registration.');
 $open_html = $render($meeting, $open_state);
-foreach (array('ssf-am-registration', 'Gå till anmälan', 'Kallelsetext', 'ssf-am-motion-row', 'Handling 1', 'ssf-am-contact') as $required) {
+foreach (array('ssf-am-registration', 'Anmäl dig', 'Kallelsetext', 'ssf-am-motion-row', 'Handling 1', 'ssf-am-contact') as $required) {
     check(str_contains($open_html, $required), 'Visible component did not reappear: ' . $required);
 }
 $form_html = $frontend->registration_shortcode();
 check(str_contains($form_html, 'ssf-am-form') && str_contains($form_html, 'ssf_member_portal_submit_meeting_registration'), 'Open mode did not render the existing registration form.');
-check(str_contains($form_html, 'Lägg till person') && str_contains($form_html, 'data-ssf-step="3"') && str_contains($form_html, '[activities][annual_meeting]'), 'The per-person annual-meeting activity choice was not rendered.');
+check(str_contains($form_html, 'Lägg till person') && str_contains($form_html, 'data-ssf-step="1"') && str_contains($form_html, '1. Deltagare'), 'Registration did not open directly on the participant step.');
+check(substr_count($form_html, '<section class="ssf-am-step"') === 3 && str_contains($form_html, 'Steg 1 av 3 – Deltagare') && str_contains($form_html, 'Steg 2 av 3 – Program &amp; aktiviteter') && str_contains($form_html, 'Steg 3 av 3 – Granska'), 'Registration progress did not expose exactly three meaningful steps.');
+check(! str_contains($form_html, '1. Årsmöteshelgen') && str_contains($form_html, 'data-ssf-step="2"') && str_contains($form_html, '[activities][annual_meeting]'), 'The redundant intro step remained or participant activities were not moved to step two.');
 check(! str_contains($form_html, 'name="meeting_attendance"'), 'The obsolete registration-level attendance choice was rendered.');
+$wizard_js = file_get_contents(__DIR__ . '/../assets/js/annual-meetings.js');
+check(str_contains($wizard_js, 'Math.min(3, step)') && str_contains($wizard_js, 'if (current === 2)') && str_contains($wizard_js, 'if (current === 3) buildReview(form)'), 'Wizard state was not reduced to the three-step flow.');
+check(str_contains($wizard_js, 'show(current + 1)') && str_contains($wizard_js, 'show(current - 1)'), 'Wizard next/back navigation was not preserved.');
 $question_program = $meeting['program'];
 foreach ($question_program as &$activity) {
     if ('dinner' === ($activity['key'] ?? '')) {
@@ -283,7 +288,7 @@ $GLOBALS['meeting_options']['ssf_member_portal_active_meeting_id'] = 11;
 check($service->registration_state($meeting, get_post(10))['status'] === 'closed', 'Closed historical meeting lost its closed status.');
 $GLOBALS['meeting_options']['ssf_member_portal_active_meeting_id'] = 10;
 $closed_html = $render($meeting, $closed_state);
-check(str_contains($closed_html, 'Anmälan är stängd') && ! str_contains($closed_html, 'Gå till anmälan'), 'Closed mode did not show its status correctly.');
+check(str_contains($closed_html, 'Anmälan är stängd') && ! str_contains($closed_html, 'Anmäl dig'), 'Closed mode did not show its status correctly.');
 $closed_form_html = $frontend->registration_shortcode();
 check(! str_contains($closed_form_html, 'ssf-am-form') && str_contains($closed_form_html, 'Anmälan är stängd'), 'Closed mode exposed the form.');
 ob_start();

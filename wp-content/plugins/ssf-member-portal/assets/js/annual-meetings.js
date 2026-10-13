@@ -152,13 +152,19 @@
   document.querySelectorAll('[data-ssf-group-registration]').forEach(function (form) {
     var current = 1;
     form.classList.add('is-step-flow');
-    function show(step) {
-      current = Math.max(1, Math.min(5, step));
+    function show(step, moveFocus) {
+      current = Math.max(1, Math.min(3, step));
       form.querySelectorAll('[data-ssf-step]').forEach(function (section) { section.hidden = Number(section.getAttribute('data-ssf-step')) !== current; });
-      form.querySelectorAll('[data-ssf-step-indicator]').forEach(function (item) { item.classList.toggle('is-active', Number(item.getAttribute('data-ssf-step-indicator')) === current); });
-      if (current === 4) syncPeople(form);
-      if (current === 5) buildReview(form);
-      form.querySelector('[data-ssf-step="' + current + '"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      form.querySelectorAll('[data-ssf-step-indicator]').forEach(function (item) {
+        var active = Number(item.getAttribute('data-ssf-step-indicator')) === current;
+        item.classList.toggle('is-active', active);
+        if (active) { item.setAttribute('aria-current', 'step'); } else { item.removeAttribute('aria-current'); }
+      });
+      if (current === 2) syncPeople(form);
+      if (current === 3) buildReview(form);
+      var section = form.querySelector('[data-ssf-step="' + current + '"]');
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (moveFocus !== false) { section.querySelector('h2').focus({ preventScroll: true }); }
     }
     function currentStepIsValid() {
       var section = form.querySelector('[data-ssf-step="' + current + '"]');
@@ -166,7 +172,7 @@
       for (var index = 0; index < fields.length; index++) {
         if (!fields[index].checkValidity()) { fields[index].reportValidity(); return false; }
       }
-      if (current === 3) {
+      if (current === 2) {
         var people = form.querySelectorAll('[data-ssf-person]');
         for (var personIndex = 0; personIndex < people.length; personIndex++) {
           if (!section.querySelector('input[name^="participants[' + personIndex + '][activities]"]:checked')) {
@@ -177,7 +183,7 @@
       }
       return true;
     }
-    syncPeople(form); show(1);
+    syncPeople(form); show(1, !document.querySelector('[data-ssf-error-message]'));
     form.addEventListener('input', function (event) { if (event.target.matches('[data-ssf-person-name]')) syncPeople(form); });
     form.addEventListener('change', function () { syncPeople(form); });
     form.addEventListener('click', function (event) {

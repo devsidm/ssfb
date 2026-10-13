@@ -121,7 +121,7 @@
 .ssf-am-button--secondary:hover { background: #eef7f7; }
 .ssf-am-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .ssf-am-cancel { margin-top: 1.5rem; }
-.ssf-am-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem; margin: 1.5rem 0 2rem; padding: 0; list-style: none; color: #536677; font-size: .82rem; }
+.ssf-am-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: 1.5rem 0 2rem; padding: 0; list-style: none; color: #536677; font-size: .82rem; }
 .ssf-am-steps li { display: flex; align-items: center; gap: .4rem; border-bottom: 3px solid #c9d7df; padding: .5rem 0; }
 .ssf-am-steps li span { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #e8eff3; font-weight: 700; }
 .ssf-am-steps li.is-active { border-color: #176a70; color: #102f57; font-weight: 700; }
