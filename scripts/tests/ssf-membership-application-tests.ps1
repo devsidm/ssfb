@@ -70,10 +70,10 @@ foreach ($field in @('_ssf_owner', '_ssf_build_country', '_ssf_call_sign', '_ssf
 foreach ($field in @('applicant_first_name', 'applicant_last_name', 'applicant_street', 'applicant_postal_code', 'applicant_city', 'applicant_invoice_email')) { Assert-Contains "Ombudsfält $field" $public "'$field'" }
 Assert-Contains 'Obligatorisk fartygskategori' $profile "'_ssf_vessel_operation' => self::field('Fartygskategori', 'select', 'basic', true"
 Assert-Contains 'Fritidsfartyg kan väljas' $profile "'leisure' => 'Fritidsfartyg'"
-Assert-Contains 'Handelsfartyg kan väljas' $profile "'commercial' => 'Handelsfartyg'"
+Assert-Contains 'Föreningsfartyg kan väljas' $profile "'commercial' => 'Föreningsfartyg'"
 Assert-Contains 'Manipulerad fartygskategori avvisas' $profile "'select' === `$field['type'] && `$value && ! array_key_exists"
 Assert-Contains 'Fritidsfartygets årsavgift' $organization "'500 kr/år per fartyg'"
-Assert-Contains 'Handelsfartygets årsavgift' $organization "'1 500 kr/år per fartyg'"
+Assert-Contains 'Föreningsfartygets årsavgift' $organization "'1 500 kr/år per fartyg'"
 Assert-Contains 'Betalningens bankgiro' $organization "'332-1908'"
 Assert-Contains 'Betalningens Swishnummer' $organization "'1236400279'"
 Assert-Contains 'Ansökningsmejl använder centrala avgifter' $emails 'SSF_Organization_Info::membership_fees()'

@@ -48,7 +48,7 @@ final class SSF_Organization_Info
         return array(
             'support' => array('label' => 'Stödmedlem', 'amount' => '200 kr/år'),
             'leisure' => array('label' => 'Fritidsfartyg', 'amount' => '500 kr/år per fartyg'),
-            'commercial' => array('label' => 'Handelsfartyg', 'amount' => '1 500 kr/år per fartyg'),
+            'commercial' => array('label' => 'Föreningsfartyg', 'amount' => '1 500 kr/år per fartyg'),
         );
     }
 

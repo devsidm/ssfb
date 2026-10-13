@@ -84,7 +84,7 @@ class SSF_Medlemsfartyg_Profile
             '_ssf_home_port' => self::field('Hemmahamn', 'text', 'basic', true, true, $all),
             '_ssf_call_sign' => self::field('Signalbokstäver / anropssignal', 'text', 'basic', false, true, $all),
             'tax_fartygstyp' => self::field('Fartygstyp', 'taxonomy', 'basic', true, true, $all, array(), '', array('taxonomy' => 'fartygstyp')),
-            '_ssf_vessel_operation' => self::field('Fartygskategori', 'select', 'basic', true, false, $application_admin, array(), 'Välj efter hur fartyget används. Valet avgör årsavgiften.', array('options' => array('' => 'Välj fartygskategori', 'leisure' => 'Fritidsfartyg', 'commercial' => 'Handelsfartyg'))),
+            '_ssf_vessel_operation' => self::field('Fartygskategori', 'select', 'basic', true, false, $application_admin, array(), 'Välj efter hur fartyget används. Valet avgör årsavgiften.', array('options' => array('' => 'Välj fartygskategori', 'leisure' => 'Fritidsfartyg', 'commercial' => 'Föreningsfartyg'))),
             '_ssf_rig' => self::field('Nuvarande rigg', 'text', 'basic', false, true, $all),
             '_ssf_hull_type' => self::field('Skrovtyp', 'text', 'basic', false, true, $all),
             '_ssf_material' => self::field('Material', 'text', 'basic', false, true, $all),

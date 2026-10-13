@@ -21,7 +21,7 @@ Medlemsavgifter:
 
 - Stödmedlem: 200 kr/år
 - Fritidsfartyg: 500 kr/år per fartyg
-- Handelsfartyg: 1 500 kr/år per fartyg
+- Föreningsfartyg: 1 500 kr/år per fartyg
 
 Betalning görs till bankgiro 332-1908 eller Swish 1236400279. Stödmedlemmar
 anger namn och fartygssökande anger ansökningsnummer som betalningsreferens.
