@@ -56,6 +56,7 @@ function esc_html($text): string { return htmlspecialchars((string) $text, ENT_Q
 function esc_attr($text): string { return esc_html($text); }
 function esc_textarea($text): string { return esc_html($text); }
 function esc_url($text): string { return esc_html($text); }
+function wp_json_encode($value): string { return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); }
 function checked($actual, $expected = true): void { if ($actual == $expected) echo 'checked="checked"'; }
 function selected($actual, $expected): void { if ($actual == $expected) echo 'selected="selected"'; }
 function disabled($actual, $expected = true): void { if ($actual == $expected) echo 'disabled="disabled"'; }
@@ -192,14 +193,9 @@ $module->save(10, get_post(10));
 $meeting = $module->data(10);
 $program_state = $service->registration_state($meeting, get_post(10));
 $program_html = $render($meeting, $program_state);
-check(str_contains($program_html, 'Själva årsmötet') && ! str_contains($program_html, '<h4>Middag</h4>'), 'Program/dinner visibility was not independent.');
-check(! isset($program_state['choice_states']['dinner']), 'Hidden dinner remained in the registration choices.');
+check(str_contains($program_html, 'Själva årsmötet') && str_contains($program_html, '<h4>Middag</h4>'), 'Dinner was not rendered as an ordinary program activity.');
+check(isset($program_state['choice_states']['dinner']), 'Dinner was not exposed through the generic activity choices.');
 check(substr_count($program_html, '<h2>Snart klart</h2>') === 1 && str_contains($program_html, 'Vi återkommer med detaljer.'), 'Editable advance notice did not persist.');
-$_POST['ssf_meeting_modules']['dinner'] = 1;
-$module->save(10, get_post(10));
-$meeting = $module->data(10);
-check(str_contains($render($meeting, $service->registration_state($meeting, get_post(10))), '<h4>Middag</h4>'), 'Dinner did not reappear when enabled.');
-check(isset($service->registration_state($meeting, get_post(10))['choice_states']['dinner']), 'Visible dinner did not return to the registration choices.');
 
 $_POST['ssf_meeting_modules']['invitation'] = 1;
 $_POST['ssf_meeting_modules']['motions'] = 1;
@@ -218,6 +214,21 @@ $form_html = $frontend->registration_shortcode();
 check(str_contains($form_html, 'ssf-am-form') && str_contains($form_html, 'ssf_member_portal_submit_meeting_registration'), 'Open mode did not render the existing registration form.');
 check(str_contains($form_html, 'Lägg till person') && str_contains($form_html, 'data-ssf-step="3"') && str_contains($form_html, '[activities][annual_meeting]'), 'The per-person annual-meeting activity choice was not rendered.');
 check(! str_contains($form_html, 'name="meeting_attendance"'), 'The obsolete registration-level attendance choice was rendered.');
+$question_program = $meeting['program'];
+foreach ($question_program as &$activity) {
+    if ('dinner' === ($activity['key'] ?? '')) {
+        $activity['questions'] = array(
+            array('key' => 'dietary_preferences', 'library_key' => 'dietary_preferences', 'title' => 'Kost / matpreferenser', 'type' => 'multiple', 'options' => array('Vegetarisk', 'Glutenfri'), 'required' => 1, 'scope' => 'participant', 'order' => 0),
+            array('key' => 'transport', 'library_key' => 'transport', 'title' => 'Behöver ni transport?', 'type' => 'yes_no', 'options' => array(), 'required' => 0, 'scope' => 'registration', 'order' => 1),
+        );
+    }
+}
+unset($activity);
+update_post_meta(10, '_ssf_am_program', $question_program);
+$_POST['ssf_meeting_program'] = $question_program;
+$meeting = $module->data(10);
+$question_form_html = $frontend->registration_shortcode();
+check(str_contains($question_form_html, 'data-ssf-activity-question-group') && str_contains($question_form_html, 'activity_answers[dinner][dietary_preferences][participants][person_1][]'), 'Activity question was not rendered per participant.');
 
 $_POST['ssf_meeting_registration_status'] = 'closed';
 $_POST['ssf_meeting_registration_closes_on'] = '2026-10-17';
@@ -238,7 +249,9 @@ ob_start();
 $editor->render(get_post(10));
 $admin_html = ob_get_clean();
 check(str_contains($admin_html, 'name="ssf_meeting_registration_visible" value="1" checked="checked"') && str_contains($admin_html, 'name="ssf_meeting_registration_status" value="open"') && str_contains($admin_html, 'name="ssf_meeting_registration_status" value="closed" checked="checked"'), 'Admin did not separate visibility from registration status.');
-check(str_contains($admin_html, 'name="ssf_meeting_advance_notice[visible]"') && str_contains($admin_html, 'name="ssf_meeting_modules[dinner]"') && str_contains($admin_html, 'name="ssf_meeting_modules[contact]"'), 'Admin did not expose component visibility controls.');
+check(str_contains($admin_html, 'name="ssf_meeting_advance_notice[visible]"') && ! str_contains($admin_html, 'name="ssf_meeting_modules[dinner]"') && str_contains($admin_html, 'name="ssf_meeting_modules[contact]"'), 'Admin still exposed dinner as a separate module.');
+check(str_contains($admin_html, 'Välj befintlig fråga') && str_contains($admin_html, '+ Skapa ny fråga') && str_contains($admin_html, 'name="ssf_meeting_program[1][questions][0][scope]"'), 'Admin did not expose reusable activity questions and answer scope.');
+check(isset($GLOBALS['meeting_options']['ssf_member_portal_annual_meeting_question_library']['transport']), 'A newly created activity question was not saved to the reusable library.');
 
 update_post_meta(10, '_ssf_am_modules', array('meeting' => 1, 'day2' => 0, 'dinner' => 0, 'calendar' => 1));
 update_post_meta(10, '_ssf_am_registration_mode', 'open');

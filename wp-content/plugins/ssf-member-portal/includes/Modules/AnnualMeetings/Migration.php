@@ -25,8 +25,12 @@ final class Migration
     public function run(): array
     {
         $by_year = array();
+        $activities_migrated = 0;
         foreach ($this->meetings->all() as $meeting) {
             $year = (int) $this->meetings->data((int) $meeting->ID)['year'];
+            if ($this->meetings->migrate_activity_model((int) $meeting->ID)) {
+                $activities_migrated++;
+            }
             if ($year) {
                 update_post_meta($meeting->ID, '_ssf_am_sharepoint_year', $year);
                 update_post_meta($meeting->ID, '_ssf_mp_sharepoint_folder', 'Årsmöten/' . $year . '/Motioner/');
@@ -43,6 +47,7 @@ final class Migration
             'motions_unresolved' => 0,
             'registrations_unresolved' => 0,
             'calendar_duplicates_changed' => 0,
+            'activities_migrated' => $activities_migrated,
         );
 
         $motions = get_posts(array('post_type' => MotionPostType::POST_TYPE, 'post_status' => 'any', 'posts_per_page' => -1));

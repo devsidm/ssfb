@@ -346,6 +346,41 @@ final class Frontend
         <?php
     }
 
+    public function render_activity_question(array $activity, array $question, array $participants, array $activity_answers): void
+    {
+        $activity_key = (string) $activity['key'];
+        $question_key = (string) $question['key'];
+        $entry = (array) ($activity_answers[$activity_key][$question_key] ?? array());
+        $scope = 'registration' === ($question['scope'] ?? '') ? 'registration' : 'participant';
+        $selected = array_values(array_filter($participants, static function (array $participant) use ($activity_key): bool { return ! empty($participant['activities'][$activity_key]); }));
+        ?>
+        <fieldset class="ssf-am-fieldset ssf-am-activity-question" data-ssf-activity-question-group data-activity-key="<?php echo esc_attr($activity_key); ?>" data-question-scope="<?php echo esc_attr($scope); ?>" <?php echo $selected ? '' : 'hidden'; ?>><legend><?php echo esc_html($activity['title'] . ' – ' . $question['title']); ?><?php if (! empty($question['required'])) : ?> <span aria-hidden="true">*</span><?php endif; ?></legend><?php if (! empty($question['help'])) : ?><p class="ssf-am-help"><?php echo esc_html($question['help']); ?></p><?php endif; ?>
+        <?php if ('registration' === $scope) : $name = 'activity_answers[' . $activity_key . '][' . $question_key . '][registration]'; $this->render_activity_answer_control($question, $name, $entry['registration'] ?? '', ! $selected); ?>
+        <?php else : ?><div data-ssf-question-people><?php foreach ($participants as $index => $participant) : $person_id = (string) ($participant['id'] ?? ('person_' . ($index + 1))); $active = ! empty($participant['activities'][$activity_key]); $name = 'activity_answers[' . $activity_key . '][' . $question_key . '][participants][' . $person_id . ']'; ?><article class="ssf-am-diet-card" data-ssf-question-person data-person-id="<?php echo esc_attr($person_id); ?>" <?php echo $active ? '' : 'hidden'; ?>><h3><?php echo esc_html(trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? '')) ?: sprintf(__('Person %d', 'ssf-member-portal'), $index + 1)); ?></h3><?php $this->render_activity_answer_control($question, $name, $entry['participants'][$person_id] ?? '', ! $active); ?></article><?php endforeach; ?></div><?php endif; ?>
+        </fieldset>
+        <?php
+    }
+
+    private function render_activity_answer_control(array $question, string $name, $value, bool $disabled): void
+    {
+        $required = ! empty($question['required']);
+        if ('textarea' === ($question['type'] ?? '')) {
+            ?><textarea name="<?php echo esc_attr($name); ?>" rows="3" <?php echo $required ? 'data-required="1" required' : ''; ?> <?php echo $disabled ? 'disabled' : ''; ?>><?php echo esc_textarea((string) $value); ?></textarea><?php
+        } elseif ('yes_no' === ($question['type'] ?? '')) {
+            foreach (array('yes' => __('Ja', 'ssf-member-portal'), 'no' => __('Nej', 'ssf-member-portal')) as $option => $label) {
+                ?><label class="ssf-am-option"><input type="radio" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr($option); ?>" <?php checked($value, $option); ?> <?php echo $required ? 'data-required="1" required' : ''; ?> <?php echo $disabled ? 'disabled' : ''; ?>> <?php echo esc_html($label); ?></label><?php
+            }
+        } elseif (in_array(($question['type'] ?? ''), array('single', 'multiple'), true)) {
+            $multiple = 'multiple' === $question['type'];
+            foreach ((array) ($question['options'] ?? array()) as $option) {
+                $checked = $multiple ? in_array($option, (array) $value, true) : $value === $option;
+                ?><label class="ssf-am-option"><input type="<?php echo $multiple ? 'checkbox' : 'radio'; ?>" name="<?php echo esc_attr($name . ($multiple ? '[]' : '')); ?>" value="<?php echo esc_attr($option); ?>" <?php checked($checked); ?> <?php echo $required && ! $multiple ? 'data-required="1" required' : ''; ?> <?php echo $disabled ? 'disabled' : ''; ?>> <?php echo esc_html($option); ?></label><?php
+            }
+        } else {
+            ?><input name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr((string) $value); ?>" <?php echo $required ? 'data-required="1" required' : ''; ?> <?php echo $disabled ? 'disabled' : ''; ?>><?php
+        }
+    }
+
     private function redirect_error(string $url, string $error): void
     {
         wp_safe_redirect(add_query_arg('ssf_am_error', rawurlencode($error), $url));

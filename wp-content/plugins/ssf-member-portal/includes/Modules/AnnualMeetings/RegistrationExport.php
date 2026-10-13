@@ -14,12 +14,14 @@ final class RegistrationExport
         $rows = array();
         $activity_counts = array_fill_keys(array_keys($activities), 0);
         $diet_rows = array();
+        $answer_rows = array();
         foreach ($registrations as $registration) {
             $id = (int) $registration->ID;
             $status = (string) get_post_meta($id, '_ssf_am_status', true) ?: RegistrationService::REGISTERED;
             $registration_id = (string) get_post_meta($id, '_ssf_am_registration_id', true);
             $submitted = $this->date((int) get_post_meta($id, '_ssf_am_submitted_at', true));
-            foreach ($this->participants($id) as $participant) {
+            $registration_participants = $this->participants($id);
+            foreach ($registration_participants as $participant) {
                 $name = trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? ''));
                 $row = array($registration_id, ! empty($participant['primary']) ? 'Ja' : 'Nej', $name, (string) ($participant['email'] ?? ''), (string) ($participant['phone'] ?? ''), $this->relationship((string) ($participant['relationship'] ?? '')), implode(', ', (array) ($participant['vessels'] ?? array())));
                 $selected = array_filter((array) ($participant['activities'] ?? array()));
@@ -37,6 +39,37 @@ final class RegistrationExport
                 $row[] = $submitted;
                 $rows[] = $row;
             }
+            $stored_answers = get_post_meta($id, '_ssf_am_activity_answers', true);
+            if (is_array($stored_answers) && $stored_answers) {
+                $names = array();
+                foreach ($registration_participants as $participant) { $names[(string) ($participant['id'] ?? '')] = trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? '')); }
+                foreach ($stored_answers as $activity_key => $entries) {
+                    foreach ((array) $entries as $entry) {
+                        $question = (array) ($entry['question'] ?? array());
+                        $activity_title = (string) ($activities[$activity_key]['title'] ?? $activity_key);
+                        if ('registration' === ($question['scope'] ?? 'participant')) {
+                            $answer_rows[] = array($activity_title, 'Hela anmälan', (string) ($question['title'] ?? ''), $this->answer_value($entry['registration'] ?? ''), $registration_id);
+                        } else {
+                            foreach ((array) ($entry['participants'] ?? array()) as $person_id => $value) {
+                                $answer_rows[] = array($activity_title, $names[$person_id] ?? $person_id, (string) ($question['title'] ?? ''), $this->answer_value($value), $registration_id);
+                            }
+                        }
+                    }
+                }
+            } else {
+                foreach ($registration_participants as $participant) {
+                    $name = trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? ''));
+                    foreach ((array) ($participant['activities'] ?? array()) as $activity_key => $selected) {
+                        if (! $selected || empty($activities[$activity_key]['questions'])) { continue; }
+                        foreach ((array) $activities[$activity_key]['questions'] as $question) {
+                            if ('dietary_preferences' === ($question['key'] ?? '')) { $value = $this->dietary($participant); }
+                            elseif ('kitchen_notes' === ($question['key'] ?? '')) { $value = (string) ($participant['allergy_note'] ?? ''); }
+                            else { continue; }
+                            $answer_rows[] = array((string) $activities[$activity_key]['title'], $name, (string) $question['title'], $value, $registration_id);
+                        }
+                    }
+                }
+            }
         }
         $activity_rows = array();
         foreach ($activities as $key => $activity) {
@@ -47,6 +80,7 @@ final class RegistrationExport
         return array('headers' => $headers, 'rows' => $rows, 'sheets' => array(
             array('name' => 'Deltagare', 'headers' => $headers, 'rows' => $rows),
             array('name' => 'Aktiviteter', 'headers' => array('Aktivitet', 'Antal', 'Max antal', 'Lediga platser'), 'rows' => $activity_rows),
+            array('name' => 'Aktivitetsfrågor', 'headers' => array('Aktivitet', 'Deltagare/anmälan', 'Fråga', 'Svar', 'Anmälnings-ID'), 'rows' => $answer_rows),
             array('name' => 'Specialkost', 'headers' => array('Namn', 'Aktivitet', 'Kost', 'Allergi/övrigt', 'Anmälnings-ID'), 'rows' => $diet_rows),
         ));
     }
@@ -82,9 +116,6 @@ final class RegistrationExport
         foreach ((array) ($meeting['program'] ?? array()) as $item) {
             if (! empty($item['visible']) && (! empty($item['requires_registration']) || 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? ''))) { $activities[(string) $item['key']] = $item; }
         }
-        if (! empty($meeting['modules']['dinner']) && ! isset($activities['dinner']) && ! empty($meeting['dinner']['start_at'])) {
-            $activities['dinner'] = array('key' => 'dinner', 'title' => (string) ($meeting['dinner']['title'] ?: 'Middag'), 'food' => 1, 'capacity' => (int) ($meeting['dinner']['capacity'] ?? 0));
-        }
         return $activities;
     }
 
@@ -105,6 +136,14 @@ final class RegistrationExport
     private function has_special_diet(array $participant): bool
     {
         return (bool) (array_diff((array) ($participant['dietary'] ?? array()), array('none')) || ! empty($participant['dietary_other']) || ! empty($participant['allergy_note']));
+    }
+
+    private function answer_value($value): string
+    {
+        if (is_array($value)) { return implode(', ', array_filter(array_map('sanitize_text_field', $value))); }
+        if ('yes' === $value) { return 'Ja'; }
+        if ('no' === $value) { return 'Nej'; }
+        return sanitize_textarea_field((string) $value);
     }
 
     private function status(string $value): string

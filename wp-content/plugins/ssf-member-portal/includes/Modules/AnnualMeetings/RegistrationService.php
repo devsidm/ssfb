@@ -176,6 +176,33 @@ final class RegistrationService
             $participant['dietary_label'] = $this->dietary_label((array) $participant['dietary'], (string) $participant['dietary_other']);
         }
         unset($participant);
+        $activity_answers = (array) $get('activity_answers', array());
+        if (! $activity_answers) {
+            $activity_answers = $this->legacy_activity_answers($meeting, $participants);
+        }
+        $registration_activity_answers = array();
+        foreach ($participants as &$participant) {
+            $participant['activity_answers'] = array();
+        }
+        unset($participant);
+        foreach ($activity_answers as $activity_key => $question_entries) {
+            foreach ((array) $question_entries as $entry) {
+                $question = (array) ($entry['question'] ?? array());
+                $label = (string) ($question['title'] ?? '');
+                if (! $label) { continue; }
+                if ('registration' === ($question['scope'] ?? 'participant')) {
+                    $registration_activity_answers[] = array('activity' => $activity_titles[$activity_key] ?? $activity_key, 'question' => $label, 'answer' => $this->answer_label($question, $entry['registration'] ?? ''));
+                    continue;
+                }
+                foreach ($participants as &$participant) {
+                    $person_id = (string) ($participant['id'] ?? '');
+                    if (array_key_exists($person_id, (array) ($entry['participants'] ?? array()))) {
+                        $participant['activity_answers'][] = array('activity' => $activity_titles[$activity_key] ?? $activity_key, 'question' => $label, 'answer' => $this->answer_label($question, $entry['participants'][$person_id]));
+                    }
+                }
+                unset($participant);
+            }
+        }
         $labels = array();
         foreach ($this->meetings->registration_choices($meeting) as $item) {
             if (! empty($program[$item['key']])) {
@@ -207,6 +234,8 @@ final class RegistrationService
             'food' => (array) $get('food', array()),
             'food_note' => (string) $get('food_note'),
             'answers' => (array) $get('answers', array()),
+            'activity_answers' => $activity_answers,
+            'registration_activity_answers' => $registration_activity_answers,
             'status' => (string) $get('status', self::REGISTERED),
             'status_label' => $this->status_label((string) $get('status', self::REGISTERED)),
             'submitted_at' => (int) $get('submitted_at', 0),
@@ -601,7 +630,7 @@ final class RegistrationService
                 if (get_post_meta($registration->ID, '_ssf_am_anonymised_at', true)) {
                     continue;
                 }
-                foreach (array('email', 'phone', 'food', 'food_note', 'answers', 'represented_vessels', 'associated_vessels') as $key) {
+                foreach (array('email', 'phone', 'food', 'food_note', 'answers', 'activity_answers', 'represented_vessels', 'associated_vessels') as $key) {
                     delete_post_meta($registration->ID, '_ssf_am_' . $key);
                 }
                 $participants = (array) get_post_meta($registration->ID, '_ssf_am_participants', true);
@@ -755,6 +784,12 @@ final class RegistrationService
             }
         }
 
+        $activity_answers = $this->validate_activity_answers($activities, $participants, (array) ($input['activity_answers'] ?? array()));
+        if (is_wp_error($activity_answers)) {
+            return $activity_answers;
+        }
+        $this->apply_legacy_food_projection($participants, $activity_answers);
+
         $primary = $participants[0];
         $data = array(
             'first_name' => $primary['first_name'], 'last_name' => $primary['last_name'], 'email' => $primary['email'], 'phone' => $primary['phone'],
@@ -763,7 +798,7 @@ final class RegistrationService
             'associated_vessels' => 'representative' !== $primary['relationship'] ? $primary['vessels'] : array(),
             'meeting_attendance' => ! empty($primary['activities']['annual_meeting']) ? 'yes' : 'no',
             'program' => array_diff_key($primary['activities'], array('annual_meeting' => true)),
-            'food' => $primary['dietary'], 'food_note' => $primary['allergy_note'], 'participants' => $participants, 'answers' => array(),
+            'food' => $primary['dietary'], 'food_note' => $primary['allergy_note'], 'participants' => $participants, 'answers' => array(), 'activity_answers' => $activity_answers,
         );
         if (! $data['first_name'] || ! $data['last_name'] || ! is_email($data['email'])) {
             return new \WP_Error('annual_meeting_required', __('Fyll i förnamn, efternamn och en giltig e-postadress.', 'ssf-member-portal'));
@@ -822,6 +857,137 @@ final class RegistrationService
             return 'single' === $type ? (in_array($value, $options, true) ? $value : '') : $value;
         }
         return 'textarea' === $type ? sanitize_textarea_field((string) $value) : sanitize_text_field((string) $value);
+    }
+
+    private function validate_activity_answers(array $activities, array $participants, array $submitted)
+    {
+        $answers = array();
+        foreach ($activities as $activity_key => $activity) {
+            $selected = array_values(array_filter($participants, static function (array $participant) use ($activity_key): bool {
+                return ! empty($participant['activities'][$activity_key]);
+            }));
+            if (! $selected) {
+                continue;
+            }
+            foreach ((array) ($activity['questions'] ?? array()) as $question) {
+                $question_key = sanitize_key((string) ($question['key'] ?? ''));
+                if (! $question_key || empty($question['title'])) {
+                    continue;
+                }
+                $entry = array('question' => $question, 'registration' => '', 'participants' => array());
+                $raw = (array) ($submitted[$activity_key][$question_key] ?? array());
+                if ('registration' === ($question['scope'] ?? 'participant')) {
+                    $entry['registration'] = $this->answer($question, $raw['registration'] ?? '');
+                    if (! empty($question['required']) && $this->empty_answer($entry['registration'])) {
+                        return new \WP_Error('annual_meeting_activity_question_required', sprintf(__('Besvara frågan för %1$s: %2$s', 'ssf-member-portal'), $activity['title'], $question['title']));
+                    }
+                } else {
+                    foreach ($selected as $participant) {
+                        $person_id = (string) $participant['id'];
+                        $value = $this->answer($question, $raw['participants'][$person_id] ?? '');
+                        if (! empty($question['required']) && $this->empty_answer($value)) {
+                            $name = trim((string) $participant['first_name'] . ' ' . (string) $participant['last_name']);
+                            return new \WP_Error('annual_meeting_activity_question_required', sprintf(__('Besvara frågan för %1$s – %2$s: %3$s', 'ssf-member-portal'), $activity['title'], $name, $question['title']));
+                        }
+                        $entry['participants'][$person_id] = $value;
+                    }
+                }
+                $answers[$activity_key][$question_key] = $entry;
+            }
+        }
+        return $answers;
+    }
+
+    private function empty_answer($value): bool
+    {
+        return '' === $value || array() === $value || null === $value;
+    }
+
+    private function answer_label(array $question, $value): string
+    {
+        if (is_array($value)) { return implode(', ', array_filter(array_map('sanitize_text_field', $value))); }
+        if ('yes_no' === ($question['type'] ?? '')) { return 'yes' === $value ? __('Ja', 'ssf-member-portal') : ('no' === $value ? __('Nej', 'ssf-member-portal') : ''); }
+        return sanitize_textarea_field((string) $value);
+    }
+
+    private function legacy_activity_answers(array $meeting, array $participants): array
+    {
+        $answers = array();
+        foreach ($this->meetings->participant_activities($meeting) as $activity) {
+            $activity_key = (string) ($activity['key'] ?? '');
+            foreach ((array) ($activity['questions'] ?? array()) as $question) {
+                $question_key = (string) ($question['key'] ?? '');
+                if (! $activity_key || ! $question_key || 'participant' !== ($question['scope'] ?? 'participant')) {
+                    continue;
+                }
+                $values = array();
+                foreach ($participants as $participant) {
+                    if (empty($participant['activities'][$activity_key])) {
+                        continue;
+                    }
+                    if ('dietary_preferences' === $question_key) {
+                        $values[(string) $participant['id']] = $this->legacy_diet_values($participant, (array) ($question['options'] ?? array()));
+                    } elseif ('kitchen_notes' === $question_key) {
+                        $values[(string) $participant['id']] = implode("\n", array_filter(array((string) ($participant['dietary_other'] ?? ''), (string) ($participant['allergy_note'] ?? ''))));
+                    }
+                }
+                if ($values) {
+                    $answers[$activity_key][$question_key] = array('question' => $question, 'registration' => '', 'participants' => $values);
+                }
+            }
+        }
+        return $answers;
+    }
+
+    private function legacy_diet_values(array $participant, array $options = array()): array
+    {
+        $labels = array(
+            'none' => array('Ingen specialkost', 'Ingen särskild kost'),
+            'vegetarian' => array('Vegetarisk', 'Vegetariskt'),
+            'vegan' => array('Vegansk', 'Veganskt'),
+            'gluten_free' => array('Glutenfri', 'Glutenfritt'),
+            'lactose_free' => array('Laktosfri', 'Laktosfritt'),
+            'other' => array('Annan', 'Annat'),
+        );
+        $values = array();
+        foreach ((array) ($participant['dietary'] ?? array()) as $stored) {
+            $candidates = $labels[$stored] ?? array((string) $stored);
+            $matched = '';
+            foreach ($options as $option) {
+                foreach ($candidates as $candidate) {
+                    if (0 === strcasecmp((string) $option, $candidate)) { $matched = (string) $option; break 2; }
+                }
+            }
+            $values[] = $matched ?: $candidates[0];
+        }
+        return array_values(array_unique(array_filter($values)));
+    }
+
+    private function apply_legacy_food_projection(array &$participants, array $activity_answers): void
+    {
+        $map = array('ingen specialkost' => 'none', 'vegetarisk' => 'vegetarian', 'vegetariskt' => 'vegetarian', 'vegansk' => 'vegan', 'veganskt' => 'vegan', 'glutenfri' => 'gluten_free', 'glutenfritt' => 'gluten_free', 'laktosfri' => 'lactose_free', 'laktosfritt' => 'lactose_free', 'annan' => 'other');
+        foreach ($activity_answers as $questions) {
+            foreach ($questions as $question_key => $entry) {
+                foreach ($participants as &$participant) {
+                    $value = $entry['participants'][(string) $participant['id']] ?? null;
+                    if ('dietary_preferences' === $question_key && null !== $value) {
+                        $dietary = array();
+                        $other = array();
+                        foreach ((array) $value as $label) {
+                            $normalised = function_exists('mb_strtolower') ? mb_strtolower((string) $label) : strtolower((string) $label);
+                            if (isset($map[$normalised])) { $dietary[] = $map[$normalised]; } else { $other[] = sanitize_text_field((string) $label); }
+                        }
+                        $dietary = array_values(array_unique($dietary ?: array('none')));
+                        if (count($dietary) > 1) { $dietary = array_values(array_diff($dietary, array('none'))); }
+                        $participant['dietary'] = $dietary;
+                        $participant['dietary_other'] = implode(', ', array_filter($other));
+                    } elseif ('kitchen_notes' === $question_key && null !== $value) {
+                        $participant['allergy_note'] = sanitize_textarea_field((string) $value);
+                    }
+                }
+                unset($participant);
+            }
+        }
     }
 
     private function vessels(array $values): array

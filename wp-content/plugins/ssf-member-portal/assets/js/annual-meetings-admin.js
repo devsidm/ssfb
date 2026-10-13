@@ -89,6 +89,32 @@
     }
   }
 
+  function addActivityQuestion(activityRow, question) {
+    var template = document.getElementById('tmpl-ssf-am-activity-question-row');
+    var container = activityRow.querySelector('[data-ssf-activity-questions]');
+    var keyField = activityRow.querySelector('input[name$="[key]"]');
+    if (!template || !container || !keyField) {
+      return;
+    }
+    var match = keyField.name.match(/ssf_meeting_program\[([^\]]+)\]/);
+    var programIndex = match ? match[1] : String(Date.now());
+    var questionIndex = String(Date.now());
+    container.insertAdjacentHTML('beforeend', template.innerHTML.replace(/__PROGRAM__/g, programIndex).replace(/__QUESTION__/g, questionIndex));
+    var row = container.lastElementChild;
+    question = question || {};
+    Object.keys(question).forEach(function (name) {
+      var field = row.querySelector('[name$="[' + name + ']"]');
+      if (!field) { return; }
+      if (field.type === 'checkbox') {
+        field.checked = !!question[name];
+      } else {
+        field.value = Array.isArray(question[name]) ? question[name].join('\n') : question[name];
+      }
+    });
+    container.querySelectorAll('[data-ssf-question-order]').forEach(function (field, index) { field.value = String(index); });
+    initialiseRow(row);
+  }
+
   function selectMedia(field) {
     if (!window.wp || !wp.media) {
       return;
@@ -144,6 +170,33 @@
         row.remove();
         updateOrder(parent);
       }
+      return;
+    }
+
+    var removeQuestion = event.target.closest('[data-ssf-remove-activity-question]');
+    if (removeQuestion) {
+      var questionRow = removeQuestion.closest('[data-ssf-activity-question]');
+      if (questionRow && window.confirm('Ta bort frågan från aktiviteten?')) {
+        questionRow.remove();
+      }
+      return;
+    }
+
+    var useQuestion = event.target.closest('[data-ssf-use-question]');
+    if (useQuestion) {
+      var activityRow = useQuestion.closest('[data-ssf-repeater-row]');
+      var selectQuestion = activityRow.querySelector('[data-ssf-question-library]');
+      var option = selectQuestion && selectQuestion.selectedOptions[0];
+      if (option && option.dataset.question) {
+        addActivityQuestion(activityRow, JSON.parse(option.dataset.question));
+        selectQuestion.value = '';
+      }
+      return;
+    }
+
+    var newQuestion = event.target.closest('[data-ssf-new-question]');
+    if (newQuestion) {
+      addActivityQuestion(newQuestion.closest('[data-ssf-repeater-row]'), {});
       return;
     }
 

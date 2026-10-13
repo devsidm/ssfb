@@ -165,8 +165,7 @@ final class Module
             'title' => __('Årsmöte', 'ssf-member-portal'),
             'ssf_am_date' => __('Datum', 'ssf-member-portal'),
             'ssf_am_location' => __('Plats', 'ssf-member-portal'),
-            'ssf_am_dinner' => __('Middag', 'ssf-member-portal'),
-            'ssf_am_day2' => __('Dag 2', 'ssf-member-portal'),
+            'ssf_am_day2' => __('Program & aktiviteter', 'ssf-member-portal'),
             'ssf_am_registrations' => __('Anmälningar', 'ssf-member-portal'),
             'ssf_am_motions' => __('Motioner', 'ssf-member-portal'),
             'date' => __('Status och publicering', 'ssf-member-portal'),
@@ -183,9 +182,6 @@ final class Module
                 break;
             case 'ssf_am_location':
                 echo esc_html($meeting['location'] ?: __('Saknas', 'ssf-member-portal'));
-                break;
-            case 'ssf_am_dinner':
-                echo $this->module_enabled($meeting, 'dinner') ? esc_html(sprintf(__('%d anmälda', 'ssf-member-portal'), (int) ($counts['dinner'] ?? 0))) : esc_html__('Av', 'ssf-member-portal');
                 break;
             case 'ssf_am_day2':
                 $activities = array_filter((array) $meeting['program'], static function (array $item): bool { return ! empty($item['requires_registration']); });
@@ -245,9 +241,12 @@ final class Module
         }
         $modules = $this->sanitize_modules((array) wp_unslash($_POST['ssf_meeting_modules'] ?? array()));
         $invitation = $this->sanitize_invitation((array) wp_unslash($_POST['ssf_meeting_invitation'] ?? array()));
-        $dinner = isset($_POST['ssf_meeting_dinner']) ? $this->sanitize_dinner((array) wp_unslash($_POST['ssf_meeting_dinner'])) : $current['dinner'];
+        // Keep the legacy dinner payload untouched for rollback/read compatibility.
+        // New edits are made on the ordinary activity stored in program.
+        $dinner = $current['dinner'];
         $program = $this->sanitize_program((array) wp_unslash($_POST['ssf_meeting_program'] ?? array()), $start_at, $duration_days);
         $program = $this->migrate_legacy_activities($program, $current, $start_at, $duration_days);
+        $this->store_question_library($program);
         $submitted_registration_mode = sanitize_key(wp_unslash($_POST['ssf_meeting_registration_status'] ?? ''));
         $registration_mode = in_array($submitted_registration_mode, array('open', 'closed'), true)
             ? $submitted_registration_mode : ('open' === $current['registration_mode'] ? 'open' : 'closed');
@@ -310,6 +309,7 @@ final class Module
         foreach ($values as $key => $value) {
             update_post_meta($post_id, '_ssf_am_' . $key, $value);
         }
+        update_post_meta($post_id, '_ssf_am_activity_model_version', 1);
 
         update_post_meta($post_id, '_ssf_mp_meeting_year', $year);
         update_post_meta($post_id, '_ssf_mp_meeting_date', $values['meeting_date']);
@@ -334,12 +334,25 @@ final class Module
         $start_at = (int) $meta('start_at', 0);
         $end_at = (int) $meta('end_at', 0);
         $duration_days = $this->duration_days($start_at, $end_at, absint($meta('duration_days', 0)));
-        $program = $this->normalise_program((array) $meta('program', array()), $start_at, $duration_days);
         $documents = (array) $meta('documents', array());
         $invitation = wp_parse_args((array) $meta('invitation', array()), array('title' => 'Kallelse', 'text' => '', 'publish_at' => 0, 'pdf_id' => 0, 'visible' => 1));
         $dinner = wp_parse_args((array) $meta('dinner', array()), array('title' => 'Middag', 'start_at' => 0, 'end_at' => 0, 'opens_at' => 0, 'location' => '', 'description' => '', 'price' => '', 'deadline' => 0, 'capacity' => 0, 'food_enabled' => 1, 'manual_open' => 0));
-        $advance_notice = wp_parse_args((array) $meta('advance_notice', array()), array('visible' => 0, 'title' => 'Mer information kommer', 'text' => 'Vi publicerar mer information om årsmöteshelgen här löpande.'));
+        $food_options = (array) $meta('food_options', array('Vegetariskt', 'Veganskt', 'Glutenfritt', 'Laktosfritt'));
         $stored_modules = (array) $meta('modules', array());
+        $activity_model_version = (int) $meta('activity_model_version', 0);
+        $program = $this->migrate_legacy_activities(
+            $this->normalise_program((array) $meta('program', array()), $start_at, $duration_days),
+            array(
+                'meeting_start_at' => (int) $meta('meeting_start_at', 0),
+                'meeting_end_at' => (int) $meta('meeting_end_at', 0),
+                'dinner' => $dinner,
+                'food_options' => $food_options,
+                'legacy_dinner_visible' => $activity_model_version < 1 && array_key_exists('dinner', $stored_modules) ? (bool) $stored_modules['dinner'] : null,
+            ),
+            $start_at,
+            $duration_days
+        );
+        $advance_notice = wp_parse_args((array) $meta('advance_notice', array()), array('visible' => 0, 'title' => 'Mer information kommer', 'text' => 'Vi publicerar mer information om årsmöteshelgen här löpande.'));
         $meeting_post = get_post($meeting_id);
         $is_new_meeting = $meeting_post && 'auto-draft' === $meeting_post->post_status;
         $modules = wp_parse_args($stored_modules, array(
@@ -410,7 +423,7 @@ final class Module
             'program' => $program,
             'program_pdf_id' => (int) $meta('program_pdf_id', 0),
             'documents' => $documents,
-            'food_options' => (array) $meta('food_options', array('Vegetariskt', 'Veganskt', 'Glutenfritt', 'Laktosfritt')),
+            'food_options' => $food_options,
             'questions' => (array) $meta('questions', array()),
             'sharepoint_year' => (int) $meta('sharepoint_year', $legacy_year),
             'notification_email' => (string) $meta('notification_email', ''),
@@ -496,22 +509,14 @@ final class Module
     public function registration_choices(array $meeting): array
     {
         $choices = array();
-        $has_program_dinner = false;
         if ($this->module_enabled($meeting, 'day2')) {
             foreach ((array) $meeting['program'] as $item) {
                 $is_annual_meeting = 'annual_meeting' === ($item['type'] ?? '') || 'annual_meeting' === ($item['key'] ?? '');
-                $is_dinner = 'dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '');
                 if ($is_annual_meeting) {
-                    continue;
-                }
-                if ($is_dinner && ! $this->module_enabled($meeting, 'dinner')) {
                     continue;
                 }
                 if (empty($item['visible']) || empty($item['requires_registration'])) {
                     continue;
-                }
-                if ('dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '')) {
-                    $has_program_dinner = true;
                 }
                 $starts_at = ! empty($item['date']) && ! empty($item['start']) ? $this->timestamp($item['date'] . 'T' . $item['start']) : 0;
                 $ends_at = ! empty($item['date']) && ! empty($item['end']) ? $this->timestamp($item['date'] . 'T' . $item['end']) : 0;
@@ -523,30 +528,6 @@ final class Module
                     'optional' => $item['optional'] ?? 1,
                 ));
             }
-        }
-        if ($this->module_enabled($meeting, 'day2') && $this->module_enabled($meeting, 'dinner') && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
-            $dinner = $meeting['dinner'];
-            $choices[] = array(
-                'key' => 'dinner',
-                'title' => (string) ($dinner['title'] ?: __('Middag', 'ssf-member-portal')),
-                'date' => wp_date('Y-m-d', (int) $dinner['start_at'], wp_timezone()),
-                'start' => wp_date('H:i', (int) $dinner['start_at'], wp_timezone()),
-                'end' => ! empty($dinner['end_at']) ? wp_date('H:i', (int) $dinner['end_at'], wp_timezone()) : '',
-                'location' => (string) $dinner['location'],
-                'description' => (string) $dinner['description'],
-                'capacity' => max(0, (int) $dinner['capacity']),
-                'opens_at' => (int) ($dinner['opens_at'] ?? 0),
-                'deadline' => (int) $dinner['deadline'],
-                'food' => ! empty($dinner['food_enabled']) ? 1 : 0,
-                'closed' => 0,
-                'manual_open' => ! empty($dinner['manual_open']) ? 1 : 0,
-                'starts_at' => (int) $dinner['start_at'],
-                'ends_at' => (int) ($dinner['end_at'] ?? 0),
-                'price' => (string) $dinner['price'],
-                'optional' => 1,
-                'visible' => 1,
-                'source' => 'dinner',
-            );
         }
         return $choices;
     }
@@ -595,7 +576,7 @@ final class Module
 
     private function program_row(): array
     {
-        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'requires_registration' => 0, 'ask' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'opens_at' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'order' => 0);
+        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'requires_registration' => 0, 'ask' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'opens_at' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'questions' => array(), 'order' => 0);
     }
 
     private function question_row(): array
@@ -627,6 +608,11 @@ final class Module
             $requires_registration = ! empty($row['requires_registration']) || ! empty($row['ask']);
             $type = sanitize_key($row['type'] ?? 'activity');
             $types = array('annual_meeting', 'dinner', 'presentation', 'activity', 'other');
+            $opens_at = $this->timestamp(sanitize_text_field((string) ($row['opens_at'] ?? '')));
+            $deadline = $this->timestamp(sanitize_text_field((string) ($row['deadline'] ?? '')));
+            if ($opens_at && $deadline && $opens_at > $deadline) {
+                $opens_at = 0;
+            }
             $program[] = array(
                 'key' => $key,
                 'day' => $day,
@@ -642,12 +628,13 @@ final class Module
                 'optional' => ! empty($row['optional']) ? 1 : 0,
                 'food' => ! empty($row['food']) ? 1 : 0,
                 'closed' => ! empty($row['closed']) ? 1 : 0,
-                'manual_open' => 0,
+                'manual_open' => ! empty($row['manual_open']) ? 1 : 0,
                 'capacity' => max(0, absint($row['capacity'] ?? 0)),
-                'opens_at' => 0,
-                'deadline' => 0,
+                'opens_at' => $opens_at,
+                'deadline' => $deadline,
                 'price' => sanitize_text_field($row['price'] ?? ''),
                 'visible' => ! empty($row['visible']) ? 1 : 0,
+                'questions' => $this->sanitize_activity_questions((array) ($row['questions'] ?? array())),
                 'order' => max(0, absint($row['order'] ?? count($program))),
             );
         }
@@ -789,6 +776,7 @@ final class Module
                 'deadline' => 0,
                 'price' => '',
                 'visible' => 1,
+                'questions' => array(),
                 'order' => $index,
             ));
             $item['requires_registration'] = $requires_registration ? 1 : 0;
@@ -812,8 +800,124 @@ final class Module
         return $program;
     }
 
+    private function sanitize_activity_questions(array $rows): array
+    {
+        $questions = array();
+        $used = array();
+        $types = array('text', 'textarea', 'single', 'multiple', 'yes_no');
+        foreach (array_values($rows) as $index => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $title = sanitize_text_field((string) ($row['title'] ?? ''));
+            if (! $title) {
+                continue;
+            }
+            $library_key = sanitize_key((string) ($row['library_key'] ?? ''));
+            $key = sanitize_key((string) ($row['key'] ?? '')) ?: $library_key ?: sanitize_key($title);
+            $key = $key ?: 'fraga_' . ($index + 1);
+            $base = $key;
+            $suffix = 2;
+            while (isset($used[$key])) {
+                $key = $base . '_' . $suffix++;
+            }
+            $used[$key] = true;
+            $type = sanitize_key((string) ($row['type'] ?? 'text'));
+            $options = is_array($row['options'] ?? null)
+                ? array_values(array_filter(array_map('sanitize_text_field', $row['options'])))
+                : $this->lines(sanitize_textarea_field((string) ($row['options'] ?? '')));
+            $questions[] = array(
+                'key' => $key,
+                'library_key' => $library_key ?: $key,
+                'title' => $title,
+                'help' => sanitize_textarea_field((string) ($row['help'] ?? '')),
+                'type' => in_array($type, $types, true) ? $type : 'text',
+                'options' => $options,
+                'required' => ! empty($row['required']) ? 1 : 0,
+                'scope' => 'registration' === ($row['scope'] ?? '') ? 'registration' : 'participant',
+                'order' => max(0, absint($row['order'] ?? $index)),
+            );
+        }
+        usort($questions, static function (array $a, array $b): int { return $a['order'] <=> $b['order']; });
+        return $questions;
+    }
+
+    public function question_library(array $meeting = array()): array
+    {
+        $library = get_option('ssf_member_portal_annual_meeting_question_library', array());
+        $library = is_array($library) ? $library : array();
+        if (! isset($library['dietary_preferences'])) {
+            $options = array_values(array_filter(array_map('sanitize_text_field', (array) ($meeting['food_options'] ?? array()))));
+            $normalised_options = array_map(static function (string $option): string { return function_exists('mb_strtolower') ? mb_strtolower($option) : strtolower($option); }, $options);
+            if (! array_filter($normalised_options, static function (string $option): bool { return false !== strpos($option, 'ingen'); })) {
+                array_unshift($options, __('Ingen specialkost', 'ssf-member-portal'));
+            }
+            if (! array_filter($normalised_options, static function (string $option): bool { return false !== strpos($option, 'annan') || false !== strpos($option, 'annat'); })) {
+                $options[] = __('Annan', 'ssf-member-portal');
+            }
+            $library['dietary_preferences'] = array(
+                'key' => 'dietary_preferences', 'library_key' => 'dietary_preferences',
+                'title' => __('Kost / matpreferenser', 'ssf-member-portal'), 'help' => '',
+                'type' => 'multiple', 'options' => $options ?: array('Ingen specialkost', 'Vegetarisk', 'Vegansk', 'Glutenfri', 'Laktosfri', 'Annan'),
+                'required' => 1, 'scope' => 'participant', 'order' => 0,
+            );
+        }
+        if (! isset($library['kitchen_notes'])) {
+            $library['kitchen_notes'] = array(
+                'key' => 'kitchen_notes', 'library_key' => 'kitchen_notes',
+                'title' => __('Allergier eller annat köket behöver känna till', 'ssf-member-portal'), 'help' => '',
+                'type' => 'textarea', 'options' => array(), 'required' => 0, 'scope' => 'participant', 'order' => 1,
+            );
+        }
+        return $library;
+    }
+
+    public function migrate_activity_model(int $meeting_id): bool
+    {
+        if ((int) get_post_meta($meeting_id, '_ssf_am_activity_model_version', true) >= 1) {
+            return false;
+        }
+        $meeting = $this->data($meeting_id);
+        $stored = get_post_meta($meeting_id, '_ssf_am_program', true);
+        $stored = is_array($stored) ? $stored : array();
+        if ($stored !== $meeting['program']) {
+            update_post_meta($meeting_id, '_ssf_am_program', $meeting['program']);
+        }
+        update_post_meta($meeting_id, '_ssf_am_activity_model_version', 1);
+        return true;
+    }
+
+    private function store_question_library(array $program): void
+    {
+        $library = $this->question_library();
+        $changed = false;
+        foreach ($program as $activity) {
+            foreach ((array) ($activity['questions'] ?? array()) as $question) {
+                $key = sanitize_key((string) ($question['library_key'] ?? $question['key'] ?? ''));
+                if ($key && ! isset($library[$key])) {
+                    $library[$key] = $question;
+                    $changed = true;
+                }
+            }
+        }
+        if ($changed) {
+            update_option('ssf_member_portal_annual_meeting_question_library', $library, false);
+        }
+    }
+
     private function migrate_legacy_activities(array $program, array $meeting, int $weekend_start, int $duration_days): array
     {
+        foreach ($program as &$activity) {
+            $is_dinner = 'dinner' === ($activity['type'] ?? '') || 'dinner' === ($activity['key'] ?? '');
+            if ($is_dinner && array_key_exists('legacy_dinner_visible', $meeting) && null !== $meeting['legacy_dinner_visible']) {
+                $activity['visible'] = $meeting['legacy_dinner_visible'] ? 1 : 0;
+            }
+            if ($is_dinner && empty($activity['questions']) && (! empty($activity['food']) || ! empty($meeting['dinner']['food_enabled']))) {
+                $library = $this->question_library($meeting);
+                $activity['questions'] = array($library['dietary_preferences'], $library['kitchen_notes']);
+            }
+        }
+        unset($activity);
         $types = array_column($program, 'type');
         $keys = array_column($program, 'key');
         if (! in_array('annual_meeting', $types, true) && ! empty($meeting['meeting_start_at'])) {
@@ -838,11 +942,18 @@ final class Module
                 'deadline' => 0,
                 'price' => '',
                 'visible' => 1,
+                'questions' => array(),
                 'order' => count($program),
             );
         }
         if (! in_array('dinner', $types, true) && ! in_array('dinner', $keys, true) && ! empty($meeting['dinner']['start_at'])) {
             $dinner = $meeting['dinner'];
+            $questions = array();
+            if (! empty($dinner['food_enabled'])) {
+                $library = $this->question_library($meeting);
+                $questions[] = $library['dietary_preferences'];
+                $questions[] = $library['kitchen_notes'];
+            }
             $program[] = array(
                 'key' => 'dinner',
                 'day' => $this->day_for_timestamp((int) $dinner['start_at'], $weekend_start, $duration_days),
@@ -858,12 +969,13 @@ final class Module
                 'optional' => 1,
                 'food' => ! empty($dinner['food_enabled']) ? 1 : 0,
                 'closed' => 0,
-                'manual_open' => 0,
+                'manual_open' => ! empty($dinner['manual_open']) ? 1 : 0,
                 'capacity' => max(0, (int) $dinner['capacity']),
-                'opens_at' => 0,
-                'deadline' => 0,
+                'opens_at' => (int) ($dinner['opens_at'] ?? 0),
+                'deadline' => (int) ($dinner['deadline'] ?? 0),
                 'price' => (string) $dinner['price'],
-                'visible' => 1,
+                'visible' => ! array_key_exists('legacy_dinner_visible', $meeting) || null === $meeting['legacy_dinner_visible'] || $meeting['legacy_dinner_visible'] ? 1 : 0,
+                'questions' => $questions,
                 'order' => count($program),
             );
         }

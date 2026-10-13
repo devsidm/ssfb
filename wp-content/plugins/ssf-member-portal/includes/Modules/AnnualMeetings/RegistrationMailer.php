@@ -75,8 +75,9 @@ final class RegistrationMailer
             $this->add_row($rows, __('Telefon', 'ssf-member-portal'), (string) ($participant['phone'] ?? ''));
             $this->add_row($rows, __('Fartyg', 'ssf-member-portal'), implode(', ', (array) ($participant['vessels'] ?? array())));
             $this->add_row($rows, __('Aktiviteter', 'ssf-member-portal'), implode(', ', (array) ($participant['activity_labels'] ?? array())));
-            $this->add_row($rows, __('Specialkost', 'ssf-member-portal'), (string) ($participant['dietary_label'] ?? ''));
-            $this->add_row($rows, __('Allergi/övrigt', 'ssf-member-portal'), (string) ($participant['allergy_note'] ?? ''));
+            foreach ((array) ($participant['activity_answers'] ?? array()) as $answer) {
+                $this->add_row($rows, (string) $answer['activity'] . ' – ' . (string) $answer['question'], (string) $answer['answer']);
+            }
             $name = trim((string) ($participant['first_name'] ?? '') . ' ' . (string) ($participant['last_name'] ?? ''));
             $participant_sections[] = array('title' => sprintf(__('Deltagare %d: %s', 'ssf-member-portal'), $index + 1, $name), 'rows' => $rows);
         }
@@ -87,6 +88,9 @@ final class RegistrationMailer
             }
             $answer = $registration['answers'][$question['key']] ?? '';
             $this->add_row($registration_rows, (string) $question['title'], $this->answer_value($question, $answer));
+        }
+        foreach ((array) ($registration['registration_activity_answers'] ?? array()) as $answer) {
+            $this->add_row($registration_rows, (string) $answer['activity'] . ' – ' . (string) $answer['question'], (string) $answer['answer']);
         }
 
         $updated = ! empty($registration['submitted_at']) && (int) ($registration['updated_at'] ?? 0) > (int) $registration['submitted_at'];

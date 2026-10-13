@@ -19,34 +19,6 @@ $show_invitation = $this->meetings->module_enabled($meeting, 'invitation') && ! 
 $program = array_values(array_filter((array) $meeting['program'], static function (array $item): bool {
     return ! empty($item['visible']);
 }));
-$program = array_values(array_filter($program, function (array $item) use ($meeting): bool {
-    return ('dinner' !== ($item['type'] ?? '') && 'dinner' !== ($item['key'] ?? '')) || $this->meetings->module_enabled($meeting, 'dinner');
-}));
-$has_program_dinner = (bool) array_filter($program, static function (array $item): bool {
-    return 'dinner' === ($item['type'] ?? '') || 'dinner' === ($item['key'] ?? '');
-});
-
-// Older meetings may store dinner separately. Present it in the same chronological program.
-if ($this->meetings->module_enabled($meeting, 'dinner') && ! $has_program_dinner && ! empty($meeting['dinner']['start_at'])) {
-    $dinner = (array) $meeting['dinner'];
-    $dinner_date = wp_date('Y-m-d', (int) $dinner['start_at'], wp_timezone());
-    $meeting_date = ! empty($meeting['start_at']) ? wp_date('Y-m-d', (int) $meeting['start_at'], wp_timezone()) : $dinner_date;
-    $day = max(1, (int) round((strtotime($dinner_date . ' 12:00:00') - strtotime($meeting_date . ' 12:00:00')) / DAY_IN_SECONDS) + 1);
-    $program[] = array(
-        'key' => 'dinner',
-        'day' => $day,
-        'date' => $dinner_date,
-        'start' => wp_date('H:i', (int) $dinner['start_at'], wp_timezone()),
-        'end' => ! empty($dinner['end_at']) ? wp_date('H:i', (int) $dinner['end_at'], wp_timezone()) : '',
-        'title' => $dinner['title'] ?: __('Middag', 'ssf-member-portal'),
-        'description' => (string) ($dinner['description'] ?? ''),
-        'location' => (string) ($dinner['location'] ?? ''),
-        'price' => (string) ($dinner['price'] ?? ''),
-        'requires_registration' => 1,
-        'order' => count($program),
-    );
-}
-
 usort($program, static function (array $a, array $b): int {
     return ((int) ($a['day'] ?? 1) <=> (int) ($b['day'] ?? 1))
         ?: strcmp((string) ($a['start'] ?? ''), (string) ($b['start'] ?? ''))

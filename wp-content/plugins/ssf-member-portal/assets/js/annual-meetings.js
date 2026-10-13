@@ -43,41 +43,57 @@
         container.appendChild(label);
       });
     });
-    syncDiet(form, people);
+    syncActivityQuestions(form, people);
     refreshCounts(form);
   }
 
-  function syncDiet(form, people) {
-    var container = form.querySelector('[data-ssf-diet-list]');
-    var existing = {};
-    container.querySelectorAll('[data-ssf-diet-person]').forEach(function (card) {
-      var oldIndex = card.getAttribute('data-ssf-diet-person');
-      var person = people[Number(oldIndex)];
-      var id = card.getAttribute('data-person-id') || (person ? person.id : '');
-      if (id) { card.setAttribute('data-person-id', id); existing[id] = card; }
-    });
-    people.forEach(function (person) {
-      var card = existing[person.id];
-      if (!card) {
-        card = document.createElement('article');
-        card.className = 'ssf-am-diet-card';
-        card.setAttribute('data-ssf-diet-person', person.index);
-        card.setAttribute('data-person-id', person.id);
-        card.innerHTML = '<h3></h3><div class="ssf-am-options"></div><p><label>Annan specialkost<input name="participants[' + person.index + '][dietary_other]"></label></p><p><label>Allergi / övrig information<textarea name="participants[' + person.index + '][allergy_note]" rows="2"></textarea></label></p>';
-        [['none', 'Ingen specialkost'], ['vegetarian', 'Vegetarisk'], ['vegan', 'Vegansk'], ['gluten_free', 'Glutenfri'], ['lactose_free', 'Laktosfri'], ['other', 'Annan']].forEach(function (option) {
-          card.querySelector('.ssf-am-options').insertAdjacentHTML('beforeend', '<label class="ssf-am-option"><input type="checkbox" name="participants[' + person.index + '][dietary][]" value="' + option[0] + '"> ' + option[1] + '</label>');
+  function syncActivityQuestions(form, people) {
+    var visibleGroups = 0;
+    form.querySelectorAll('[data-ssf-activity-question-group]').forEach(function (group) {
+      var activityKey = group.getAttribute('data-activity-key');
+      var selected = {};
+      form.querySelectorAll('[data-ssf-activity="' + activityKey + '"] input:checked').forEach(function (input) { selected[input.getAttribute('data-person-id')] = true; });
+      var anySelected = Object.keys(selected).length > 0;
+      group.hidden = !anySelected;
+      if (anySelected) { visibleGroups++; }
+      if (group.getAttribute('data-question-scope') === 'registration') {
+        group.querySelectorAll('input, select, textarea').forEach(function (field) {
+          field.disabled = !anySelected;
+          if (field.dataset.required === '1') { field.required = anySelected; }
         });
-        container.appendChild(card);
+        return;
       }
-      card.setAttribute('data-ssf-diet-person', person.index);
-      card.querySelectorAll('[name]').forEach(function (field) { field.name = field.name.replace(/participants\[\d+\]/, 'participants[' + person.index + ']'); });
-      card.querySelector('h3').textContent = person.name;
-      var hasFood = !!form.querySelector('[data-food="1"] input[name^="participants[' + person.index + ']"]:checked');
-      card.hidden = !hasFood;
+      var container = group.querySelector('[data-ssf-question-people]');
+      var existing = {};
+      container.querySelectorAll('[data-ssf-question-person]').forEach(function (card) { existing[card.getAttribute('data-person-id')] = card; });
+      var base = container.querySelector('[data-ssf-question-person]');
+      people.forEach(function (person) {
+        var card = existing[person.id];
+        if (!card && base) {
+          card = base.cloneNode(true);
+          var oldId = card.getAttribute('data-person-id');
+          card.setAttribute('data-person-id', person.id);
+          card.querySelectorAll('[name]').forEach(function (field) {
+            field.name = field.name.replace('[participants][' + oldId + ']', '[participants][' + person.id + ']');
+            field.checked = false;
+            if (field.type !== 'checkbox' && field.type !== 'radio') { field.value = ''; }
+          });
+          container.appendChild(card);
+          existing[person.id] = card;
+        }
+        if (!card) { return; }
+        card.querySelector('h3').textContent = person.name;
+        var active = !!selected[person.id];
+        card.hidden = !active;
+        card.querySelectorAll('input, select, textarea').forEach(function (field) {
+          field.disabled = !active;
+          if (field.dataset.required === '1') { field.required = active; }
+        });
+      });
+      Object.keys(existing).forEach(function (id) { if (!people.some(function (person) { return person.id === id; })) existing[id].remove(); });
     });
-    var active = {};
-    people.forEach(function (person) { active[person.id] = true; });
-    Object.keys(existing).forEach(function (id) { if (!active[id]) existing[id].remove(); });
+    var empty = form.querySelector('[data-ssf-no-activity-questions]');
+    if (empty) { empty.hidden = visibleGroups > 0; }
   }
 
   function refreshCounts(form) {
@@ -85,6 +101,15 @@
       var count = activity.querySelectorAll('input:checked').length;
       activity.querySelector('[data-ssf-activity-count]').textContent = count + (count === 1 ? ' person' : ' personer');
     });
+  }
+
+  function answerText(container) {
+    var values = [];
+    container.querySelectorAll('input:not([disabled]), textarea:not([disabled]), select:not([disabled])').forEach(function (field) {
+      if ((field.type === 'checkbox' || field.type === 'radio') && !field.checked) { return; }
+      if (field.value) { values.push(field.value === 'yes' ? 'Ja' : (field.value === 'no' ? 'Nej' : field.value)); }
+    });
+    return values.join(', ');
   }
 
   function buildReview(form) {
@@ -100,6 +125,12 @@
       article.innerHTML = '<h3></h3><p></p>';
       article.querySelector('h3').textContent = personName(card, index);
       article.querySelector('p').textContent = activities.length ? activities.join(' · ') : 'Inga aktiviteter valda';
+      var personId = card.getAttribute('data-person-id');
+      form.querySelectorAll('[data-ssf-question-person][data-person-id="' + personId + '"]:not([hidden])').forEach(function (answerCard) {
+        var value = answerText(answerCard);
+        var legend = answerCard.closest('[data-ssf-activity-question-group]').querySelector('legend').textContent.replace('*', '').trim();
+        if (value) { var answerRow = document.createElement('p'); answerRow.innerHTML = '<strong></strong> <span></span>'; answerRow.querySelector('strong').textContent = legend + ':'; answerRow.querySelector('span').textContent = value; article.appendChild(answerRow); }
+      });
       review.appendChild(article);
     });
     var summary = document.createElement('article');
@@ -108,6 +139,10 @@
     form.querySelectorAll('[data-ssf-activity]').forEach(function (activity) {
       summary.insertAdjacentHTML('beforeend', '<div><span></span><strong>' + activity.querySelectorAll('input:checked').length + '</strong></div>');
       summary.lastElementChild.querySelector('span').textContent = activity.querySelector('h3').textContent;
+    });
+    form.querySelectorAll('[data-ssf-activity-question-group][data-question-scope="registration"]:not([hidden])').forEach(function (group) {
+      var value = answerText(group);
+      if (value) { summary.insertAdjacentHTML('beforeend', '<p><strong></strong> <span></span></p>'); summary.lastElementChild.querySelector('strong').textContent = group.querySelector('legend').textContent.replace('*', '').trim() + ':'; summary.lastElementChild.querySelector('span').textContent = value; }
     });
     review.appendChild(summary);
   }
@@ -144,7 +179,7 @@
     }
     syncPeople(form); show(1);
     form.addEventListener('input', function (event) { if (event.target.matches('[data-ssf-person-name]')) syncPeople(form); });
-    form.addEventListener('change', function () { refreshCounts(form); syncDiet(form, Array.prototype.map.call(form.querySelectorAll('[data-ssf-person]'), function (card, index) { return { index: index, name: personName(card, index) }; })); });
+    form.addEventListener('change', function () { syncPeople(form); });
     form.addEventListener('click', function (event) {
       if (event.target.closest('[data-ssf-next]')) { if (currentStepIsValid()) show(current + 1); }
       if (event.target.closest('[data-ssf-back]')) show(current - 1);
