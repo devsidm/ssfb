@@ -194,6 +194,7 @@ $meeting = $module->data(10);
 $program_state = $service->registration_state($meeting, get_post(10));
 $program_html = $render($meeting, $program_state);
 check(str_contains($program_html, 'Själva årsmötet') && str_contains($program_html, '<h4>Middag</h4>'), 'Dinner was not rendered as an ordinary program activity.');
+check(! str_contains($program_html, 'Anmälan krävs'), 'The unfriendly registration-required badge was still rendered in the program.');
 check(isset($program_state['choice_states']['dinner']), 'Dinner was not exposed through the generic activity choices.');
 check(substr_count($program_html, '<h2>Snart klart</h2>') === 1 && str_contains($program_html, 'Vi återkommer med detaljer.'), 'Editable advance notice did not persist.');
 
