@@ -69,6 +69,8 @@ $person = static function (string $id, string $first, array $activities, array $
 
 $one = $validate->invoke($service, $meeting, array('participants' => array($person('p1', 'Ada', array('annual_meeting' => 1)))), 0);
 check(! is_wp_error($one) && 1 === count($one['participants']) && 'yes' === $one['meeting_attendance'], 'One participant/one activity failed.');
+$without_vessel = $validate->invoke($service, $meeting, array('participants' => array($person('p1', 'Johan', array('annual_meeting' => 1), array('relationship' => 'representative', 'vessels' => array())))), 0);
+check(! is_wp_error($without_vessel) && ! $without_vessel['participants'][0]['vessels'], 'Optional vessel field was incorrectly required for a representative.');
 $multi = $validate->invoke($service, $meeting, array('participants' => array($person('p1', 'Ada', array('annual_meeting' => 1, 'dinner' => 1), array('dietary' => array('vegan'), 'allergy_note' => 'Nötter')))), 0);
 check(! is_wp_error($multi) && 'vegan' === $multi['participants'][0]['dietary'][0] && 'Nötter' === $multi['participants'][0]['allergy_note'], 'Multiple activities or dietary data failed.');
 $two = $validate->invoke($service, $meeting, array('participants' => array($person('p1', 'Ada', array('annual_meeting' => 1)), $person('p2', 'Grace', array('dinner' => 1), array('email' => '', 'dietary' => array('vegetarian'))))), 0);

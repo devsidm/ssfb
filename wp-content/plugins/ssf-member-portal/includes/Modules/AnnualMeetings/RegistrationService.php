@@ -761,9 +761,6 @@ final class RegistrationService
             if (! in_array($participant['relationship'], $valid_relationships, true)) {
                 return new \WP_Error('annual_meeting_relationship', sprintf(__('Välj relation till SSF för %s.', 'ssf-member-portal'), $participant['first_name']));
             }
-            if (in_array($participant['relationship'], array('representative', 'vessel_member'), true) && ! $participant['vessels']) {
-                return new \WP_Error('annual_meeting_vessel', sprintf(__('Ange fartyg för %s.', 'ssf-member-portal'), $participant['first_name']));
-            }
             foreach ((array) ($submitted['activities'] ?? array()) as $activity_key => $selected) {
                 $activity_key = sanitize_key((string) $activity_key);
                 if (! $selected) {
