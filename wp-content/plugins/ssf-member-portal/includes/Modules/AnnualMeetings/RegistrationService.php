@@ -470,8 +470,9 @@ final class RegistrationService
         $capacity = max(0, (int) ($choice['capacity'] ?? 0));
         $count = (int) ($counts[(string) ($choice['key'] ?? '')] ?? 0);
         $now = $this->now();
-        $open_at = $this->choice_open_at($meeting, $choice);
-        $close_at = $this->choice_close_at($meeting, $choice);
+        $times = $this->effective_registration_times($meeting, $choice);
+        $open_at = $times['opens_at'];
+        $close_at = $times['closes_at'];
         $meeting_end = $this->meeting_end_at($meeting);
         $full = $capacity > 0 && $count >= $capacity;
         $status = self::AVAILABILITY_OPEN;
@@ -509,6 +510,22 @@ final class RegistrationService
             'opens_at' => $open_at,
             'closes_at' => $close_at,
         );
+    }
+
+    /**
+     * Empty activity values inherit independently from the meeting. Legacy
+     * activity timestamps therefore remain explicit overrides without a data
+     * migration, while new activities inherit by default.
+     */
+    public function effective_registration_times(array $meeting, array $choice): array
+    {
+        $meeting_end = $this->meeting_end_at($meeting);
+        $opens_at = (int) (($choice['opens_at'] ?? 0) ?: ($meeting['registration_opens_at'] ?? 0));
+        $closes_at = (int) (($choice['deadline'] ?? 0) ?: ($meeting['registration_closes_at'] ?? 0) ?: $meeting_end);
+        if (! empty($choice['manual_open'])) {
+            $closes_at = $meeting_end;
+        }
+        return array('opens_at' => $opens_at, 'closes_at' => $closes_at);
     }
 
     private function send_confirmation(int $registration_id, array $meeting, array $registration, string $manage_url, bool $queue_on_failure): bool
@@ -1012,16 +1029,6 @@ final class RegistrationService
         } catch (\Exception $exception) {
             return wp_generate_password(64, false, false);
         }
-    }
-
-    private function choice_open_at(array $meeting, array $choice): int
-    {
-        return (int) ($meeting['registration_opens_at'] ?? 0);
-    }
-
-    private function choice_close_at(array $meeting, array $choice): int
-    {
-        return (int) (($meeting['registration_closes_at'] ?? 0) ?: $this->meeting_end_at($meeting));
     }
 
     private function meeting_end_at(array $meeting): int

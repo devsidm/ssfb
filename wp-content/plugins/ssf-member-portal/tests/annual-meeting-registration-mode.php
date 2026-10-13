@@ -128,6 +128,14 @@ $render = static function (array $meeting, array $state) use ($module, $service,
 $meeting = $module->data(10);
 check($meeting['registration_mode'] === 'closed' && $meeting['registration_visible'] && ! $meeting['registration_mode_explicit'], 'Legacy disabled registration was not preserved.');
 check($meeting['modules']['dinner'], 'Legacy program dinner disappeared before an explicit visibility save.');
+$shared_open = strtotime('2026-09-01 08:00:00 Europe/Stockholm');
+$shared_close = strtotime('2026-10-10 23:59:00 Europe/Stockholm');
+$dinner_close = strtotime('2026-10-05 23:59:00 Europe/Stockholm');
+$times_meeting = array_merge($meeting, array('registration_opens_at' => $shared_open, 'registration_closes_at' => $shared_close));
+$inherited_times = $service->effective_registration_times($times_meeting, array());
+check($inherited_times['opens_at'] === $shared_open && $inherited_times['closes_at'] === $shared_close, 'Activity did not inherit meeting registration times.');
+$override_times = $service->effective_registration_times($times_meeting, array('deadline' => $dinner_close));
+check($override_times['opens_at'] === $shared_open && $override_times['closes_at'] === $dinner_close, 'Partial activity registration override did not preserve the inherited opening.');
 $new_post = new WP_Post(11);
 $new_post->post_status = 'auto-draft';
 $GLOBALS['meeting_posts'][11] = $new_post;

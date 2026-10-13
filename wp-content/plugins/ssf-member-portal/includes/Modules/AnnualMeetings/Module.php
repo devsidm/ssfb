@@ -610,6 +610,10 @@ final class Module
             $types = array('annual_meeting', 'dinner', 'presentation', 'activity', 'other');
             $opens_at = $this->timestamp(sanitize_text_field((string) ($row['opens_at'] ?? '')));
             $deadline = $this->timestamp(sanitize_text_field((string) ($row['deadline'] ?? '')));
+            if ('inherit' === sanitize_key((string) ($row['registration_times'] ?? ''))) {
+                $opens_at = 0;
+                $deadline = 0;
+            }
             if ($opens_at && $deadline && $opens_at > $deadline) {
                 $opens_at = 0;
             }

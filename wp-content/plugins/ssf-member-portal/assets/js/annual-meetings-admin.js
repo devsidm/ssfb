@@ -42,6 +42,15 @@
     });
   }
 
+  function updateRegistrationTimeFields(row) {
+    var selected = row.querySelector('[data-ssf-registration-times] input[type="radio"]:checked');
+    var fields = row.querySelector('[data-ssf-registration-time-overrides]');
+    if (!selected || !fields) {
+      return;
+    }
+    fields.hidden = selected.value !== 'override';
+  }
+
   function updateProgramDays() {
     var start = editor.querySelector('[data-ssf-weekend-start]');
     var duration = editor.querySelector('[data-ssf-weekend-duration]');
@@ -78,6 +87,7 @@
 
   function initialiseRow(row) {
     updateRegistrationFields(row);
+    updateRegistrationTimeFields(row);
     var input = row.querySelector('[data-ssf-title-input]');
     if (input) {
       input.addEventListener('input', function () {
@@ -236,6 +246,9 @@
     }
     if (event.target.matches('[data-ssf-registration-toggle]')) {
       updateRegistrationFields(event.target.closest('[data-ssf-repeater-row]'));
+    }
+    if (event.target.matches('[data-ssf-registration-times] input[type="radio"]')) {
+      updateRegistrationTimeFields(event.target.closest('[data-ssf-repeater-row]'));
     }
     if (event.target.matches('[data-ssf-weekend-start], [data-ssf-weekend-duration]')) {
       updateProgramDays();
