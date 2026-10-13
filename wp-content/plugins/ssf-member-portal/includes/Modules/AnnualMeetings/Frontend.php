@@ -133,7 +133,7 @@ final class Frontend
         $choices = (array) $registration_state['choices'];
         $choice_states = (array) $registration_state['choice_states'];
         if ($registration_post && isset($_GET['ssf_am_confirmation'])) {
-            $calendar = $this->calendar->urls($meeting);
+            $calendar = $this->calendar->urls($meeting, $this->meetings->registration_calendar_url($token));
             ob_start();
             include SSF_MEMBER_PORTAL_PATH . 'templates/annual-meetings/confirmation.php';
             return (string) ob_get_clean();
@@ -220,14 +220,15 @@ final class Frontend
             exit;
         }
         $meeting = $this->meetings->data((int) $registration->post_parent);
-        if (! $this->calendar->event_data($meeting)) {
+        $ics = $this->registrations->calendar($registration);
+        if (! $ics) {
             status_header(404);
             exit;
         }
         nocache_headers();
         header('Content-Type: text/calendar; charset=utf-8');
         header('Content-Disposition: attachment; filename="ssf-arsmoteshelg-' . (int) $meeting['year'] . '.ics"');
-        echo $this->calendar->ics($meeting); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        echo $ics; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         exit;
     }
 

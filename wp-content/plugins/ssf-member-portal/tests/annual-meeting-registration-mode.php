@@ -15,6 +15,7 @@ $GLOBALS['now'] = strtotime('2026-09-20 12:00:00 Europe/Stockholm');
 
 class WP_Post {
     public int $ID;
+    public int $post_parent = 0;
     public string $post_type = 'ssf_annual_meeting';
     public string $post_status = 'publish';
     public string $post_title = 'SSF:s årsmöteshelg 2026';
@@ -84,7 +85,7 @@ $service = (new ReflectionClass(SSF\MemberPortal\Modules\AnnualMeetings\Registra
 $calendar = new SSF\MemberPortal\Modules\AnnualMeetings\CalendarService($module);
 $frontend = (new ReflectionClass(SSF\MemberPortal\Modules\AnnualMeetings\Frontend::class))->newInstanceWithoutConstructor();
 $editor = new SSF\MemberPortal\Modules\AnnualMeetings\Editor($module, $service);
-foreach (array(array($service, 'meetings', $module), array($frontend, 'meetings', $module), array($frontend, 'registrations', $service)) as $property) {
+foreach (array(array($service, 'meetings', $module), array($service, 'calendar', $calendar), array($frontend, 'meetings', $module), array($frontend, 'registrations', $service)) as $property) {
     $field = new ReflectionProperty($property[0], $property[1]);
     $field->setValue($property[0], $property[2]);
 }
@@ -99,7 +100,7 @@ update_post_meta(10, '_ssf_am_modules', array('meeting' => 1, 'day2' => 1, 'cale
 $GLOBALS['meeting_posts'][10]->post_content = 'Varmt välkommen';
 $program = array(
     array('key' => 'annual_meeting', 'type' => 'annual_meeting', 'title' => 'Själva årsmötet', 'day' => 1, 'start' => '10:00', 'end' => '12:00', 'requires_registration' => 1, 'visible' => 1),
-    array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'day' => 1, 'start' => '18:00', 'end' => '20:00', 'requires_registration' => 1, 'visible' => 1),
+    array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'day' => 1, 'start' => '18:00', 'end' => '20:00', 'requires_registration' => 1, 'visible' => 1, 'registration_times' => 'inherit', 'opens_at' => '2026-09-02T08:00', 'deadline' => '2026-10-05T23:59'),
 );
 update_post_meta(10, '_ssf_am_program', $program);
 update_post_meta(10, '_ssf_am_invitation', array('title' => 'Kallelse', 'text' => 'Kallelsetext', 'visible' => 1, 'pdf_id' => 0));
@@ -136,6 +137,36 @@ $inherited_times = $service->effective_registration_times($times_meeting, array(
 check($inherited_times['opens_at'] === $shared_open && $inherited_times['closes_at'] === $shared_close, 'Activity did not inherit meeting registration times.');
 $override_times = $service->effective_registration_times($times_meeting, array('deadline' => $dinner_close));
 check($override_times['opens_at'] === $shared_open && $override_times['closes_at'] === $dinner_close, 'Partial activity registration override did not preserve the inherited opening.');
+$calendar_meeting = array_merge($meeting, array(
+    'calendar_title' => 'SSF:s årsmöteshelg 2026',
+    'location' => 'Hotell Svea',
+    'program' => array(
+        array('key' => 'annual_meeting', 'type' => 'annual_meeting', 'title' => 'Årsmöte', 'date' => '2026-10-17', 'start' => '10:00', 'end' => '12:00', 'location' => 'Hotell Svea', 'description' => 'Beslut, frågor; svar\\bilaga', 'visible' => 1, 'requires_registration' => 1),
+        array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'date' => '2026-10-17', 'start' => '18:00', 'end' => '22:00', 'location' => 'Hotell Svea', 'visible' => 1, 'requires_registration' => 1),
+        array('key' => 'museum', 'type' => 'activity', 'title' => 'Museibesök', 'date' => '2026-10-18', 'start' => '11:00', 'end' => '13:00', 'location' => 'Sjöfartsmuseet', 'visible' => 1, 'requires_registration' => 1),
+        array('key' => 'walk', 'type' => 'activity', 'title' => 'Stadsvandring', 'date' => '2026-10-17', 'start' => '', 'end' => '', 'location' => 'Hamnen', 'visible' => 1, 'requires_registration' => 0),
+    ),
+));
+$raw_public_ics = $calendar->ics($calendar_meeting);
+$public_ics = str_replace("\r\n ", '', $raw_public_ics);
+check(str_starts_with($raw_public_ics, "BEGIN:VCALENDAR\r\nVERSION:2.0") && str_ends_with($raw_public_ics, "END:VCALENDAR\r\n"), 'Calendar output was not a complete VCALENDAR.');
+check(! array_filter(explode("\r\n", $raw_public_ics), static fn (string $line): bool => strlen($line) > 75), 'ICS line folding exceeded 75 octets.');
+check(substr_count($public_ics, 'BEGIN:VEVENT') === 2, 'Calendar did not group the program into one event per day.');
+check(str_contains($public_ics, 'DTSTART;TZID=Europe/Stockholm:20261017T100000') && str_contains($public_ics, 'DTEND;TZID=Europe/Stockholm:20261017T220000'), 'Daily calendar bounds did not use the first start and last end.');
+check(str_contains($public_ics, 'Årsmöte') && str_contains($public_ics, 'Middag') && str_contains($public_ics, 'Museibesök'), 'Calendar descriptions did not contain the daily program.');
+check(str_contains($public_ics, 'Hotell Svea') && str_contains($public_ics, 'Hamnen') && str_contains($public_ics, 'LOCATION:Hotell Svea'), 'Multiple calendar locations were not described with a comprehensible main location.');
+check(str_contains($public_ics, 'Beslut\\, frågor\\; svar\\\\bilaga') && str_contains($public_ics, 'Tid ej angiven'), 'ICS escaping or missing-time handling failed.');
+$selected_ics = str_replace("\r\n ", '', $calendar->ics($calendar_meeting, array('annual_meeting' => 2, 'dinner' => 1)));
+check(substr_count($selected_ics, 'BEGIN:VEVENT') === 1 && str_contains($selected_ics, 'Årsmöte') && str_contains($selected_ics, 'Middag') && ! str_contains($selected_ics, 'Museibesök'), 'Registration calendar did not filter to the group selections.');
+$registration_post = new WP_Post(20);
+$registration_post->post_parent = 10;
+$GLOBALS['meeting_posts'][20] = $registration_post;
+update_post_meta(20, '_ssf_am_participants', array(
+    array('id' => 'p1', 'first_name' => 'Ada', 'last_name' => 'Test', 'activities' => array('annual_meeting' => 1)),
+    array('id' => 'p2', 'first_name' => 'Bo', 'last_name' => 'Test', 'activities' => array('dinner' => 1)),
+));
+$group_ics = str_replace("\r\n ", '', $service->calendar($registration_post));
+check(substr_count($group_ics, 'BEGIN:VEVENT') === 1 && str_contains($group_ics, 'Själva årsmötet') && str_contains($group_ics, 'Middag'), 'Group registration calendar did not use the union of participant activities.');
 $new_post = new WP_Post(11);
 $new_post->post_status = 'auto-draft';
 $GLOBALS['meeting_posts'][11] = $new_post;
@@ -165,6 +196,7 @@ $_POST = array(
 );
 $module->save(10, get_post(10));
 $meeting = $module->data(10);
+check(empty($meeting['program'][1]['opens_at']) && empty($meeting['program'][1]['deadline']), 'Choosing inherited registration times did not clear activity overrides.');
 check($meeting['registration_mode'] === 'open' && ! $meeting['registration_visible'] && ! $meeting['registration_open'], 'Registration visibility and status were not kept separate.');
 check(! $meeting['modules']['day2'] && ! $meeting['modules']['dinner'] && ! $meeting['modules']['motions'] && ! $meeting['modules']['documents'] && ! $meeting['modules']['invitation'], 'Hidden component flags did not persist.');
 $_POST['ssf_meeting_modules']['dinner'] = 1;
@@ -178,7 +210,7 @@ $hidden_state = $service->registration_state($meeting, get_post(10));
 check(! $hidden_state['can_register'], 'Hidden mode allowed registration.');
 check($frontend->registration_shortcode() === '', 'Direct registration page exposed hidden registration content.');
 $hidden_html = $render($meeting, $hidden_state);
-foreach (array('Simrishamn', 'Kajen 1', 'Vägbeskrivning', 'Lägg till i kalender', 'Varmt välkommen') as $required) {
+foreach (array('Simrishamn', 'Kajen 1', 'Vägbeskrivning', 'Lägg programmet i kalendern', 'Varmt välkommen') as $required) {
     check(str_contains($hidden_html, $required), 'Hidden components removed core meeting information: ' . $required);
 }
 foreach (array('ssf-am-registration', 'Gå till anmälan', 'Anmälan är inte', 'Anmälan är stängd', 'Avstängd', 'Anmälan krävs', 'Anmäl gärna', 'ssf-am-program', 'Kallelsetext', 'ssf-am-motion-row', 'ssf-am-document-grid', 'Handling 1', 'ssf-am-contact', 'href="#ssf-am-') as $forbidden) {

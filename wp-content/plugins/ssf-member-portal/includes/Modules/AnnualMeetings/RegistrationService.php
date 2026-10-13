@@ -126,7 +126,8 @@ final class RegistrationService
             $meeting,
             $registration,
             $manage_url,
-            true
+            true,
+            (string) $token
         );
         if ($is_new) {
             $this->mailer->notification($meeting, $registration);
@@ -308,7 +309,8 @@ final class RegistrationService
             $meeting,
             $registration,
             $this->meetings->registration_url(array('token' => rawurlencode($token))),
-            true
+            true,
+            $token
         );
     }
 
@@ -528,13 +530,13 @@ final class RegistrationService
         return array('opens_at' => $opens_at, 'closes_at' => $closes_at);
     }
 
-    private function send_confirmation(int $registration_id, array $meeting, array $registration, string $manage_url, bool $queue_on_failure): bool
+    private function send_confirmation(int $registration_id, array $meeting, array $registration, string $manage_url, bool $queue_on_failure, string $token = ''): bool
     {
         $sent = $this->mailer->confirmation(
             $meeting,
             $registration,
             $manage_url,
-            $this->calendar->urls($meeting),
+            $token ? $this->calendar->urls($meeting, $this->meetings->registration_calendar_url($token)) : array(),
             $this->meetings->meeting_url(array('meeting' => (int) $meeting['id']))
         );
         $now = $this->now();
@@ -628,7 +630,14 @@ final class RegistrationService
 
     public function calendar(\WP_Post $registration): string
     {
-        return $this->calendar_for_meeting((int) $registration->post_parent);
+        $meeting = $this->meetings->data((int) $registration->post_parent);
+        $counts = array();
+        foreach ((array) ($this->details((int) $registration->ID, $meeting)['participants'] ?? array()) as $participant) {
+            foreach (array_filter((array) ($participant['activities'] ?? array())) as $key => $selected) {
+                $counts[(string) $key] = ($counts[(string) $key] ?? 0) + 1;
+            }
+        }
+        return $this->calendar->ics($meeting, $counts);
     }
 
     public function run_retention(): void

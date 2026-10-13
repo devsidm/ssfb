@@ -76,15 +76,7 @@ $resources = array_values(array_filter($resources, static function (array $resou
         <?php if ($meeting['intro']) : ?><p class="ssf-am-lead"><?php echo esc_html($meeting['intro']); ?></p><?php endif; ?>
         <?php if ($this->meetings->module_enabled($meeting, 'calendar') && $calendar) : ?>
             <div class="ssf-am-actions">
-                <details class="ssf-am-calendar-menu">
-                    <summary class="ssf-am-button ssf-am-button--secondary"><?php esc_html_e('Lägg till i kalender', 'ssf-member-portal'); ?></summary>
-                    <div class="ssf-am-calendar-menu__options" aria-label="<?php esc_attr_e('Välj kalender', 'ssf-member-portal'); ?>">
-                        <a href="<?php echo esc_url($calendar['outlook']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Outlook', 'ssf-member-portal'); ?></a>
-                        <a href="<?php echo esc_url($calendar['google']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Google Kalender', 'ssf-member-portal'); ?></a>
-                        <a href="<?php echo esc_url($calendar['apple']); ?>"><?php esc_html_e('Apple Kalender / iCal', 'ssf-member-portal'); ?></a>
-                        <a href="<?php echo esc_url($calendar['ics']); ?>"><?php esc_html_e('Ladda ner kalenderfil (.ics)', 'ssf-member-portal'); ?></a>
-                    </div>
-                </details>
+                <a class="ssf-am-button ssf-am-button--secondary" href="<?php echo esc_url($calendar['ics']); ?>"><?php esc_html_e('Lägg programmet i kalendern', 'ssf-member-portal'); ?></a>
             </div>
         <?php endif; ?>
     </header>

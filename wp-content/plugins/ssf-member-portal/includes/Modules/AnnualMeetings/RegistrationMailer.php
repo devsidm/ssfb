@@ -96,7 +96,7 @@ final class RegistrationMailer
         $updated = ! empty($registration['submitted_at']) && (int) ($registration['updated_at'] ?? 0) > (int) $registration['submitted_at'];
         $secondary_links = array();
         if (! empty($calendar['ics'])) {
-            $secondary_links[] = array('label' => __('Lägg till i kalender', 'ssf-member-portal'), 'url' => (string) $calendar['ics']);
+            $secondary_links[] = array('label' => __('Lägg mitt program i kalendern', 'ssf-member-portal'), 'url' => (string) $calendar['ics']);
         }
         if ($meeting_url) {
             $secondary_links[] = array('label' => __('Visa information om årsmötet', 'ssf-member-portal'), 'url' => $meeting_url);

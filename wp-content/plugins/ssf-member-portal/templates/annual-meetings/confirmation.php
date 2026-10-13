@@ -28,8 +28,8 @@ $cancelled = 'cancelled' === $registration['status'];
 
     <?php if (! $cancelled) : ?>
         <section class="ssf-am-confirmation__next" aria-labelledby="ssf-am-confirmation-next">
-            <div><p class="ssf-am-kicker"><?php esc_html_e('Nästa steg', 'ssf-member-portal'); ?></p><h2 id="ssf-am-confirmation-next"><?php esc_html_e('Spara helgen i kalendern', 'ssf-member-portal'); ?></h2><p><?php esc_html_e('Välj den kalender du använder. Alla alternativ innehåller årsmöteshelgens datum, plats och länk till mer information.', 'ssf-member-portal'); ?></p></div>
-            <?php if ($calendar) : ?><details class="ssf-am-calendar-menu"><summary class="ssf-am-button"><?php esc_html_e('Lägg till i kalender', 'ssf-member-portal'); ?></summary><div class="ssf-am-calendar-menu__options" aria-label="<?php esc_attr_e('Välj kalender', 'ssf-member-portal'); ?>"><a href="<?php echo esc_url($calendar['outlook']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Outlook', 'ssf-member-portal'); ?></a><a href="<?php echo esc_url($calendar['google']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Google Kalender', 'ssf-member-portal'); ?></a><a href="<?php echo esc_url($calendar['apple']); ?>"><?php esc_html_e('Apple Kalender / iCal', 'ssf-member-portal'); ?></a><a href="<?php echo esc_url($calendar['ics']); ?>"><?php esc_html_e('Ladda ner kalenderfil (.ics)', 'ssf-member-portal'); ?></a></div></details><?php endif; ?>
+            <div><p class="ssf-am-kicker"><?php esc_html_e('Nästa steg', 'ssf-member-portal'); ?></p><h2 id="ssf-am-confirmation-next"><?php esc_html_e('Spara programmet i kalendern', 'ssf-member-portal'); ?></h2><p><?php esc_html_e('Kalenderfilen innehåller de aktiviteter som någon i din anmälan deltar i, samlade till en kalenderhändelse per dag.', 'ssf-member-portal'); ?></p></div>
+            <?php if ($calendar) : ?><a class="ssf-am-button" href="<?php echo esc_url($calendar['ics']); ?>"><?php esc_html_e('Lägg mitt program i kalendern', 'ssf-member-portal'); ?></a><?php endif; ?>
         </section>
     <?php endif; ?>
 

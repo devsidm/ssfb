@@ -130,10 +130,7 @@ final class Editor
             </section>
 
             <section id="ssf-am-tab-publishing" role="tabpanel" aria-labelledby="ssf-am-tab-button-publishing" data-ssf-admin-panel="publishing" class="ssf-am-admin-panel" hidden>
-                <div class="ssf-am-admin-heading"><div><h2>Kalender & publicering</h2><p>Årsmötesobjektet är källa för webbkalendern och den publika iCal-filen.</p></div></div>
-                <div data-ssf-module-fields="calendar">
-                    <div class="ssf-am-admin-grid"><label>Kalendertitel<input name="ssf_meeting_calendar_title" value="<?php echo esc_attr($data['calendar_title']); ?>"></label><label>Kalenderbeskrivning<textarea rows="3" name="ssf_meeting_calendar_description"><?php echo esc_textarea($data['calendar_description']); ?></textarea></label></div>
-                </div>
+                <div class="ssf-am-admin-heading"><div><h2>Anmälan & publicering</h2><p>Kalenderfilen byggs automatiskt från Program & aktiviteter och behöver inga separata kalenderfält.</p></div></div>
                 <h3>Gemensam anmälan till aktiviteter</h3>
                 <div class="ssf-am-admin-grid">
                     <label>Anmälan öppnar<input name="ssf_meeting_registration_opens_at" type="datetime-local" value="<?php echo esc_attr($this->input_date((int) $data['registration_opens_at'])); ?>"></label>

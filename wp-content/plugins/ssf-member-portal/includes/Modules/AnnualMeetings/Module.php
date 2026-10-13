@@ -289,8 +289,8 @@ final class Module
             'allow_edits' => ! empty($_POST['ssf_meeting_allow_edits']) ? 1 : 0,
             'capacity' => max(0, absint($_POST['ssf_meeting_capacity'] ?? 0)),
             'waitlist' => ! empty($_POST['ssf_meeting_waitlist']) ? 1 : 0,
-            'calendar_title' => sanitize_text_field(wp_unslash($_POST['ssf_meeting_calendar_title'] ?? '')),
-            'calendar_description' => sanitize_textarea_field(wp_unslash($_POST['ssf_meeting_calendar_description'] ?? '')),
+            'calendar_title' => (string) $current['calendar_title'],
+            'calendar_description' => (string) $current['calendar_description'],
             'modules' => $modules,
             'visibility_version' => 1,
             'advance_notice' => $advance_notice,
@@ -382,6 +382,7 @@ final class Module
         $registration_visible = '' === $stored_registration_visible ? 'hidden' !== $registration_mode : (bool) $stored_registration_visible;
         return array(
             'id' => $meeting_id,
+            'title' => $meeting_post ? (string) get_the_title($meeting_post) : '',
             'year' => (int) $meta('year', $legacy_year),
             'meeting_date' => (string) $meta('meeting_date', $legacy_date),
             'motion_opens_at' => (int) $meta('motion_opens_at', (int) get_post_meta($meeting_id, '_ssf_mp_motion_opens_at', true)),
@@ -471,6 +472,14 @@ final class Module
     {
         return add_query_arg(
             array('action' => 'ssf_member_portal_annual_meeting_calendar_public', 'meeting' => $meeting_id),
+            admin_url('admin-post.php')
+        );
+    }
+
+    public function registration_calendar_url(string $token): string
+    {
+        return add_query_arg(
+            array('action' => 'ssf_member_portal_meeting_calendar', 'token' => rawurlencode($token)),
             admin_url('admin-post.php')
         );
     }
