@@ -585,7 +585,7 @@ final class Module
 
     private function program_row(): array
     {
-        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'requires_registration' => 0, 'ask' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'opens_at' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'questions' => array(), 'order' => 0);
+        return array('key' => '', 'date' => '', 'start' => '', 'end' => '', 'title' => '', 'description' => '', 'location' => '', 'teams_url' => '', 'requires_registration' => 0, 'ask' => 0, 'optional' => 1, 'food' => 0, 'closed' => 0, 'manual_open' => 0, 'capacity' => 0, 'opens_at' => 0, 'deadline' => 0, 'price' => '', 'visible' => 1, 'questions' => array(), 'order' => 0);
     }
 
     private function question_row(): array
@@ -626,6 +626,10 @@ final class Module
             if ($opens_at && $deadline && $opens_at > $deadline) {
                 $opens_at = 0;
             }
+            $teams_url = esc_url_raw((string) ($row['teams_url'] ?? ''));
+            if ($teams_url && ! preg_match('#^https://#i', $teams_url)) {
+                $teams_url = '';
+            }
             $program[] = array(
                 'key' => $key,
                 'day' => $day,
@@ -636,6 +640,7 @@ final class Module
                 'title' => $title,
                 'description' => sanitize_textarea_field($row['description'] ?? ''),
                 'location' => sanitize_text_field($row['location'] ?? ''),
+                'teams_url' => $teams_url,
                 'requires_registration' => $requires_registration ? 1 : 0,
                 'ask' => $requires_registration ? 1 : 0,
                 'optional' => ! empty($row['optional']) ? 1 : 0,
@@ -778,6 +783,7 @@ final class Module
                 'title' => '',
                 'description' => '',
                 'location' => '',
+                'teams_url' => '',
                 'requires_registration' => $requires_registration ? 1 : 0,
                 'ask' => $requires_registration ? 1 : 0,
                 'optional' => 1,

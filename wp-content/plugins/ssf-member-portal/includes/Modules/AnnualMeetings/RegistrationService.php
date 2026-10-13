@@ -167,13 +167,19 @@ final class RegistrationService
             $participants = array($this->legacy_participant($get, $meeting));
         }
         $activity_titles = array();
+        $activity_links = array();
         foreach ($this->meetings->participant_activities($meeting) as $activity) {
-            $activity_titles[(string) $activity['key']] = (string) $activity['title'];
+            $activity_key = (string) $activity['key'];
+            $activity_titles[$activity_key] = (string) $activity['title'];
+            if (! empty($activity['teams_url'])) {
+                $activity_links[$activity_key] = array('label' => (string) $activity['title'], 'url' => (string) $activity['teams_url']);
+            }
         }
         foreach ($participants as &$participant) {
             $participant = wp_parse_args((array) $participant, array('id' => '', 'first_name' => '', 'last_name' => '', 'email' => '', 'phone' => '', 'relationship' => 'other', 'vessels' => array(), 'activities' => array(), 'dietary' => array(), 'dietary_other' => '', 'allergy_note' => '', 'primary' => 0));
             $participant['relationship_label'] = $this->relationship_label((string) $participant['relationship']);
             $participant['activity_labels'] = array_values(array_intersect_key($activity_titles, array_filter((array) $participant['activities'])));
+            $participant['activity_links'] = array_values(array_intersect_key($activity_links, array_filter((array) $participant['activities'])));
             $participant['dietary_label'] = $this->dietary_label((array) $participant['dietary'], (string) $participant['dietary_other']);
         }
         unset($participant);

@@ -100,7 +100,7 @@ update_post_meta(10, '_ssf_am_modules', array('meeting' => 1, 'day2' => 1, 'cale
 $GLOBALS['meeting_posts'][10]->post_content = 'Varmt välkommen';
 $program = array(
     array('key' => 'annual_meeting', 'type' => 'annual_meeting', 'title' => 'Själva årsmötet', 'day' => 1, 'start' => '10:00', 'end' => '12:00', 'requires_registration' => 1, 'visible' => 1),
-    array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'day' => 1, 'start' => '18:00', 'end' => '20:00', 'requires_registration' => 1, 'visible' => 1, 'registration_times' => 'inherit', 'opens_at' => '2026-09-02T08:00', 'deadline' => '2026-10-05T23:59'),
+    array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'day' => 1, 'start' => '18:00', 'end' => '20:00', 'requires_registration' => 1, 'visible' => 1, 'teams_url' => 'https://teams.microsoft.com/l/meetup-join/test', 'registration_times' => 'inherit', 'opens_at' => '2026-09-02T08:00', 'deadline' => '2026-10-05T23:59'),
 );
 update_post_meta(10, '_ssf_am_program', $program);
 update_post_meta(10, '_ssf_am_invitation', array('title' => 'Kallelse', 'text' => 'Kallelsetext', 'visible' => 1, 'pdf_id' => 0));
@@ -197,6 +197,7 @@ $_POST = array(
 $module->save(10, get_post(10));
 $meeting = $module->data(10);
 check(empty($meeting['program'][1]['opens_at']) && empty($meeting['program'][1]['deadline']), 'Choosing inherited registration times did not clear activity overrides.');
+check('https://teams.microsoft.com/l/meetup-join/test' === $meeting['program'][1]['teams_url'], 'The Teams meeting link was not saved with the activity.');
 check($meeting['registration_mode'] === 'open' && ! $meeting['registration_visible'] && ! $meeting['registration_open'], 'Registration visibility and status were not kept separate.');
 check(! $meeting['modules']['day2'] && ! $meeting['modules']['dinner'] && ! $meeting['modules']['motions'] && ! $meeting['modules']['documents'] && ! $meeting['modules']['invitation'], 'Hidden component flags did not persist.');
 $_POST['ssf_meeting_modules']['dinner'] = 1;
@@ -257,6 +258,7 @@ check(str_contains($form_html, 'Lägg till person') && str_contains($form_html, 
 check(substr_count($form_html, '<section class="ssf-am-step"') === 3 && str_contains($form_html, 'Steg 1 av 3 – Deltagare') && str_contains($form_html, 'Steg 2 av 3 – Program &amp; aktiviteter') && str_contains($form_html, 'Steg 3 av 3 – Granska'), 'Registration progress did not expose exactly three meaningful steps.');
 check(! str_contains($form_html, '1. Årsmöteshelgen') && str_contains($form_html, 'data-ssf-step="2"') && str_contains($form_html, '[activities][annual_meeting]'), 'The redundant intro step remained or participant activities were not moved to step two.');
 check(! str_contains($form_html, 'name="meeting_attendance"'), 'The obsolete registration-level attendance choice was rendered.');
+check(str_contains($form_html, 'https://teams.microsoft.com/l/meetup-join/test') && str_contains($form_html, 'Anslut till Teams-mötet'), 'The Teams meeting link was missing from the booking form.');
 $wizard_js = file_get_contents(__DIR__ . '/../assets/js/annual-meetings.js');
 check(str_contains($wizard_js, 'Math.min(3, step)') && str_contains($wizard_js, 'if (current === 2)') && str_contains($wizard_js, 'if (current === 3) buildReview(form)'), 'Wizard state was not reduced to the three-step flow.');
 check(str_contains($wizard_js, 'show(current + 1)') && str_contains($wizard_js, 'show(current - 1)'), 'Wizard next/back navigation was not preserved.');

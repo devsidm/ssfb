@@ -95,6 +95,19 @@ final class RegistrationMailer
 
         $updated = ! empty($registration['submitted_at']) && (int) ($registration['updated_at'] ?? 0) > (int) $registration['submitted_at'];
         $secondary_links = array();
+        $teams_links = array();
+        foreach ((array) ($registration['participants'] ?? array()) as $participant) {
+            foreach ((array) ($participant['activity_links'] ?? array()) as $activity_link) {
+                $url = (string) ($activity_link['url'] ?? '');
+                if ($url) {
+                    $teams_links[$url] = array(
+                        'label' => sprintf(__('Anslut till Teams: %s', 'ssf-member-portal'), (string) ($activity_link['label'] ?? '')),
+                        'url' => $url,
+                    );
+                }
+            }
+        }
+        $secondary_links = array_values($teams_links);
         if (! empty($calendar['ics'])) {
             $secondary_links[] = array('label' => __('Lägg mitt program i kalendern', 'ssf-member-portal'), 'url' => (string) $calendar['ics']);
         }

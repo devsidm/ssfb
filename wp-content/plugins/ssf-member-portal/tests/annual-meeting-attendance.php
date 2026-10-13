@@ -31,6 +31,7 @@ function sanitize_text_field($value): string { return trim(strip_tags((string) $
 function sanitize_textarea_field($value): string { return sanitize_text_field($value); }
 function sanitize_email($value): string { return filter_var((string) $value, FILTER_SANITIZE_EMAIL); }
 function sanitize_key($value): string { return strtolower(preg_replace('/[^a-z0-9_-]/i', '', (string) $value)); }
+function esc_url_raw($value): string { return filter_var((string) $value, FILTER_SANITIZE_URL); }
 function is_email($value): bool { return false !== filter_var($value, FILTER_VALIDATE_EMAIL); }
 function current_datetime(): DateTimeImmutable { return (new DateTimeImmutable('@' . $GLOBALS['attendance_now']))->setTimezone(wp_timezone()); }
 function wp_timezone(): DateTimeZone { return new DateTimeZone('Europe/Stockholm'); }
@@ -59,7 +60,7 @@ $meeting = array(
     'program' => array(
         array('key' => 'annual_meeting', 'type' => 'annual_meeting', 'title' => 'Själva årsmötet', 'visible' => 1, 'requires_registration' => 1, 'capacity' => 0),
         array('key' => 'activity_1', 'type' => 'activity', 'title' => 'Studiebesök', 'visible' => 1, 'requires_registration' => 1, 'capacity' => 1),
-        array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'visible' => 1, 'requires_registration' => 1, 'food' => 1, 'capacity' => 0),
+        array('key' => 'dinner', 'type' => 'dinner', 'title' => 'Middag', 'visible' => 1, 'requires_registration' => 1, 'food' => 1, 'capacity' => 0, 'teams_url' => 'https://teams.microsoft.com/l/meetup-join/dinner'),
     ),
     'food_options' => array(), 'questions' => array(), 'waitlist' => 0,
 );
@@ -115,10 +116,12 @@ $GLOBALS['attendance_posts'][22] = new WP_Post(22);
 $GLOBALS['attendance_meta'][22] = array('_ssf_am_registration_id' => '2026-REG-0022', '_ssf_am_status' => 'registered', '_ssf_am_first_name' => 'Ada', '_ssf_am_last_name' => 'Test', '_ssf_am_email' => 'ada@example.test', '_ssf_am_participants' => $question_result['participants'], '_ssf_am_activity_answers' => $question_result['activity_answers']);
 $question_details = $service->details(22, $question_meeting);
 check('Vegetarisk' === $question_details['participants'][0]['activity_answers'][0]['answer'] && 'Glutenfri' === $question_details['participants'][1]['activity_answers'][0]['answer'], 'Admin/confirmation projection mixed participant answers.');
+check('https://teams.microsoft.com/l/meetup-join/dinner' === $question_details['participants'][0]['activity_links'][0]['url'], 'The selected activity did not expose its Teams meeting link in booking details.');
 $question_export = (new SSF\MemberPortal\Modules\AnnualMeetings\RegistrationExport())->data($question_meeting, array($GLOBALS['attendance_posts'][22]));
 check(4 === count($question_export['sheets'][2]['rows']) && 'Vegetarisk' === $question_export['sheets'][2]['rows'][0][3] && 'Glutenfri' === $question_export['sheets'][2]['rows'][1][3], 'Activity answers were not exported per participant.');
 $question_mail = (new ReflectionMethod(new SSF\MemberPortal\Modules\AnnualMeetings\RegistrationMailer(), 'confirmation_data'))->invoke(new SSF\MemberPortal\Modules\AnnualMeetings\RegistrationMailer(), $question_meeting, $question_details, '', array(), '');
 check(str_contains(json_encode($question_mail, JSON_UNESCAPED_UNICODE), 'Vegetarisk') && str_contains(json_encode($question_mail, JSON_UNESCAPED_UNICODE), 'Glutenfri'), 'Confirmation email omitted activity answers.');
+check(1 === count($question_mail['secondary_links']) && 'https://teams.microsoft.com/l/meetup-join/dinner' === $question_mail['secondary_links'][0]['url'], 'The confirmation email omitted or duplicated the selected Teams meeting link.');
 
 $GLOBALS['attendance_posts'][20] = new WP_Post(20);
 $GLOBALS['attendance_meta'][20] = array('_ssf_am_registration_id' => '2026-REG-0020', '_ssf_am_first_name' => 'Äldre', '_ssf_am_last_name' => 'Deltagare', '_ssf_am_email' => 'old@example.test', '_ssf_am_status' => 'registered', '_ssf_am_meeting_attendance' => 'yes', '_ssf_am_program' => array('dinner' => 1));
