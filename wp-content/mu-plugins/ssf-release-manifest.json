@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.9",
-    "build":  "20261013.2",
-    "built_at":  "2026-10-13T11:02:56.0142315Z",
+    "build":  "20261013.3",
+    "built_at":  "2026-10-13T11:46:24.9754290Z",
     "source":  "codex",
-    "source_revision":  "601f2f82752904a70fb83db034dda673afc09bb2",
-    "description":  "Remove registration-required badge from annual meeting program",
+    "source_revision":  "7dee9c023f70c3caef590a6ea37697c8f6b4949c",
+    "description":  "Shared annual meeting registration times and daily program calendar",
     "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
     "components":  [
                        "ssf-member-portal"
