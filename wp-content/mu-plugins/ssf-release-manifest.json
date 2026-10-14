@@ -2,14 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.9",
-    "build":  "20261014.1",
-    "built_at":  "2026-10-14T06:41:00.0036304Z",
+    "build":  "20261014.2",
+    "built_at":  "2026-10-14T07:01:24.9518874Z",
     "source":  "codex",
-    "source_revision":  "ca820a481e5444d5e363d99697921a5851b8d270",
-    "description":  "Bump SSF Member Portal to 0.11.16 for production release parity",
+    "source_revision":  "dfff6f1a32889664ac7e8add77256c35da8f2418",
+    "description":  "Bump all changed production plugins for release parity",
     "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
     "components":  [
-                       "ssf-member-portal"
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
