@@ -2,14 +2,18 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.9",
-    "build":  "20261014.2",
-    "built_at":  "2026-10-14T07:01:24.9518874Z",
+    "build":  "20261025.1",
+    "built_at":  "2026-10-25T21:10:56.0057577Z",
     "source":  "codex",
-    "source_revision":  "dfff6f1a32889664ac7e8add77256c35da8f2418",
-    "description":  "Bump all changed production plugins for release parity",
+    "source_revision":  "facae3e11f9c91e03edf6caa58660b665fc8f906",
+    "description":  "Responsive SSF admin layouts",
     "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
     "components":  [
-                       "ssf-site-customizations"
+                       "ssf-inspektioner",
+                       "ssf-medlemsfartyg",
+                       "ssf-medlemsprocess",
+                       "ssf-member-portal",
+                       "ssf-stadgar"
                    ],
     "status":  "development",
     "prepared_at":  ""
