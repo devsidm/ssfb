@@ -2,7 +2,9 @@
   "schema_version": 1,
   "production": {
     "plugins": [
+      "ssf-arbetsyta",
       "ssf-calendar",
+      "ssf-inspektioner",
       "ssf-medlemsfartyg",
       "ssf-medlemsprocess",
       "ssf-member-portal",
@@ -43,10 +45,7 @@
     "plugins": []
   },
   "plugin_policy": {
-    "dev_only": [
-      "ssf-arbetsyta",
-      "ssf-inspektioner"
-    ],
+    "dev_only": [],
     "prod_only": [],
     "ignore_version": []
   }
