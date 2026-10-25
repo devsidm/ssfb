@@ -1,13 +1,13 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.9",
+    "version":  "0.14.10",
     "build":  "20261025.2",
     "built_at":  "2026-10-25T21:21:43.0147302Z",
     "source":  "codex",
     "source_revision":  "59fac45e35290bb1df11ca9932b24053b436f99b",
     "description":  "Promote Workspace and Inspections to production scope",
-    "notes":  "DEV build 20261008.1 verified on /, /nyheter/ and /arbetsyta/anvandare/. Legacy Latest Posts removed; SSF news filters and grid retained.",
+    "notes":  "DEV build 20261025.2 verified. Promote SSF Workspace and SSF Inspections to production scope; responsive SSF admin layout fixes included.",
     "components":  [
                        "ssf-arbetsyta",
                        "ssf-inspektioner",
@@ -16,6 +16,6 @@
                        "ssf-member-portal",
                        "ssf-stadgar"
                    ],
-    "status":  "development",
-    "prepared_at":  ""
+    "status":  "prepared",
+    "prepared_at":  "2026-10-25T21:28:09.8671066Z"
 }
