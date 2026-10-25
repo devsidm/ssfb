@@ -31,3 +31,4 @@ add_filter('query_vars', array('SSF_Inspections_UI', 'query_vars'));
 add_action('template_redirect', array('SSF_Inspections_UI', 'dispatch'), 0);
 add_action('rest_api_init', array('SSF_Inspections_UI', 'rest_routes'));
 add_action('admin_menu', array('SSF_Inspections_UI', 'admin_menu'), 30);
+add_action('admin_enqueue_scripts', array('SSF_Inspections_UI', 'admin_assets'));

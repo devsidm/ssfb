@@ -106,7 +106,7 @@ final class Module
     public function add_meta_box(): void
     {
         add_meta_box('ssf-member-portal-meeting', __('Redigera årsmötet', 'ssf-member-portal'), array($this, 'render_meta_box'), self::POST_TYPE, 'normal', 'high');
-        add_meta_box('ssf-member-portal-meeting-status', __('Årsmötesöversikt', 'ssf-member-portal'), array($this, 'render_status_meta_box'), self::POST_TYPE, 'side', 'high');
+        add_meta_box('ssf-member-portal-meeting-status', __('Årsmötesöversikt', 'ssf-member-portal'), array($this, 'render_status_meta_box'), self::POST_TYPE, 'normal', 'default');
     }
 
     public function enqueue_admin_assets(string $hook): void

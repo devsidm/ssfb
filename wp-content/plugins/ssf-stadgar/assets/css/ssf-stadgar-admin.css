@@ -4,6 +4,11 @@
   gap: 16px;
 }
 
+.ssf-document-admin-grid > *,
+.ssf-document-admin-pdf {
+  min-width: 0;
+}
+
 .ssf-document-admin-grid--wide {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 16px;
@@ -20,6 +25,7 @@
 .ssf-document-admin-grid select,
 .ssf-document-admin-grid textarea {
   width: 100%;
+  max-width: 100%;
 }
 
 .ssf-document-admin-check {
@@ -43,6 +49,7 @@
 
 .ssf-document-extracted-text textarea {
   width: 100%;
+  max-width: 100%;
   margin-top: 8px;
 }
 

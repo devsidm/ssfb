@@ -1,4 +1,7 @@
 .ssf-admin-section {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   margin: 18px 0;
   padding: 18px;
   border: 1px solid #d9e3f0;
@@ -15,6 +18,7 @@
 .ssf-admin-grid label,
 .ssf-owner-form label {
   display: grid;
+  min-width: 0;
   gap: 6px;
   font-weight: 600;
 }
@@ -24,6 +28,7 @@
 .ssf-owner-form input,
 .ssf-owner-form textarea {
   width: 100%;
+  max-width: 100%;
 }
 
 .ssf-check-row {
@@ -38,6 +43,7 @@
 }
 
 .ssf-owner-card {
+  min-width: 0;
   padding: 16px;
   border: 1px solid #d9e3f0;
   border-radius: 12px;
@@ -45,6 +51,8 @@
 }
 
 .ssf-owner-form section {
+  box-sizing: border-box;
+  width: 100%;
   max-width: 920px;
   margin: 18px 0;
   padding: 18px;
@@ -61,6 +69,10 @@
 
 .ssf-owner-form .ssf-vessel-field:has(textarea) {
   grid-column: 1 / -1;
+}
+
+.ssf-owner-form .ssf-vessel-field {
+  min-width: 0;
 }
 
 .ssf-owner-form .ssf-vessel-section-heading p,

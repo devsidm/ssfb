@@ -84,7 +84,7 @@ if ($selected && ! $selected_version) {
 $version = $selected_version ? $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . SSF_Inspections_DB::table('versions') . ' WHERE id=%d AND template_id=%d', $selected_version, $selected), ARRAY_A) : null;
 $sections = $version ? $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . SSF_Inspections_DB::table('sections') . ' WHERE version_id=%d ORDER BY sort_order,id', $selected_version), ARRAY_A) : array();
 
-echo '<div class="wrap"><h1>Inspektionsmallar</h1>';
+echo '<div class="wrap ssf-inspections-admin ssf-inspections-admin--templates"><h1>Inspektionsmallar</h1>';
 if ($notice) {
     echo '<div class="notice notice-success"><p>' . esc_html($notice) . '</p></div>';
 }

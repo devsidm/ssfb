@@ -1,0 +1,60 @@
+.ssf-inspections-admin {
+  box-sizing: border-box;
+  width: auto;
+  max-width: 1180px;
+}
+
+.ssf-inspections-admin *,
+.ssf-inspections-admin *::before,
+.ssf-inspections-admin *::after {
+  box-sizing: border-box;
+}
+
+.ssf-inspections-admin > p {
+  max-width: 70ch;
+}
+
+.ssf-inspections-admin__table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.ssf-inspections-admin__table table {
+  min-width: 760px;
+}
+
+.ssf-inspections-admin--templates .postbox {
+  min-width: 0;
+}
+
+.ssf-inspections-admin--templates form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 12px 0;
+}
+
+.ssf-inspections-admin--templates input:not([type="checkbox"]),
+.ssf-inspections-admin--templates select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ssf-inspections-admin--templates input:not([type="checkbox"]):not([type="number"]) {
+  flex: 1 1 220px;
+}
+
+@media (max-width: 782px) {
+  .ssf-inspections-admin--templates form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ssf-inspections-admin--templates input:not([type="checkbox"]):not([type="number"]),
+  .ssf-inspections-admin--templates select,
+  .ssf-inspections-admin--templates .button {
+    width: 100%;
+  }
+}

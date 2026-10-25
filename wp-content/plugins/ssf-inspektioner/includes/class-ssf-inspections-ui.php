@@ -409,6 +409,14 @@ final class SSF_Inspections_UI
         add_submenu_page('ssf-overview', 'Inspektionsmallar', 'Inspektionsmallar', 'ssf_manage_inspections', 'ssf-inspection-templates', array(__CLASS__, 'admin_templates'));
     }
 
+    public static function admin_assets(string $hook): void
+    {
+        if (! in_array($hook, array('ssf_page_ssf-inspections', 'ssf_page_ssf-inspection-templates'), true)) {
+            return;
+        }
+        wp_enqueue_style('ssf-inspections-admin', SSF_INSPECTIONS_URL . 'assets/inspection-admin.css', array(), SSF_INSPECTIONS_VERSION);
+    }
+
     public static function admin_inspections(): void
     {
         if (! SSF_Inspections_Core::inspector()) {
@@ -417,9 +425,9 @@ final class SSF_Inspections_UI
         global $wpdb;
         $where = SSF_Inspections_Core::manager() ? '' : $wpdb->prepare(' WHERE i.inspector_user_id=%d', get_current_user_id());
         $rows = $wpdb->get_results('SELECT i.* FROM ' . SSF_Inspections_DB::table('inspections') . " i $where ORDER BY i.updated_at DESC LIMIT 200", ARRAY_A);
-        echo '<div class="wrap"><h1>Inspektioner</h1><p><a class="button button-primary" href="' . esc_url(self::url()) . '">Öppna mobil arbetsyta</a></p>';
+        echo '<div class="wrap ssf-inspections-admin"><h1>Inspektioner</h1><p><a class="button button-primary" href="' . esc_url(self::url()) . '">Öppna mobil arbetsyta</a></p>';
         foreach (array('in_progress' => 'Pågående', 'needs_action' => 'Behöver åtgärd', 'completed' => 'Avslutade') as $group => $title) {
-            echo '<h2>' . esc_html($title) . '</h2><table class="widefat striped"><thead><tr><th>Fartyg</th><th>Typ</th><th>Inspektör</th><th>Datum</th><th>Progress/status</th><th>Anmärkningar</th><th>Senast ändrad</th></tr></thead><tbody>';
+            echo '<h2>' . esc_html($title) . '</h2><div class="ssf-inspections-admin__table"><table class="widefat striped"><thead><tr><th>Fartyg</th><th>Typ</th><th>Inspektör</th><th>Datum</th><th>Progress/status</th><th>Anmärkningar</th><th>Senast ändrad</th></tr></thead><tbody>';
             $shown = 0;
             foreach ($rows as $row) {
                 $items = SSF_Inspections_Core::snapshots((int) $row['id']);
@@ -436,7 +444,7 @@ final class SSF_Inspections_UI
             if (! $shown) {
                 echo '<tr><td colspan="7">Inga inspektioner.</td></tr>';
             }
-            echo '</tbody></table>';
+            echo '</tbody></table></div>';
         }
         echo '</div>';
     }
