@@ -7,10 +7,10 @@
     "source":  "codex",
     "source_revision":  "dced0135748f039bd5f8c6da411ae9d9715e3d98",
     "description":  "Keep annual meeting editor metabox in the WordPress main column",
-    "notes":  "DEV build 20261026.1 verified. Promote SSF Workspace and SSF Inspections to production scope; remove DEV-only inspection seed from production runtime; responsive SSF admin layout fixes included.",
+    "notes":  "DEV build 20261026.3 verified. Keep the annual meeting editor metabox in the WordPress main column for default and legacy saved user layouts; preserve all other metabox positions.",
     "components":  [
                        "ssf-member-portal"
                    ],
-    "status":  "development",
-    "prepared_at":  ""
+    "status":  "prepared",
+    "prepared_at":  "2026-10-26T14:16:02.4226354Z"
 }
