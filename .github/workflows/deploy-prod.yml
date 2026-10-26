@@ -1,0 +1,87 @@
+name: Deploy PROD
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY exactly to continue
+        required: true
+        type: string
+      plugin_choices:
+        description: One y or SKIP line per prompted plugin, in server prompt order
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-production:
+    name: deploy-production
+    if: >-
+      ${{ github.ref == 'refs/heads/main' &&
+          inputs.confirmation == 'DEPLOY' &&
+          vars.SSF_ENABLE_PROD_DEPLOY == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+
+    steps:
+      - name: Validate environment secrets
+        shell: bash
+        env:
+          SSF_PROD_SSH_HOST: ${{ secrets.SSF_PROD_SSH_HOST }}
+          SSF_PROD_SSH_USER: ${{ secrets.SSF_PROD_SSH_USER }}
+          SSF_PROD_SSH_PRIVATE_KEY: ${{ secrets.SSF_PROD_SSH_PRIVATE_KEY }}
+          SSF_PROD_SSH_KNOWN_HOSTS: ${{ secrets.SSF_PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in SSF_PROD_SSH_HOST SSF_PROD_SSH_USER SSF_PROD_SSH_PRIVATE_KEY SSF_PROD_SSH_KNOWN_HOSTS; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required production secret: $name" >&2
+              missing=1
+            fi
+          done
+          [[ "$missing" == "0" ]]
+
+      - name: Prepare restricted SSH authentication
+        shell: bash
+        env:
+          SSF_PROD_SSH_PRIVATE_KEY: ${{ secrets.SSF_PROD_SSH_PRIVATE_KEY }}
+          SSF_PROD_SSH_KNOWN_HOSTS: ${{ secrets.SSF_PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSF_PROD_SSH_PRIVATE_KEY" > "$HOME/.ssh/ssf-production"
+          chmod 600 "$HOME/.ssh/ssf-production"
+          printf '%s\n' "$SSF_PROD_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Run existing server deployment
+        shell: bash
+        env:
+          SSF_PROD_SSH_HOST: ${{ secrets.SSF_PROD_SSH_HOST }}
+          SSF_PROD_SSH_USER: ${{ secrets.SSF_PROD_SSH_USER }}
+          SSF_PROD_SSH_PORT: ${{ vars.SSF_PROD_SSH_PORT }}
+          PLUGIN_CHOICES: ${{ inputs.plugin_choices }}
+        run: |
+          set -euo pipefail
+          port="${SSF_PROD_SSH_PORT:-22}"
+          {
+            if [[ -n "$PLUGIN_CHOICES" ]]; then
+              printf '%s\n' "$PLUGIN_CHOICES"
+            fi
+            printf 'DEPLOY\n'
+          } | ssh -T \
+            -i "$HOME/.ssh/ssf-production" \
+            -p "$port" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSF_PROD_SSH_USER@$SSF_PROD_SSH_HOST" \
+            'exec "$HOME/bin/ssf-deploy"'

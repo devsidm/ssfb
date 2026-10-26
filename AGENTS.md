@@ -57,7 +57,8 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 
 ## Deployment
 
-- Never push GitHub without explicit approval.
+- Codex may push commits to its own task or feature branch when the task is intended for GitHub review.
+- Never push directly to `main`, force-push `main`, merge a Codex-authored pull request without explicit authorization, or bypass required CI/review.
 - Never deploy PROD without explicit approval.
 - **CRITICAL – SSF DEV FTP ROOT:** DEV FTP `/` is already the DEV WordPress document root. Never prepend or create `ssfb.se`, `public_html`, or `dev`; deployment paths start directly with `wp-content/`, `wp-admin/`, etc. For `scripts/ssf-release-deploy.ps1` on DEV, `RemoteRoot` MUST be omitted/empty. If FTP `/` does not look like a WordPress root, abort rather than guess. Never touch uploads or copy `wp-config.php`.
 - Do not copy DEV database or `wp-config.php` to PROD.
@@ -79,6 +80,14 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 - Use existing working mechanisms first.
 - Keep harness work outside runtime WordPress code unless the user explicitly asks for a runtime change.
 - If only `AGENTS.md`, `docs/`, `config/`, `scripts/`, tests or `.gitignore` change, do not create a release build.
+
+## Code Review Rules
+
+- Flag any path that can deploy or roll back PROD without the existing server scripts, backups, maintenance window and exact typed confirmation.
+- Flag DEV FTP paths that prepend `ssfb.se`, `public_html` or `dev`; the DEV FTP root must start directly at `wp-content/` or another WordPress-root path.
+- Flag secrets, private environment files, customer data or live credentials in source, fixtures, logs, Actions or Codex configuration.
+- Flag runtime plugin changes whose plugin version is unchanged, and release manifests whose `source_revision` is not the reviewed commit.
+- Flag live tests in GitHub Actions. CI must be offline; DEV verification remains an explicit local step after preflight.
 
 ## Known Failure Modes
 

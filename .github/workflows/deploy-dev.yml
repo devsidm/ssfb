@@ -1,0 +1,79 @@
+name: Deploy DEV
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+
+jobs:
+  deploy-development:
+    name: deploy-development
+    if: ${{ github.ref == 'refs/heads/main' && vars.SSF_ENABLE_DEV_DEPLOY == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: development
+
+    steps:
+      - name: Check out reviewed main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Provide curl.exe compatibility for existing PowerShell tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d "$RUNNER_TEMP/ssf-bin"
+          ln -s "$(command -v curl)" "$RUNNER_TEMP/ssf-bin/curl.exe"
+          printf '%s\n' "$RUNNER_TEMP/ssf-bin" >> "$GITHUB_PATH"
+
+      - name: Validate environment secrets
+        shell: bash
+        env:
+          SSF_FTP_HOST: ${{ secrets.SSF_FTP_HOST }}
+          SSF_FTP_USER: ${{ secrets.SSF_FTP_USER }}
+          SSF_FTP_PASSWORD: ${{ secrets.SSF_FTP_PASSWORD }}
+          SSF_WP_USER: ${{ secrets.SSF_WP_USER }}
+          SSF_WP_PASSWORD: ${{ secrets.SSF_WP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in SSF_FTP_HOST SSF_FTP_USER SSF_FTP_PASSWORD SSF_WP_USER SSF_WP_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required development secret: $name" >&2
+              missing=1
+            fi
+          done
+          [[ "$missing" == "0" ]]
+
+      - name: Run mandatory DEV preflight
+        shell: pwsh
+        env:
+          SSF_FTP_PASSWORD: ${{ secrets.SSF_FTP_PASSWORD }}
+          SSF_WP_USER: ${{ secrets.SSF_WP_USER }}
+          SSF_WP_PASSWORD: ${{ secrets.SSF_WP_PASSWORD }}
+        run: ./scripts/ssf-dev-preflight.ps1
+
+      - name: Deploy frozen release to DEV root
+        shell: pwsh
+        env:
+          SSF_FTP_HOST: ${{ secrets.SSF_FTP_HOST }}
+          SSF_FTP_USER: ${{ secrets.SSF_FTP_USER }}
+          SSF_FTP_PASSWORD: ${{ secrets.SSF_FTP_PASSWORD }}
+          SSF_WP_USER: ${{ secrets.SSF_WP_USER }}
+          SSF_WP_PASSWORD: ${{ secrets.SSF_WP_PASSWORD }}
+        run: >-
+          ./scripts/ssf-release-deploy.ps1
+          -Environment development
+          -BaseUrl 'https://ssfb.se/dev'
+          -FtpHost $env:SSF_FTP_HOST
+          -FtpUser $env:SSF_FTP_USER

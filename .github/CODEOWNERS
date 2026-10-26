@@ -1,0 +1,6 @@
+* @devsidm
+/.github/ @devsidm
+/AGENTS.md @devsidm
+/config/deploy-components.json @devsidm
+/scripts/deploy/ @devsidm
+/scripts/ssf-release-*.ps1 @devsidm
