@@ -116,7 +116,17 @@ Assert-Contains 'Fartygskvittens finns' $vesselForm "'vessel_update_received'"
 Assert-Contains 'Fartygsinbjudan finns' $vesselTokens "'vessel_update_invitation'"
 Assert-True 'Separat årsmötesmall är borttagen' (-not (Test-Path -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-member-portal\templates\emails\annual-meeting-confirmation.php')))
 
-$directMailFiles = @(rg -l '\bwp_mail\s*\(' (Join-Path $repo 'wp-content') --glob '*.php' --glob '!vendor/**')
+$rg = Get-Command rg -ErrorAction SilentlyContinue
+if ($rg) {
+    $directMailFiles = @(& $rg.Source -l '\bwp_mail\s*\(' (Join-Path $repo 'wp-content') --glob '*.php' --glob '!vendor/**')
+} else {
+    $directMailFiles = @(
+        Get-ChildItem -LiteralPath (Join-Path $repo 'wp-content') -Recurse -File -Filter '*.php' |
+            Where-Object { $_.FullName -notmatch '[\\/]vendor[\\/]' } |
+            Select-String -Pattern '\bwp_mail\s*\(' -List |
+            ForEach-Object { $_.Path }
+    )
+}
 $allowed = @(
     (Join-Path $repo 'wp-content\mu-plugins\ssf-email-router.php'),
     (Join-Path $repo 'wp-content\mu-plugins\ssf-email-template.php'),
