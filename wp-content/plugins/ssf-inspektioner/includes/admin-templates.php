@@ -48,19 +48,6 @@ if ('POST' === ($_SERVER['REQUEST_METHOD'] ?? '')) {
         if ($section_id) {
             $result = $wpdb->delete(SSF_Inspections_DB::table('items'), array('id' => absint($_POST['item_id'] ?? 0), 'section_id' => $section_id));
         }
-    } elseif ('seed' === $action && false !== strpos(home_url('/'), '/dev/')) {
-        $created = SSF_Inspections_Templates::create('SSF testmall – fartygsinspektion');
-        if (! is_wp_error($created)) {
-            foreach (array('Allmänt', 'Skrov', 'Däck', 'Rigg och master', 'Maskin och tekniska system', 'Säkerhet', 'Inredning', 'Dokumentation', 'Helhetsbedömning') as $title) {
-                $section_id = SSF_Inspections_Templates::add_section($created['template_id'], $created['version_id'], $title);
-                if (! is_wp_error($section_id)) {
-                    SSF_Inspections_Templates::add_item($created['template_id'], $created['version_id'], $section_id, array('title' => $title . ' – allmänt skick', 'help_text' => 'Dokumentera iakttagelser ombord.', 'required' => true));
-                }
-            }
-            $result = $created;
-        } else {
-            $result = $created;
-        }
     }
     if (is_wp_error($result)) {
         $error = $result->get_error_message();
@@ -94,11 +81,6 @@ if ($error) {
 echo '<h2>Skapa mall</h2><form method="post">';
 wp_nonce_field('ssf_inspection_templates');
 echo '<input type="hidden" name="template_action" value="create"><input name="name" required placeholder="Mallens namn"><button class="button button-primary">Skapa utkast</button></form>';
-if (false !== strpos(home_url('/'), '/dev/')) {
-    echo '<form method="post">';
-    wp_nonce_field('ssf_inspection_templates');
-    echo '<input type="hidden" name="template_action" value="seed"><button class="button">Skapa explicit DEV-testmall</button></form>';
-}
 echo '<h2>Mallar</h2><ul>';
 foreach ($templates as $template) {
     echo '<li><a href="' . esc_url(add_query_arg(array('page' => 'ssf-inspection-templates', 'template_id' => $template['id']), admin_url('admin.php'))) . '">' . esc_html($template['name']) . '</a> · ' . esc_html($template['status']) . '</li>';
