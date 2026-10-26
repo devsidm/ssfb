@@ -1,20 +1,15 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.10",
-    "build":  "20261026.2",
-    "built_at":  "2026-10-26T08:23:53.9498352Z",
+    "version":  "0.14.11",
+    "build":  "20261026.3",
+    "built_at":  "2026-10-26T14:09:37.3275187Z",
     "source":  "codex",
-    "source_revision":  "38644e5806156f5296ed4929246a2b57856a68e5",
-    "description":  "Production candidate with required plugin version bumps",
+    "source_revision":  "dced0135748f039bd5f8c6da411ae9d9715e3d98",
+    "description":  "Keep annual meeting editor metabox in the WordPress main column",
     "notes":  "DEV build 20261026.1 verified. Promote SSF Workspace and SSF Inspections to production scope; remove DEV-only inspection seed from production runtime; responsive SSF admin layout fixes included.",
     "components":  [
-                       "ssf-arbetsyta",
-                       "ssf-inspektioner",
-                       "ssf-medlemsfartyg",
-                       "ssf-medlemsprocess",
-                       "ssf-member-portal",
-                       "ssf-stadgar"
+                       "ssf-member-portal"
                    ],
     "status":  "development",
     "prepared_at":  ""
