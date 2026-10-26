@@ -2,11 +2,11 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.10",
-    "build":  "20261025.2",
-    "built_at":  "2026-10-25T21:21:43.0147302Z",
+    "build":  "20261026.1",
+    "built_at":  "2026-10-26T08:11:59.1893947Z",
     "source":  "codex",
-    "source_revision":  "59fac45e35290bb1df11ca9932b24053b436f99b",
-    "description":  "Promote Workspace and Inspections to production scope",
+    "source_revision":  "38cda73bb1566377384a6cd89ae7aa2d5725d8c8",
+    "description":  "Production candidate without DEV-only inspection seed",
     "notes":  "DEV build 20261025.2 verified. Promote SSF Workspace and SSF Inspections to production scope; responsive SSF admin layout fixes included.",
     "components":  [
                        "ssf-arbetsyta",
@@ -16,6 +16,6 @@
                        "ssf-member-portal",
                        "ssf-stadgar"
                    ],
-    "status":  "prepared",
-    "prepared_at":  "2026-10-25T21:28:09.8671066Z"
+    "status":  "development",
+    "prepared_at":  ""
 }
