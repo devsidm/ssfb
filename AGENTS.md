@@ -80,6 +80,14 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 - Keep harness work outside runtime WordPress code unless the user explicitly asks for a runtime change.
 - If only `AGENTS.md`, `docs/`, `config/`, `scripts/`, tests or `.gitignore` change, do not create a release build.
 
+## Code Review Rules
+
+- Flag any path that can deploy or roll back PROD without the existing server scripts, backups, maintenance window and exact typed confirmation.
+- Flag DEV FTP paths that prepend `ssfb.se`, `public_html` or `dev`; the DEV FTP root must start directly at `wp-content/` or another WordPress-root path.
+- Flag secrets, private environment files, customer data or live credentials in source, fixtures, logs, Actions or Codex configuration.
+- Flag runtime plugin changes whose plugin version is unchanged, and release manifests whose `source_revision` is not the reviewed commit.
+- Flag live tests in GitHub Actions. CI must be offline; DEV verification remains an explicit local step after preflight.
+
 ## Known Failure Modes
 
 SYMPTOM: Membership metadata sync appears successful but status is wrong.
