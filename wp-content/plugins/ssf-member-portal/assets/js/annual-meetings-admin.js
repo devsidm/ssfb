@@ -6,6 +6,23 @@
     return;
   }
 
+  function lockEditorMetaBoxToMainColumn() {
+    if (!window.jQuery || !window.jQuery.fn.sortable) {
+      return;
+    }
+
+    window.jQuery('.meta-box-sortables.ui-sortable').each(function () {
+      var sortable = window.jQuery(this);
+      var cancel = sortable.sortable('option', 'cancel') || '';
+      var editorHeader = '#ssf-member-portal-meeting > .postbox-header';
+      if (cancel.indexOf(editorHeader) === -1) {
+        sortable.sortable('option', 'cancel', cancel ? cancel + ', ' + editorHeader : editorHeader);
+      }
+    });
+  }
+
+  window.setTimeout(lockEditorMetaBoxToMainColumn, 0);
+
   function activateTab(key) {
     editor.querySelectorAll('[data-ssf-admin-tab]').forEach(function (tab) {
       var active = tab.getAttribute('data-ssf-admin-tab') === key;

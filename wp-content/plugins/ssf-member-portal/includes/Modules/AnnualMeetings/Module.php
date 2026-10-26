@@ -13,6 +13,7 @@ if (! defined('ABSPATH')) {
 final class Module
 {
     public const POST_TYPE = 'ssf_annual_meeting';
+    private const EDITOR_META_BOX_ID = 'ssf-member-portal-meeting';
 
     private RegistrationPostType $registrations;
     private RegistrationService $registration_service;
@@ -32,6 +33,7 @@ final class Module
         add_action('add_meta_boxes_' . self::POST_TYPE, array($this, 'add_meta_box'));
         add_action('save_post_' . self::POST_TYPE, array($this, 'save'), 10, 2);
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_filter('get_user_option_meta-box-order_' . self::POST_TYPE, array($this, 'keep_editor_in_main_column'), 10, 3);
         add_filter('manage_' . self::POST_TYPE . '_posts_columns', array($this, 'admin_columns'));
         add_action('manage_' . self::POST_TYPE . '_posts_custom_column', array($this, 'admin_column'), 10, 2);
     }
@@ -105,8 +107,48 @@ final class Module
 
     public function add_meta_box(): void
     {
-        add_meta_box('ssf-member-portal-meeting', __('Redigera årsmötet', 'ssf-member-portal'), array($this, 'render_meta_box'), self::POST_TYPE, 'normal', 'high');
+        add_meta_box(self::EDITOR_META_BOX_ID, __('Redigera årsmötet', 'ssf-member-portal'), array($this, 'render_meta_box'), self::POST_TYPE, 'normal', 'high');
         add_meta_box('ssf-member-portal-meeting-status', __('Årsmötesöversikt', 'ssf-member-portal'), array($this, 'render_status_meta_box'), self::POST_TYPE, 'normal', 'default');
+    }
+
+    /**
+     * Keep the full annual-meeting editor out of WordPress' sidebar.
+     *
+     * WordPress applies the current user's saved meta-box order after boxes
+     * have been registered, and that saved order can move a normal box into
+     * another context. Preserve every other saved choice while forcing only
+     * the large meeting editor back into the normal context.
+     *
+     * @param mixed    $order  Saved meta-box order.
+     * @param string   $option User option name.
+     * @param \WP_User $user   User whose option is being read.
+     * @return mixed
+     */
+    public function keep_editor_in_main_column($order, string $option = '', $user = null)
+    {
+        if (! is_array($order)) {
+            return $order;
+        }
+
+        foreach (array('normal', 'advanced', 'side') as $context) {
+            if (! isset($order[$context]) || ! is_string($order[$context])) {
+                continue;
+            }
+
+            $ids = array_filter(array_map('trim', explode(',', $order[$context])), 'strlen');
+            $ids = array_values(array_filter($ids, static function (string $id): bool {
+                return self::EDITOR_META_BOX_ID !== $id;
+            }));
+            $order[$context] = implode(',', $ids);
+        }
+
+        $normal = isset($order['normal']) && is_string($order['normal'])
+            ? array_filter(array_map('trim', explode(',', $order['normal'])), 'strlen')
+            : array();
+        array_unshift($normal, self::EDITOR_META_BOX_ID);
+        $order['normal'] = implode(',', array_values(array_unique($normal)));
+
+        return $order;
     }
 
     public function enqueue_admin_assets(string $hook): void
