@@ -57,7 +57,8 @@ PROD is forbidden unless the user explicitly authorizes a PROD operation. The DE
 
 ## Deployment
 
-- Never push GitHub without explicit approval.
+- Codex may push commits to its own task or feature branch when the task is intended for GitHub review.
+- Never push directly to `main`, force-push `main`, merge a Codex-authored pull request without explicit authorization, or bypass required CI/review.
 - Never deploy PROD without explicit approval.
 - **CRITICAL – SSF DEV FTP ROOT:** DEV FTP `/` is already the DEV WordPress document root. Never prepend or create `ssfb.se`, `public_html`, or `dev`; deployment paths start directly with `wp-content/`, `wp-admin/`, etc. For `scripts/ssf-release-deploy.ps1` on DEV, `RemoteRoot` MUST be omitted/empty. If FTP `/` does not look like a WordPress root, abort rather than guess. Never touch uploads or copy `wp-config.php`.
 - Do not copy DEV database or `wp-config.php` to PROD.

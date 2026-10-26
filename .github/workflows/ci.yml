@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  targeted-checks:
+    name: targeted-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select comparison range
+        id: range
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="$(git rev-parse HEAD^)"
+            head="$(git rev-parse HEAD)"
+          fi
+          printf 'base=%s\nhead=%s\n' "$base" "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Run changed-file checks and targeted tests
+        shell: pwsh
+        run: >-
+          ./scripts/ci/ssf-ci.ps1
+          -BaseSha '${{ steps.range.outputs.base }}'
+          -HeadSha '${{ steps.range.outputs.head }}'
