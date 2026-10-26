@@ -7,7 +7,7 @@
     "source":  "codex",
     "source_revision":  "38cda73bb1566377384a6cd89ae7aa2d5725d8c8",
     "description":  "Production candidate without DEV-only inspection seed",
-    "notes":  "DEV build 20261025.2 verified. Promote SSF Workspace and SSF Inspections to production scope; responsive SSF admin layout fixes included.",
+    "notes":  "DEV build 20261026.1 verified. Promote SSF Workspace and SSF Inspections to production scope; remove DEV-only inspection seed from production runtime; responsive SSF admin layout fixes included.",
     "components":  [
                        "ssf-arbetsyta",
                        "ssf-inspektioner",
@@ -16,6 +16,6 @@
                        "ssf-member-portal",
                        "ssf-stadgar"
                    ],
-    "status":  "development",
-    "prepared_at":  ""
+    "status":  "prepared",
+    "prepared_at":  "2026-10-26T08:18:17.7378980Z"
 }
