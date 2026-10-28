@@ -3,6 +3,8 @@
 GitHub `devsidm/ssfb` is the source of truth; `main` is the stable base.
 The existing development site remains **https://ssfb.se/dev**. Do not install local WordPress or a database.
 
+The workflow was verified from a fresh Codex Cloud task.
+
 ## Audit and runtime requirements
 
 - Custom theme: `wp-content/themes/ssf`; custom plugins: `wp-content/plugins`; MU plugins: `wp-content/mu-plugins`. WordPress core is absent.
