@@ -1,0 +1,112 @@
+name: Deploy DEV
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy-development:
+    name: Deploy to ssfb.se/dev
+    runs-on: windows-2022
+    timeout-minutes: 30
+    environment: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, libxml, mbstring
+          coverage: none
+          tools: none
+
+      - name: Verify required secrets are present
+        shell: pwsh
+        env:
+          SSF_FTP_HOST: ${{ secrets.SSF_FTP_HOST }}
+          SSF_FTP_USER: ${{ secrets.SSF_FTP_USER }}
+          SSF_FTP_PASSWORD: ${{ secrets.SSF_FTP_PASSWORD }}
+          SSF_WP_USER: ${{ secrets.SSF_WP_USER }}
+          SSF_WP_PASSWORD: ${{ secrets.SSF_WP_PASSWORD }}
+        run: |
+          $required = @(
+            'SSF_FTP_HOST',
+            'SSF_FTP_USER',
+            'SSF_FTP_PASSWORD',
+            'SSF_WP_USER',
+            'SSF_WP_PASSWORD'
+          )
+          foreach ($name in $required) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing required GitHub Environment secret: $name"
+            }
+          }
+
+      - name: Validate PHP syntax
+        shell: pwsh
+        run: |
+          $files = git ls-files -- '*.php'
+          foreach ($file in $files) {
+            php -l $file
+            if ($LASTEXITCODE -ne 0) {
+              throw "PHP lint failed: $file"
+            }
+          }
+
+      - name: Run focused regression checks
+        shell: pwsh
+        run: |
+          php scripts/tests/ssf-access-control-runtime-test.php
+          if ($LASTEXITCODE -ne 0) { throw 'Access control regression test failed.' }
+          php scripts/tests/ssf-workspace-tests.php
+          if ($LASTEXITCODE -ne 0) { throw 'Workspace regression test failed.' }
+          php wp-content/plugins/ssf-member-portal/tests/annual-meeting-registration-mode.php
+          if ($LASTEXITCODE -ne 0) { throw 'Annual meeting registration mode test failed.' }
+          php wp-content/plugins/ssf-member-portal/tests/annual-meeting-attendance.php
+          if ($LASTEXITCODE -ne 0) { throw 'Annual meeting attendance test failed.' }
+          bash scripts/tests/ssf-release-files-tests.sh
+          if ($LASTEXITCODE -ne 0) { throw 'Release files regression test failed.' }
+
+      - name: Create temporary CI release manifest
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          pwsh -NoProfile -File scripts/ssf-release-build.ps1 `
+            -Description "GitHub Actions DEV deploy $env:GITHUB_SHA" `
+            -Source ci
+          if ($LASTEXITCODE -ne 0) { throw 'Release build registration failed.' }
+          git add wp-content/mu-plugins/ssf-release-manifest.json
+          git commit -m 'Temporary CI release manifest'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create local release manifest commit.' }
+          if (git status --porcelain) {
+            throw 'Working tree is not clean after temporary CI manifest commit.'
+          }
+
+      - name: Deploy and verify DEV
+        shell: pwsh
+        env:
+          SSF_FTP_PASSWORD: ${{ secrets.SSF_FTP_PASSWORD }}
+          SSF_WP_USER: ${{ secrets.SSF_WP_USER }}
+          SSF_WP_PASSWORD: ${{ secrets.SSF_WP_PASSWORD }}
+          SSF_FTP_HOST: ${{ secrets.SSF_FTP_HOST }}
+          SSF_FTP_USER: ${{ secrets.SSF_FTP_USER }}
+        run: |
+          pwsh -NoProfile -File scripts/ssf-release-deploy.ps1 `
+            -Environment development `
+            -BaseUrl 'https://ssfb.se/dev' `
+            -FtpHost $env:SSF_FTP_HOST `
+            -FtpUser $env:SSF_FTP_USER
+          if ($LASTEXITCODE -ne 0) { throw 'DEV deployment failed.' }
