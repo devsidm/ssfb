@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-checks:
+    name: PHP lint and local tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, libxml, mbstring
+          coverage: none
+          tools: none
+      - name: Validate toolchain
+        run: bash scripts/codex-setup.sh
+      - name: Check PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(git ls-files -z -- '*.php')
+      - name: Focused local regression tests
+        run: |
+          set -euo pipefail
+          php scripts/tests/ssf-access-control-runtime-test.php
+          php scripts/tests/ssf-workspace-tests.php
+          php wp-content/plugins/ssf-member-portal/tests/annual-meeting-registration-mode.php
+          php wp-content/plugins/ssf-member-portal/tests/annual-meeting-attendance.php
+          bash scripts/tests/ssf-release-files-tests.sh

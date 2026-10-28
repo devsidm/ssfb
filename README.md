@@ -28,12 +28,11 @@ Appearance > Themes > SSF
 
 ## Development workflow
 
-1. Make changes in a feature branch.
-2. Test locally in WordPress.
-3. Commit and push changes to GitHub.
-4. Register a unique build with `scripts/ssf-release-build.ps1`.
-5. Commit the release manifest and deploy with `scripts/ssf-release-deploy.ps1`.
-6. Confirm the verified build under **SSF > Release**.
+1. Start from current `main` in a focused feature branch.
+2. Run `bash scripts/codex-setup.sh` and the relevant local checks.
+3. Review the diff, commit the scoped change, and open a pull request against `main` when authorized to push.
+
+See [Codex Cloud development](docs/development/codex-cloud.md) for runtimes, targeted tests and GitHub settings. The existing WordPress development site remains `https://ssfb.se/dev`; local WordPress is not required for Codex tasks. Live DEV testing requires the documented preflight. Release builds and deployment are a separate operational workflow and are not part of normal Codex tasks.
 
 ## Releases
 
