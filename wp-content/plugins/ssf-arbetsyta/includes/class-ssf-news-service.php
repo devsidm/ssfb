@@ -16,6 +16,8 @@ final class SSF_News_Service
     public const META_EXTERNAL_IMAGE = '_ssf_news_external_image';
     public const META_SHIPS = '_ssf_news_ship_ids';
     public const META_FEATURED = '_ssf_news_featured';
+    public const META_GALLERY = '_ssf_news_gallery_ids';
+    public const META_GALLERY_LEGACY = '_ssf_external_news_gallery_ids';
     public const HOME_SETTINGS = 'ssf_news_home_settings';
     public const TAXONOMY = 'ssf_news_topic';
 
@@ -571,9 +573,10 @@ final class SSF_News_Service
         $id = $post ? (int) $post->ID : 0;
         $type = $post ? self::post_meta($id, self::META_TYPE) : 'ssf';
         $featured = $post && '1' === self::post_meta($id, self::META_FEATURED);
+        $image_fields = self::editor_image_fields($post);
         $html = '<h1>' . ($post ? 'Redigera nyhet' : 'Ny artikel') . '</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '">← Egna nyheter</a></p>' . self::notice_html();
         $html .= '<form method="post" enctype="multipart/form-data" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_external_save"><input type="hidden" name="mode" value="own"><input type="hidden" name="post_id" value="' . esc_attr((string) $id) . '">' . wp_nonce_field('ssf_news_save_' . $id, '_wpnonce', true, false)
-            . '<label for="ssf-title">Rubrik</label><input id="ssf-title" name="title" required maxlength="200" value="' . esc_attr($post ? $post->post_title : '') . '"><label for="ssf-excerpt">Ingress</label><textarea id="ssf-excerpt" name="summary" rows="4">' . esc_textarea($post ? $post->post_excerpt : '') . '</textarea><label for="ssf-content">Artikeltext</label><textarea id="ssf-content" name="content" rows="16">' . esc_textarea($post ? $post->post_content : '') . '</textarea><label for="ssf-type">Typ</label><select id="ssf-type" name="news_type"><option value="ssf"' . selected($type, 'ssf', false) . '>SSF-nyhet</option><option value="ship"' . selected($type, 'ship', false) . '>Från medlemsfartygen</option></select><label class="ssf-workspace-check"><input type="checkbox" name="featured_news" value="1"' . checked($featured, true, false) . '> Utvald på nyhetssidan</label><p class="ssf-workspace-help">Den utvalda nyheten visas större i filtret Alla när den är publicerad.</p><label for="ssf-image">Utvald bild (valfri)</label><input id="ssf-image" name="featured_image" type="file" accept="image/jpeg,image/png,image/webp"><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="draft">Spara utkast</button>';
+            . '<label for="ssf-title">Rubrik</label><input id="ssf-title" name="title" required maxlength="200" value="' . esc_attr($post ? $post->post_title : '') . '"><label for="ssf-excerpt">Ingress</label><textarea id="ssf-excerpt" name="summary" rows="4">' . esc_textarea($post ? $post->post_excerpt : '') . '</textarea><label for="ssf-content">Artikeltext</label><textarea id="ssf-content" name="content" rows="16">' . esc_textarea($post ? $post->post_content : '') . '</textarea><label for="ssf-type">Typ</label><select id="ssf-type" name="news_type"><option value="ssf"' . selected($type, 'ssf', false) . '>SSF-nyhet</option><option value="ship"' . selected($type, 'ship', false) . '>Från medlemsfartygen</option></select><label class="ssf-workspace-check"><input type="checkbox" name="featured_news" value="1"' . checked($featured, true, false) . '> Utvald på nyhetssidan</label><p class="ssf-workspace-help">Den utvalda nyheten visas större i filtret Alla när den är publicerad.</p>' . $image_fields . '<div class="ssf-workspace-form-actions"><button class="ssf-workspace-button" name="intent" value="draft">Spara utkast</button>';
         if (self::can('ssf_news_publish')) {
             $html .= '<button class="ssf-workspace-button" name="intent" value="publish">Publicera</button>';
             if ($post && 'publish' === $post->post_status) {
@@ -585,6 +588,28 @@ final class SSF_News_Service
             $html .= '<a target="_blank" rel="noopener" href="' . esc_url(get_preview_post_link($post)) . '">Förhandsgranska ↗</a>';
         }
         return $html . '</div></form>';
+    }
+
+    private static function editor_image_fields(?WP_Post $post): string
+    {
+        $featured_id = $post ? (int) get_post_thumbnail_id($post->ID) : 0;
+        $html = '<fieldset class="ssf-news-image-fields"><legend>Utvald bild</legend>';
+        if ($featured_id) {
+            $html .= '<div class="ssf-news-current-featured">' . wp_get_attachment_image($featured_id, 'thumbnail', false, array('loading' => 'lazy')) . '</div><p class="ssf-workspace-help">Om du väljer en ny bild ersätts den nuvarande.</p>';
+        } else {
+            $html .= '<p class="ssf-workspace-help">Den utvalda bilden visas högst upp i artikeln och används i nyhetslistor.</p>';
+        }
+        $html .= '<label for="ssf-image">' . ($featured_id ? 'Välj ny bild' : 'Välj/ladda upp bild') . '</label><input id="ssf-image" name="featured_image" type="file" accept="image/jpeg,image/png,image/webp"></fieldset>';
+        $html .= '<fieldset class="ssf-news-image-fields"><legend>Fler bilder</legend><p class="ssf-workspace-help">Du kan lägga till flera bilder som visas efter artikeltexten. Nya bilder läggs sist.</p><label for="ssf-gallery-images">Välj en eller flera bilder</label><input id="ssf-gallery-images" name="gallery_images[]" type="file" accept="image/jpeg,image/png,image/webp" multiple>';
+        $gallery_ids = $post ? self::gallery_ids($post->ID) : array();
+        if ($gallery_ids) {
+            $html .= '<p><strong>Bilder i artikeln</strong></p><div class="ssf-news-gallery-editor">';
+            foreach ($gallery_ids as $attachment_id) {
+                $html .= '<label class="ssf-news-gallery-editor__item">' . wp_get_attachment_image($attachment_id, 'thumbnail', false, array('loading' => 'lazy')) . '<span><input type="checkbox" name="remove_gallery_ids[]" value="' . esc_attr((string) $attachment_id) . '"> Ta bort från artikeln</span></label>';
+            }
+            $html .= '</div><p class="ssf-workspace-help">Bilden ligger kvar i Mediabiblioteket när den tas bort från artikeln.</p>';
+        }
+        return $html . '</fieldset>';
     }
 
     private static function media_news(int $id): string
@@ -1165,6 +1190,9 @@ final class SSF_News_Service
         }
         self::set_featured($id, ! empty($_POST['featured_news']));
         self::handle_image_upload($id);
+        if ('own' === $mode) {
+            self::handle_gallery_updates($id);
+        }
         $path = 'external' === $mode ? 'nyheter/medierna/' . $id : 'nyheter/egna/' . $id;
         if ('preview' === $intent) {
             wp_safe_redirect(add_query_arg('preview', '1', SSF_Workspace::url($path)));
@@ -1200,8 +1228,13 @@ final class SSF_News_Service
             return;
         }
         $file = $_FILES['featured_image'];
+        if (UPLOAD_ERR_OK !== (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE)
+            || (int) ($file['size'] ?? 0) > wp_max_upload_size()) {
+            wp_die('Bilden kunde inte laddas upp eller är för stor.', '', array('response' => 400));
+        }
         $checked = wp_check_filetype_and_ext((string) ($file['tmp_name'] ?? ''), (string) ($file['name'] ?? ''));
-        if (! in_array($checked['type'] ?? '', array('image/jpeg', 'image/png', 'image/webp'), true)) {
+        if (! in_array($checked['type'] ?? '', array('image/jpeg', 'image/png', 'image/webp'), true)
+            || ! in_array(strtolower((string) ($checked['ext'] ?? '')), array('jpg', 'jpeg', 'png', 'webp'), true)) {
             wp_die('Bilden måste vara JPEG, PNG eller WebP.', '', array('response' => 400));
         }
         require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -1211,6 +1244,72 @@ final class SSF_News_Service
         if (! is_wp_error($attachment)) {
             set_post_thumbnail($post_id, (int) $attachment);
         }
+    }
+
+    private static function gallery_ids(int $post_id): array
+    {
+        if (function_exists('ssf_news_gallery_ids')) {
+            return ssf_news_gallery_ids($post_id);
+        }
+        $key = metadata_exists('post', $post_id, self::META_GALLERY) ? self::META_GALLERY : self::META_GALLERY_LEGACY;
+        $ids = array_values(array_unique(array_filter(array_map('absint', (array) get_post_meta($post_id, $key, true)), 'wp_attachment_is_image')));
+        return $ids;
+    }
+
+    private static function set_gallery_ids(int $post_id, array $ids): void
+    {
+        if (function_exists('ssf_news_set_gallery_ids')) {
+            ssf_news_set_gallery_ids($post_id, $ids);
+            return;
+        }
+        update_post_meta($post_id, self::META_GALLERY, array_values(array_unique(array_filter(array_map('absint', $ids), 'wp_attachment_is_image'))));
+    }
+
+    private static function handle_gallery_updates(int $post_id): void
+    {
+        $ids = self::gallery_ids($post_id);
+        $remove = array_map('absint', (array) ($_POST['remove_gallery_ids'] ?? array()));
+        $ids = array_values(array_diff($ids, $remove));
+        $names = array_filter((array) ($_FILES['gallery_images']['name'] ?? array()), static fn($name): bool => '' !== trim((string) $name));
+        if ($names && ! current_user_can('upload_files')) {
+            wp_die('Du saknar behörighet att ladda upp bilder.', '', array('response' => 403));
+        }
+        foreach ($names as $index => $name) {
+            if (! $name) {
+                continue;
+            }
+            $attachment_id = self::upload_gallery_image($post_id, array(
+                'name' => $name,
+                'tmp_name' => $_FILES['gallery_images']['tmp_name'][$index] ?? '',
+                'error' => $_FILES['gallery_images']['error'][$index] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $_FILES['gallery_images']['size'][$index] ?? 0,
+            ));
+            if ($attachment_id) {
+                $ids[] = $attachment_id;
+            }
+        }
+        self::set_gallery_ids($post_id, $ids);
+    }
+
+    private static function upload_gallery_image(int $post_id, array $file): int
+    {
+        if (UPLOAD_ERR_OK !== (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE)
+            || empty($file['tmp_name']) || (int) ($file['size'] ?? 0) > wp_max_upload_size()) {
+            wp_die('En av bilderna kunde inte laddas upp eller är för stor.', '', array('response' => 400));
+        }
+        $checked = wp_check_filetype_and_ext((string) $file['tmp_name'], (string) ($file['name'] ?? ''));
+        if (! in_array($checked['type'] ?? '', array('image/jpeg', 'image/png', 'image/webp'), true)
+            || ! in_array(strtolower((string) ($checked['ext'] ?? '')), array('jpg', 'jpeg', 'png', 'webp'), true)) {
+            wp_die('Bilderna måste vara JPEG, PNG eller WebP.', '', array('response' => 400));
+        }
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        $attachment = media_handle_sideload($file, $post_id);
+        if (is_wp_error($attachment)) {
+            wp_die('En av bilderna kunde inte sparas.', '', array('response' => 400));
+        }
+        return (int) $attachment;
     }
 
     public static function handle_source_analyze(): void

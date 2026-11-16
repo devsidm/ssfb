@@ -28,6 +28,9 @@ Assert-Contains 'Faktisk filtyp verifieras' 'wp_check_filetype_and_ext'
 Assert-Contains 'Uppladdning kopplas till utkast' 'media_handle_sideload'
 Assert-Contains 'Huvudbild sätts' 'set_post_thumbnail'
 Assert-Contains 'Galleri sparas på utkast' 'SSF_EXTERNAL_NEWS_GALLERY'
+Assert-Contains 'Canonical gallery metadata' "SSF_NEWS_GALLERY='_ssf_news_gallery_ids'"
+Assert-Contains 'Legacy gallery fallback' "metadata_exists('post',`$id,SSF_NEWS_GALLERY)?SSF_NEWS_GALLERY:SSF_EXTERNAL_NEWS_GALLERY"
+Assert-Contains 'Extern skribent appendar canonical gallery' 'ssf_news_append_gallery_ids($p->ID,$g)'
 Assert-Contains 'Mottagaradress sparas' 'SSF_EXTERNAL_NEWS_RECIPIENT'
 Assert-Contains 'Centrala e-postmallen används' 'SSF_Email_Template::send'
 Assert-Contains 'Omsändning finns' 'ssf_external_news_resend'
@@ -55,5 +58,7 @@ Assert-Contains 'Quick action för extern skribent' 'Bjud in extern skribent' $w
 Assert-Contains 'Mobilkort för skribenter' '.ssf-external-writer-table td::before' $workspaceCss
 Assert-Contains 'Riktigt nyhetskort används' 'function ssf_site_render_news_card' $shortcodes
 Assert-Contains 'Riktig artikelrendering används' 'function ssf_render_news_article' $theme
+Assert-Contains 'Publik gallery-renderer används' 'function ssf_news_gallery' $theme
+Assert-Contains 'WordPress responsive image API används' 'wp_get_attachment_image' $theme
 if ($failures.Count) { $failures | ForEach-Object { Write-Error $_ }; exit 1 }
 Write-Host 'PASS: externa nyhetsinbjudningar, token-skydd, e-post, redigering och privata förhandsgranskningar.'

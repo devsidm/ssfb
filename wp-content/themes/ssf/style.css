@@ -3,7 +3,7 @@ Theme Name: SSF
 Theme URI: https://github.com/devsidm/ssfb
 Author: SIDM
 Description: Custom WordPress theme for the SSF website.
-Version: 0.3.2
+Version: 0.3.4
 Requires at least: 6.0
 Tested up to: 6.6
 Requires PHP: 8.0
@@ -298,8 +298,46 @@ h6 {
 
 .single-featured-image {
   overflow: hidden;
-  margin-bottom: 26px;
+  margin: 0 0 26px;
   border-radius: var(--ssf-radius);
+}
+
+.single-featured-image img,
+.ssf-news-gallery img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+.single-featured-image figcaption,
+.ssf-news-gallery figcaption {
+  padding-top: 8px;
+  color: var(--ssf-muted);
+  font-size: 0.9rem;
+}
+
+.ssf-news-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 34px;
+}
+
+.ssf-news-gallery figure {
+  min-width: 0;
+  margin: 0;
+}
+
+.ssf-news-gallery figure:only-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .ssf-news-gallery {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
 }
 
 .site-footer__inner {

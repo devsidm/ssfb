@@ -6,7 +6,7 @@
  */
 
 if (! defined('SSF_VERSION')) {
-    define('SSF_VERSION', '0.3.3');
+    define('SSF_VERSION', '0.3.4');
 }
 
 function ssf_setup(): void
@@ -36,10 +36,60 @@ function ssf_enqueue_assets(): void
 add_action('wp_enqueue_scripts', 'ssf_enqueue_assets');
 
 /** Shared ordinary-news rendering used by the public template and private previews. */
+function ssf_news_featured_figure(WP_Post $post): string
+{
+    $attachment_id = (int) get_post_thumbnail_id($post->ID);
+    if (! $attachment_id) {
+        return '';
+    }
+    $image = wp_get_attachment_image($attachment_id, 'large', false, array(
+        'sizes' => '(max-width: 720px) calc(100vw - 32px), (max-width: 900px) calc(100vw - 48px), 860px',
+        'decoding' => 'async',
+    ));
+    if (! $image) {
+        return '';
+    }
+    $attachment = get_post($attachment_id);
+    $caption = $attachment instanceof WP_Post ? trim((string) $attachment->post_excerpt) : '';
+    return '<figure class="single-featured-image">' . $image . ($caption ? '<figcaption>' . wp_kses_post($caption) . '</figcaption>' : '') . '</figure>';
+}
+
+function ssf_news_gallery(WP_Post $post): string
+{
+    if (! function_exists('ssf_news_gallery_ids')) {
+        return '';
+    }
+    $featured_id = (int) get_post_thumbnail_id($post->ID);
+    $ids = array_values(array_filter(ssf_news_gallery_ids($post->ID), static fn(int $id): bool => $id !== $featured_id));
+    if (! $ids) {
+        return '';
+    }
+    $single = 1 === count($ids);
+    $image_size = $single ? 'large' : 'medium_large';
+    $sizes = $single
+        ? '(max-width: 720px) calc(100vw - 32px), (max-width: 900px) calc(100vw - 48px), 860px'
+        : '(max-width: 720px) calc(100vw - 32px), 410px';
+    $html = '<section class="ssf-news-gallery" aria-label="Fler bilder">';
+    foreach ($ids as $attachment_id) {
+        $image = wp_get_attachment_image($attachment_id, $image_size, false, array(
+            'sizes' => $sizes,
+            'loading' => 'lazy',
+            'decoding' => 'async',
+        ));
+        if (! $image) {
+            continue;
+        }
+        $attachment = get_post($attachment_id);
+        $caption = $attachment instanceof WP_Post ? trim((string) $attachment->post_excerpt) : '';
+        $html .= '<figure>' . $image . ($caption ? '<figcaption>' . wp_kses_post($caption) . '</figcaption>' : '') . '</figure>';
+    }
+    return $html . '</section>';
+}
+
 function ssf_render_news_article(WP_Post $post): void
 {
     echo '<article id="post-' . esc_attr((string) $post->ID) . '" class="content-page content-page--single">';
-    if (has_post_thumbnail($post)) { echo '<div class="single-featured-image">' . get_the_post_thumbnail($post, 'large') . '</div>'; }
+    echo ssf_news_featured_figure($post); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     $author = get_userdata((int) $post->post_author);
     $historical = (array) get_post_meta($post->ID, '_ssf_historical_author', true);
     $author_name = (string) ($historical['display_name'] ?? ($author ? $author->display_name : 'Tidigare användare'));
@@ -56,5 +106,5 @@ function ssf_render_news_article(WP_Post $post): void
         echo '</article>';
         return;
     }
-    echo '<p class="entry-date">' . esc_html(get_the_date('', $post)) . ' · Publicerad av ' . esc_html($author_name) . '</p><h1>' . esc_html(get_the_title($post)) . '</h1><div class="entry-content">' . apply_filters('the_content', $post->post_content) . '</div></article>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+    echo '<p class="entry-date">' . esc_html(get_the_date('', $post)) . ' · Publicerad av ' . esc_html($author_name) . '</p><h1>' . esc_html(get_the_title($post)) . '</h1><div class="entry-content">' . apply_filters('the_content', $post->post_content) . '</div>' . ssf_news_gallery($post) . '</article>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 }
