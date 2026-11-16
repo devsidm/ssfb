@@ -3,6 +3,9 @@ param()
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $source = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-site-customizations\includes\external-news-authors.php')
+$workspaceNews = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-arbetsyta\includes\class-ssf-news-service.php')
+$workspaceServices = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-arbetsyta\includes\class-ssf-workspace-services.php')
+$workspaceCss = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-arbetsyta\assets\workspace.css')
 $shortcodes = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\plugins\ssf-site-customizations\includes\shortcodes.php')
 $theme = Get-Content -Raw -LiteralPath (Join-Path $repo 'wp-content\themes\ssf\functions.php')
 $failures = [Collections.Generic.List[string]]::new()
@@ -17,6 +20,7 @@ Assert-Contains '30 dagars giltighet' '30*DAY_IN_SECONDS'
 Assert-Contains 'Återkallelse kontrolleras' 'SSF_EXTERNAL_NEWS_REVOKED'
 Assert-Contains 'Extern route utan wp-admin' "'^skriv-nyhet/([^/]+)/?$'"
 Assert-Contains 'Noindex och no-cache' 'X-Robots-Tag: noindex, nofollow, noarchive'
+Assert-Contains 'Ingen referrer från token-sidan' 'Referrer-Policy: no-referrer'
 Assert-Contains 'CSRF skydd' 'wp_verify_nonce'
 Assert-Contains 'Extern kan inte publicera' "'pending':'draft'"
 Assert-Contains 'Bildformat begränsas' "array('image/jpeg','image/png','image/webp')"
@@ -34,6 +38,21 @@ Assert-Contains 'Mailfel lagras utan att blockera' "'failed'"
 Assert-Contains 'Menybadge för väntande granskning' 'awaiting-mod'
 Assert-Contains 'Förhandsgranskning finns' 'ssf_external_news_render_preview'
 Assert-Contains 'Mobilförhandsgranskning finns' "'mobile'"
+Assert-Contains 'Kanonisk create-hjälpare' 'function ssf_external_news_create_invitation'
+Assert-Contains 'Kanonisk resend-hjälpare' 'function ssf_external_news_resend_invitation'
+Assert-Contains 'Kanonisk tokenrotation' 'function ssf_external_news_regenerate_link'
+Assert-Contains 'Kanonisk återkallelse' 'function ssf_external_news_revoke_link'
+Assert-Contains 'Workspace-route för skribenter' "if ('skribenter' === `$section)" $workspaceNews
+Assert-Contains 'Workspace använder kanonisk create' 'ssf_external_news_create_invitation(' $workspaceNews
+Assert-Contains 'Workspace använder kanonisk resend' 'ssf_external_news_resend_invitation(' $workspaceNews
+Assert-Contains 'Workspace använder kanonisk rotation' 'ssf_external_news_regenerate_link(' $workspaceNews
+Assert-Contains 'Workspace använder kanonisk återkallelse' 'ssf_external_news_revoke_link(' $workspaceNews
+Assert-Contains 'Workspace använder nyhetsbehörighet' "require_cap('ssf_news_edit')" $workspaceNews
+Assert-Contains 'Workspace verifierar postbehörighet server-side' "current_user_can('edit_post', `$id)" $workspaceNews
+Assert-Contains 'Workspace-actions har separata nonces' "check_admin_referer('ssf_news_writer_'" $workspaceNews
+Assert-Contains 'Workspace-granskning stannar i Arbetsytan' "SSF_Workspace::url('nyheter/egna/'" $workspaceNews
+Assert-Contains 'Quick action för extern skribent' 'Bjud in extern skribent' $workspaceServices
+Assert-Contains 'Mobilkort för skribenter' '.ssf-external-writer-table td::before' $workspaceCss
 Assert-Contains 'Riktigt nyhetskort används' 'function ssf_site_render_news_card' $shortcodes
 Assert-Contains 'Riktig artikelrendering används' 'function ssf_render_news_article' $theme
 if ($failures.Count) { $failures | ForEach-Object { Write-Error $_ }; exit 1 }

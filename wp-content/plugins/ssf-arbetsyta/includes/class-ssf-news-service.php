@@ -36,6 +36,10 @@ final class SSF_News_Service
             'ssf_news_source_test_page' => 'handle_source_test_page',
             'ssf_news_source_save' => 'handle_source_save',
             'ssf_news_source_action' => 'handle_source_action',
+            'ssf_news_writer_create' => 'handle_writer_create',
+            'ssf_news_writer_resend' => 'handle_writer_resend',
+            'ssf_news_writer_regenerate' => 'handle_writer_regenerate',
+            'ssf_news_writer_revoke' => 'handle_writer_revoke',
         ) as $action => $method) {
             add_action('admin_post_' . $action, array(__CLASS__, $method));
         }
@@ -440,6 +444,9 @@ final class SSF_News_Service
         if ('bevakning' === $section) {
             return self::sources(isset($parts[1]) ? (int) $parts[1] : 0);
         }
+        if ('skribenter' === $section) {
+            return self::external_writers();
+        }
         if ('tips' === $section) {
             return self::tip_form();
         }
@@ -448,11 +455,12 @@ final class SSF_News_Service
 
     private static function tabs(string $active = ''): string
     {
-        $tabs = array('' => 'Översikt', 'egna' => 'Egna nyheter', 'medierna' => 'I medierna', 'forslag' => 'Artikelförslag', 'bevakning' => 'Omvärldsbevakning');
+        $tabs = array('' => 'Översikt', 'egna' => 'Egna nyheter', 'medierna' => 'I medierna', 'forslag' => 'Artikelförslag', 'bevakning' => 'Omvärldsbevakning', 'skribenter' => 'Skribenter');
         $html = '<nav class="ssf-workspace-tabs ssf-news-tabs" aria-label="Nyheters delar">';
         foreach ($tabs as $path => $label) {
             if ('bevakning' === $path && ! self::can('ssf_news_sources_manage')
-                || 'forslag' === $path && ! self::can('ssf_news_suggestions_manage')) {
+                || 'forslag' === $path && ! self::can('ssf_news_suggestions_manage')
+                || 'skribenter' === $path && ! self::can('ssf_news_edit')) {
                 continue;
             }
             $html .= '<a' . ($active === $path ? ' aria-current="page"' : '') . ' href="' . esc_url(SSF_Workspace::url('nyheter' . ($path ? '/' . $path : ''))) . '">' . esc_html($label) . '</a>';
@@ -471,7 +479,8 @@ final class SSF_News_Service
         $new = self::count_suggestions();
         $drafts = wp_count_posts('post')->draft ?? 0;
         $future = wp_count_posts('post')->future ?? 0;
-        $html = self::notice_html() . '<div class="ssf-news-heading"><div><h1>Nyheter</h1><p>Det här behöver du göra nu.</p></div><div class="ssf-workspace-form-actions"><a class="ssf-workspace-button" href="' . esc_url(SSF_Workspace::url('nyheter/ny')) . '">+ Ny artikel</a><a class="ssf-workspace-button ssf-workspace-button--secondary" href="' . esc_url(SSF_Workspace::url('nyheter/extern')) . '">+ Lägg till extern artikel</a></div></div>' . self::tabs('');
+        $writer_action = self::can('ssf_news_edit') ? '<a class="ssf-workspace-button ssf-workspace-button--secondary" href="' . esc_url(SSF_Workspace::url('nyheter/skribenter')) . '">+ Bjud in extern skribent</a>' : '';
+        $html = self::notice_html() . '<div class="ssf-news-heading"><div><h1>Nyheter</h1><p>Det här behöver du göra nu.</p></div><div class="ssf-workspace-form-actions"><a class="ssf-workspace-button" href="' . esc_url(SSF_Workspace::url('nyheter/ny')) . '">+ Ny artikel</a><a class="ssf-workspace-button ssf-workspace-button--secondary" href="' . esc_url(SSF_Workspace::url('nyheter/extern')) . '">+ Lägg till extern artikel</a>' . $writer_action . '</div></div>' . self::tabs('');
         $html .= '<div class="ssf-news-stats"><a href="' . esc_url(SSF_Workspace::url('nyheter/forslag')) . '"><strong>' . esc_html((string) $new) . '</strong><span>nya artikelförslag</span></a><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '"><strong>' . esc_html((string) $drafts) . '</strong><span>utkast</span></a><a href="' . esc_url(SSF_Workspace::url('nyheter/egna')) . '"><strong>' . esc_html((string) $future) . '</strong><span>schemalagda</span></a></div>';
         $recent = get_posts(array('post_type' => array('post', self::SUGGESTION_TYPE), 'post_status' => array('draft', 'pending', 'future', 'publish', 'private'), 'numberposts' => 6, 'orderby' => 'modified', 'order' => 'DESC'));
         $html .= '<h2>Senaste aktivitet</h2><ul class="ssf-workspace-list">';
@@ -600,6 +609,47 @@ final class SSF_News_Service
     {
         self::require_cap('ssf_news_suggestions_manage');
         return '<h1>Lägg till extern artikel</h1><p><a href="' . esc_url(SSF_Workspace::url('nyheter/forslag')) . '">← Artikelförslag</a></p>' . self::notice_html() . '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_manual">' . wp_nonce_field('ssf_news_manual', '_wpnonce', true, false) . '<label for="ssf-external-url">Artikelns URL</label><input id="ssf-external-url" name="url" type="url" inputmode="url" required placeholder="https://…"><p class="ssf-workspace-help">Vi hämtar bara säker metadata: rubrik, kort beskrivning, canonical URL, datum och Open Graph-bild. Artikeltexten kopieras aldrig.</p><button class="ssf-workspace-button" type="submit">Hämta och skapa förslag</button></form>';
+    }
+
+    private static function external_writers(): string
+    {
+        self::require_cap('ssf_news_edit');
+        if (! function_exists('ssf_external_news_list')) {
+            return '<h1>Externa skribenter</h1>' . self::tabs('skribenter') . '<p class="ssf-workspace-error" role="alert">Tjänsten för externa skribenter är inte tillgänglig.</p>';
+        }
+        $html = '<h1>Externa skribenter</h1>' . self::tabs('skribenter') . self::notice_html();
+        $created = get_transient('ssf_workspace_external_news_link_' . get_current_user_id());
+        if (is_string($created) && $created) {
+            delete_transient('ssf_workspace_external_news_link_' . get_current_user_id());
+            $html .= '<section class="ssf-workspace-panel ssf-external-writer-link"><h2>Ny länk skapades</h2><p>Den tidigare länken är nu ogiltig.</p><label for="ssf-created-writer-link">Ny personlig länk</label><input id="ssf-created-writer-link" type="url" readonly value="' . esc_attr(ssf_external_news_url($created)) . '" onfocus="this.select()"></section>';
+        }
+        $html .= '<section class="ssf-workspace-panel ssf-external-writer-invite"><h2>Bjud in extern skribent</h2><p class="ssf-workspace-help">Skribenten får en personlig länk och behöver inget konto. Länken ger endast tillgång till detta nyhetsutkast.</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="ssf-workspace-form"><input type="hidden" name="action" value="ssf_news_writer_create">' . wp_nonce_field('ssf_news_writer_create', '_wpnonce', true, false) . '<label for="ssf-writer-email">E-postadress *</label><input id="ssf-writer-email" name="recipient" type="email" autocomplete="email" required><label for="ssf-writer-title">Nyhetens arbetsrubrik</label><input id="ssf-writer-title" name="title" maxlength="200"><label for="ssf-writer-expires">Länken gäller till *</label><input id="ssf-writer-expires" name="expires_on" type="date" required value="' . esc_attr(wp_date('Y-m-d', time() + 30 * DAY_IN_SECONDS)) . '"><button class="ssf-workspace-button" type="submit">Skapa och skicka länk</button></form></section>';
+        $html .= '<h2>Inbjudningar och utkast</h2><div class="ssf-workspace-table-wrap ssf-external-writer-table"><table><thead><tr><th>Nyhet</th><th>Skribent</th><th>Status</th><th>Senast ändrad</th><th>Länk giltig till</th><th>Åtgärd</th></tr></thead><tbody>';
+        $visible = 0;
+        foreach (ssf_external_news_list() as $post) {
+            if (! current_user_can('edit_post', $post->ID)) {
+                continue;
+            }
+            $visible++;
+            $expires = (int) get_post_meta($post->ID, SSF_EXTERNAL_NEWS_EXPIRES, true);
+            $active = 'draft' === $post->post_status && ! get_post_meta($post->ID, SSF_EXTERNAL_NEWS_REVOKED, true) && $expires >= time();
+            $editor_url = SSF_Workspace::url('nyheter/egna/' . $post->ID);
+            $open_label = 'pending' === $post->post_status ? 'Granska' : ('publish' === $post->post_status ? 'Öppna artikel' : 'Öppna utkast');
+            $html .= '<tr><td data-label="Nyhet"><strong>' . esc_html($post->post_title ?: 'Namnlöst utkast') . '</strong></td><td data-label="Skribent">' . esc_html((string) get_post_meta($post->ID, SSF_EXTERNAL_NEWS_RECIPIENT, true)) . '</td><td data-label="Status"><span class="ssf-status">' . esc_html(ssf_external_news_status($post)) . '</span></td><td data-label="Senast ändrad">' . esc_html(get_the_modified_date('Y-m-d H:i', $post)) . '</td><td data-label="Länk giltig till">' . esc_html($expires ? wp_date('Y-m-d H:i', $expires) : '–') . '</td><td data-label="Åtgärd"><div class="ssf-external-writer-actions"><a class="ssf-workspace-button" href="' . esc_url($editor_url) . '">' . esc_html($open_label) . '</a>';
+            if ($active) {
+                $html .= self::writer_action_form('resend', $post->ID, 'Skicka ny länk');
+                $html .= self::writer_action_form('regenerate', $post->ID, 'Skapa ny länk');
+                $html .= self::writer_action_form('revoke', $post->ID, 'Återkalla länk', true);
+            }
+            $html .= '</div></td></tr>';
+        }
+        $html .= '</tbody></table></div>';
+        return $html . ($visible ? '' : '<p class="ssf-workspace-empty">Det finns inga inbjudningar ännu.</p>');
+    }
+
+    private static function writer_action_form(string $intent, int $post_id, string $label, bool $danger = false): string
+    {
+        return '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_news_writer_' . esc_attr($intent) . '"><input type="hidden" name="post_id" value="' . esc_attr((string) $post_id) . '">' . wp_nonce_field('ssf_news_writer_' . $intent . '_' . $post_id, '_wpnonce', true, false) . '<button class="ssf-workspace-button ssf-workspace-button--secondary' . ($danger ? ' ssf-external-writer-revoke' : '') . '" type="submit">' . esc_html($label) . '</button></form>';
     }
 
     private static function tip_form(): string
@@ -854,6 +904,77 @@ final class SSF_News_Service
         $html .= '<label class="ssf-workspace-check"><input type="checkbox" name="allow_preview" value="1"' . checked($source && '1' === self::post_meta($id, '_ssf_source_allow_preview'), true, false) . '> Tillåt extern förhandsvisningsbild</label>';
         $html .= '<p class="ssf-workspace-help">Extern bild innebär att besökarens webbläsare kontaktar källans bildserver. Bilden kopieras eller cachas inte av SSF.</p>';
         return $html . '<button class="ssf-workspace-button" type="submit">Spara bevakningskälla</button></form>';
+    }
+
+    public static function handle_writer_create(): void
+    {
+        self::require_cap('ssf_news_edit');
+        check_admin_referer('ssf_news_writer_create');
+        if (! function_exists('ssf_external_news_create_invitation')) {
+            self::redirect('nyheter/skribenter', '', 'Tjänsten för externa skribenter är inte tillgänglig.');
+        }
+        $date = sanitize_text_field((string) wp_unslash($_POST['expires_on'] ?? ''));
+        $expires = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $date . ' 23:59:59', wp_timezone());
+        if (! $expires || $expires->format('Y-m-d') !== $date) {
+            self::redirect('nyheter/skribenter', '', 'Ange giltig e-postadress och framtida datum.');
+        }
+        $result = ssf_external_news_create_invitation(
+            (string) wp_unslash($_POST['recipient'] ?? ''),
+            (string) wp_unslash($_POST['title'] ?? ''),
+            $expires ? $expires->getTimestamp() : 0,
+            get_current_user_id()
+        );
+        if (is_wp_error($result)) {
+            self::redirect('nyheter/skribenter', '', $result->get_error_message());
+        }
+        self::redirect('nyheter/skribenter', 'Inbjudan har skickats.');
+    }
+
+    private static function writer_action_post(string $intent): int
+    {
+        self::require_cap('ssf_news_edit');
+        if (! defined('SSF_EXTERNAL_NEWS_HASH') || ! function_exists('ssf_external_news_resend_invitation')) {
+            wp_die('Tjänsten för externa skribenter är inte tillgänglig.', '', array('response' => 503));
+        }
+        $id = absint($_POST['post_id'] ?? 0);
+        check_admin_referer('ssf_news_writer_' . $intent . '_' . $id);
+        $post = $id ? get_post($id) : null;
+        if (! $post || 'post' !== $post->post_type || ! current_user_can('edit_post', $id)
+            || ! get_post_meta($id, SSF_EXTERNAL_NEWS_HASH, true)) {
+            wp_die('Du saknar behörighet.', '', array('response' => 403));
+        }
+        return $id;
+    }
+
+    public static function handle_writer_resend(): void
+    {
+        $id = self::writer_action_post('resend');
+        $result = ssf_external_news_resend_invitation($id);
+        if (is_wp_error($result)) {
+            self::redirect('nyheter/skribenter', '', $result->get_error_message());
+        }
+        self::redirect('nyheter/skribenter', 'Ny länk skickades. Den tidigare länken är nu ogiltig.');
+    }
+
+    public static function handle_writer_regenerate(): void
+    {
+        $id = self::writer_action_post('regenerate');
+        $token = ssf_external_news_regenerate_link($id);
+        if (is_wp_error($token)) {
+            self::redirect('nyheter/skribenter', '', $token->get_error_message());
+        }
+        set_transient('ssf_workspace_external_news_link_' . get_current_user_id(), $token, 10 * MINUTE_IN_SECONDS);
+        self::redirect('nyheter/skribenter', 'Ny länk skapades. Den tidigare länken är nu ogiltig.');
+    }
+
+    public static function handle_writer_revoke(): void
+    {
+        $id = self::writer_action_post('revoke');
+        $result = ssf_external_news_revoke_link($id);
+        if (is_wp_error($result)) {
+            self::redirect('nyheter/skribenter', '', $result->get_error_message());
+        }
+        self::redirect('nyheter/skribenter', 'Länken är återkallad.');
     }
 
     public static function handle_home_settings(): void
