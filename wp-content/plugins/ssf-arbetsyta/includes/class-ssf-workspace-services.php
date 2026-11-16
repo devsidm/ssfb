@@ -36,6 +36,7 @@ final class SSF_Workspace_Services
                 'quick_actions' => array(
                     array('label' => 'Ny artikel', 'url' => add_query_arg('new', '1', SSF_Workspace::url('nyheter/egna'))),
                     array('label' => 'Lägg till extern artikel', 'url' => SSF_Workspace::url('nyheter/extern')),
+                    array('label' => 'Bjud in extern skribent', 'url' => SSF_Workspace::url('nyheter/skribenter')),
                 ),
             ));
         }
