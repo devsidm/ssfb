@@ -2,17 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.11",
-    "build":  "20261116.1",
-    "built_at":  "2026-11-16T13:50:47.4925373Z",
+    "build":  "20261116.2",
+    "built_at":  "2026-11-16T14:03:55.1280397Z",
     "source":  "codex",
-    "source_revision":  "7e92c8145950fe94e82fe0eb5127116e476827e8",
-    "description":  "Externa skribentinbjudningar i Arbetsyta Nyheter",
+    "source_revision":  "0c3289f2196af3379f4f09060fcbd2179aeec0a0",
+    "description":  "Kortare rubrik för skribentinbjudan i Arbetsyta Nyheter",
     "notes":  "DEV build 20261026.3 verified. Keep the annual meeting editor metabox in the WordPress main column for default and legacy saved user layouts; preserve all other metabox positions.",
     "components":  [
-                       "documentation",
-                       "release-tooling",
-                       "ssf-arbetsyta",
-                       "ssf-site-customizations"
+                       "ssf-arbetsyta"
                    ],
     "status":  "development",
     "prepared_at":  ""
