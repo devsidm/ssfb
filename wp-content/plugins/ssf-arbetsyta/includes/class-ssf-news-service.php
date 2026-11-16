@@ -455,7 +455,7 @@ final class SSF_News_Service
 
     private static function tabs(string $active = ''): string
     {
-        $tabs = array('' => 'Översikt', 'egna' => 'Egna nyheter', 'medierna' => 'I medierna', 'forslag' => 'Artikelförslag', 'bevakning' => 'Omvärldsbevakning', 'skribenter' => 'Skribenter');
+        $tabs = array('' => 'Översikt', 'egna' => 'Egna nyheter', 'medierna' => 'I medierna', 'forslag' => 'Artikelförslag', 'bevakning' => 'Omvärldsbevakning', 'skribenter' => 'Bjud in skribent');
         $html = '<nav class="ssf-workspace-tabs ssf-news-tabs" aria-label="Nyheters delar">';
         foreach ($tabs as $path => $label) {
             if ('bevakning' === $path && ! self::can('ssf_news_sources_manage')
