@@ -2,14 +2,17 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.11",
-    "build":  "20261116.3",
-    "built_at":  "2026-11-16T14:20:26.6082898Z",
+    "build":  "20261116.4",
+    "built_at":  "2026-11-16T21:15:53.7871496Z",
     "source":  "codex",
-    "source_revision":  "0f6b80d3eaf14111d66ddf86cef5de078eb99bb1",
-    "description":  "Fliken för skribentinbjudan heter Bjud in skribent",
+    "source_revision":  "54f6b9182a0b1a2aa2b3ef04637c6295da64c974",
+    "description":  "Responsiva nyhetsbilder och canonical gallery integrerat med extern skribent",
     "notes":  "DEV build 20261026.3 verified. Keep the annual meeting editor metabox in the WordPress main column for default and legacy saved user layouts; preserve all other metabox positions.",
     "components":  [
-                       "ssf-arbetsyta"
+                       "release-tooling",
+                       "ssf",
+                       "ssf-arbetsyta",
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
