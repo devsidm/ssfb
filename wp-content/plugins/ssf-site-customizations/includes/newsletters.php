@@ -382,10 +382,12 @@ function ssf_site_render_newsletter_editor_page(): void
     $status_object = get_post_status_object($status);
     $primary_status = in_array($status, array('publish', 'future', 'private', 'pending'), true) ? $status : 'publish';
     $duplicates = ssf_site_newsletter_duplicates($post_id, (string) $values['issue'], (string) $values['year'], (int) $values['pdf_id']);
+    $workspace_editor = ! empty($_GET['workspace_newsletter']);
     ?>
-    <div class="wrap ssf-newsletter-editor">
-        <h1><?php echo esc_html($post ? __('Redigera nyhetsbrev', 'ssf-site') : __('Lägg till nyhetsbrev', 'ssf-site')); ?></h1>
-        <?php ssf_site_render_newsletter_admin_tabs('editor'); ?>
+    <div class="wrap ssf-newsletter-editor<?php echo $workspace_editor ? ' ssf-newsletter-editor--workspace' : ''; ?>">
+        <?php if ($workspace_editor) : ?><p><a href="<?php echo esc_url(SSF_Workspace::url('nyhetsbrev')); ?>">← Till alla nyhetsbrev</a></p><?php endif; ?>
+        <div class="ssf-newsletter-editor__heading"><h1><?php echo esc_html($post ? __('Redigera nyhetsbrev', 'ssf-site') : __('Nytt nyhetsbrev', 'ssf-site')); ?></h1><?php if ($workspace_editor && $post) : ?><p><?php echo esc_html($values['series'] . ($status_object ? ' · ' . $status_object->label : '')); ?></p><?php endif; ?></div>
+        <?php if (! $workspace_editor) { ssf_site_render_newsletter_admin_tabs('editor'); } ?>
         <?php if (isset($_GET['updated'])) : ?><div class="notice notice-success is-dismissible"><p><?php esc_html_e('Nyhetsbrevet har sparats.', 'ssf-site'); ?></p></div><?php endif; ?>
         <?php foreach ($errors as $error) : ?><div class="notice notice-error"><p><?php echo esc_html(ssf_site_newsletter_editor_error_message($error)); ?></p></div><?php endforeach; ?>
         <?php if ($duplicates) : ?><div class="notice notice-warning"><p><?php echo esc_html(implode(' ', $duplicates)); ?></p></div><?php endif; ?>
