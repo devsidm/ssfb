@@ -10,6 +10,7 @@ if (! defined('ABSPATH')) {
 }
 
 const SSF_SITE_NEWSLETTER_POST_TYPE = 'ssf_newsletter';
+const SSF_SITE_NEWSLETTER_SERIES_TAXONOMY = 'ssf_newsletter_series';
 const SSF_SITE_NEWSLETTER_SERIES_META = '_ssf_newsletter_series';
 const SSF_SITE_NEWSLETTER_ISSUE_META = '_ssf_newsletter_issue';
 const SSF_SITE_NEWSLETTER_DATE_META = '_ssf_newsletter_date';
@@ -55,6 +56,45 @@ function ssf_site_register_newsletter_post_type(): void
     );
 }
 add_action('init', 'ssf_site_register_newsletter_post_type');
+
+function ssf_site_register_newsletter_series(): void
+{
+    register_taxonomy(SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, array(SSF_SITE_NEWSLETTER_POST_TYPE), array(
+        'labels' => array('name' => __('Serier', 'ssf-site'), 'singular_name' => __('Serie', 'ssf-site')),
+        'public' => false, 'show_ui' => false, 'show_in_rest' => true, 'hierarchical' => false,
+    ));
+    foreach (array('fordevind' => 'Fördevind', 'emh' => 'EMH:s nyhetsbrev') as $slug => $name) {
+        if (! term_exists($slug, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY)) { wp_insert_term($name, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, array('slug' => $slug)); }
+    }
+}
+add_action('init', 'ssf_site_register_newsletter_series', 15);
+
+function ssf_site_newsletter_series_name(int $post_id): string
+{
+    $terms = get_the_terms($post_id, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY);
+    return is_array($terms) && $terms ? (string) $terms[0]->name : (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, true);
+}
+
+function ssf_site_set_newsletter_series(int $post_id, string $series): void
+{
+    $series = sanitize_text_field($series);
+    update_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, $series);
+    if ('' === $series) { wp_set_object_terms($post_id, array(), SSF_SITE_NEWSLETTER_SERIES_TAXONOMY); return; }
+    $term = term_exists($series, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY);
+    if (! $term) { $term = wp_insert_term($series, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY); }
+    if (! is_wp_error($term)) { wp_set_object_terms($post_id, array((int) (is_array($term) ? $term['term_id'] : $term)), SSF_SITE_NEWSLETTER_SERIES_TAXONOMY); }
+}
+
+function ssf_site_migrate_newsletter_series(): void
+{
+    if ('2026-11-17' === get_option('ssf_site_newsletter_series_version')) { return; }
+    foreach (get_posts(array('post_type' => SSF_SITE_NEWSLETTER_POST_TYPE, 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids')) as $post_id) {
+        $legacy = (string) get_post_meta((int) $post_id, SSF_SITE_NEWSLETTER_SERIES_META, true);
+        if ($legacy && ! has_term('', SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, (int) $post_id)) { ssf_site_set_newsletter_series((int) $post_id, $legacy); }
+    }
+    update_option('ssf_site_newsletter_series_version', '2026-11-17', false);
+}
+add_action('admin_init', 'ssf_site_migrate_newsletter_series');
 
 function ssf_site_grant_newsletter_capabilities(): void
 {
@@ -358,7 +398,7 @@ function ssf_site_render_newsletter_editor_page(): void
                             <input id="newsletter-title" name="newsletter_title" type="text" value="<?php echo esc_attr((string) $values['title']); ?>" placeholder="<?php esc_attr_e('Fördevind nr 2 - 2024', 'ssf-site'); ?>" required>
                         </div>
                         <div class="ssf-newsletter-editor__fields">
-                            <div class="ssf-newsletter-field"><label for="ssf-newsletter-series"><?php esc_html_e('Serie', 'ssf-site'); ?></label><input id="ssf-newsletter-series" name="ssf_newsletter_series" type="text" value="<?php echo esc_attr((string) $values['series']); ?>" placeholder="<?php esc_attr_e('Fördevind', 'ssf-site'); ?>"></div>
+                            <div class="ssf-newsletter-field"><label for="ssf-newsletter-series"><?php esc_html_e('Serie', 'ssf-site'); ?></label><select id="ssf-newsletter-series" name="ssf_newsletter_series" required><?php foreach (get_terms(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'hide_empty' => false)) as $term) : ?><option value="<?php echo esc_attr($term->name); ?>" <?php selected($values['series'], $term->name); ?>><?php echo esc_html($term->name); ?></option><?php endforeach; ?></select></div>
                             <div class="ssf-newsletter-field"><label for="ssf-newsletter-issue"><?php esc_html_e('Nummer / utgåva', 'ssf-site'); ?></label><input id="ssf-newsletter-issue" name="ssf_newsletter_issue" type="text" value="<?php echo esc_attr((string) $values['issue']); ?>" placeholder="<?php esc_attr_e('3 eller 1/2024', 'ssf-site'); ?>"></div>
                         </div>
                     </section>
@@ -482,7 +522,7 @@ function ssf_site_handle_newsletter_editor_save(): void
     }
     $post_id = (int) $saved_id;
 
-    update_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, $values['series']);
+    ssf_site_set_newsletter_series($post_id, $values['series']);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_ISSUE_META, $values['issue']);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_META, $values['date']);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_PRECISION_META, $values['date_precision']);
@@ -615,7 +655,7 @@ function ssf_site_save_newsletter(int $post_id, WP_Post $post): void
         $date = $year . '-01-01';
     }
 
-    update_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, $series);
+    ssf_site_set_newsletter_series($post_id, $series);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_ISSUE_META, $issue);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_META, $date);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_PRECISION_META, $date_precision);
@@ -906,11 +946,11 @@ function ssf_site_get_newsletter_years(bool $published_only = true): array
     return $years;
 }
 
-function ssf_site_get_newsletters(string $year = '', int $exclude_id = 0): array
+function ssf_site_get_newsletters(string $year = '', int $exclude_id = 0, string $series = '', bool $published_only = true): array
 {
     $args = array(
         'post_type' => SSF_SITE_NEWSLETTER_POST_TYPE,
-        'post_status' => 'publish',
+        'post_status' => $published_only ? 'publish' : array('publish', 'draft', 'pending', 'private', 'future'),
         'posts_per_page' => -1,
         'no_found_rows' => true,
         'meta_query' => array(),
@@ -920,6 +960,9 @@ function ssf_site_get_newsletters(string $year = '', int $exclude_id = 0): array
     }
     if (ssf_site_is_valid_newsletter_year($year)) {
         $args['meta_query'][] = array('key' => SSF_SITE_NEWSLETTER_YEAR_META, 'value' => $year);
+    }
+    if ($series && term_exists($series, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY)) {
+        $args['tax_query'] = array(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'field' => 'slug', 'terms' => $series));
     }
 
     $posts = get_posts($args);
@@ -980,7 +1023,7 @@ function ssf_site_newsletter_data(int $post_id): array
     $date_precision = (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_PRECISION_META, true);
     $date_precision = in_array($date_precision, array('full_date', 'year_only'), true) ? $date_precision : 'full_date';
     return array(
-        'series' => (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, true),
+        'series' => ssf_site_newsletter_series_name($post_id),
         'issue' => (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_ISSUE_META, true),
         'date' => (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_META, true),
         'date_precision' => $date_precision,
