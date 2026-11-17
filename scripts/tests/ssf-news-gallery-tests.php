@@ -115,10 +115,13 @@ $single_html = ssf_news_gallery($article);
 gallery_check(str_contains($single_html, 'data-size="large"') && str_contains($single_html, '860px'), 'en ensam gallerybild ska använda large och full artikelbredd i sizes');
 
 $service = file_get_contents(dirname(__DIR__, 2) . '/wp-content/plugins/ssf-arbetsyta/includes/class-ssf-news-service.php');
-$styles = file_get_contents(dirname(__DIR__, 2) . '/wp-content/themes/ssf/style.css');
+$styles = file_get_contents(dirname(__DIR__, 2) . '/wp-content/themes/ssf/style.css')
+    . file_get_contents(dirname(__DIR__, 2) . '/wp-content/plugins/ssf-site-customizations/assets/css/ssf-site.css');
 gallery_check(str_contains($service, 'name="gallery_images[]"') && str_contains($service, 'multiple'), 'Workspace ska stödja multiple upload');
 gallery_check(str_contains($service, 'name="remove_gallery_ids[]"') && str_contains($service, 'Ta bort från artikeln'), 'Workspace ska kunna koppla bort bilder');
 gallery_check(! str_contains($service, 'wp_delete_attachment'), 'borttagning från artikel får inte radera attachment');
 gallery_check(str_contains($styles, 'grid-template-columns: repeat(2, minmax(0, 1fr))') && str_contains($styles, '@media (max-width: 640px)'), 'gallery ska vara responsiv CSS Grid');
+gallery_check(function_exists('ssf_news_gallery_html') && str_contains(ssf_news_gallery_html($article), 'data-id="11"'), 'theme-oberoende gallery-renderare ska finnas');
+gallery_check(str_contains(file_get_contents(dirname(__DIR__, 2) . '/wp-content/plugins/ssf-site-customizations/includes/external-news-authors.php'), "add_filter('the_content', 'ssf_news_append_gallery_to_content'"), 'public gallery ska kopplas in theme-oberoende');
 
 echo "PASS: canonical gallery, legacy fallback, editor controls and responsive article image HTML.\n";

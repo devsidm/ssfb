@@ -6,6 +6,70 @@ function ssf_news_sanitize_gallery_ids(array $ids):array{$clean=array();foreach(
 function ssf_news_gallery_ids(int $id):array{$key=metadata_exists('post',$id,SSF_NEWS_GALLERY)?SSF_NEWS_GALLERY:SSF_EXTERNAL_NEWS_GALLERY;return ssf_news_sanitize_gallery_ids((array)get_post_meta($id,$key,true));}
 function ssf_news_set_gallery_ids(int $id,array $ids):array{$ids=ssf_news_sanitize_gallery_ids($ids);update_post_meta($id,SSF_NEWS_GALLERY,$ids);return $ids;}
 function ssf_news_append_gallery_ids(int $id,array $ids):array{return ssf_news_set_gallery_ids($id,array_merge(ssf_news_gallery_ids($id),$ids));}
+
+/** Render the canonical gallery independently of the active public theme. */
+function ssf_news_gallery_html(WP_Post $post): string {
+    $featured_id = (int) get_post_thumbnail_id($post->ID);
+    $ids = array_values(array_filter(
+        ssf_news_gallery_ids($post->ID),
+        static fn(int $id): bool => $id !== $featured_id
+    ));
+    if (! $ids) { return ''; }
+    $single = 1 === count($ids);
+    $image_size = $single ? 'large' : 'medium_large';
+    $sizes = $single
+        ? '(max-width: 720px) calc(100vw - 32px), (max-width: 900px) calc(100vw - 48px), 760px'
+        : '(max-width: 640px) calc(100vw - 32px), 365px';
+    $html = '<section class="ssf-news-gallery" aria-label="Fler bilder">';
+    foreach ($ids as $attachment_id) {
+        $image = wp_get_attachment_image($attachment_id, $image_size, false, array(
+            'sizes' => $sizes,
+            'loading' => 'lazy',
+            'decoding' => 'async',
+        ));
+        if (! $image) { continue; }
+        $attachment = get_post($attachment_id);
+        $caption = $attachment instanceof WP_Post ? trim((string) $attachment->post_excerpt) : '';
+        $html .= '<figure>' . $image . ($caption ? '<figcaption>' . wp_kses_post($caption) . '</figcaption>' : '') . '</figure>';
+    }
+    return $html . '</section>';
+}
+
+/** Append galleries for public themes that do not provide their own news renderer. */
+function ssf_news_append_gallery_to_content(string $content): string {
+    if (! is_singular('post') || ! in_the_loop() || ! is_main_query() || function_exists('ssf_news_gallery')) {
+        return $content;
+    }
+    global $post;
+    return $post instanceof WP_Post ? $content . ssf_news_gallery_html($post) : $content;
+}
+add_filter('the_content', 'ssf_news_append_gallery_to_content', 20);
+
+/** Give the active theme's featured image an explicit responsive slot size. */
+function ssf_news_featured_image_attributes(array $attr, WP_Post $attachment, $size): array {
+    if (is_singular('post') && str_contains((string) ($attr['class'] ?? ''), 'wp-post-image')) {
+        $attr['sizes'] = '(max-width: 720px) calc(100vw - 32px), (max-width: 900px) calc(100vw - 48px), 760px';
+        $attr['decoding'] = 'async';
+    }
+    return $attr;
+}
+add_filter('wp_get_attachment_image_attributes', 'ssf_news_featured_image_attributes', 20, 3);
+
+/** Article-context fallback used by external-writer previews with themes such as SSF2. */
+function ssf_external_news_render_article_preview(WP_Post $post): void {
+    echo '<article class="content-page content-page--single">';
+    echo '<p class="entry-date">' . esc_html(get_the_date('', $post)) . '</p><h1>' . esc_html(get_the_title($post)) . '</h1>';
+    $featured_id = (int) get_post_thumbnail_id($post->ID);
+    if ($featured_id) {
+        echo '<figure class="single-featured-image">' . wp_get_attachment_image($featured_id, 'large', false, array(
+            'sizes' => '(max-width: 720px) calc(100vw - 32px), (max-width: 900px) calc(100vw - 48px), 760px',
+            'decoding' => 'async',
+        )) . '</figure>';
+    }
+    echo '<div class="entry-content">' . apply_filters('the_content', $post->post_content) . '</div>';
+    echo ssf_news_gallery_html($post);
+    echo '</article>';
+}
 function ssf_external_news_token(): string { return rtrim(strtr(base64_encode(random_bytes(32)),'+/','-_'),'='); }
 function ssf_external_news_url(string $token): string { return home_url('/skriv-nyhet/'.rawurlencode($token).'/'); }
 function ssf_external_news_audit(int $id,string $event): void { $a=(array)get_post_meta($id,SSF_EXTERNAL_NEWS_AUDIT,true); $a[]=array('event'=>sanitize_key($event),'time'=>current_time('mysql')); update_post_meta($id,SSF_EXTERNAL_NEWS_AUDIT,array_slice($a,-100)); }
@@ -22,7 +86,7 @@ function ssf_external_news_register_route(): void { add_rewrite_rule('^skriv-nyh
 add_action('init','ssf_external_news_register_route'); add_filter('query_vars',static function(array $v):array{$v[]='ssf_external_news_token';return $v;}); add_filter('wp_robots',static function(array $r):array{if(get_query_var('ssf_external_news_token')){$r['noindex']=true;$r['nofollow']=true;}return $r;}); add_action('template_redirect','ssf_external_news_render_editor',0);
 function ssf_external_news_preview_url(string $t,string $context='home',string $device='desktop'):string{return add_query_arg(array('view'=>'preview','context'=>$context,'device'=>$device),ssf_external_news_url($t));}
 function ssf_external_news_render_editor():void { $t=(string)get_query_var('ssf_external_news_token');if(!$t)return;nocache_headers();header('X-Robots-Tag: noindex, nofollow, noarchive',true);header('Referrer-Policy: no-referrer',true);$p=ssf_external_news_find($t);status_header($p?200:404);get_header();echo '<main id="ssf-external-news" class="ssf-external-news"><section class="ssf-external-news__card"><p class="ssf-external-news__brand">Sveriges Segelfartygsförbund</p><h1>Skriv en nyhet</h1>';if(!$p){echo '<p>Länken är inte längre giltig. Kontakta SSF om du behöver en ny länk.</p></section></main>';get_footer();exit;}$submitted='pending'===$p->post_status;$view='preview'===sanitize_key((string)($_GET['view']??''))?'preview':'edit';$notice=sanitize_key((string)($_GET['ssf_external_news_notice']??''));if($notice){echo '<div class="ssf-external-news__notice">'.('submitted'===$notice?'✓ Nyheten har skickats till SSF för granskning':'✓ Utkastet är sparat').'</div>';}echo '<p class="ssf-external-news__state">'.esc_html(ssf_external_news_status($p)).'</p><nav class="ssf-external-news__nav"><a href="'.esc_url(ssf_external_news_url($t)).'">Redigera</a><a href="'.esc_url(ssf_external_news_preview_url($t)).'">Förhandsgranska</a></nav>';if($submitted){echo '<p class="ssf-external-news__notice">Nyheten väntar på granskning.</p></section></main>';get_footer();exit;}if('preview'===$view){ssf_external_news_render_preview($p,$t);echo '</section></main>';get_footer();exit;}echo '<form method="post" enctype="multipart/form-data" action="'.esc_url(admin_url('admin-post.php')).'" class="ssf-external-news__form"><input type="hidden" name="action" value="ssf_external_news_save"><input type="hidden" name="token" value="'.esc_attr($t).'">';wp_nonce_field('ssf_external_news_'.hash('sha256',$t),'ssf_external_news_nonce');echo '<label>Rubrik<input type="text" name="title" required value="'.esc_attr($p->post_title).'"></label><label>Ingress / sammanfattning<textarea name="excerpt" rows="3">'.esc_textarea($p->post_excerpt).'</textarea></label><label>Nyhetstext</label>';wp_editor($p->post_content,'ssf_external_news_content',array('textarea_name'=>'content','media_buttons'=>false,'textarea_rows'=>14,'teeny'=>true));echo '<label>Huvudbild<input type="file" name="featured_image" accept="image/jpeg,image/png,image/webp"></label><label>Fler bilder<input type="file" name="gallery_images[]" accept="image/jpeg,image/png,image/webp" multiple></label><p class="description">Endast JPEG, PNG och WebP-bilder kan laddas upp.</p><div><button type="submit" name="intent" value="save" class="ssf-button">Spara utkast</button><button type="submit" name="intent" value="preview" class="ssf-button">Förhandsgranska</button><button type="submit" name="intent" value="submit" class="ssf-button ssf-button--primary">Skicka till SSF</button></div></form></section></main>';get_footer();exit; }
-function ssf_external_news_render_preview(WP_Post $p,string $t):void{$c='article'===sanitize_key((string)($_GET['context']??'home'))?'article':'home';$d='mobile'===sanitize_key((string)($_GET['device']??''))?'mobile':'desktop';echo '<div class="ssf-external-news__preview-nav"><a href="'.esc_url(ssf_external_news_preview_url($t,'home',$d)).'">Startsida</a><a href="'.esc_url(ssf_external_news_preview_url($t,'article',$d)).'">Nyhetssida</a><a href="'.esc_url(ssf_external_news_preview_url($t,$c,'desktop')).'">Desktop</a><a href="'.esc_url(ssf_external_news_preview_url($t,$c,'mobile')).'">Mobil</a></div><div class="ssf-external-news__preview ssf-external-news__preview--'.esc_attr($d).'">';if('home'===$c&&function_exists('ssf_site_render_news_card')){echo '<div class="ssf-news-grid">'.ssf_site_render_news_card($p,ssf_external_news_preview_url($t,'article',$d)).'</div>';}elseif('article'===$c&&function_exists('ssf_render_news_article')){ssf_render_news_article($p);}echo '</div><p><a href="'.esc_url(ssf_external_news_url($t)).'">← Tillbaka till Redigera</a></p>';}
+function ssf_external_news_render_preview(WP_Post $p,string $t):void{$c='article'===sanitize_key((string)($_GET['context']??'home'))?'article':'home';$d='mobile'===sanitize_key((string)($_GET['device']??''))?'mobile':'desktop';echo '<div class="ssf-external-news__preview-nav"><a href="'.esc_url(ssf_external_news_preview_url($t,'home',$d)).'">Startsida</a><a href="'.esc_url(ssf_external_news_preview_url($t,'article',$d)).'">Nyhetssida</a><a href="'.esc_url(ssf_external_news_preview_url($t,$c,'desktop')).'">Desktop</a><a href="'.esc_url(ssf_external_news_preview_url($t,$c,'mobile')).'">Mobil</a></div><div class="ssf-external-news__preview ssf-external-news__preview--'.esc_attr($d).'">';if('home'===$c&&function_exists('ssf_site_render_news_card')){echo '<div class="ssf-news-grid">'.ssf_site_render_news_card($p,ssf_external_news_preview_url($t,'article',$d)).'</div>';}elseif('article'===$c){if(function_exists('ssf_render_news_article')){ssf_render_news_article($p);}else{ssf_external_news_render_article_preview($p);}}echo '</div><p><a href="'.esc_url(ssf_external_news_url($t)).'">← Tillbaka till Redigera</a></p>';}
 function ssf_external_news_upload(int $id,array $f):int{if(empty($f['tmp_name'])||UPLOAD_ERR_OK!==(int)($f['error']??UPLOAD_ERR_NO_FILE)||!is_uploaded_file($f['tmp_name'])||(int)$f['size']>wp_max_upload_size())return 0;$checked=wp_check_filetype_and_ext($f['tmp_name'],$f['name']);if(!in_array($checked['type']??'',array('image/jpeg','image/png','image/webp'),true)||!in_array(strtolower((string)($checked['ext']??'')),array('jpg','jpeg','png','webp'),true))return 0;require_once ABSPATH.'wp-admin/includes/file.php';require_once ABSPATH.'wp-admin/includes/image.php';require_once ABSPATH.'wp-admin/includes/media.php';$a=media_handle_sideload($f,$id);return is_wp_error($a)?0:(int)$a;}
 function ssf_external_news_save():void{$t=sanitize_text_field(wp_unslash($_POST['token']??''));$p=ssf_external_news_find($t);if(!$p||!isset($_POST['ssf_external_news_nonce'])||!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ssf_external_news_nonce'])),'ssf_external_news_'.hash('sha256',$t))){wp_die('Länken är inte längre giltig.',403);}$i=sanitize_key(wp_unslash($_POST['intent']??'save'));if(!in_array($i,array('save','preview','submit'),true))$i='save';wp_update_post(array('ID'=>$p->ID,'post_title'=>sanitize_text_field(wp_unslash($_POST['title']??'')),'post_excerpt'=>sanitize_textarea_field(wp_unslash($_POST['excerpt']??'')),'post_content'=>wp_kses_post(wp_unslash($_POST['content']??'')),'post_status'=>'submit'===$i?'pending':'draft'));if(!get_post_meta($p->ID,SSF_EXTERNAL_NEWS_STARTED_AT,true))update_post_meta($p->ID,SSF_EXTERNAL_NEWS_STARTED_AT,current_time('mysql'));if(!empty($_FILES['featured_image'])){$a=ssf_external_news_upload($p->ID,$_FILES['featured_image']);if($a)set_post_thumbnail($p->ID,$a);}$g=array();foreach((array)($_FILES['gallery_images']['name']??array())as $n=>$name){$a=ssf_external_news_upload($p->ID,array('name'=>$name,'tmp_name'=>$_FILES['gallery_images']['tmp_name'][$n]??'','error'=>$_FILES['gallery_images']['error'][$n]??UPLOAD_ERR_NO_FILE,'size'=>$_FILES['gallery_images']['size'][$n]??0));if($a)$g[]=$a;}if($g)ssf_news_append_gallery_ids($p->ID,$g);ssf_external_news_audit($p->ID,'submit'===$i?'submitted':'saved');$url='preview'===$i?ssf_external_news_preview_url($t):add_query_arg('ssf_external_news_notice','submit'===$i?'submitted':'saved',ssf_external_news_url($t));wp_safe_redirect($url);exit;}
 add_action('admin_post_nopriv_ssf_external_news_save','ssf_external_news_save');add_action('admin_post_ssf_external_news_save','ssf_external_news_save');

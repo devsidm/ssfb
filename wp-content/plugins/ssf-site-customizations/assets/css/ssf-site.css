@@ -1369,3 +1369,38 @@ body.home .ssf-home-actions .ssf-card--link:focus-visible {
     border-radius: 16px;
   }
 }
+
+/* Responsive images for ordinary news, independent of the active public theme. */
+.ssf-news-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin: 32px 0 0;
+}
+
+.ssf-news-gallery figure,
+.single-featured-image {
+  margin: 0;
+}
+
+.ssf-news-gallery img,
+.single-featured-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ssf-news-gallery figcaption,
+.single-featured-image figcaption {
+  margin-top: 8px;
+  color: var(--ssf-muted, #526579);
+  font-size: .875rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .ssf-news-gallery {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
