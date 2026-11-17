@@ -106,6 +106,10 @@ $cases = array(
 check(count(SSF_User_Admin::open_assignments(2)) === 1, 'Only active assigned case blocks deactivation');
 check(count(SSF_User_Admin::open_assignments(3)) === 1, 'Other user assignment remains separate');
 SSF_Access_Control::save_groups(2, array('ansokningar', 'nyheter'), 1);
+check(user_can(2, 'edit_ssf_newsletters'), 'News editor group grants newsletter editing');
+check(user_can(2, 'publish_ssf_newsletters'), 'News editor group grants newsletter publishing');
+check(user_can(2, 'manage_ssf_newsletters'), 'News editor group grants newsletter management');
+check(! user_can(3, 'edit_ssf_newsletters'), 'User without news group has no newsletter capability');
 SSF_Access_Control::set_active(2, false, 1);
 check(! SSF_Access_Control::is_active(2), 'Deactivation persists');
 check(SSF_Access_Control::status(2) === SSF_Access_Control::STATUS_TERMINATED, 'Disconnected user has terminated status');

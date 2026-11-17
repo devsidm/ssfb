@@ -64,7 +64,7 @@ final class SSF_Access_Control
             'nyheter' => array(
                 'label' => 'Webbredaktör',
                 'description' => 'Nyheter, artikelförslag, publicering och omvärldsbevakning.',
-                'capabilities' => array('ssf_manage_news', 'ssf_news_view', 'ssf_news_edit', 'ssf_news_publish', 'ssf_news_suggestions_manage', 'ssf_news_sources_manage', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'upload_files'),
+                'capabilities' => array('ssf_manage_news', 'ssf_news_view', 'ssf_news_edit', 'ssf_news_publish', 'ssf_news_suggestions_manage', 'ssf_news_sources_manage', 'edit_posts', 'edit_others_posts', 'edit_published_posts', 'publish_posts', 'upload_files', 'read_ssf_newsletter', 'edit_ssf_newsletter', 'delete_ssf_newsletter', 'edit_ssf_newsletters', 'edit_others_ssf_newsletters', 'publish_ssf_newsletters', 'read_private_ssf_newsletters', 'delete_ssf_newsletters', 'delete_private_ssf_newsletters', 'delete_published_ssf_newsletters', 'delete_others_ssf_newsletters', 'edit_private_ssf_newsletters', 'edit_published_ssf_newsletters', 'manage_ssf_newsletters'),
             ),
             'nyhetsutkast' => array(
                 'label' => 'Nyhetsskribent',
