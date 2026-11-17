@@ -46,7 +46,7 @@ final class SSF_Workspace_Services
                 'id' => 'newsletters', 'label' => 'Nyhetsbrev', 'description' => 'Skapa och hantera nyhetsbrev',
                 'route' => 'nyhetsbrev', 'capability' => 'edit_ssf_newsletters', 'nav_group' => 'arbete', 'order' => 32,
                 'owns_heading' => true, 'render' => array(__CLASS__, 'newsletters'),
-                'quick_actions' => array(array('label' => 'Lägg till nyhetsbrev', 'url' => ssf_site_newsletter_editor_url())),
+                'quick_actions' => array(array('label' => 'Lägg till nyhetsbrev', 'url' => ssf_site_newsletter_workspace_url())),
             ));
         }
         if (post_type_exists('medlemsfartyg')) {
@@ -90,9 +90,7 @@ final class SSF_Workspace_Services
     public static function newsletters(string $tail)
     {
         if ('ny' === $tail || ctype_digit($tail)) {
-            $_GET['newsletter_id'] = 'ny' === $tail ? 0 : (int) $tail;
-            $_GET['workspace_newsletter'] = '1';
-            ob_start(); ssf_site_render_newsletter_editor_page(); return (string) ob_get_clean();
+            return ssf_site_render_newsletter_workspace_editor('ny' === $tail ? 0 : (int) $tail);
         }
         if ('serier' === $tail) { return self::newsletter_series(); }
         if ('' !== $tail) { return self::error('Sidan kunde inte hittas.'); }

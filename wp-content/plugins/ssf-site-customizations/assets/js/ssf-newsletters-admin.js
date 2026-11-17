@@ -19,6 +19,7 @@
       $("[data-ssf-newsletter-pdf-size]").text(attachment.filesizeHumanReadable || "");
       $("[data-ssf-newsletter-pdf-link]").attr("href", attachment.url || "").prop("hidden", !attachment.url);
       $("[data-ssf-remove-newsletter-pdf]").prop("disabled", false);
+      $(".ssf-newsletter-workspace-editor [data-ssf-select-newsletter-pdf]").text("Byt PDF");
 
       if ($(".ssf-newsletter-editor__form").length && !$("#newsletter-title").val()) {
         $("#newsletter-title").val(parsed.title);
@@ -41,6 +42,7 @@
     $("[data-ssf-newsletter-pdf-name]").text("Ingen PDF vald.");
     $("[data-ssf-newsletter-pdf-size]").text("");
     $("[data-ssf-newsletter-pdf-link]").attr("href", "").prop("hidden", true);
+    $(".ssf-newsletter-workspace-editor [data-ssf-select-newsletter-pdf]").text("Välj eller ladda upp PDF");
     $(this).prop("disabled", true);
   });
 
@@ -60,6 +62,7 @@
       $("[data-ssf-newsletter-cover-id]").val(attachment.id);
       $("[data-ssf-newsletter-cover-preview]").html(preview ? '<img src="' + preview + '" alt="">' : "");
       $("[data-ssf-remove-newsletter-cover]").prop("disabled", false);
+      $(".ssf-newsletter-workspace-editor [data-ssf-select-newsletter-cover]").text("Byt bild");
     });
 
     frame.open();
@@ -68,7 +71,10 @@
   $(document).on("click", "[data-ssf-remove-newsletter-cover]", function (event) {
     event.preventDefault();
     $("[data-ssf-newsletter-cover-id]").val("");
-    $("[data-ssf-newsletter-cover-preview]").empty();
+    $("[data-ssf-newsletter-cover-preview]").html(
+      $(".ssf-newsletter-workspace-editor").length ? "<span>Ingen omslagsbild vald</span>" : ""
+    );
+    $(".ssf-newsletter-workspace-editor [data-ssf-select-newsletter-cover]").text("Välj bild");
     $(this).prop("disabled", true);
   });
 
