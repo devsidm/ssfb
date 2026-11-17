@@ -2,14 +2,14 @@
     "schema_version":  1,
     "release_name":  "SSF Web",
     "version":  "0.14.11",
-    "build":  "20261117.3",
-    "built_at":  "2026-11-17T19:23:52.4811083Z",
+    "build":  "20261117.4",
+    "built_at":  "2026-11-17T21:47:47.6190270Z",
     "source":  "codex",
-    "source_revision":  "8714dd9cd6e7c4b698bc17a9de87fe74937af477",
-    "description":  "UX-polish för Nyhetsbrev i Arbetsytan",
+    "source_revision":  "5a84a37493a41dd09ad09014e01257940b96d1df",
+    "description":  "Workspace-nativ nyhetsbrevsredigerare",
     "notes":  "DEV build 20261026.3 verified. Keep the annual meeting editor metabox in the WordPress main column for default and legacy saved user layouts; preserve all other metabox positions.",
     "components":  [
-                       "ssf-arbetsyta"
+                       "ssf-site-customizations"
                    ],
     "status":  "development",
     "prepared_at":  ""
