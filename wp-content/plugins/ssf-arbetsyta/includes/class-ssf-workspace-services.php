@@ -9,6 +9,7 @@ final class SSF_Workspace_Services
     public static function boot(): void
     {
         add_action('ssf_workspace_register_services', array(__CLASS__, 'register'));
+        add_action('admin_post_ssf_workspace_newsletter_series', array(__CLASS__, 'save_newsletter_series'));
     }
 
     public static function register(): void
@@ -88,18 +89,43 @@ final class SSF_Workspace_Services
 
     public static function newsletters(string $tail)
     {
+        if ('ny' === $tail || ctype_digit($tail)) {
+            $_GET['newsletter_id'] = 'ny' === $tail ? 0 : (int) $tail;
+            $_GET['workspace_newsletter'] = '1';
+            ob_start(); ssf_site_render_newsletter_editor_page(); return (string) ob_get_clean();
+        }
+        if ('serier' === $tail) { return self::newsletter_series(); }
         if ('' !== $tail) { return self::error('Sidan kunde inte hittas.'); }
         $series = isset($_GET['serie']) ? sanitize_key(wp_unslash($_GET['serie'])) : '';
         $year = isset($_GET['ar']) ? sanitize_text_field(wp_unslash($_GET['ar'])) : '';
         $items = ssf_site_get_newsletters($year, 0, $series, false);
-        $html = '<div class="ssf-workspace-service-heading"><div><h1>Nyhetsbrev</h1></div><a class="ssf-workspace-button" href="' . esc_url(ssf_site_newsletter_editor_url()) . '">+ Lägg till nyhetsbrev</a></div>';
+        $html = '<div class="ssf-workspace-service-heading"><div><h1>Nyhetsbrev</h1></div><a class="ssf-workspace-button" href="' . esc_url(ssf_site_newsletter_workspace_url()) . '">+ Lägg till nyhetsbrev</a></div><nav class="ssf-workspace-tabs"><a href="' . esc_url(SSF_Workspace::url('nyhetsbrev')) . '">Översikt</a><a href="' . esc_url(ssf_site_newsletter_workspace_url()) . '">Lägg till nyhetsbrev</a>' . (current_user_can('manage_ssf_newsletters') ? '<a href="' . esc_url(SSF_Workspace::url('nyhetsbrev/serier')) . '">Serier</a>' : '') . '</nav>';
         $html .= '<form class="ssf-workspace-form" method="get" action="' . esc_url(SSF_Workspace::url('nyhetsbrev')) . '"><label>Serie <select name="serie"><option value="">Alla</option>';
         foreach (get_terms(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'hide_empty' => false)) as $term) { $html .= '<option value="' . esc_attr($term->slug) . '"' . selected($series, $term->slug, false) . '>' . esc_html($term->name) . '</option>'; }
         $html .= '</select></label><label>År <select name="ar"><option value="">Alla</option>';
         foreach (ssf_site_get_newsletter_years(false) as $item_year) { $html .= '<option value="' . esc_attr($item_year) . '"' . selected($year, $item_year, false) . '>' . esc_html($item_year) . '</option>'; }
         $html .= '</select></label><button class="ssf-workspace-button" type="submit">Filtrera</button></form><div class="ssf-workspace-table-wrap"><table><thead><tr><th>Serie</th><th>Titel / nummer</th><th>År eller datum</th><th>Status</th><th>PDF</th><th>Senast ändrad</th><th>Åtgärd</th></tr></thead><tbody>';
-        foreach ($items as $post) { $data = ssf_site_newsletter_data($post->ID); $html .= '<tr><td>' . esc_html($data['series']) . '</td><td><strong>' . esc_html($post->post_title) . '</strong></td><td>' . esc_html(ssf_site_newsletter_display_date($post->ID)) . '</td><td>' . esc_html(get_post_status_object($post->post_status)->label) . '</td><td>' . esc_html($data['pdf_size'] ?: '–') . '</td><td>' . esc_html(get_the_modified_date('Y-m-d', $post)) . '</td><td><a href="' . esc_url(ssf_site_newsletter_editor_url($post->ID)) . '">Öppna</a></td></tr>'; }
+        foreach ($items as $post) { $data = ssf_site_newsletter_data($post->ID); $html .= '<tr><td>' . esc_html($data['series']) . '</td><td><strong>' . esc_html($post->post_title) . '</strong></td><td>' . esc_html(ssf_site_newsletter_display_date($post->ID)) . '</td><td>' . esc_html(get_post_status_object($post->post_status)->label) . '</td><td>' . esc_html($data['pdf_size'] ?: '–') . '</td><td>' . esc_html(get_the_modified_date('Y-m-d', $post)) . '</td><td><a href="' . esc_url(ssf_site_newsletter_workspace_url($post->ID)) . '">Öppna</a></td></tr>'; }
         return $html . ($items ? '' : '<tr><td colspan="7">Inga nyhetsbrev hittades.</td></tr>') . '</tbody></table></div>';
+    }
+
+    private static function newsletter_series()
+    {
+        if (! current_user_can('manage_ssf_newsletters')) { return self::error('Du saknar behörighet.', 403); }
+        $terms = get_terms(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'hide_empty' => false));
+        $html = '<h1>Nyhetsbrevsserier</h1><form class="ssf-workspace-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_workspace_newsletter_series"><input type="hidden" name="series_action" value="create">' . wp_nonce_field('ssf_workspace_newsletter_series', '_wpnonce', true, false) . '<label>Namn<input name="name" required></label><label>Slug<input name="slug"></label><button class="ssf-workspace-button">+ Lägg till serie</button></form><div class="ssf-workspace-table-wrap"><table><thead><tr><th>Namn</th><th>Slug</th><th>Antal nummer</th><th>Åtgärd</th></tr></thead><tbody>';
+        foreach ($terms as $term) { $html .= '<tr><td>' . esc_html($term->name) . '</td><td>' . esc_html($term->slug) . '</td><td>' . esc_html((string) $term->count) . '</td><td><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="ssf_workspace_newsletter_series"><input type="hidden" name="series_action" value="edit"><input type="hidden" name="term_id" value="' . esc_attr((string) $term->term_id) . '">' . wp_nonce_field('ssf_workspace_newsletter_series', '_wpnonce', true, false) . '<input name="name" value="' . esc_attr($term->name) . '"><button>Ändra</button></form></td></tr>'; }
+        return $html . '</tbody></table></div>';
+    }
+
+    public static function save_newsletter_series(): void
+    {
+        if (! current_user_can('manage_ssf_newsletters') || ! check_admin_referer('ssf_workspace_newsletter_series')) { wp_die('Du saknar behörighet.', '', array('response' => 403)); }
+        $name = sanitize_text_field(wp_unslash($_POST['name'] ?? ''));
+        $action = sanitize_key(wp_unslash($_POST['series_action'] ?? ''));
+        if ('edit' === $action) { wp_update_term(absint($_POST['term_id'] ?? 0), SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, array('name' => $name)); }
+        elseif ($name) { wp_insert_term($name, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, array('slug' => sanitize_title(wp_unslash($_POST['slug'] ?? '')))); }
+        wp_safe_redirect(SSF_Workspace::url('nyhetsbrev/serier')); exit;
     }
 
     private static function error(string $message, int $status = 404): WP_Error

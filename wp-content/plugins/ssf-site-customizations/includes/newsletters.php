@@ -235,6 +235,12 @@ function ssf_site_newsletter_editor_url(int $post_id = 0): string
     return add_query_arg($args, admin_url('admin.php'));
 }
 
+function ssf_site_newsletter_workspace_url(int $post_id = 0): string
+{
+    if (! class_exists('SSF_Workspace')) { return ssf_site_newsletter_editor_url($post_id); }
+    return SSF_Workspace::url('nyhetsbrev/' . ($post_id ? $post_id . '/' : 'ny/'));
+}
+
 function ssf_site_redirect_newsletter_post_new(): void
 {
     $post_type = isset($_GET['post_type']) ? sanitize_key(wp_unslash($_GET['post_type'])) : '';
@@ -278,7 +284,7 @@ function ssf_site_newsletter_editor_redirect(int $post_id = 0, array $state = ar
         $state['post_id'] = $post_id;
         set_transient(ssf_site_newsletter_editor_state_key(), $state, 2 * MINUTE_IN_SECONDS);
     }
-    wp_safe_redirect(ssf_site_newsletter_editor_url($post_id));
+    wp_safe_redirect(! empty($_POST['workspace_newsletter']) ? ssf_site_newsletter_workspace_url($post_id) : ssf_site_newsletter_editor_url($post_id));
     exit;
 }
 
@@ -387,6 +393,7 @@ function ssf_site_render_newsletter_editor_page(): void
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="ssf-newsletter-editor__form">
             <input type="hidden" name="action" value="ssf_save_newsletter_editor">
             <input type="hidden" name="newsletter_id" value="<?php echo esc_attr((string) $post_id); ?>">
+            <?php if (! empty($_GET['workspace_newsletter'])) : ?><input type="hidden" name="workspace_newsletter" value="1"><?php endif; ?>
             <?php wp_nonce_field('ssf_save_newsletter_editor'); ?>
 
             <div class="ssf-newsletter-editor__layout">
@@ -541,7 +548,7 @@ function ssf_site_handle_newsletter_editor_save(): void
     }
 
     ssf_site_clear_newsletter_cache();
-    wp_safe_redirect(add_query_arg('updated', '1', ssf_site_newsletter_editor_url($post_id)));
+    wp_safe_redirect(add_query_arg('updated', '1', ! empty($_POST['workspace_newsletter']) ? ssf_site_newsletter_workspace_url($post_id) : ssf_site_newsletter_editor_url($post_id)));
     exit;
 }
 add_action('admin_post_ssf_save_newsletter_editor', 'ssf_site_handle_newsletter_editor_save');
