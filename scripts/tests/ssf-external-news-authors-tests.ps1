@@ -46,6 +46,8 @@ Assert-Contains 'Kanonisk resend-hjälpare' 'function ssf_external_news_resend_i
 Assert-Contains 'Kanonisk tokenrotation' 'function ssf_external_news_regenerate_link'
 Assert-Contains 'Kanonisk återkallelse' 'function ssf_external_news_revoke_link'
 Assert-Contains 'Workspace-route för skribenter' "if ('skribenter' === `$section)" $workspaceNews
+Assert-Contains 'Sidrubrik för skribenter' '<h1>Bjud in skribent</h1>' $workspaceNews
+Assert-Contains 'Flikrubrik för skribenter' "'skribenter' => 'Bjud in skribent'" $workspaceNews
 Assert-Contains 'Workspace använder kanonisk create' 'ssf_external_news_create_invitation(' $workspaceNews
 Assert-Contains 'Workspace använder kanonisk resend' 'ssf_external_news_resend_invitation(' $workspaceNews
 Assert-Contains 'Workspace använder kanonisk rotation' 'ssf_external_news_regenerate_link(' $workspaceNews

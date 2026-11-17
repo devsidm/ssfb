@@ -640,9 +640,9 @@ final class SSF_News_Service
     {
         self::require_cap('ssf_news_edit');
         if (! function_exists('ssf_external_news_list')) {
-            return '<h1>Externa skribenter</h1>' . self::tabs('skribenter') . '<p class="ssf-workspace-error" role="alert">Tjänsten för externa skribenter är inte tillgänglig.</p>';
+            return '<h1>Bjud in skribent</h1>' . self::tabs('skribenter') . '<p class="ssf-workspace-error" role="alert">Tjänsten för externa skribenter är inte tillgänglig.</p>';
         }
-        $html = '<h1>Externa skribenter</h1>' . self::tabs('skribenter') . self::notice_html();
+        $html = '<h1>Bjud in skribent</h1>' . self::tabs('skribenter') . self::notice_html();
         $created = get_transient('ssf_workspace_external_news_link_' . get_current_user_id());
         if (is_string($created) && $created) {
             delete_transient('ssf_workspace_external_news_link_' . get_current_user_id());
