@@ -389,7 +389,7 @@ function ssf_site_render_newsletter_workspace_editor(int $newsletter_id = 0): st
 {
     extract(ssf_site_newsletter_editor_context($newsletter_id), EXTR_SKIP);
     wp_enqueue_media();
-    wp_enqueue_script('ssf-newsletter-workspace-media', SSF_SITE_URL . 'assets/js/ssf-newsletters-admin.js', array('jquery', 'media-views'), SSF_SITE_VERSION, true);
+    wp_enqueue_script('ssf-newsletter-workspace-media', SSF_SITE_URL . 'assets/js/ssf-newsletters-admin.js', array('jquery', 'media-views'), SSF_SITE_VERSION . '.workspace.1', true);
     $status_labels = array('publish' => 'Publicerad', 'draft' => 'Utkast', 'pending' => 'Väntar på granskning', 'future' => 'Schemalagd', 'private' => 'Privat');
     $status_label = $status_labels[$status] ?? 'Utkast';
     $series_terms = get_terms(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'hide_empty' => false));
