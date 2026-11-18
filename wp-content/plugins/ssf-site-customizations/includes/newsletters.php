@@ -10,6 +10,7 @@ if (! defined('ABSPATH')) {
 }
 
 const SSF_SITE_NEWSLETTER_POST_TYPE = 'ssf_newsletter';
+const SSF_SITE_NEWSLETTER_SERIES_TAXONOMY = 'ssf_newsletter_series';
 const SSF_SITE_NEWSLETTER_SERIES_META = '_ssf_newsletter_series';
 const SSF_SITE_NEWSLETTER_ISSUE_META = '_ssf_newsletter_issue';
 const SSF_SITE_NEWSLETTER_DATE_META = '_ssf_newsletter_date';
@@ -55,6 +56,45 @@ function ssf_site_register_newsletter_post_type(): void
     );
 }
 add_action('init', 'ssf_site_register_newsletter_post_type');
+
+function ssf_site_register_newsletter_series(): void
+{
+    register_taxonomy(SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, array(SSF_SITE_NEWSLETTER_POST_TYPE), array(
+        'labels' => array('name' => __('Serier', 'ssf-site'), 'singular_name' => __('Serie', 'ssf-site')),
+        'public' => false, 'show_ui' => false, 'show_in_rest' => true, 'hierarchical' => false,
+    ));
+    foreach (array('fordevind' => 'Fördevind', 'emh' => 'EMH:s nyhetsbrev') as $slug => $name) {
+        if (! term_exists($slug, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY)) { wp_insert_term($name, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, array('slug' => $slug)); }
+    }
+}
+add_action('init', 'ssf_site_register_newsletter_series', 15);
+
+function ssf_site_newsletter_series_name(int $post_id): string
+{
+    $terms = get_the_terms($post_id, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY);
+    return is_array($terms) && $terms ? (string) $terms[0]->name : (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, true);
+}
+
+function ssf_site_set_newsletter_series(int $post_id, string $series): void
+{
+    $series = sanitize_text_field($series);
+    update_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, $series);
+    if ('' === $series) { wp_set_object_terms($post_id, array(), SSF_SITE_NEWSLETTER_SERIES_TAXONOMY); return; }
+    $term = term_exists($series, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY);
+    if (! $term) { $term = wp_insert_term($series, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY); }
+    if (! is_wp_error($term)) { wp_set_object_terms($post_id, array((int) (is_array($term) ? $term['term_id'] : $term)), SSF_SITE_NEWSLETTER_SERIES_TAXONOMY); }
+}
+
+function ssf_site_migrate_newsletter_series(): void
+{
+    if ('2026-11-17' === get_option('ssf_site_newsletter_series_version')) { return; }
+    foreach (get_posts(array('post_type' => SSF_SITE_NEWSLETTER_POST_TYPE, 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids')) as $post_id) {
+        $legacy = (string) get_post_meta((int) $post_id, SSF_SITE_NEWSLETTER_SERIES_META, true);
+        if ($legacy && ! has_term('', SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, (int) $post_id)) { ssf_site_set_newsletter_series((int) $post_id, $legacy); }
+    }
+    update_option('ssf_site_newsletter_series_version', '2026-11-17', false);
+}
+add_action('admin_init', 'ssf_site_migrate_newsletter_series');
 
 function ssf_site_grant_newsletter_capabilities(): void
 {
@@ -195,6 +235,12 @@ function ssf_site_newsletter_editor_url(int $post_id = 0): string
     return add_query_arg($args, admin_url('admin.php'));
 }
 
+function ssf_site_newsletter_workspace_url(int $post_id = 0): string
+{
+    if (! class_exists('SSF_Workspace')) { return ssf_site_newsletter_editor_url($post_id); }
+    return SSF_Workspace::url('nyhetsbrev/' . ($post_id ? $post_id . '/' : 'ny/'));
+}
+
 function ssf_site_redirect_newsletter_post_new(): void
 {
     $post_type = isset($_GET['post_type']) ? sanitize_key(wp_unslash($_GET['post_type'])) : '';
@@ -238,7 +284,7 @@ function ssf_site_newsletter_editor_redirect(int $post_id = 0, array $state = ar
         $state['post_id'] = $post_id;
         set_transient(ssf_site_newsletter_editor_state_key(), $state, 2 * MINUTE_IN_SECONDS);
     }
-    wp_safe_redirect(ssf_site_newsletter_editor_url($post_id));
+    wp_safe_redirect(! empty($_POST['workspace_newsletter']) ? ssf_site_newsletter_workspace_url($post_id) : ssf_site_newsletter_editor_url($post_id));
     exit;
 }
 
@@ -285,13 +331,13 @@ function ssf_site_newsletter_editor_values(array $source): array
     );
 }
 
-function ssf_site_render_newsletter_editor_page(): void
+function ssf_site_newsletter_editor_context(?int $newsletter_id = null): array
 {
     if (! current_user_can('edit_ssf_newsletters')) {
         wp_die(esc_html__('Du saknar behörighet att redigera nyhetsbrev.', 'ssf-site'));
     }
 
-    $post_id = isset($_GET['newsletter_id']) ? absint($_GET['newsletter_id']) : 0;
+    $post_id = null !== $newsletter_id ? $newsletter_id : (isset($_GET['newsletter_id']) ? absint($_GET['newsletter_id']) : 0);
     $post = $post_id ? get_post($post_id) : null;
     if ($post_id && (! $post instanceof WP_Post || SSF_SITE_NEWSLETTER_POST_TYPE !== $post->post_type || ! current_user_can('edit_post', $post_id))) {
         wp_die(esc_html__('Nyhetsbrevet kunde inte öppnas.', 'ssf-site'));
@@ -336,9 +382,67 @@ function ssf_site_render_newsletter_editor_page(): void
     $status_object = get_post_status_object($status);
     $primary_status = in_array($status, array('publish', 'future', 'private', 'pending'), true) ? $status : 'publish';
     $duplicates = ssf_site_newsletter_duplicates($post_id, (string) $values['issue'], (string) $values['year'], (int) $values['pdf_id']);
+    return compact('post', 'post_id', 'values', 'errors', 'pdf_name', 'pdf_url', 'pdf_size', 'cover_markup', 'status', 'status_object', 'primary_status', 'duplicates');
+}
+
+function ssf_site_render_newsletter_workspace_editor(int $newsletter_id = 0): string
+{
+    extract(ssf_site_newsletter_editor_context($newsletter_id), EXTR_SKIP);
+    wp_enqueue_media();
+    wp_enqueue_script('ssf-newsletter-workspace-media', SSF_SITE_URL . 'assets/js/ssf-newsletters-admin.js', array('jquery', 'media-views'), SSF_SITE_VERSION . '.workspace.1', true);
+    $status_labels = array('publish' => 'Publicerad', 'draft' => 'Utkast', 'pending' => 'Väntar på granskning', 'future' => 'Schemalagd', 'private' => 'Privat');
+    $status_label = $status_labels[$status] ?? 'Utkast';
+    $series_terms = get_terms(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'hide_empty' => false));
+    ob_start();
+    ?>
+    <div class="ssf-newsletter-workspace-editor">
+        <a class="ssf-newsletter-workspace-back" href="<?php echo esc_url(SSF_Workspace::url('nyhetsbrev')); ?>">← Alla nyhetsbrev</a>
+        <header class="ssf-newsletter-workspace-header">
+            <h1><?php echo esc_html($post ? 'Redigera nyhetsbrev' : 'Nytt nyhetsbrev'); ?></h1>
+            <p><?php echo esc_html($post ? $values['series'] . ' · ' . $status_label : 'Lägg till en utgåva av Fördevind, EMH:s nyhetsbrev eller en annan nyhetsbrevsserie.'); ?></p>
+        </header>
+        <?php if (isset($_GET['updated'])) : ?><p class="ssf-workspace-confirmation" role="status">Nyhetsbrevet har sparats.</p><?php endif; ?>
+        <?php foreach ($errors as $error) : ?><p class="ssf-workspace-error" role="alert"><?php echo esc_html(ssf_site_newsletter_editor_error_message($error)); ?></p><?php endforeach; ?>
+        <?php if ($duplicates) : ?><p class="ssf-newsletter-workspace-warning" role="status"><?php echo esc_html(implode(' ', $duplicates)); ?></p><?php endif; ?>
+        <form class="ssf-workspace-form ssf-newsletter-workspace-form ssf-newsletter-editor__form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="ssf_save_newsletter_editor">
+            <input type="hidden" name="newsletter_id" value="<?php echo esc_attr((string) $post_id); ?>">
+            <input type="hidden" name="workspace_newsletter" value="1">
+            <?php wp_nonce_field('ssf_save_newsletter_editor'); ?>
+            <div class="ssf-newsletter-workspace-layout">
+                <div class="ssf-newsletter-workspace-main">
+                    <section class="ssf-workspace-panel"><h2>Utgåva</h2>
+                        <div class="ssf-newsletter-workspace-fields">
+                            <div class="ssf-newsletter-workspace-field"><label for="ssf-newsletter-series">Serie</label><select id="ssf-newsletter-series" name="ssf_newsletter_series" required><option value="">Välj serie</option><?php foreach ($series_terms as $term) : ?><option value="<?php echo esc_attr($term->name); ?>" <?php selected($values['series'], $term->name); ?>><?php echo esc_html($term->name); ?></option><?php endforeach; ?></select></div>
+                            <div class="ssf-newsletter-workspace-field"><label for="ssf-newsletter-issue">Nummer / utgåva</label><input id="ssf-newsletter-issue" name="ssf_newsletter_issue" value="<?php echo esc_attr((string) $values['issue']); ?>" placeholder="Till exempel 2"></div>
+                        </div>
+                        <div class="ssf-newsletter-workspace-field"><label for="newsletter-title">Titel</label><input class="ssf-newsletter-workspace-title" id="newsletter-title" name="newsletter_title" required value="<?php echo esc_attr((string) $values['title']); ?>" placeholder="Fördevind nr 2 – 2026"></div>
+                    </section>
+                    <section class="ssf-workspace-panel"><h2>Datum</h2>
+                        <div class="ssf-newsletter-workspace-field" data-ssf-newsletter-date-field><label for="ssf-newsletter-date">Publiceringsdatum</label><input type="date" id="ssf-newsletter-date" name="ssf_newsletter_date" value="<?php echo esc_attr((string) $values['raw_date']); ?>"></div>
+                        <label class="ssf-workspace-check"><input type="checkbox" name="ssf_newsletter_year_only" value="1" data-ssf-newsletter-year-only <?php checked('year_only', $values['date_precision']); ?>><span>Jag känner bara till året</span></label>
+                        <div class="ssf-newsletter-workspace-field" data-ssf-newsletter-year-field><label for="ssf-newsletter-year">År</label><input type="number" id="ssf-newsletter-year" name="ssf_newsletter_year" min="1900" max="<?php echo esc_attr((string) ssf_site_newsletter_max_year()); ?>" value="<?php echo esc_attr((string) $values['raw_year']); ?>"></div>
+                    </section>
+                    <section class="ssf-workspace-panel"><h2>Kort beskrivning</h2><p class="ssf-workspace-help">Visas tillsammans med nyhetsbrevet på webbplatsen.</p><label class="screen-reader-text" for="ssf-newsletter-excerpt">Kort beskrivning</label><textarea id="ssf-newsletter-excerpt" name="ssf_newsletter_excerpt" rows="7"><?php echo esc_textarea((string) $values['description']); ?></textarea></section>
+                </div>
+                <aside class="ssf-newsletter-workspace-sidebar">
+                    <section class="ssf-workspace-panel"><h2>PDF</h2><p class="ssf-workspace-help">PDF krävs innan nyhetsbrevet kan publiceras.</p><div class="ssf-newsletter-workspace-file" data-ssf-newsletter-pdf-summary><strong data-ssf-newsletter-pdf-name><?php echo esc_html($pdf_name ?: 'Ingen PDF vald'); ?></strong><span data-ssf-newsletter-pdf-size><?php echo esc_html($pdf_size); ?></span></div><input type="hidden" name="ssf_newsletter_pdf_id" value="<?php echo esc_attr((string) $values['pdf_id']); ?>" data-ssf-newsletter-pdf-id><div class="ssf-newsletter-workspace-media-actions"><button class="ssf-workspace-button ssf-workspace-button--secondary" type="button" data-ssf-select-newsletter-pdf><?php echo esc_html($pdf_url ? 'Byt PDF' : 'Välj eller ladda upp PDF'); ?></button><a href="<?php echo esc_url((string) $pdf_url); ?>" target="_blank" rel="noopener" data-ssf-newsletter-pdf-link <?php echo $pdf_url ? '' : 'hidden'; ?>>Öppna PDF</a><button class="ssf-newsletter-workspace-remove" type="button" data-ssf-remove-newsletter-pdf <?php disabled(! $values['pdf_id']); ?>>Ta bort</button></div></section>
+                    <section class="ssf-workspace-panel"><h2>Omslagsbild</h2><p class="ssf-workspace-help">Valfri. Används i nyhetsbrevsarkivet.</p><div class="ssf-newsletter-workspace-cover" data-ssf-newsletter-cover-preview><?php echo $cover_markup ?: '<span>Ingen omslagsbild vald</span>'; ?></div><input type="hidden" name="ssf_newsletter_cover_id" value="<?php echo esc_attr((string) $values['cover_id']); ?>" data-ssf-newsletter-cover-id><div class="ssf-newsletter-workspace-media-actions"><button class="ssf-workspace-button ssf-workspace-button--secondary" type="button" data-ssf-select-newsletter-cover><?php echo esc_html($cover_markup ? 'Byt bild' : 'Välj bild'); ?></button><button class="ssf-newsletter-workspace-remove" type="button" data-ssf-remove-newsletter-cover <?php disabled(! $values['cover_id']); ?>>Ta bort</button></div></section>
+                    <section class="ssf-workspace-panel"><h2>Publicering</h2><p class="ssf-newsletter-workspace-status">Status <span class="ssf-newsletter-workspace-badge"><?php echo esc_html($status_label); ?></span></p><div class="ssf-workspace-form-actions"><button class="ssf-workspace-button ssf-workspace-button--secondary" type="submit" name="newsletter_status" value="draft" formnovalidate>Spara utkast</button><?php if (current_user_can('publish_ssf_newsletters')) : ?><button class="ssf-workspace-button" type="submit" name="newsletter_status" value="<?php echo esc_attr($primary_status); ?>"><?php echo esc_html($post && 'draft' !== $status ? 'Spara ändringar' : 'Publicera'); ?></button><?php endif; ?></div><?php if ($post && 'publish' === $status) : ?><a href="<?php echo esc_url(get_permalink($post)); ?>" target="_blank" rel="noopener">Visa publicerat nyhetsbrev ↗</a><?php endif; ?></section>
+                </aside>
+            </div>
+        </form>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+
+function ssf_site_render_newsletter_editor_page(): void
+{
+    extract(ssf_site_newsletter_editor_context(), EXTR_SKIP);
     ?>
     <div class="wrap ssf-newsletter-editor">
-        <h1><?php echo esc_html($post ? __('Redigera nyhetsbrev', 'ssf-site') : __('Lägg till nyhetsbrev', 'ssf-site')); ?></h1>
+        <div class="ssf-newsletter-editor__heading"><h1><?php echo esc_html($post ? __('Redigera nyhetsbrev', 'ssf-site') : __('Nytt nyhetsbrev', 'ssf-site')); ?></h1></div>
         <?php ssf_site_render_newsletter_admin_tabs('editor'); ?>
         <?php if (isset($_GET['updated'])) : ?><div class="notice notice-success is-dismissible"><p><?php esc_html_e('Nyhetsbrevet har sparats.', 'ssf-site'); ?></p></div><?php endif; ?>
         <?php foreach ($errors as $error) : ?><div class="notice notice-error"><p><?php echo esc_html(ssf_site_newsletter_editor_error_message($error)); ?></p></div><?php endforeach; ?>
@@ -358,7 +462,7 @@ function ssf_site_render_newsletter_editor_page(): void
                             <input id="newsletter-title" name="newsletter_title" type="text" value="<?php echo esc_attr((string) $values['title']); ?>" placeholder="<?php esc_attr_e('Fördevind nr 2 - 2024', 'ssf-site'); ?>" required>
                         </div>
                         <div class="ssf-newsletter-editor__fields">
-                            <div class="ssf-newsletter-field"><label for="ssf-newsletter-series"><?php esc_html_e('Serie', 'ssf-site'); ?></label><input id="ssf-newsletter-series" name="ssf_newsletter_series" type="text" value="<?php echo esc_attr((string) $values['series']); ?>" placeholder="<?php esc_attr_e('Fördevind', 'ssf-site'); ?>"></div>
+                            <div class="ssf-newsletter-field"><label for="ssf-newsletter-series"><?php esc_html_e('Serie', 'ssf-site'); ?></label><select id="ssf-newsletter-series" name="ssf_newsletter_series" required><?php foreach (get_terms(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'hide_empty' => false)) as $term) : ?><option value="<?php echo esc_attr($term->name); ?>" <?php selected($values['series'], $term->name); ?>><?php echo esc_html($term->name); ?></option><?php endforeach; ?></select></div>
                             <div class="ssf-newsletter-field"><label for="ssf-newsletter-issue"><?php esc_html_e('Nummer / utgåva', 'ssf-site'); ?></label><input id="ssf-newsletter-issue" name="ssf_newsletter_issue" type="text" value="<?php echo esc_attr((string) $values['issue']); ?>" placeholder="<?php esc_attr_e('3 eller 1/2024', 'ssf-site'); ?>"></div>
                         </div>
                     </section>
@@ -482,7 +586,7 @@ function ssf_site_handle_newsletter_editor_save(): void
     }
     $post_id = (int) $saved_id;
 
-    update_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, $values['series']);
+    ssf_site_set_newsletter_series($post_id, $values['series']);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_ISSUE_META, $values['issue']);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_META, $values['date']);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_PRECISION_META, $values['date_precision']);
@@ -501,7 +605,7 @@ function ssf_site_handle_newsletter_editor_save(): void
     }
 
     ssf_site_clear_newsletter_cache();
-    wp_safe_redirect(add_query_arg('updated', '1', ssf_site_newsletter_editor_url($post_id)));
+    wp_safe_redirect(add_query_arg('updated', '1', ! empty($_POST['workspace_newsletter']) ? ssf_site_newsletter_workspace_url($post_id) : ssf_site_newsletter_editor_url($post_id)));
     exit;
 }
 add_action('admin_post_ssf_save_newsletter_editor', 'ssf_site_handle_newsletter_editor_save');
@@ -615,7 +719,7 @@ function ssf_site_save_newsletter(int $post_id, WP_Post $post): void
         $date = $year . '-01-01';
     }
 
-    update_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, $series);
+    ssf_site_set_newsletter_series($post_id, $series);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_ISSUE_META, $issue);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_META, $date);
     update_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_PRECISION_META, $date_precision);
@@ -906,11 +1010,11 @@ function ssf_site_get_newsletter_years(bool $published_only = true): array
     return $years;
 }
 
-function ssf_site_get_newsletters(string $year = '', int $exclude_id = 0): array
+function ssf_site_get_newsletters(string $year = '', int $exclude_id = 0, string $series = '', bool $published_only = true): array
 {
     $args = array(
         'post_type' => SSF_SITE_NEWSLETTER_POST_TYPE,
-        'post_status' => 'publish',
+        'post_status' => $published_only ? 'publish' : array('publish', 'draft', 'pending', 'private', 'future'),
         'posts_per_page' => -1,
         'no_found_rows' => true,
         'meta_query' => array(),
@@ -920,6 +1024,9 @@ function ssf_site_get_newsletters(string $year = '', int $exclude_id = 0): array
     }
     if (ssf_site_is_valid_newsletter_year($year)) {
         $args['meta_query'][] = array('key' => SSF_SITE_NEWSLETTER_YEAR_META, 'value' => $year);
+    }
+    if ($series && term_exists($series, SSF_SITE_NEWSLETTER_SERIES_TAXONOMY)) {
+        $args['tax_query'] = array(array('taxonomy' => SSF_SITE_NEWSLETTER_SERIES_TAXONOMY, 'field' => 'slug', 'terms' => $series));
     }
 
     $posts = get_posts($args);
@@ -980,7 +1087,7 @@ function ssf_site_newsletter_data(int $post_id): array
     $date_precision = (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_PRECISION_META, true);
     $date_precision = in_array($date_precision, array('full_date', 'year_only'), true) ? $date_precision : 'full_date';
     return array(
-        'series' => (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_SERIES_META, true),
+        'series' => ssf_site_newsletter_series_name($post_id),
         'issue' => (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_ISSUE_META, true),
         'date' => (string) get_post_meta($post_id, SSF_SITE_NEWSLETTER_DATE_META, true),
         'date_precision' => $date_precision,
