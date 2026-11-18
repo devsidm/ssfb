@@ -1,13 +1,13 @@
 {
     "schema_version":  1,
     "release_name":  "SSF Web",
-    "version":  "0.14.11",
+    "version":  "0.14.12",
     "build":  "20261118.2",
     "built_at":  "2026-11-18T07:57:23.8108832Z",
     "source":  "codex",
     "source_revision":  "af993b92570b089aec91c2d1db99ca8f83f29417",
     "description":  "Nyhetsbrev: Workspace-hantering, serier och förbättrad editor",
-    "notes":  "DEV build 20261026.3 verified. Keep the annual meeting editor metabox in the WordPress main column for default and legacy saved user layouts; preserve all other metabox positions.",
+    "notes":  "Nyhetsbrev i Arbetsytan: strukturerade serier, behörigheter, förbättrad editor och publikt seriearkiv.",
     "components":  [
                        "release-tooling",
                        "ssf",
@@ -15,6 +15,6 @@
                        "ssf-arbetsyta",
                        "ssf-site-customizations"
                    ],
-    "status":  "development",
-    "prepared_at":  ""
+    "status":  "prepared",
+    "prepared_at":  "2026-11-18T13:16:27.7951231Z"
 }
