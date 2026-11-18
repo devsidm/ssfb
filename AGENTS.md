@@ -6,6 +6,7 @@
 - Do not modify WordPress core. This checkout contains custom code, not a complete WordPress installation.
 - Do not access production or modify production data. Never deploy to PROD unless explicitly authorized. Deployment is outside the normal Codex workflow.
 - Never copy the DEV database or `wp-config.php` to PROD. Never use `rsync --delete` for deployment.
+- Production deployment uses `scripts/deploy/ssf-server-deploy.sh`; rollback uses `scripts/deploy/ssf-server-rollback.sh`. The production server GitHub deploy key is read-only. A production deployment requires the exact confirmation `DEPLOY`; follow the rollback script's exact confirmation requirement for rollback.
 - For DEV FTP, `/` is already the DEV WordPress root. Never prepend or create `ssfb.se`, `public_html`, or `dev`; omit/leave empty `RemoteRoot`. If `/` is not a WordPress root, abort rather than guess.
 - Never add, print, or commit secrets, tokens, private environment files, FTP credentials, or WordPress admin credentials.
 - Never search arbitrary files for secrets or dump the process environment.
