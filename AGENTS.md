@@ -12,7 +12,8 @@
 - Never search arbitrary files for secrets or dump the process environment.
 - The existing development site is `https://ssfb.se/dev`; do not install another WordPress environment. Local tests need no live site or secrets.
 - Never access or mutate live DEV unless the task explicitly requires live DEV testing.
-- Before any live DEV test, read [operational safeguards](docs/development/operating-standard.md), run `pwsh -NoProfile -File scripts/ssf-dev-preflight.ps1`, and stop unless green. Fail closed outside `/dev`. Use `curl.exe` for WordPress HTTP/login, never PowerShell HTTP cmdlets.
+- Before any live DEV test, read [operational safeguards](docs/development/operating-standard.md), run `pwsh -NoProfile -File scripts/ssf-dev-preflight.ps1`, and stop unless green. Fail closed outside `/dev`.
+- For WordPress HTTP and login, ALWAYS use `curl.exe`. NEVER use `Invoke-WebRequest` or `Invoke-RestMethod`.
 - All active MU plugins must be represented in the repository.
 - For SharePoint work, read the operational safeguards and `config/environments.json`. Never guess IDs or repair schema during tests; canonical membership status is `ApplicationStatus`.
 - Begin with task-named files and nearby code. Avoid broad repository scans; read only task-relevant documentation. See [Codex Cloud development](docs/development/codex-cloud.md) for tooling and test commands.
